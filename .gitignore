@@ -5,6 +5,8 @@ node_modules/
 .env
 .env.local
 .env.production
+.env.prod
+backend/.env
 
 # Build outputs
 dist/
@@ -32,6 +34,9 @@ Thumbs.db
 
 # Docker
 .docker/
+
+# Deployment (generated at runtime)
+deploy/nginx/active.conf
 
 # Sequelize
 backend/src/migrations/*.map

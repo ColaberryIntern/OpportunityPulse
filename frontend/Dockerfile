@@ -1,5 +1,8 @@
 FROM node:20-alpine AS build
 
+ARG REACT_APP_API_BASE_URL=http://localhost:3001/api/v1
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+
 WORKDIR /app
 
 COPY package*.json ./
