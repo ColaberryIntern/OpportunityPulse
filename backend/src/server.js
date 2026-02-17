@@ -123,6 +123,10 @@ async function startServer() {
 
     app.listen(env.port, () => {
       logger.info(`Opportunity Pulse API running on port ${env.port} [${env.nodeEnv}]`);
+
+      // Start ingestion scheduler after server is listening
+      const { startScheduler } = require('./ingestion/scheduler');
+      startScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
