@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: op-postgres
+    environment:
+      POSTGRES_DB: opportunity_pulse_dev
+      POSTGRES_USER: opportunity_pulse
+      POSTGRES_PASSWORD: dev_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opportunity_pulse -d opportunity_pulse_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: op-backend
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: opportunity_pulse
+      DB_PASSWORD: dev_password_change_me
+      DB_NAME: opportunity_pulse_dev
+      DB_SSL: "false"
+      JWT_SECRET: dev_jwt_secret_minimum_32_characters_long_change_in_prod
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+      BCRYPT_ROUNDS: "12"
+      FRONTEND_URL: http://localhost:3002
+      RATE_LIMIT_WINDOW_MS: "900000"
+      RATE_LIMIT_MAX_REQUESTS: "100"
+      AUTH_RATE_LIMIT_MAX: "20"
+      LOG_LEVEL: info
+      AUDIT_LOG_ENABLED: "true"
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+
+  frontend:
+    build: ./frontend
+    container_name: op-frontend
+    ports:
+      - "3002:3002"
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:3001/api/v1
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+
+volumes:
+  pgdata:
