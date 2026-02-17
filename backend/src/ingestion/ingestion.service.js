@@ -8,6 +8,9 @@ const MockJobsAdapter = require('./adapters/mockJobs.adapter');
 const MockInvestmentsAdapter = require('./adapters/mockInvestments.adapter');
 const UsaSpendingAdapter = require('./adapters/usaSpending.adapter');
 const RemotiveAdapter = require('./adapters/remotive.adapter');
+const RemoteOkAdapter = require('./adapters/remoteOk.adapter');
+const HimalayasAdapter = require('./adapters/himalayas.adapter');
+const JobicyAdapter = require('./adapters/jobicy.adapter');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -36,6 +39,12 @@ function getAdapter(dataSource) {
       return new UsaSpendingAdapter(dataSource);
     case 'remotive':
       return new RemotiveAdapter(dataSource);
+    case 'remote_ok':
+      return new RemoteOkAdapter(dataSource);
+    case 'himalayas':
+      return new HimalayasAdapter(dataSource);
+    case 'jobicy':
+      return new JobicyAdapter(dataSource);
     default:
       throw new AppError(`Unknown data source adapter: ${dataSource.name}`, 400);
   }

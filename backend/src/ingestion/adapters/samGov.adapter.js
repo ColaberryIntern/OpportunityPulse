@@ -2,18 +2,21 @@ const BaseAdapter = require('./base.adapter');
 const { OPPORTUNITY_TYPES } = require('../../config/constants');
 const logger = require('../../logging/logger');
 
-class AppError extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = 'AppError';
-  }
-}
-
 const SAM_GOV_BASE_URL = 'https://api.sam.gov/prod/opportunities/v2/search';
+
+const REQUEST_TIMEOUT_MS = 30000;
+
+const DEFAULT_KEYWORDS = [
+  'artificial intelligence',
+  'machine learning',
+  'AI/ML',
+  'data science',
+  'natural language processing',
+];
 
 /**
  * SAM.gov adapter — fetches federal contract opportunities from the SAM.gov API.
+ * Requires a free API key from https://open.gsa.gov/.
  * Uses native fetch (Node 18+).
  */
 class SamGovAdapter extends BaseAdapter {
@@ -21,21 +24,29 @@ class SamGovAdapter extends BaseAdapter {
     super(dataSource);
 
     this.apiKey = process.env.SAM_GOV_API_KEY;
-    if (!this.apiKey) {
-      throw new AppError('SAM_GOV_API_KEY not configured.', 500);
-    }
 
     // Default: fetch opportunities posted within the last 7 days
     const config = dataSource.config || {};
     this.lookbackDays = config.lookbackDays || 7;
     this.pageLimit = config.pageLimit || 100;
+    this.keywords = config.keywords || DEFAULT_KEYWORDS;
+    this.naicsCode = config.naicsCode || null;
   }
 
   /**
    * Fetch all pages of results from the SAM.gov opportunities API.
+   * If SAM_GOV_API_KEY is not set, logs a warning and returns an empty array.
    * @returns {Promise<Array>} Array of raw SAM.gov opportunity records.
    */
   async fetch() {
+    if (!this.apiKey) {
+      logger.warn(
+        'SAM_GOV_API_KEY not configured — skipping SAM.gov ingestion. '
+        + 'Register for a free key at https://open.gsa.gov/'
+      );
+      return [];
+    }
+
     const postedTo = new Date();
     const postedFrom = new Date();
     postedFrom.setDate(postedFrom.getDate() - this.lookbackDays);
@@ -60,39 +71,145 @@ class SamGovAdapter extends BaseAdapter {
         offset: String(offset),
       });
 
+      // Add keyword search if configured
+      if (this.keywords && this.keywords.length > 0) {
+        params.set('keyword', this.keywords.join(' OR '));
+      }
+
+      // Add NAICS code filter if configured
+      if (this.naicsCode) {
+        params.set('ncode', this.naicsCode);
+      }
+
       const url = `${SAM_GOV_BASE_URL}?${params.toString()}`;
 
       logger.info(`SAM.gov fetch: offset=${offset}, limit=${this.pageLimit}`);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-      if (!response.ok) {
-        const body = await response.text();
-        logger.error(`SAM.gov API error: ${response.status} - ${body}`);
-        throw new AppError(
-          `SAM.gov API returned ${response.status}: ${body}`,
-          502
-        );
-      }
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
 
-      const data = await response.json();
-      const records = data.opportunitiesData || [];
+        clearTimeout(timeoutId);
 
-      allRecords = allRecords.concat(records);
+        if (!response.ok) {
+          const body = await response.text();
+          logger.error(`SAM.gov API error: ${response.status} - ${body}`);
+          throw new Error(`SAM.gov API returned ${response.status}: ${body}`);
+        }
 
-      // If fewer records returned than the limit, we have reached the last page
-      if (records.length < this.pageLimit) {
-        hasMore = false;
-      } else {
-        offset += this.pageLimit;
+        const data = await response.json();
+        const records = data.opportunitiesData || [];
+
+        allRecords = allRecords.concat(records);
+
+        // If fewer records returned than the limit, we have reached the last page
+        if (records.length < this.pageLimit) {
+          hasMore = false;
+        } else {
+          offset += this.pageLimit;
+        }
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error.name === 'AbortError') {
+          logger.error(`SAM.gov fetch timed out at offset ${offset}.`);
+          throw new Error(
+            `SAM.gov API request timed out after ${REQUEST_TIMEOUT_MS}ms at offset ${offset}.`
+          );
+        }
+
+        throw error;
       }
     }
 
     logger.info(`SAM.gov fetch complete: ${allRecords.length} records retrieved.`);
     return allRecords;
+  }
+
+  /**
+   * Build a human-readable description from the raw SAM.gov API record fields.
+   * The API search endpoint returns a URL in the `description` field instead of text,
+   * so we construct a useful summary from the available metadata.
+   * @param {object} record - Raw SAM.gov opportunity record.
+   * @returns {string} Formatted description text.
+   */
+  static buildDescription(record) {
+    const lines = [];
+
+    if (record.type || record.baseType) {
+      lines.push(`Type: ${record.type || record.baseType}`);
+    }
+
+    if (record.fullParentPathName) {
+      const agency = record.fullParentPathName
+        .split('.')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(' > ');
+      lines.push(`Agency: ${agency}`);
+    }
+
+    if (record.solicitationNumber) {
+      lines.push(`Solicitation: ${record.solicitationNumber}`);
+    }
+
+    // Award details
+    if (record.award) {
+      const amount = record.award.amount
+        ? `$${parseFloat(record.award.amount).toLocaleString()}`
+        : null;
+      const awardee = record.award.awardee;
+      if (amount && awardee && awardee.name) {
+        const loc = awardee.location;
+        const awardeeLocation = loc
+          ? ` (${[loc.city?.name, loc.state?.code].filter(Boolean).join(', ')})`
+          : '';
+        lines.push(`\nAward: ${amount} to ${awardee.name}${awardeeLocation}`);
+      } else if (amount) {
+        lines.push(`\nAward Amount: ${amount}`);
+      }
+    }
+
+    // Location
+    const perf = record.placeOfPerformance;
+    if (perf) {
+      const parts = [perf.state?.name, perf.country?.name].filter(Boolean);
+      if (parts.length) lines.push(`Location: ${parts.join(', ')}`);
+    }
+
+    // Classification
+    const codes = [
+      record.naicsCode ? `NAICS: ${record.naicsCode}` : null,
+      record.classificationCode ? `Classification: ${record.classificationCode}` : null,
+    ].filter(Boolean);
+    if (codes.length) lines.push(codes.join(' | '));
+
+    // Contact
+    const contact = record.pointOfContact && record.pointOfContact[0];
+    if (contact) {
+      lines.push('');
+      if (contact.fullName) lines.push(`Contact: ${contact.fullName}`);
+      if (contact.email) lines.push(`Email: ${contact.email}`);
+      if (contact.phone) lines.push(`Phone: ${contact.phone}`);
+    }
+
+    // Dates
+    const dates = [];
+    if (record.postedDate) dates.push(`Posted: ${record.postedDate}`);
+    if (record.responseDeadLine) dates.push(`Deadline: ${record.responseDeadLine}`);
+    if (record.archiveDate) dates.push(`Archive: ${record.archiveDate}`);
+    if (dates.length) {
+      lines.push('');
+      lines.push(dates.join(' | '));
+    }
+
+    return lines.join('\n') || record.solicitationNumber || 'No details available.';
   }
 
   /**
@@ -129,8 +246,8 @@ class SamGovAdapter extends BaseAdapter {
         source: 'sam_gov',
         sourceId: record.noticeId,
         title: record.title || 'Untitled Opportunity',
-        description: record.description || record.solicitationNumber || null,
-        sourceUrl: `https://sam.gov/opp/${record.noticeId}/view`,
+        description: SamGovAdapter.buildDescription(record),
+        sourceUrl: record.uiLink || `https://sam.gov/opp/${record.noticeId}/view`,
         status: 'active',
         category: record.naicsCode || 'General',
         tags,

@@ -102,7 +102,7 @@ describe('SamGovAdapter', () => {
       expect(records).toEqual([]);
     });
 
-    it('should throw when SAM_GOV_API_KEY is not set', () => {
+    it('should return empty array when SAM_GOV_API_KEY is not set', async () => {
       delete process.env.SAM_GOV_API_KEY;
 
       const dsNoKey = {
@@ -112,7 +112,10 @@ describe('SamGovAdapter', () => {
         config: {},
       };
 
-      expect(() => new SamGovAdapter(dsNoKey)).toThrow();
+      const adapterNoKey = new SamGovAdapter(dsNoKey);
+      const records = await adapterNoKey.fetch();
+      expect(records).toEqual([]);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should handle API error responses gracefully', async () => {
