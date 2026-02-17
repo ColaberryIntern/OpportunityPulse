@@ -11,6 +11,18 @@ module.exports = {
           pageLimit: 100,
         }),
         schedule: 'daily',
+        enabled: false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+      {
+        name: 'sam_gov_scraper',
+        type: 'scraper',
+        config: JSON.stringify({
+          keywords: ['artificial intelligence', 'machine learning', 'AI/ML', 'data science', 'natural language processing'],
+          maxResults: 25,
+        }),
+        schedule: 'daily',
         enabled: true,
         created_at: new Date(),
         updated_at: new Date(),

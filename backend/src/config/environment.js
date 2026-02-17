@@ -51,10 +51,11 @@ const env = {
   },
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS, 10) || 12,
   email: {
-    service: process.env.EMAIL_SERVICE || 'sendgrid',
-    apiKey: process.env.EMAIL_API_KEY,
-    from: process.env.EMAIL_FROM || 'noreply@opportunitypulse.com',
-    verificationUrl: process.env.EMAIL_VERIFICATION_URL || 'http://localhost:3000/verify-email',
+    service: 'gmail',
+    user: process.env.GMAIL_USER,
+    appPassword: process.env.GMAIL_APP_PASSWORD,
+    from: process.env.EMAIL_FROM || process.env.GMAIL_USER || 'noreply@opportunitypulse.com',
+    verificationUrl: process.env.EMAIL_VERIFICATION_URL || 'http://localhost:3002/verify-email',
   },
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   rateLimit: {

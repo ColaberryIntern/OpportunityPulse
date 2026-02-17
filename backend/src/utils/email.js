@@ -1,24 +1,42 @@
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 const { env } = require('../config/environment');
 const logger = require('../logging/logger');
 const { verificationEmailTemplate } = require('./emailTemplates');
 
 /**
- * Send a generic email via SendGrid.
- * Gracefully degrades if EMAIL_API_KEY is not configured.
+ * Create a reusable Nodemailer transporter for Gmail SMTP.
+ * Returns null if credentials are not configured.
+ */
+function createTransporter() {
+  if (!env.email.user || !env.email.appPassword) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: env.email.user,
+      pass: env.email.appPassword,
+    },
+  });
+}
+
+/**
+ * Send a generic email via Gmail SMTP.
+ * Gracefully degrades if email credentials are not configured.
  */
 async function sendEmail({ to, subject, html, text }) {
-  if (!env.email.apiKey) {
-    logger.warn('EMAIL_API_KEY not configured — skipping email send', { to, subject });
+  const transporter = createTransporter();
+
+  if (!transporter) {
+    logger.warn('Email credentials not configured — skipping email send', { to, subject });
     return { sent: false };
   }
 
-  sgMail.setApiKey(env.email.apiKey);
-
   try {
-    const [response] = await sgMail.send({
-      to,
+    const info = await transporter.sendMail({
       from: env.email.from,
+      to,
       subject,
       html,
       text,
@@ -27,10 +45,10 @@ async function sendEmail({ to, subject, html, text }) {
     logger.info('Email sent successfully', {
       to,
       subject,
-      statusCode: response.statusCode,
+      messageId: info.messageId,
     });
 
-    return { sent: true, statusCode: response.statusCode };
+    return { sent: true, messageId: info.messageId };
   } catch (error) {
     logger.error('Failed to send email', {
       to,

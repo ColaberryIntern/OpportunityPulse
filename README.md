@@ -20,8 +20,8 @@ AI-powered SaaS platform for discovering and analyzing government contracts, AI 
 | **Frontend** | React 19, Redux Toolkit, Tailwind CSS |
 | **Database** | PostgreSQL 15 |
 | **AI** | OpenAI GPT-4o-mini |
-| **Email** | SendGrid |
-| **Data Sources** | SAM.gov API, mock adapters |
+| **Email** | Nodemailer (Gmail SMTP) |
+| **Data Sources** | SAM.gov scraper, mock adapters |
 | **Infrastructure** | Docker, GitHub Actions CI/CD |
 
 ## Quick Start
@@ -68,9 +68,9 @@ Optional:
 
 | Variable | Description |
 |----------|-------------|
-| `EMAIL_API_KEY` | SendGrid API key (emails skipped if not set) |
+| `GMAIL_USER` | Gmail address for sending emails (skipped if not set) |
+| `GMAIL_APP_PASSWORD` | Google App Password ([create here](https://myaccount.google.com/apppasswords)) |
 | `OPENAI_API_KEY` | Enables AI scoring/trends/insights |
-| `SAM_GOV_API_KEY` | Enables live government contract ingestion |
 
 ### 3. Set up database
 

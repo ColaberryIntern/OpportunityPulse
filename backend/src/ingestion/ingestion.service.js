@@ -3,6 +3,7 @@ const { INGESTION_STATUS } = require('../config/constants');
 const logger = require('../logging/logger');
 
 const SamGovAdapter = require('./adapters/samGov.adapter');
+const SamGovScraperAdapter = require('./adapters/samGovScraper.adapter');
 const MockJobsAdapter = require('./adapters/mockJobs.adapter');
 const MockInvestmentsAdapter = require('./adapters/mockInvestments.adapter');
 
@@ -23,6 +24,8 @@ function getAdapter(dataSource) {
   switch (dataSource.name) {
     case 'sam_gov':
       return new SamGovAdapter(dataSource);
+    case 'sam_gov_scraper':
+      return new SamGovScraperAdapter(dataSource);
     case 'mock_jobs':
       return new MockJobsAdapter(dataSource);
     case 'mock_investments':
