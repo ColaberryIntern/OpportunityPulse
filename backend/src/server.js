@@ -16,6 +16,11 @@ validateEnv();
 
 const app = express();
 
+// Trust proxy when behind nginx reverse proxy (production)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ----- Global Middleware -----
 app.use(helmet());
 app.use(cors({
