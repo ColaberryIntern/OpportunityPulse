@@ -1,5 +1,5 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { Opportunity, AnalysisRun, sequelize } = require('../models');
+const { Opportunity, OpportunityClassification, AnalysisRun, sequelize } = require('../models');
 const { OPPORTUNITY_QUADRANTS } = require('../config/constants');
 const logger = require('../logging/logger');
 
@@ -121,6 +121,25 @@ async function computeSaturationIndex() {
         updatedCount += oppIds.length;
       } catch (err) {
         errors.push({ group: key, error: err.message });
+      }
+    }
+
+    // Bridge saturation scores to opportunity_classifications table
+    let classificationUpdates = 0;
+    for (const [key, group] of Object.entries(groupSignals)) {
+      const oppIds = group.opps.map((o) => o.id);
+      try {
+        await OpportunityClassification.update(
+          {
+            demandScore: group.demandScore,
+            competitionScore: group.competitionScore,
+            saturationIndex: group.saturationIndex,
+          },
+          { where: { opportunityId: { [Op.in]: oppIds } } }
+        );
+        classificationUpdates += oppIds.length;
+      } catch (err) {
+        errors.push({ group: key, classificationError: err.message });
       }
     }
 

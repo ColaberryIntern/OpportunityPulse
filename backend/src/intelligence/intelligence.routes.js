@@ -2,6 +2,7 @@ const { Router } = require('express');
 const controller = require('./intelligence.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 const { ROLES } = require('../config/constants');
 
 const router = Router();
@@ -10,6 +11,8 @@ const router = Router();
 router.use(verifyToken);
 
 // --- Public Read Endpoints (authenticated users) ---
+// Dimension data changes only when classification runs (every 2h at most),
+// so a 5-minute cache dramatically reduces DB load.
 
 /**
  * @swagger
@@ -21,7 +24,7 @@ router.use(verifyToken);
  *       200:
  *         description: List of AI domains
  */
-router.get('/domains', controller.getDomains);
+router.get('/domains', cacheResponse('intelligence:domains', 300), controller.getDomains);
 
 /**
  * @swagger
@@ -30,7 +33,7 @@ router.get('/domains', controller.getDomains);
  *     tags: [Intelligence]
  *     summary: List AI capabilities with opportunity counts
  */
-router.get('/capabilities', controller.getCapabilities);
+router.get('/capabilities', cacheResponse('intelligence:capabilities', 300), controller.getCapabilities);
 
 /**
  * @swagger
@@ -39,7 +42,7 @@ router.get('/capabilities', controller.getCapabilities);
  *     tags: [Intelligence]
  *     summary: List strategic intents with opportunity counts
  */
-router.get('/intents', controller.getIntents);
+router.get('/intents', cacheResponse('intelligence:intents', 300), controller.getIntents);
 
 /**
  * @swagger
@@ -48,7 +51,7 @@ router.get('/intents', controller.getIntents);
  *     tags: [Intelligence]
  *     summary: List monetization angles with opportunity counts
  */
-router.get('/monetization-angles', controller.getMonetizationAngles);
+router.get('/monetization-angles', cacheResponse('intelligence:monetization', 300), controller.getMonetizationAngles);
 
 /**
  * @swagger
@@ -57,7 +60,7 @@ router.get('/monetization-angles', controller.getMonetizationAngles);
  *     tags: [Intelligence]
  *     summary: List maturity phases with opportunity counts
  */
-router.get('/maturity-phases', controller.getMaturityPhases);
+router.get('/maturity-phases', cacheResponse('intelligence:maturity', 300), controller.getMaturityPhases);
 
 /**
  * @swagger
@@ -66,7 +69,7 @@ router.get('/maturity-phases', controller.getMaturityPhases);
  *     tags: [Intelligence]
  *     summary: List geographic tags with opportunity counts
  */
-router.get('/geographic-tags', controller.getGeographicTags);
+router.get('/geographic-tags', cacheResponse('intelligence:geo', 300), controller.getGeographicTags);
 
 /**
  * @swagger
@@ -75,7 +78,7 @@ router.get('/geographic-tags', controller.getGeographicTags);
  *     tags: [Intelligence]
  *     summary: Get current meta AI signal values and trends
  */
-router.get('/meta-signals', controller.getMetaSignals);
+router.get('/meta-signals', cacheResponse('intelligence:signals', 300), controller.getMetaSignals);
 
 /**
  * @swagger
@@ -84,7 +87,7 @@ router.get('/meta-signals', controller.getMetaSignals);
  *     tags: [Intelligence]
  *     summary: List active strategic clusters with metrics
  */
-router.get('/clusters', controller.getClusters);
+router.get('/clusters', cacheResponse('intelligence:clusters', 300), controller.getClusters);
 
 /**
  * @swagger
@@ -93,7 +96,7 @@ router.get('/clusters', controller.getClusters);
  *     tags: [Intelligence]
  *     summary: Get domain vs demand heatmap matrix data
  */
-router.get('/heatmap', controller.getHeatmap);
+router.get('/heatmap', cacheResponse('intelligence:heatmap', 300), controller.getHeatmap);
 
 // --- Admin Endpoints ---
 

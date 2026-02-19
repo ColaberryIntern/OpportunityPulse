@@ -77,10 +77,16 @@ async function detectClusters() {
         const oldCount = cluster.opportunityCount || 1;
         const growthRate = ((count - oldCount) / oldCount) * 100;
 
+        // Compute trend velocity: rate of change of growth rate
+        const oldGrowthRate = parseFloat(cluster.growthRate) || 0;
+        const newGrowthRate = Math.round(growthRate * 100) / 100;
+        const trendVelocity = Math.round((newGrowthRate - oldGrowthRate) * 100) / 100;
+
         await cluster.update({
           opportunityCount: count,
           avgAiScore: avgScore,
-          growthRate: Math.round(growthRate * 100) / 100,
+          growthRate: newGrowthRate,
+          trendVelocity,
           isActive: true,
         });
         updated++;
