@@ -44,6 +44,16 @@ const PersonalMatch = require('./PersonalMatch')(sequelize);
 const AiTool = require('./AiTool')(sequelize);
 const AiToolMention = require('./AiToolMention')(sequelize);
 const OpportunityAction = require('./OpportunityAction')(sequelize);
+const AiDomain = require('./AiDomain')(sequelize);
+const AiCapability = require('./AiCapability')(sequelize);
+const StrategicIntent = require('./StrategicIntent')(sequelize);
+const MonetizationAngle = require('./MonetizationAngle')(sequelize);
+const MaturityPhase = require('./MaturityPhase')(sequelize);
+const GeographicTag = require('./GeographicTag')(sequelize);
+const MetaSignal = require('./MetaSignal')(sequelize);
+const StrategicCluster = require('./StrategicCluster')(sequelize);
+const OpportunityClassification = require('./OpportunityClassification')(sequelize);
+const OpportunityMultiTag = require('./OpportunityMultiTag')(sequelize);
 
 const models = {
   UserRole,
@@ -71,6 +81,16 @@ const models = {
   AiTool,
   AiToolMention,
   OpportunityAction,
+  AiDomain,
+  AiCapability,
+  StrategicIntent,
+  MonetizationAngle,
+  MaturityPhase,
+  GeographicTag,
+  MetaSignal,
+  StrategicCluster,
+  OpportunityClassification,
+  OpportunityMultiTag,
 };
 
 // Set up associations

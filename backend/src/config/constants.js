@@ -73,6 +73,14 @@ const ANALYSIS_TYPES = {
   SATURATION_COMPUTATION: 'saturation_computation',
   ACTION_RECOMMENDATION: 'action_recommendation',
   EXECUTIVE_BRIEF: 'executive_brief',
+  DOMAIN_CLASSIFICATION: 'domain_classification',
+  CAPABILITY_CLASSIFICATION: 'capability_classification',
+  STRATEGIC_INTENT: 'strategic_intent',
+  MONETIZATION_ANGLE: 'monetization_angle',
+  MATURITY_PHASE: 'maturity_phase',
+  GEOGRAPHIC_TAGGING: 'geographic_tagging',
+  META_SIGNAL_COMPUTATION: 'meta_signal_computation',
+  CLUSTER_DETECTION: 'cluster_detection',
 };
 
 const ACTION_TYPES = {

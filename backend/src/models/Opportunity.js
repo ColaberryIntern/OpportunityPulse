@@ -129,6 +129,8 @@ module.exports = (sequelize) => {
   Opportunity.associate = (models) => {
     Opportunity.belongsTo(models.DataSource, { foreignKey: 'data_source_id', as: 'dataSource' });
     Opportunity.hasMany(models.OpportunityAction, { foreignKey: 'opportunity_id', as: 'actions' });
+    Opportunity.hasOne(models.OpportunityClassification, { foreignKey: 'opportunity_id', as: 'classification' });
+    Opportunity.hasMany(models.OpportunityMultiTag, { foreignKey: 'opportunity_id', as: 'multiTags' });
   };
 
   return Opportunity;

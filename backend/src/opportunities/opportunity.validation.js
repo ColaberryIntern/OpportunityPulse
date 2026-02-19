@@ -42,6 +42,38 @@ const listOpportunitiesValidation = [
     .optional()
     .isISO8601()
     .withMessage('dateTo must be a valid ISO 8601 date.'),
+  query('domain')
+    .optional()
+    .isString()
+    .withMessage('domain must be a valid slug string.'),
+  query('capability')
+    .optional()
+    .isString()
+    .withMessage('capability must be a valid slug string.'),
+  query('intent')
+    .optional()
+    .isString()
+    .withMessage('intent must be a valid slug string.'),
+  query('monetization')
+    .optional()
+    .isString()
+    .withMessage('monetization must be a valid slug string.'),
+  query('maturity')
+    .optional()
+    .isString()
+    .withMessage('maturity must be a valid slug string.'),
+  query('geo')
+    .optional()
+    .isString()
+    .withMessage('geo must be a valid slug string.'),
+  query('quadrant')
+    .optional()
+    .isIn(['HD_LC', 'HD_HC', 'LD_LC', 'LD_HC'])
+    .withMessage('quadrant must be HD_LC, HD_HC, LD_LC, or LD_HC.'),
+  query('cluster')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('cluster must be a positive integer (cluster ID).'),
 ];
 
 module.exports = {

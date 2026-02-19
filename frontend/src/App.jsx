@@ -28,6 +28,8 @@ import AiToolsPage from './pages/AiToolsPage';
 import AiToolDetailPage from './pages/AiToolDetailPage';
 import ExecutiveBriefPage from './pages/ExecutiveBriefPage';
 import ActionTrackerPage from './pages/ActionTrackerPage';
+import StrategicClustersPage from './pages/StrategicClustersPage';
+import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -213,6 +215,22 @@ function App() {
           element={
             <ProtectedLayout>
               <ActionTrackerPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/strategic-clusters"
+          element={
+            <ProtectedLayout>
+              <StrategicClustersPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/intelligence"
+          element={
+            <ProtectedLayout>
+              <IntelligenceDashboardPage />
             </ProtectedLayout>
           }
         />

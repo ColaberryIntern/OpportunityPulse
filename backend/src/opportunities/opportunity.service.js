@@ -1,5 +1,5 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { Opportunity, DataSource } = require('../models');
+const { Opportunity, DataSource, OpportunityClassification, AiDomain, AiCapability, StrategicIntent, MonetizationAngle, MaturityPhase, GeographicTag, StrategicCluster } = require('../models');
 const { OPPORTUNITY_STATUS } = require('../config/constants');
 const { parsePagination } = require('../utils/pagination');
 
@@ -27,6 +27,14 @@ async function listOpportunities({
   page,
   limit,
   actionType,
+  domain,
+  capability,
+  intent,
+  monetization,
+  maturity,
+  geo,
+  quadrant,
+  cluster,
 } = {}) {
   const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit });
 
@@ -106,12 +114,70 @@ async function listOpportunities({
       break;
   }
 
+  // Build includes array
+  const include = [{ model: DataSource, as: 'dataSource', attributes: ['name', 'type'] }];
+
+  // Multi-dimensional classification filters
+  const hasDimensionalFilter = domain || capability || intent || monetization || maturity || geo || quadrant || cluster;
+  if (hasDimensionalFilter) {
+    const classificationWhere = {};
+    if (domain) {
+      const domainRow = await AiDomain.findOne({ where: { slug: domain } });
+      if (domainRow) classificationWhere.domainId = domainRow.id;
+    }
+    if (capability) {
+      const capRow = await AiCapability.findOne({ where: { slug: capability } });
+      if (capRow) classificationWhere.capabilityId = capRow.id;
+    }
+    if (intent) {
+      const intentRow = await StrategicIntent.findOne({ where: { slug: intent } });
+      if (intentRow) classificationWhere.strategicIntentId = intentRow.id;
+    }
+    if (monetization) {
+      const monetRow = await MonetizationAngle.findOne({ where: { slug: monetization } });
+      if (monetRow) classificationWhere.monetizationAngleId = monetRow.id;
+    }
+    if (maturity) {
+      const matRow = await MaturityPhase.findOne({ where: { slug: maturity } });
+      if (matRow) classificationWhere.maturityPhaseId = matRow.id;
+    }
+    if (geo) {
+      const geoRow = await GeographicTag.findOne({ where: { slug: geo } });
+      if (geoRow) classificationWhere.geographicTagId = geoRow.id;
+    }
+    if (cluster) {
+      classificationWhere.clusterId = parseInt(cluster, 10);
+    }
+
+    include.push({
+      model: OpportunityClassification,
+      as: 'classification',
+      where: classificationWhere,
+      required: true,
+      attributes: ['domainId', 'capabilityId', 'strategicIntentId', 'monetizationAngleId', 'maturityPhaseId', 'geographicTagId', 'clusterId', 'demandScore', 'competitionScore', 'saturationIndex'],
+    });
+  }
+
+  // Quadrant filter (on the Opportunity table itself)
+  if (quadrant) {
+    const quadrantLabels = {
+      HD_LC: 'High Demand / Low Competition',
+      HD_HC: 'High Demand / High Competition',
+      LD_LC: 'Low Demand / Low Competition',
+      LD_HC: 'Low Demand / High Competition',
+    };
+    if (quadrantLabels[quadrant]) {
+      where.opportunityQuadrant = quadrantLabels[quadrant];
+    }
+  }
+
   const { rows: results, count: total } = await Opportunity.findAndCountAll({
     where,
-    include: [{ model: DataSource, as: 'dataSource', attributes: ['name', 'type'] }],
+    include,
     order,
     limit: safeLimit,
     offset,
+    distinct: true,
   });
 
   // Build filters echo for response
@@ -126,6 +192,14 @@ async function listOpportunities({
   if (minScore !== undefined && minScore !== null && minScore !== '') filters.minScore = minScore;
   if (sort) filters.sort = sort;
   if (actionType) filters.actionType = actionType;
+  if (domain) filters.domain = domain;
+  if (capability) filters.capability = capability;
+  if (intent) filters.intent = intent;
+  if (monetization) filters.monetization = monetization;
+  if (maturity) filters.maturity = maturity;
+  if (geo) filters.geo = geo;
+  if (quadrant) filters.quadrant = quadrant;
+  if (cluster) filters.cluster = cluster;
 
   return {
     results,
@@ -144,7 +218,23 @@ async function listOpportunities({
  */
 async function getOpportunityById(id) {
   const opportunity = await Opportunity.findByPk(id, {
-    include: [{ model: DataSource, as: 'dataSource', attributes: ['name', 'type'] }],
+    include: [
+      { model: DataSource, as: 'dataSource', attributes: ['name', 'type'] },
+      {
+        model: OpportunityClassification,
+        as: 'classification',
+        required: false,
+        include: [
+          { model: AiDomain, as: 'domain', attributes: ['slug', 'name'] },
+          { model: AiCapability, as: 'capability', attributes: ['slug', 'name'] },
+          { model: StrategicIntent, as: 'strategicIntent', attributes: ['slug', 'name'] },
+          { model: MonetizationAngle, as: 'monetizationAngle', attributes: ['slug', 'name'] },
+          { model: MaturityPhase, as: 'maturityPhase', attributes: ['slug', 'name'] },
+          { model: GeographicTag, as: 'geographicTag', attributes: ['slug', 'name'] },
+          { model: StrategicCluster, as: 'cluster', attributes: ['slug', 'name'] },
+        ],
+      },
+    ],
   });
 
   if (!opportunity) {

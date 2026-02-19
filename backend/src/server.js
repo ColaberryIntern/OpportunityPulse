@@ -247,6 +247,9 @@ app.use('/api/v1/ai-tools', require('./aiTools/aiTool.routes'));
 // Sprint 26: Strategic Action Engine routes
 app.use('/api/v1/action-engine', require('./actionEngine/actionEngine.routes'));
 
+// Intelligence Engine routes (multi-dimensional classification)
+app.use('/api/v1/intelligence', require('./intelligence/intelligence.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({
@@ -306,6 +309,10 @@ async function startServer() {
       // Start Action Engine scheduler (classification, saturation, recommendations, brief)
       const { startActionEngineScheduler } = require('./actionEngine/actionEngine.scheduler');
       startActionEngineScheduler();
+
+      // Start Intelligence Engine scheduler (domain, capability, intent, monetization, maturity, geo, signals, clusters)
+      const { startIntelligenceScheduler } = require('./intelligence/intelligence.scheduler');
+      startIntelligenceScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
