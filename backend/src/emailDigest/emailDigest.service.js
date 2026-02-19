@@ -4,6 +4,7 @@ const { assembleUserContext } = require('../personalMatch/personalMatch.service'
 const { getAIClient } = require('../analysis/ai.client');
 const { sendEmail } = require('../utils/email');
 const { digestEmailTemplate } = require('../utils/emailTemplates');
+const { getExecutiveBrief } = require('../actionEngine/executiveBrief.service');
 const logger = require('../logging/logger');
 
 const DIGEST_FREQUENCY_HOURS = {
@@ -52,16 +53,23 @@ async function getUsersDueForDigest() {
  */
 async function getNewOpportunities(since, alertPref) {
   const typeFilter = [];
-  if (alertPref.govContracts) typeFilter.push('gov_contract', 'grant');
+  if (alertPref.govContracts) typeFilter.push('gov_contract');
+  if (alertPref.grants) typeFilter.push('grant');
   if (alertPref.aiJobs) typeFilter.push('ai_job');
   if (alertPref.investments) typeFilter.push('investment');
-  typeFilter.push('ai_news');
+  if (alertPref.aiNews) typeFilter.push('ai_news');
 
   const where = {
     status: 'active',
     publishedAt: { [Op.gt]: since },
     type: { [Op.in]: [...new Set(typeFilter)] },
   };
+
+  // Filter by preferred action types
+  const actionTypes = alertPref.preferredActionTypes;
+  if (actionTypes && actionTypes.length > 0) {
+    where.actionType = { [Op.in]: actionTypes };
+  }
 
   if (alertPref.minScore > 0) {
     where.aiScore = { [Op.gte]: alertPref.minScore };
@@ -208,6 +216,15 @@ async function sendDigestForUser(alertPref) {
     const frequency = alertPref.digestFrequency || 'weekly';
     const aiSummary = await generateDigestSummary(userContext, scored, typeCounts, frequency);
 
+    // Fetch executive brief top opportunities (non-critical)
+    let briefHighlights = [];
+    try {
+      const brief = await getExecutiveBrief(); // uses cache, no AI call
+      briefHighlights = (brief.topOpportunities || []).slice(0, 5);
+    } catch (err) {
+      logger.debug('Executive brief unavailable for digest', { error: err.message });
+    }
+
     const { subject, html, text } = digestEmailTemplate({
       name: user.name,
       frequency,
@@ -216,6 +233,7 @@ async function sendDigestForUser(alertPref) {
       typeCounts,
       totalNew: opportunities.length,
       since,
+      briefHighlights,
     });
 
     const result = await sendEmail({ to: user.email, subject, html, text });

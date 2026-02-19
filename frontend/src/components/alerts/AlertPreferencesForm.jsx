@@ -3,6 +3,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchAlertPreferences, updateAlertPreferences } from '../../store/slices/alertPrefSlice';
 import { clearUpdateSuccess } from '../../store/slices/alertPrefSlice';
 
+const ALL_ACTION_TYPES = ['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH'];
+const ACTION_TYPE_LABELS = {
+  BUILD: 'Build', BID: 'Bid', APPLY: 'Apply',
+  PARTNER: 'Partner', INVEST: 'Invest', TEACH: 'Teach',
+};
+
 function AlertPreferencesForm() {
   const dispatch = useDispatch();
   const { preferences, loading, error, updateSuccess } = useSelector(
@@ -12,6 +18,9 @@ function AlertPreferencesForm() {
   const [govContracts, setGovContracts] = useState(true);
   const [aiJobs, setAiJobs] = useState(true);
   const [investments, setInvestments] = useState(true);
+  const [grants, setGrants] = useState(true);
+  const [aiNews, setAiNews] = useState(true);
+  const [preferredActionTypes, setPreferredActionTypes] = useState([...ALL_ACTION_TYPES]);
   const [minScore, setMinScore] = useState(0);
   const [emailNotify, setEmailNotify] = useState(false);
   const [inAppNotify, setInAppNotify] = useState(true);
@@ -26,6 +35,9 @@ function AlertPreferencesForm() {
       setGovContracts(preferences.govContracts ?? true);
       setAiJobs(preferences.aiJobs ?? true);
       setInvestments(preferences.investments ?? true);
+      setGrants(preferences.grants ?? true);
+      setAiNews(preferences.aiNews ?? true);
+      setPreferredActionTypes(preferences.preferredActionTypes ?? [...ALL_ACTION_TYPES]);
       setMinScore(preferences.minScore ?? 0);
       setEmailNotify(preferences.emailNotify ?? false);
       setInAppNotify(preferences.inAppNotify ?? true);
@@ -40,12 +52,21 @@ function AlertPreferencesForm() {
     }
   }, [updateSuccess, dispatch]);
 
+  const toggleActionType = (type) => {
+    setPreferredActionTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(updateAlertPreferences({
       govContracts,
       aiJobs,
       investments,
+      grants,
+      aiNews,
+      preferredActionTypes,
       minScore: parseInt(minScore, 10) || 0,
       emailNotify,
       inAppNotify,
@@ -80,6 +101,30 @@ function AlertPreferencesForm() {
           <input type="checkbox" checked={investments} onChange={(e) => setInvestments(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
           <span className="text-gray-700 dark:text-gray-300">Investments</span>
         </label>
+        <label className="flex items-center gap-3 text-sm">
+          <input type="checkbox" checked={grants} onChange={(e) => setGrants(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">Grants</span>
+        </label>
+        <label className="flex items-center gap-3 text-sm">
+          <input type="checkbox" checked={aiNews} onChange={(e) => setAiNews(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">AI News</span>
+        </label>
+      </div>
+
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">Action Types</h3>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Select which action types you want to receive alerts for</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        {ALL_ACTION_TYPES.map((type) => (
+          <label key={type} className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={preferredActionTypes.includes(type)}
+              onChange={() => toggleActionType(type)}
+              className="rounded border-gray-300 dark:border-gray-600"
+            />
+            <span className="text-gray-700 dark:text-gray-300">{ACTION_TYPE_LABELS[type]}</span>
+          </label>
+        ))}
       </div>
 
       <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">Minimum AI Score</h3>

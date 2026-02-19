@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchExecutiveBrief } from '../store/slices/actionEngineSlice';
+import actionEngineService from '../services/actionEngineService';
 import SEOHead from '../components/common/SEOHead';
 
 const ACTION_TYPE_COLORS = {
@@ -20,13 +21,41 @@ const QUADRANT_SHORT = {
   'Low Demand / High Competition': { label: 'LD/HC', color: 'text-red-500 dark:text-red-400' },
 };
 
+function formatCurrency(value) {
+  if (!value || value === 0) return '$0';
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `$${(value / 1e3).toFixed(0)}K`;
+  return `$${value.toLocaleString()}`;
+}
+
 function ExecutiveBriefPage() {
   const dispatch = useDispatch();
   const { executiveBrief, briefLoading, error } = useSelector((state) => state.actionEngine);
+  const [trackedIds, setTrackedIds] = useState(new Set());
+  const [trackingId, setTrackingId] = useState(null);
 
   useEffect(() => {
     dispatch(fetchExecutiveBrief());
   }, [dispatch]);
+
+  const handleTrack = async (opp) => {
+    setTrackingId(opp.id);
+    try {
+      await actionEngineService.createAction({
+        opportunityId: opp.id,
+        actionType: opp.actionType,
+      });
+      setTrackedIds((prev) => new Set([...prev, opp.id]));
+    } catch (err) {
+      if (err.response?.status === 409) {
+        // Already tracked
+        setTrackedIds((prev) => new Set([...prev, opp.id]));
+      }
+    }
+    setTrackingId(null);
+  };
 
   if (briefLoading) {
     return (
@@ -80,7 +109,7 @@ function ExecutiveBriefPage() {
             <StatCard label="Avg AI Score" value={brief.marketStats.averageScore} suffix="/100" />
             <StatCard
               label="Revenue Potential"
-              value={brief.revenuePotentialEstimate ? `$${Math.round(brief.revenuePotentialEstimate / 1000)}k` : '$0'}
+              value={formatCurrency(brief.revenuePotentialEstimate)}
             />
           </div>
         )}
@@ -119,6 +148,17 @@ function ExecutiveBriefPage() {
                         ${parseFloat(opp.value).toLocaleString()}
                       </p>
                     )}
+                    <button
+                      onClick={() => handleTrack(opp)}
+                      disabled={trackingId === opp.id || trackedIds.has(opp.id)}
+                      className={`mt-2 px-3 py-1 text-xs font-medium rounded-md ${
+                        trackedIds.has(opp.id)
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 cursor-default'
+                          : 'bg-accent text-white hover:bg-accent/90 disabled:opacity-50'
+                      }`}
+                    >
+                      {trackedIds.has(opp.id) ? 'Tracked' : trackingId === opp.id ? '...' : 'Track'}
+                    </button>
                   </div>
                 </div>
               </div>

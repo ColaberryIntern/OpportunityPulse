@@ -61,7 +61,7 @@ function resetPasswordEmailTemplate({ resetUrl }) {
   return { subject, html, text };
 }
 
-function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCounts, totalNew, since }) {
+function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCounts, totalNew, since, briefHighlights = [] }) {
   const frequencyLabel = {
     daily: 'Daily', weekly: 'Weekly', biweekly: 'Bi-Weekly', monthly: 'Monthly',
   }[frequency] || 'Weekly';
@@ -104,6 +104,28 @@ function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCount
     .map(h => `<li style="margin-bottom: 4px; color: #374151;">${escapeHtml(h)}</li>`)
     .join('');
 
+  const actionTypeColors = {
+    BUILD: '#4F46E5', BID: '#2563EB', APPLY: '#059669',
+    PARTNER: '#7C3AED', INVEST: '#D97706', TEACH: '#E11D48',
+  };
+
+  const briefHighlightRows = briefHighlights.map((opp) => {
+    const badgeColor = actionTypeColors[opp.actionType] || '#6B7280';
+    const valueStr = opp.value ? ` | $${parseFloat(opp.value).toLocaleString()}` : '';
+    return `
+      <tr>
+        <td style="padding: 10px 0; border-bottom: 1px solid #FEF3C7;">
+          <div style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 4px;">
+            ${opp.sourceUrl ? `<a href="${opp.sourceUrl}" style="color: #92400E; text-decoration: none;">${escapeHtml(opp.title)}</a>` : escapeHtml(opp.title)}
+          </div>
+          <div style="font-size: 12px; color: #6B7280;">
+            <span style="background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">${opp.actionType}</span>
+            <span style="margin-left: 8px; font-weight: 600; color: #4F46E5;">${opp.aiScore}/100</span>${valueStr}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3002';
 
   const html = `<!DOCTYPE html>
@@ -136,6 +158,19 @@ function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCount
         <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">${typeSummaryParts}</div>
       </div>
 
+      ${briefHighlightRows ? `
+      <!-- Executive Brief Highlights -->
+      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <div style="font-size: 12px; font-weight: 600; color: #92400E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Executive Brief Highlights</div>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${briefHighlightRows}
+        </table>
+        <div style="text-align: center; margin-top: 12px;">
+          <a href="${frontendUrl}/executive-brief" style="font-size: 12px; color: #92400E; font-weight: 600; text-decoration: none;">View Full Executive Brief &rarr;</a>
+        </div>
+      </div>
+      ` : ''}
+
       <!-- Top Matches -->
       <h2 style="font-size: 16px; color: #111827; margin: 24px 0 12px;">Top Matches For You</h2>
       <table style="width: 100%; border-collapse: collapse;">
@@ -162,6 +197,10 @@ function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCount
 </body>
 </html>`;
 
+  const briefHighlightText = briefHighlights.length > 0
+    ? `\nExecutive Brief Highlights:\n${briefHighlights.map((opp, i) => `${i + 1}. [${opp.actionType}] ${opp.title} (Score: ${opp.aiScore}) ${opp.sourceUrl || ''}`).join('\n')}\n`
+    : '';
+
   const text = `${frequencyLabel} Opportunity Pulse Digest | Since ${sinceDate}
 
 Hi${name ? ` ${name}` : ''},
@@ -173,7 +212,7 @@ ${aiSummary.keyHighlights ? 'Key highlights:\n' + aiSummary.keyHighlights.map(h 
 ${aiSummary.actionItem ? `Recommended: ${aiSummary.actionItem}` : ''}
 
 ${totalNew} new opportunities (${typeSummaryParts})
-
+${briefHighlightText}
 Top Matches:
 ${topMatches.map((m, i) => `${i + 1}. ${m.opportunity.title} (${m.relevanceScore}% match) ${m.opportunity.sourceUrl || ''}`).join('\n')}
 

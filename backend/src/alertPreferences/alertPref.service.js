@@ -4,6 +4,9 @@ const DEFAULT_PREFERENCES = {
   govContracts: true,
   aiJobs: true,
   investments: true,
+  grants: true,
+  aiNews: true,
+  preferredActionTypes: ['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH'],
   minScore: 0,
   emailNotify: false,
   inAppNotify: true,
@@ -29,7 +32,7 @@ async function getPreferences(userId) {
 }
 
 async function updatePreferences(userId, data) {
-  const allowedFields = ['govContracts', 'aiJobs', 'investments', 'minScore', 'emailNotify', 'inAppNotify', 'digestFrequency'];
+  const allowedFields = ['govContracts', 'aiJobs', 'investments', 'grants', 'aiNews', 'preferredActionTypes', 'minScore', 'emailNotify', 'inAppNotify', 'digestFrequency'];
   const updates = {};
 
   for (const field of allowedFields) {

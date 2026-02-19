@@ -28,6 +28,20 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    grants: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    aiNews: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      field: 'ai_news',
+    },
+    preferredActionTypes: {
+      type: DataTypes.ARRAY(DataTypes.STRING(20)),
+      defaultValue: ['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH'],
+      field: 'preferred_action_types',
+    },
     minScore: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

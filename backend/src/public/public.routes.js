@@ -55,6 +55,35 @@ router.get('/', cacheResponse('public:list', 120), controller.listOpportunities)
 
 /**
  * @swagger
+ * /public/opportunities/feed.xml:
+ *   get:
+ *     tags: [Public]
+ *     summary: RSS feed of opportunities (no auth required)
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [gov_contract, ai_job, investment, grant, ai_news]
+ *         description: Filter by opportunity type
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by category
+ *     responses:
+ *       200:
+ *         description: RSS 2.0 XML feed
+ *         content:
+ *           application/rss+xml:
+ *             schema:
+ *               type: string
+ */
+router.get('/feed.xml', cacheResponse('public:feed', 300), controller.getFeed);
+
+/**
+ * @swagger
  * /public/opportunities/{id}:
  *   get:
  *     tags: [Public]

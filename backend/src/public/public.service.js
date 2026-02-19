@@ -14,7 +14,7 @@ class AppError extends Error {
 const EXCLUDED_FIELDS = ['aiScore', 'aiAnalysis', 'sourceData'];
 
 // Public max page size
-const PUBLIC_MAX_LIMIT = 20;
+const PUBLIC_MAX_LIMIT = 50;
 
 async function listPublicOpportunities({ type, category, page, limit } = {}) {
   // Enforce max 20/page
