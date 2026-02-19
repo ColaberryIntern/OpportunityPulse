@@ -13,6 +13,7 @@ import opportunityReducer from '../store/slices/opportunitySlice';
 import alertReducer from '../store/slices/alertSlice';
 import alertPrefReducer from '../store/slices/alertPrefSlice';
 import uiReducer from '../store/slices/uiSlice';
+import intelligenceReducer from '../store/slices/intelligenceSlice';
 
 export function createTestStore(preloadedState = {}) {
   return configureStore({
@@ -26,6 +27,7 @@ export function createTestStore(preloadedState = {}) {
       alerts: alertReducer,
       alertPreferences: alertPrefReducer,
       ui: uiReducer,
+      intelligence: intelligenceReducer,
     },
     preloadedState,
   });
