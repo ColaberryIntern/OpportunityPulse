@@ -1,6 +1,31 @@
 const { Router } = require('express');
+const { query } = require('express-validator');
 const controller = require('./public.controller');
 const { cacheResponse } = require('../middleware/cache.middleware');
+const { handleValidationErrors } = require('../middleware/validation.middleware');
+
+const feedValidation = [
+  query('type')
+    .optional()
+    .isIn(['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'])
+    .withMessage('Type must be gov_contract, ai_job, investment, grant, or ai_news.'),
+  query('category')
+    .optional()
+    .isString()
+    .trim(),
+  query('since')
+    .optional()
+    .isISO8601()
+    .withMessage('since must be a valid ISO 8601 datetime (e.g., 2026-02-19T00:00:00Z).'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 5000 })
+    .withMessage('limit must be an integer between 1 and 5000.'),
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('page must be a positive integer.'),
+];
 
 const router = Router();
 
@@ -72,15 +97,51 @@ router.get('/', cacheResponse('public:list', 120), controller.listOpportunities)
  *         schema:
  *           type: string
  *         description: Filter by category
+ *       - in: query
+ *         name: since
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Return only items ingested after this ISO 8601 timestamp
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 5000
+ *           default: 50
+ *         description: Max items per page (default 50, max 5000)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number for paginated access
  *     responses:
  *       200:
  *         description: RSS 2.0 XML feed
+ *         headers:
+ *           X-Total-Count:
+ *             description: Total matching items
+ *             schema:
+ *               type: integer
+ *           X-Page:
+ *             description: Current page number
+ *             schema:
+ *               type: integer
+ *           X-Total-Pages:
+ *             description: Total pages available
+ *             schema:
+ *               type: integer
  *         content:
  *           application/rss+xml:
  *             schema:
  *               type: string
+ *       304:
+ *         description: Not modified (If-Modified-Since)
  */
-router.get('/feed.xml', cacheResponse('public:feed', 300), controller.getFeed);
+router.get('/feed.xml', feedValidation, handleValidationErrors, controller.getFeed);
 
 /**
  * @swagger

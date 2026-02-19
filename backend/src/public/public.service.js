@@ -16,6 +16,10 @@ const EXCLUDED_FIELDS = ['aiScore', 'aiAnalysis', 'sourceData'];
 // Public max page size
 const PUBLIC_MAX_LIMIT = 50;
 
+// Feed max page size (higher for export/sync)
+const FEED_MAX_LIMIT = 5000;
+const FEED_DEFAULT_LIMIT = 50;
+
 async function listPublicOpportunities({ type, category, page, limit } = {}) {
   // Enforce max 20/page
   const requestedLimit = parseInt(limit, 10) || 20;
@@ -71,8 +75,43 @@ async function getPublicStats() {
   };
 }
 
+async function listFeedOpportunities({ type, category, since, page, limit } = {}) {
+  const requestedLimit = parseInt(limit, 10) || FEED_DEFAULT_LIMIT;
+  const safeLimit = Math.min(requestedLimit, FEED_MAX_LIMIT);
+  const safePage = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const where = { status: 'active' };
+  if (type) where.type = type;
+  if (category) where.category = category;
+  if (since) {
+    where.createdAt = { [Op.gt]: new Date(since) };
+  }
+
+  const { rows: opportunities, count: total } = await Opportunity.findAndCountAll({
+    where,
+    attributes: { exclude: EXCLUDED_FIELDS },
+    order: [['published_at', 'DESC'], ['created_at', 'DESC']],
+    limit: safeLimit,
+    offset,
+  });
+
+  return {
+    opportunities,
+    total,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      pages: Math.ceil(total / safeLimit),
+      hasMore: offset + opportunities.length < total,
+    },
+  };
+}
+
 module.exports = {
   listPublicOpportunities,
+  listFeedOpportunities,
   getPublicOpportunity,
   getPublicStats,
   AppError,

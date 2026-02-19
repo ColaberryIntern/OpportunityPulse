@@ -51,8 +51,19 @@ function isValidUrl(str) {
 
 async function getFeed(req, res, next) {
   try {
-    const { type, category } = req.query;
-    const result = await publicService.listPublicOpportunities({ type, category, limit: 50 });
+    const { type, category, since, limit, page } = req.query;
+
+    // If-Modified-Since support: return 304 if no new data
+    if (req.headers['if-modified-since']) {
+      const { Opportunity } = require('../models');
+      const clientDate = new Date(req.headers['if-modified-since']);
+      const latestUpdate = await Opportunity.max('updated_at', { where: { status: 'active' } });
+      if (latestUpdate && new Date(latestUpdate) <= clientDate) {
+        return res.status(304).end();
+      }
+    }
+
+    const result = await publicService.listFeedOpportunities({ type, category, since, limit, page });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3002';
     const apiUrl = process.env.API_URL || 'http://localhost:3001';
@@ -63,16 +74,31 @@ async function getFeed(req, res, next) {
       grant: 'Grant', ai_news: 'AI News',
     };
 
+    // Build self URL preserving query params
+    const selfParams = new URLSearchParams();
+    if (type) selfParams.set('type', type);
+    if (category) selfParams.set('category', category);
+    if (since) selfParams.set('since', since);
+    if (limit) selfParams.set('limit', limit);
+    if (page) selfParams.set('page', page);
+    const selfUrl = `${apiUrl}/api/v1/public/opportunities/feed.xml${selfParams.toString() ? '?' + selfParams.toString() : ''}`;
+
     const feed = new RSS({
       title: 'Opportunity Pulse',
       description: 'Latest opportunities — government contracts, AI jobs, investments, grants, and AI news',
-      feed_url: `${apiUrl}/api/v1/public/opportunities/feed.xml`,
+      feed_url: selfUrl,
       site_url: siteUrl,
       language: 'en',
       pubDate: result.opportunities.length > 0
         ? new Date(result.opportunities[0].publishedAt || result.opportunities[0].createdAt)
         : new Date(),
       ttl: 5,
+      custom_elements: [
+        { 'op:totalItems': result.total },
+        { 'op:currentPage': result.pagination.page },
+        { 'op:totalPages': result.pagination.pages },
+        { 'op:hasMore': result.pagination.hasMore },
+      ],
     });
 
     for (const opp of result.opportunities) {
@@ -96,7 +122,20 @@ async function getFeed(req, res, next) {
       });
     }
 
-    res.type('application/rss+xml').send(feed.xml({ indent: true }));
+    // Compute Last-Modified from the newest item
+    const lastModified = result.opportunities.length > 0
+      ? new Date(result.opportunities[0].updatedAt || result.opportunities[0].createdAt)
+      : new Date();
+
+    const xml = feed.xml({ indent: true });
+    res
+      .set('Last-Modified', lastModified.toUTCString())
+      .set('Cache-Control', 'public, max-age=300')
+      .set('X-Total-Count', String(result.total))
+      .set('X-Page', String(result.pagination.page))
+      .set('X-Total-Pages', String(result.pagination.pages))
+      .type('application/rss+xml')
+      .send(xml);
   } catch (error) {
     next(error);
   }
