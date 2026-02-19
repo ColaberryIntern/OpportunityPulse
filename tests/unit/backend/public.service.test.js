@@ -45,14 +45,14 @@ describe('PublicService', () => {
       expect(callArgs.order).toEqual([['published_at', 'DESC']]);
     });
 
-    it('should enforce max 20 per page when limit exceeds PUBLIC_MAX_LIMIT', async () => {
+    it('should enforce max 50 per page when limit exceeds PUBLIC_MAX_LIMIT', async () => {
       Opportunity.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
 
-      const result = await listPublicOpportunities({ page: 1, limit: 50 });
+      const result = await listPublicOpportunities({ page: 1, limit: 100 });
 
       const callArgs = Opportunity.findAndCountAll.mock.calls[0][0];
-      expect(callArgs.limit).toBe(20);
-      expect(result.pagination.limit).toBe(20);
+      expect(callArgs.limit).toBe(50);
+      expect(result.pagination.limit).toBe(50);
     });
 
     it('should filter by type when provided', async () => {
