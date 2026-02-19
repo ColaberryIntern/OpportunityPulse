@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Opportunity } = require('../models');
+const { Opportunity, OpportunityClassification } = require('../models');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 class AppError extends Error {
@@ -88,9 +88,19 @@ async function listFeedOpportunities({ type, category, since, page, limit } = {}
     where.createdAt = { [Op.gt]: new Date(since) };
   }
 
+  // Only include opportunities that have been fully classified
+  // (domain_id is set by the first engine that runs; if it exists,
+  // the opportunity has been through the classification pipeline)
   const { rows: opportunities, count: total } = await Opportunity.findAndCountAll({
     where,
     attributes: { exclude: EXCLUDED_FIELDS },
+    include: [{
+      model: OpportunityClassification,
+      as: 'classification',
+      required: true,
+      where: { domainId: { [Op.ne]: null } },
+      attributes: [],
+    }],
     order: [['published_at', 'DESC'], ['created_at', 'DESC']],
     limit: safeLimit,
     offset,
