@@ -88,9 +88,8 @@ async function listFeedOpportunities({ type, category, since, page, limit } = {}
     where.createdAt = { [Op.gt]: new Date(since) };
   }
 
-  // Only include opportunities that have been fully classified
-  // (domain_id is set by the first engine that runs; if it exists,
-  // the opportunity has been through the classification pipeline)
+  // Only include opportunities that have been through the classification pipeline
+  // (a row in opportunity_classifications exists once any engine has processed it)
   const { rows: opportunities, count: total } = await Opportunity.findAndCountAll({
     where,
     attributes: { exclude: EXCLUDED_FIELDS },
@@ -98,7 +97,6 @@ async function listFeedOpportunities({ type, category, since, page, limit } = {}
       model: OpportunityClassification,
       as: 'classification',
       required: true,
-      where: { domainId: { [Op.ne]: null } },
       attributes: [],
     }],
     order: [['published_at', 'DESC'], ['created_at', 'DESC']],
