@@ -96,7 +96,9 @@ async function generateActionPlanHandler(req, res) {
     return successResponse(res, plan, 'Action plan generated');
   } catch (error) {
     logger.error('Generate action plan failed', { error: error.message });
-    return errorResponse(res, error.message, error.message.includes('not found') ? 404 : 500);
+    const status = error.message.includes('not found') ? 404 :
+      (error.message.includes('classified') || error.message.includes('IGNORE')) ? 400 : 500;
+    return errorResponse(res, error.message, status);
   }
 }
 

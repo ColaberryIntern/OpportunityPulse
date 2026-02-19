@@ -109,7 +109,10 @@ function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }
                 {opportunity.status}
               </span>
               {opportunity.actionType && opportunity.actionType !== 'IGNORE' && (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ACTION_TYPE_COLORS[opportunity.actionType] || ''}`}>
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ring-1 ring-inset ring-current/20 ${ACTION_TYPE_COLORS[opportunity.actionType] || ''}`}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
                   {opportunity.actionType}
                 </span>
               )}

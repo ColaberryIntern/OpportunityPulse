@@ -37,11 +37,121 @@ function getScoreColor(score) {
   return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900';
 }
 
+function isValidUrl(str) {
+  if (!str || typeof str !== 'string') return false;
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function renderAiAnalysisValue(key, value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'object') {
+    return <span className="text-gray-600 dark:text-gray-400 ml-1">{String(value)}</span>;
+  }
+
+  if (key === 'classification') {
+    return (
+      <div className="mt-1 pl-3 border-l-2 border-indigo-200 dark:border-indigo-700 space-y-1">
+        {value.actionType && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Action:</span> {value.actionType}
+          </p>
+        )}
+        {value.confidenceScore != null && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Confidence:</span> {value.confidenceScore}%
+          </p>
+        )}
+        {value.method && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Method:</span> {value.method}
+          </p>
+        )}
+        {value.reasoning && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">{value.reasoning}</p>
+        )}
+        {value.classifiedAt && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Classified: {new Date(value.classifiedAt).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (key === 'saturation') {
+    return (
+      <div className="mt-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700 space-y-1">
+        {value.demandScore != null && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Demand:</span> {value.demandScore}/100
+          </p>
+        )}
+        {value.competitionScore != null && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Competition:</span> {value.competitionScore}/100
+          </p>
+        )}
+        {value.groupCount != null && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Similar opportunities:</span> {value.groupCount}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (key === 'actionPlan') {
+    return (
+      <div className="mt-1 pl-3 border-l-2 border-green-200 dark:border-green-700 space-y-1">
+        {value.summary && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">{value.summary}</p>
+        )}
+        {value.estimatedEffort && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Effort:</span> {value.estimatedEffort}
+          </p>
+        )}
+        {value.riskLevel && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Risk:</span> {value.riskLevel}
+          </p>
+        )}
+        {value.steps?.length > 0 && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Steps:</span> {value.steps.length} steps defined
+          </p>
+        )}
+        {value.method && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">Generated via: {value.method}</p>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback for unknown objects
+  return (
+    <div className="mt-1 pl-3 border-l-2 border-gray-200 dark:border-gray-700 space-y-1">
+      {Object.entries(value).map(([k, v]) => (
+        <p key={k} className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="font-medium capitalize">{k.replace(/_/g, ' ')}:</span>{' '}
+          {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function OpportunityDetail({ opportunity, loading }) {
   const [showRawData, setShowRawData] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [trackingAction, setTrackingAction] = useState(false);
   const [actionPlan, setActionPlan] = useState(null);
+  const [planError, setPlanError] = useState(null);
   const [trackSuccess, setTrackSuccess] = useState(false);
 
   if (loading) {
@@ -74,7 +184,7 @@ function OpportunityDetail({ opportunity, loading }) {
         </div>
         <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
           {opportunity.source && <span>Source: {opportunity.source}</span>}
-          {opportunity.sourceUrl && (
+          {isValidUrl(opportunity.sourceUrl) ? (
             <a
               href={opportunity.sourceUrl}
               target="_blank"
@@ -83,7 +193,9 @@ function OpportunityDetail({ opportunity, loading }) {
             >
               View Original
             </a>
-          )}
+          ) : opportunity.sourceUrl ? (
+            <span className="text-gray-400 dark:text-gray-500 text-xs">(invalid source link)</span>
+          ) : null}
           {opportunity.publishedAt && (
             <span>Published: {new Date(opportunity.publishedAt).toLocaleDateString()}</span>
           )}
@@ -152,10 +264,8 @@ function OpportunityDetail({ opportunity, loading }) {
                   <div key={key} className="text-sm">
                     <span className="font-medium text-gray-700 dark:text-gray-300 capitalize">
                       {key.replace(/_/g, ' ')}:
-                    </span>{' '}
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                     </span>
+                    {renderAiAnalysisValue(key, value)}
                   </div>
                 ))
               ) : (
@@ -176,7 +286,10 @@ function OpportunityDetail({ opportunity, loading }) {
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
               <span className="text-xs text-gray-400 dark:text-gray-500 uppercase">Action Type</span>
               <div className="mt-1">
-                <span className={`inline-flex items-center px-3 py-1 rounded text-sm font-medium ${ACTION_TYPE_COLORS[opportunity.actionType] || 'bg-gray-100 text-gray-600'}`}>
+                <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-bold ring-1 ring-inset ring-current/20 ${ACTION_TYPE_COLORS[opportunity.actionType] || 'bg-gray-100 text-gray-600'}`}>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
                   {opportunity.actionType}
                 </span>
               </div>
@@ -235,20 +348,36 @@ function OpportunityDetail({ opportunity, loading }) {
                   </p>
                 </div>
               ) : (
-                <button
-                  onClick={async () => {
-                    setGeneratingPlan(true);
-                    try {
-                      const res = await actionEngineService.generateActionPlan(opportunity.id);
-                      setActionPlan(res.data.data);
-                    } catch { /* silent */ }
-                    setGeneratingPlan(false);
-                  }}
-                  disabled={generatingPlan}
-                  className="mt-1 px-3 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {generatingPlan ? 'Generating...' : 'Generate Action Plan'}
-                </button>
+                <div>
+                  <button
+                    onClick={async () => {
+                      setGeneratingPlan(true);
+                      setPlanError(null);
+                      try {
+                        const res = await actionEngineService.generateActionPlan(opportunity.id);
+                        setActionPlan(res.data.data);
+                      } catch (err) {
+                        const status = err.response?.status;
+                        const message = err.response?.data?.message;
+                        if (status === 429) {
+                          setPlanError('Rate limit reached. Please try again in a few minutes.');
+                        } else if (message?.includes('IGNORE') || message?.includes('classified')) {
+                          setPlanError('This opportunity must be classified with a non-IGNORE type first.');
+                        } else {
+                          setPlanError(message || 'Failed to generate action plan. Please try again.');
+                        }
+                      }
+                      setGeneratingPlan(false);
+                    }}
+                    disabled={generatingPlan}
+                    className="mt-1 px-3 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {generatingPlan ? 'Generating...' : 'Generate Action Plan'}
+                  </button>
+                  {planError && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">{planError}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>

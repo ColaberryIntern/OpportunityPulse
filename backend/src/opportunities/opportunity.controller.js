@@ -6,12 +6,12 @@ async function listOpportunities(req, res, next) {
   try {
     const {
       type, category, status, tags, q,
-      dateFrom, dateTo, minScore, sort, page, limit,
+      dateFrom, dateTo, minScore, sort, page, limit, actionType,
     } = req.query;
 
     const result = await opportunityService.listOpportunities({
       type, category, status, tags, q,
-      dateFrom, dateTo, minScore, sort, page, limit,
+      dateFrom, dateTo, minScore, sort, page, limit, actionType,
     });
 
     logAuditEvent({

@@ -26,6 +26,10 @@ const listOpportunitiesValidation = [
     .optional()
     .isIn(['newest', 'oldest', 'score', 'value'])
     .withMessage('Sort must be newest, oldest, score, or value.'),
+  query('actionType')
+    .optional()
+    .isIn(['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH', 'IGNORE'])
+    .withMessage('actionType must be BUILD, BID, APPLY, PARTNER, INVEST, TEACH, or IGNORE.'),
   query('minScore')
     .optional()
     .isFloat({ min: 0, max: 100 })

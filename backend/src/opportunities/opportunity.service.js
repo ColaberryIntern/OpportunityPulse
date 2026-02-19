@@ -26,6 +26,7 @@ async function listOpportunities({
   sort,
   page,
   limit,
+  actionType,
 } = {}) {
   const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit });
 
@@ -36,6 +37,9 @@ async function listOpportunities({
   if (type) where.type = type;
   if (category) where.category = category;
   where.status = status || OPPORTUNITY_STATUS.ACTIVE;
+
+  // Action type filter
+  if (actionType) where.actionType = actionType;
 
   // Tags filter (overlap -- opportunity has any of the provided tags)
   if (tags) {
@@ -121,6 +125,7 @@ async function listOpportunities({
   if (dateTo) filters.dateTo = dateTo;
   if (minScore !== undefined && minScore !== null && minScore !== '') filters.minScore = minScore;
   if (sort) filters.sort = sort;
+  if (actionType) filters.actionType = actionType;
 
   return {
     results,
