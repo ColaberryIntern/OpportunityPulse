@@ -43,6 +43,7 @@ const Notification = require('./Notification')(sequelize);
 const PersonalMatch = require('./PersonalMatch')(sequelize);
 const AiTool = require('./AiTool')(sequelize);
 const AiToolMention = require('./AiToolMention')(sequelize);
+const OpportunityAction = require('./OpportunityAction')(sequelize);
 
 const models = {
   UserRole,
@@ -69,6 +70,7 @@ const models = {
   PersonalMatch,
   AiTool,
   AiToolMention,
+  OpportunityAction,
 };
 
 // Set up associations

@@ -26,6 +26,8 @@ import NotificationsPage from './pages/NotificationsPage';
 import ForYouPage from './pages/ForYouPage';
 import AiToolsPage from './pages/AiToolsPage';
 import AiToolDetailPage from './pages/AiToolDetailPage';
+import ExecutiveBriefPage from './pages/ExecutiveBriefPage';
+import ActionTrackerPage from './pages/ActionTrackerPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -194,6 +196,23 @@ function App() {
           element={
             <ProtectedLayout>
               <AiToolDetailPage />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/executive-brief"
+          element={
+            <ProtectedLayout>
+              <ExecutiveBriefPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/action-tracker"
+          element={
+            <ProtectedLayout>
+              <ActionTrackerPage />
             </ProtectedLayout>
           }
         />

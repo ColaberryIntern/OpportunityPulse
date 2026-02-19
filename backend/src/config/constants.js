@@ -69,6 +69,34 @@ const ANALYSIS_TYPES = {
   SCORING: 'scoring',
   TREND_DETECTION: 'trend_detection',
   INSIGHT_GENERATION: 'insight_generation',
+  CLASSIFICATION: 'classification',
+  SATURATION_COMPUTATION: 'saturation_computation',
+  ACTION_RECOMMENDATION: 'action_recommendation',
+  EXECUTIVE_BRIEF: 'executive_brief',
+};
+
+const ACTION_TYPES = {
+  BUILD: 'BUILD',
+  BID: 'BID',
+  APPLY: 'APPLY',
+  PARTNER: 'PARTNER',
+  INVEST: 'INVEST',
+  TEACH: 'TEACH',
+  IGNORE: 'IGNORE',
+};
+
+const OPPORTUNITY_QUADRANTS = {
+  HD_LC: 'High Demand / Low Competition',
+  HD_HC: 'High Demand / High Competition',
+  LD_LC: 'Low Demand / Low Competition',
+  LD_HC: 'Low Demand / High Competition',
+};
+
+const ACTION_STATUSES = {
+  PLANNED: 'planned',
+  IN_PROGRESS: 'in_progress',
+  EXECUTED: 'executed',
+  ABANDONED: 'abandoned',
 };
 
 const ANALYSIS_STATUS = {
@@ -155,4 +183,7 @@ module.exports = {
   FEEDBACK_STATUS,
   FORUM_POST_STATUS,
   FORUM_CATEGORIES,
+  ACTION_TYPES,
+  OPPORTUNITY_QUADRANTS,
+  ACTION_STATUSES,
 };

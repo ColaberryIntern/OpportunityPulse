@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ShareButtons from '../common/ShareButtons';
+import actionEngineService from '../../services/actionEngineService';
 
 const TYPE_COLORS = {
   gov_contract: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800',
@@ -20,6 +21,16 @@ const STATUS_COLORS = {
   archived: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800',
 };
 
+const ACTION_TYPE_COLORS = {
+  BUILD: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300',
+  BID: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+  APPLY: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
+  PARTNER: 'bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-300',
+  INVEST: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
+  TEACH: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300',
+  IGNORE: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
+};
+
 function getScoreColor(score) {
   if (score >= 80) return 'text-green-600 bg-green-50 dark:bg-green-900/20';
   if (score >= 60) return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20';
@@ -28,6 +39,10 @@ function getScoreColor(score) {
 
 function OpportunityDetail({ opportunity, loading }) {
   const [showRawData, setShowRawData] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [trackingAction, setTrackingAction] = useState(false);
+  const [actionPlan, setActionPlan] = useState(null);
+  const [trackSuccess, setTrackSuccess] = useState(false);
 
   if (loading) {
     return <p className="text-gray-500 dark:text-gray-400">Loading opportunity...</p>;
@@ -145,6 +160,141 @@ function OpportunityDetail({ opportunity, loading }) {
                 ))
               ) : (
                 <p className="text-sm text-gray-700 dark:text-gray-300">{String(opportunity.aiAnalysis)}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Strategic Intelligence */}
+      {opportunity.actionType && (
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Strategic Intelligence</h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            {/* Classification */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase">Action Type</span>
+              <div className="mt-1">
+                <span className={`inline-flex items-center px-3 py-1 rounded text-sm font-medium ${ACTION_TYPE_COLORS[opportunity.actionType] || 'bg-gray-100 text-gray-600'}`}>
+                  {opportunity.actionType}
+                </span>
+              </div>
+              {opportunity.aiAnalysis?.classification?.reasoning && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {opportunity.aiAnalysis.classification.reasoning}
+                </p>
+              )}
+              {opportunity.aiAnalysis?.classification?.confidenceScore && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Confidence: {opportunity.aiAnalysis.classification.confidenceScore}%
+                </p>
+              )}
+            </div>
+
+            {/* Saturation */}
+            {opportunity.saturationIndex != null && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase">Market Saturation</span>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
+                  {parseFloat(opportunity.saturationIndex).toFixed(0)}
+                  <span className="text-sm font-normal text-gray-500">/100</span>
+                </p>
+                {opportunity.opportunityQuadrant && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{opportunity.opportunityQuadrant}</p>
+                )}
+                {opportunity.aiAnalysis?.saturation && (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-20">Demand</span>
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div className="bg-green-500 h-2 rounded-full" style={{ width: `${opportunity.aiAnalysis.saturation.demandScore || 0}%` }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-20">Competition</span>
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div className="bg-red-500 h-2 rounded-full" style={{ width: `${opportunity.aiAnalysis.saturation.competitionScore || 0}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action Plan Summary */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase">Action Plan</span>
+              {(opportunity.aiAnalysis?.actionPlan || actionPlan) ? (
+                <div className="mt-1">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {(actionPlan || opportunity.aiAnalysis.actionPlan).summary}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Effort: {(actionPlan || opportunity.aiAnalysis.actionPlan).estimatedEffort} | Risk: {(actionPlan || opportunity.aiAnalysis.actionPlan).riskLevel}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setGeneratingPlan(true);
+                    try {
+                      const res = await actionEngineService.generateActionPlan(opportunity.id);
+                      setActionPlan(res.data.data);
+                    } catch { /* silent */ }
+                    setGeneratingPlan(false);
+                  }}
+                  disabled={generatingPlan}
+                  className="mt-1 px-3 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {generatingPlan ? 'Generating...' : 'Generate Action Plan'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Action Plan Steps */}
+          {(actionPlan?.steps || opportunity.aiAnalysis?.actionPlan?.steps) && (
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Steps</h4>
+              <div className="space-y-2">
+                {(actionPlan?.steps || opportunity.aiAnalysis.actionPlan.steps).map((step, i) => (
+                  <div key={i} className="flex items-start gap-3 text-sm">
+                    <span className="shrink-0 w-6 h-6 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center text-xs font-bold">
+                      {step.order || i + 1}
+                    </span>
+                    <div>
+                      <p className="text-gray-700 dark:text-gray-300">{step.action}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {step.effort} effort | {step.timeframe}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Track This Opportunity */}
+          {opportunity.actionType !== 'IGNORE' && (
+            <div>
+              {trackSuccess ? (
+                <span className="text-sm text-green-600 dark:text-green-400">Tracked! View in Action Tracker.</span>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setTrackingAction(true);
+                    try {
+                      await actionEngineService.createAction({ opportunityId: opportunity.id, actionType: opportunity.actionType });
+                      setTrackSuccess(true);
+                    } catch { /* silent */ }
+                    setTrackingAction(false);
+                  }}
+                  disabled={trackingAction}
+                  className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent/90 disabled:opacity-50"
+                >
+                  {trackingAction ? 'Tracking...' : 'Track This Opportunity'}
+                </button>
               )}
             </div>
           )}

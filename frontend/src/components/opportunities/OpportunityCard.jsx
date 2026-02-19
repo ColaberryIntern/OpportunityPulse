@@ -26,6 +26,23 @@ const STATUS_COLORS = {
   archived: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800',
 };
 
+const ACTION_TYPE_COLORS = {
+  BUILD: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300',
+  BID: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+  APPLY: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300',
+  PARTNER: 'bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-300',
+  INVEST: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
+  TEACH: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300',
+  IGNORE: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
+};
+
+const QUADRANT_SHORT = {
+  'High Demand / Low Competition': { label: 'HD/LC', color: 'text-green-600 dark:text-green-400' },
+  'High Demand / High Competition': { label: 'HD/HC', color: 'text-yellow-600 dark:text-yellow-400' },
+  'Low Demand / Low Competition': { label: 'LD/LC', color: 'text-gray-500 dark:text-gray-400' },
+  'Low Demand / High Competition': { label: 'LD/HC', color: 'text-red-500 dark:text-red-400' },
+};
+
 function getScoreColor(score) {
   if (score >= 80) return 'text-green-600';
   if (score >= 60) return 'text-yellow-600';
@@ -91,6 +108,16 @@ function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[opportunity.status] || STATUS_COLORS.active}`}>
                 {opportunity.status}
               </span>
+              {opportunity.actionType && opportunity.actionType !== 'IGNORE' && (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ACTION_TYPE_COLORS[opportunity.actionType] || ''}`}>
+                  {opportunity.actionType}
+                </span>
+              )}
+              {opportunity.opportunityQuadrant && QUADRANT_SHORT[opportunity.opportunityQuadrant] && (
+                <span className={`text-xs font-medium ${QUADRANT_SHORT[opportunity.opportunityQuadrant].color}`}>
+                  {QUADRANT_SHORT[opportunity.opportunityQuadrant].label}
+                </span>
+              )}
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{opportunity.title}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{opportunity.description}</p>

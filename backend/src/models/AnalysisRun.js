@@ -11,7 +11,7 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false,
       validate: {
-        isIn: [['scoring', 'trend_detection', 'insight_generation', 'ai_tool_mention_extraction', 'ai_tool_trend_analysis', 'ai_tool_github_discovery', 'ai_tool_producthunt_discovery']],
+        isIn: [['scoring', 'trend_detection', 'insight_generation', 'ai_tool_mention_extraction', 'ai_tool_trend_analysis', 'ai_tool_github_discovery', 'ai_tool_producthunt_discovery', 'classification', 'saturation_computation', 'action_recommendation', 'executive_brief']],
       },
     },
     status: {

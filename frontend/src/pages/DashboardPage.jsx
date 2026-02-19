@@ -20,6 +20,7 @@ import { useRealtimeDashboard } from '../hooks/useRealtimeDashboard';
 import { ConnectionStatus } from '../components/dashboard/RealTimeDashboard';
 import SEOHead from '../components/common/SEOHead';
 import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
+import { fetchAnalytics } from '../store/slices/actionEngineSlice';
 
 function DashboardPage() {
   const dispatch = useDispatch();
@@ -37,6 +38,7 @@ function DashboardPage() {
   const [activityPage, setActivityPage] = useState(1);
   const [chartType, setChartType] = useState('');
   const [chartPeriod, setChartPeriod] = useState('30d');
+  const actionAnalytics = useSelector((state) => state.actionEngine.analytics);
 
   useRealtimeDashboard();
 
@@ -46,6 +48,7 @@ function DashboardPage() {
     dispatch(fetchOpportunityDashboardStats());
     dispatch(fetchChartData({ period: '30d' }));
     dispatch(fetchTrendSummary());
+    dispatch(fetchAnalytics());
   }, [dispatch]);
 
   const handlePageChange = (newPage) => {
@@ -104,6 +107,35 @@ function DashboardPage() {
             description="Total actions"
           />
         </div>
+
+        {/* Strategic Intelligence */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Strategic Intelligence
+            </h2>
+            <a href="/executive-brief" className="text-sm text-accent hover:underline">
+              View Full Brief
+            </a>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <MetricsCard
+              title="Signals Classified"
+              value={actionAnalytics?.signalsProcessed}
+              description="With action types"
+            />
+            <MetricsCard
+              title="Actions Tracked"
+              value={actionAnalytics?.signalsActedOn}
+              description="Opportunities in pipeline"
+            />
+            <MetricsCard
+              title="Revenue Influenced"
+              value={actionAnalytics?.totalRevenue ? `$${Math.round(actionAnalytics.totalRevenue).toLocaleString()}` : '$0'}
+              description="From executed actions"
+            />
+          </div>
+        </section>
 
         {/* Opportunity Overview */}
         <section className="mb-8">

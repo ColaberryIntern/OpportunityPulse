@@ -84,6 +84,24 @@ module.exports = (sequelize) => {
       defaultValue: {},
       field: 'ai_analysis',
     },
+    actionType: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: 'action_type',
+      validate: {
+        isIn: [['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH', 'IGNORE']],
+      },
+    },
+    saturationIndex: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      field: 'saturation_index',
+    },
+    opportunityQuadrant: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'opportunity_quadrant',
+    },
     dataSourceId: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -102,11 +120,15 @@ module.exports = (sequelize) => {
       { fields: ['category'] },
       { fields: ['published_at'] },
       { fields: ['ai_score'] },
+      { fields: ['action_type'] },
+      { fields: ['saturation_index'] },
+      { fields: ['opportunity_quadrant'] },
     ],
   });
 
   Opportunity.associate = (models) => {
     Opportunity.belongsTo(models.DataSource, { foreignKey: 'data_source_id', as: 'dataSource' });
+    Opportunity.hasMany(models.OpportunityAction, { foreignKey: 'opportunity_id', as: 'actions' });
   };
 
   return Opportunity;

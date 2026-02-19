@@ -14,6 +14,7 @@ import apiKeyReducer from './slices/apiKeySlice';
 import webhookReducer from './slices/webhookSlice';
 import subscriptionReducer from './slices/subscriptionSlice';
 import aiToolReducer from './slices/aiToolSlice';
+import actionEngineReducer from './slices/actionEngineSlice';
 
 export const store = configureStore({
   reducer: {
@@ -32,5 +33,6 @@ export const store = configureStore({
     webhooks: webhookReducer,
     subscription: subscriptionReducer,
     aiTools: aiToolReducer,
+    actionEngine: actionEngineReducer,
   },
 });
