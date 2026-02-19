@@ -7,6 +7,7 @@ const DEFAULT_PREFERENCES = {
   minScore: 0,
   emailNotify: false,
   inAppNotify: true,
+  digestFrequency: 'weekly',
 };
 
 class AppError extends Error {
@@ -28,7 +29,7 @@ async function getPreferences(userId) {
 }
 
 async function updatePreferences(userId, data) {
-  const allowedFields = ['govContracts', 'aiJobs', 'investments', 'minScore', 'emailNotify', 'inAppNotify'];
+  const allowedFields = ['govContracts', 'aiJobs', 'investments', 'minScore', 'emailNotify', 'inAppNotify', 'digestFrequency'];
   const updates = {};
 
   for (const field of allowedFields) {
@@ -43,6 +44,13 @@ async function updatePreferences(userId, data) {
       throw new AppError('minScore must be between 0 and 100.', 400);
     }
     updates.minScore = score;
+  }
+
+  if (updates.digestFrequency !== undefined) {
+    const validFreqs = ['daily', 'weekly', 'biweekly', 'monthly'];
+    if (!validFreqs.includes(updates.digestFrequency)) {
+      throw new AppError('digestFrequency must be one of: daily, weekly, biweekly, monthly.', 400);
+    }
   }
 
   let prefs = await AlertPreference.findOne({ where: { userId } });

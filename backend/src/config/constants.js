@@ -91,6 +91,13 @@ const ALERT_SEVERITY = {
   IMPORTANT: 'important',
 };
 
+const DIGEST_FREQUENCIES = {
+  DAILY: 'daily',
+  WEEKLY: 'weekly',
+  BIWEEKLY: 'biweekly',
+  MONTHLY: 'monthly',
+};
+
 const FEEDBACK_TYPES = {
   PLATFORM: 'platform',
   OPPORTUNITY: 'opportunity',
@@ -142,6 +149,7 @@ module.exports = {
   ANALYSIS_STATUS,
   ALERT_TYPES,
   ALERT_SEVERITY,
+  DIGEST_FREQUENCIES,
   SUBSCRIPTION_FEATURES,
   FEEDBACK_TYPES,
   FEEDBACK_STATUS,

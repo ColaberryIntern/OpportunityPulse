@@ -61,4 +61,137 @@ function resetPasswordEmailTemplate({ resetUrl }) {
   return { subject, html, text };
 }
 
-module.exports = { verificationEmailTemplate, resetPasswordEmailTemplate };
+function digestEmailTemplate({ name, frequency, aiSummary, topMatches, typeCounts, totalNew, since }) {
+  const frequencyLabel = {
+    daily: 'Daily', weekly: 'Weekly', biweekly: 'Bi-Weekly', monthly: 'Monthly',
+  }[frequency] || 'Weekly';
+
+  const typeLabels = {
+    gov_contract: 'Gov Contracts', ai_job: 'AI Jobs', investment: 'Investments',
+    grant: 'Grants', ai_news: 'AI News',
+  };
+
+  const sinceDate = new Date(since).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+
+  const subject = `${frequencyLabel} Opportunity Pulse: ${totalNew} new opportunities for you`;
+
+  const matchRows = topMatches.map((m) => {
+    const opp = m.opportunity;
+    const typeBadge = typeLabels[opp.type] || opp.type;
+    const scoreColor = m.relevanceScore >= 70 ? '#059669' : m.relevanceScore >= 50 ? '#D97706' : '#6B7280';
+    return `
+      <tr>
+        <td style="padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+          <div style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 4px;">
+            ${opp.sourceUrl ? `<a href="${opp.sourceUrl}" style="color: #4F46E5; text-decoration: none;">${escapeHtml(opp.title)}</a>` : escapeHtml(opp.title)}
+          </div>
+          <div style="font-size: 12px; color: #6B7280;">
+            <span style="background: #EEF2FF; color: #4F46E5; padding: 2px 8px; border-radius: 4px; font-weight: 500;">${typeBadge}</span>
+            ${opp.location ? `<span style="margin-left: 8px;">${escapeHtml(opp.location)}</span>` : ''}
+            <span style="margin-left: 8px; color: ${scoreColor}; font-weight: 600;">${m.relevanceScore}% match</span>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const typeSummaryParts = Object.entries(typeCounts)
+    .map(([type, count]) => `${count} ${typeLabels[type] || type}`)
+    .join(' | ');
+
+  const highlightItems = (aiSummary.keyHighlights || [])
+    .map(h => `<li style="margin-bottom: 4px; color: #374151;">${escapeHtml(h)}</li>`)
+    .join('');
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3002';
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; background-color: #f9fafb;">
+  <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background: #4F46E5; padding: 24px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 22px;">Opportunity Pulse</h1>
+      <p style="color: #C7D2FE; margin: 4px 0 0; font-size: 13px;">${frequencyLabel} Digest | Since ${sinceDate}</p>
+    </div>
+
+    <div style="padding: 24px;">
+      <!-- Greeting -->
+      <p style="font-size: 15px; color: #374151;">Hi${name ? ` ${escapeHtml(name)}` : ''},</p>
+
+      <!-- AI Summary Card -->
+      <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <div style="font-size: 12px; font-weight: 600; color: #4F46E5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">AI Summary</div>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 12px;">${escapeHtml(aiSummary.summary)}</p>
+        ${highlightItems ? `<ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">${highlightItems}</ul>` : ''}
+        ${aiSummary.actionItem ? `<p style="font-size: 13px; color: #4F46E5; font-weight: 500; margin: 8px 0 0;">&rarr; ${escapeHtml(aiSummary.actionItem)}</p>` : ''}
+      </div>
+
+      <!-- Stats Bar -->
+      <div style="background: #EEF2FF; border-radius: 6px; padding: 12px 16px; margin: 16px 0; text-align: center;">
+        <span style="font-size: 24px; font-weight: 700; color: #4F46E5;">${totalNew}</span>
+        <span style="font-size: 13px; color: #6B7280; margin-left: 4px;">new opportunities</span>
+        <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">${typeSummaryParts}</div>
+      </div>
+
+      <!-- Top Matches -->
+      <h2 style="font-size: 16px; color: #111827; margin: 24px 0 12px;">Top Matches For You</h2>
+      <table style="width: 100%; border-collapse: collapse;">
+        ${matchRows}
+      </table>
+
+      <!-- CTA Button -->
+      <div style="text-align: center; padding: 24px 0 8px;">
+        <a href="${frontendUrl}/opportunities"
+           style="background-color: #4F46E5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+          View All Opportunities
+        </a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top: 1px solid #eee; padding: 16px 24px; font-size: 12px; color: #9CA3AF; text-align: center; background: #F9FAFB;">
+      <p style="margin: 0 0 8px;">You're receiving this because you enabled email digests in your
+        <a href="${frontendUrl}/alerts" style="color: #4F46E5;">alert preferences</a>.
+      </p>
+      <p style="margin: 0;">To stop receiving these emails, disable email notifications in your alert settings.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `${frequencyLabel} Opportunity Pulse Digest | Since ${sinceDate}
+
+Hi${name ? ` ${name}` : ''},
+
+${aiSummary.summary}
+
+${aiSummary.keyHighlights ? 'Key highlights:\n' + aiSummary.keyHighlights.map(h => `- ${h}`).join('\n') : ''}
+
+${aiSummary.actionItem ? `Recommended: ${aiSummary.actionItem}` : ''}
+
+${totalNew} new opportunities (${typeSummaryParts})
+
+Top Matches:
+${topMatches.map((m, i) => `${i + 1}. ${m.opportunity.title} (${m.relevanceScore}% match) ${m.opportunity.sourceUrl || ''}`).join('\n')}
+
+View all: ${frontendUrl}/opportunities
+
+---
+To stop receiving these emails, update your alert preferences at ${frontendUrl}/alerts`;
+
+  return { subject, html, text };
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+module.exports = { verificationEmailTemplate, resetPasswordEmailTemplate, digestEmailTemplate };

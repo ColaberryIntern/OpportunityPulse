@@ -15,6 +15,7 @@ function AlertPreferencesForm() {
   const [minScore, setMinScore] = useState(0);
   const [emailNotify, setEmailNotify] = useState(false);
   const [inAppNotify, setInAppNotify] = useState(true);
+  const [digestFrequency, setDigestFrequency] = useState('weekly');
 
   useEffect(() => {
     dispatch(fetchAlertPreferences());
@@ -28,6 +29,7 @@ function AlertPreferencesForm() {
       setMinScore(preferences.minScore ?? 0);
       setEmailNotify(preferences.emailNotify ?? false);
       setInAppNotify(preferences.inAppNotify ?? true);
+      setDigestFrequency(preferences.digestFrequency ?? 'weekly');
     }
   }, [preferences]);
 
@@ -47,6 +49,7 @@ function AlertPreferencesForm() {
       minScore: parseInt(minScore, 10) || 0,
       emailNotify,
       inAppNotify,
+      digestFrequency,
     }));
   };
 
@@ -98,10 +101,32 @@ function AlertPreferencesForm() {
           <input type="checkbox" checked={inAppNotify} onChange={(e) => setInAppNotify(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
           <span className="text-gray-700 dark:text-gray-300">In-app notifications</span>
         </label>
-        <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
-          <span className="text-gray-700 dark:text-gray-300">Email notifications</span>
-        </label>
+        <div>
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+            <span className="text-gray-700 dark:text-gray-300">Email digest notifications</span>
+          </label>
+          {emailNotify && (
+            <div className="ml-7 mt-2">
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Digest Frequency
+              </label>
+              <select
+                value={digestFrequency}
+                onChange={(e) => setDigestFrequency(e.target.value)}
+                className="w-48 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Every 2 weeks</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Personalized AI-summarized opportunity digests sent to your email
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <button

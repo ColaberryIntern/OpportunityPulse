@@ -295,6 +295,10 @@ async function startServer() {
       // Start AI Tools trend analysis scheduler
       const { startAiToolsScheduler } = require('./aiTools/scheduler');
       startAiToolsScheduler();
+
+      // Start email digest scheduler
+      const { startDigestScheduler } = require('./emailDigest/emailDigest.scheduler');
+      startDigestScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

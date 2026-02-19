@@ -47,6 +47,19 @@ module.exports = (sequelize) => {
       defaultValue: true,
       field: 'in_app_notify',
     },
+    digestFrequency: {
+      type: DataTypes.STRING(10),
+      defaultValue: 'weekly',
+      field: 'digest_frequency',
+      validate: {
+        isIn: [['daily', 'weekly', 'biweekly', 'monthly']],
+      },
+    },
+    lastDigestSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'last_digest_sent_at',
+    },
   }, {
     tableName: 'alert_preferences',
     timestamps: true,
