@@ -9,19 +9,19 @@ const TYPE_LABELS = {
 };
 
 const SEVERITY_STYLES = {
-  info: { border: 'border-l-blue-500', icon: 'text-blue-500', bg: 'bg-blue-50' },
-  warning: { border: 'border-l-yellow-500', icon: 'text-yellow-500', bg: 'bg-yellow-50' },
-  important: { border: 'border-l-red-500', icon: 'text-red-500', bg: 'bg-red-50' },
+  info: { border: 'border-l-blue-500', icon: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+  warning: { border: 'border-l-yellow-500', icon: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+  important: { border: 'border-l-red-500', icon: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
 };
 
 function AlertList({ alerts, pagination, onPageChange, onMarkRead, onMarkAllRead, onDelete, loading }) {
   if (loading) {
-    return <p className="text-gray-500">Loading alerts...</p>;
+    return <p className="text-gray-500 dark:text-gray-400">Loading alerts...</p>;
   }
 
   if (!alerts || !alerts.length) {
     return (
-      <div className="bg-white shadow rounded-lg p-6 text-center text-gray-500">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 text-center text-gray-500 dark:text-gray-400">
         No alerts yet.
       </div>
     );
@@ -42,7 +42,7 @@ function AlertList({ alerts, pagination, onPageChange, onMarkRead, onMarkAllRead
         </div>
       )}
 
-      <div className="bg-white shadow rounded-lg overflow-hidden divide-y divide-gray-200">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
         {alerts.map((alert) => {
           const severity = SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.info;
 
@@ -69,15 +69,15 @@ function AlertList({ alerts, pagination, onPageChange, onMarkRead, onMarkAllRead
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h4 className={`text-sm ${!alert.read ? 'font-semibold text-gray-900' : 'font-normal text-gray-700'}`}>
+                  <h4 className={`text-sm ${!alert.read ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-normal text-gray-700 dark:text-gray-300'}`}>
                     {alert.title}
                   </h4>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                     {TYPE_LABELS[alert.type] || alert.type}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mt-0.5">{alert.message}</p>
-                <span className="text-xs text-gray-400 mt-1 block">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{alert.message}</p>
+                <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 block">
                   {new Date(alert.createdAt).toLocaleString()}
                 </span>
               </div>

@@ -17,24 +17,24 @@ function RoleAssigner({ roles }) {
   };
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Assign Role to User</h2>
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Assign Role to User</h2>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded text-red-700 text-sm">
           {error}
         </div>
       )}
 
       {assignSuccess && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 rounded text-green-700 text-sm">
           Role assigned successfully.
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="userId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             User ID
           </label>
           <input
@@ -44,20 +44,20 @@ function RoleAssigner({ roles }) {
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             placeholder="Enter user ID"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             required
           />
         </div>
 
         <div className="flex-1">
-          <label htmlFor="roleId" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="roleId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Role
           </label>
           <select
             id="roleId"
             value={roleId}
             onChange={(e) => setRoleId(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             required
           >
             <option value="">Select a role</option>

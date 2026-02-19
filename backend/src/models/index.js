@@ -34,6 +34,15 @@ const AnalysisRun = require('./AnalysisRun')(sequelize);
 const AlertPreference = require('./AlertPreference')(sequelize);
 const ForumPost = require('./ForumPost')(sequelize);
 const Comment = require('./Comment')(sequelize);
+const ApiKey = require('./ApiKey')(sequelize);
+const Webhook = require('./Webhook')(sequelize);
+const WebhookDelivery = require('./WebhookDelivery')(sequelize);
+const BehaviorProfile = require('./BehaviorProfile')(sequelize);
+const SavedOpportunity = require('./SavedOpportunity')(sequelize);
+const Notification = require('./Notification')(sequelize);
+const PersonalMatch = require('./PersonalMatch')(sequelize);
+const AiTool = require('./AiTool')(sequelize);
+const AiToolMention = require('./AiToolMention')(sequelize);
 
 const models = {
   UserRole,
@@ -51,6 +60,15 @@ const models = {
   AlertPreference,
   ForumPost,
   Comment,
+  ApiKey,
+  Webhook,
+  WebhookDelivery,
+  BehaviorProfile,
+  SavedOpportunity,
+  Notification,
+  PersonalMatch,
+  AiTool,
+  AiToolMention,
 };
 
 // Set up associations

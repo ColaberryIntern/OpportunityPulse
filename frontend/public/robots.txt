@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /browse
+Allow: /login
+Allow: /register
+Allow: /privacy
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /admin
+Sitemap: https://opportunitypulse.com/sitemap.xml

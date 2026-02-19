@@ -7,6 +7,7 @@ describe('uiSlice', () => {
   const initialState = {
     upgradeRequired: false,
     upgradeMessage: '',
+    darkMode: false,
   };
 
   it('should return initial state', () => {

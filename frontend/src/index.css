@@ -17,9 +17,42 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Dark mode support */
+/* Dark mode support — CSS variable overrides for brand colors */
 .dark {
   --color-primary: #0a0a1a;
   --color-secondary: #0d1527;
   --color-accent: #0a2540;
+}
+
+/* Dark mode fallback for form elements without explicit dark: classes */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #374151;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+/* Accessibility: focus-visible ring for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid #0f3460;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.dark *:focus-visible {
+  outline-color: #60a5fa;
+}
+
+/* Accessibility: screen reader only utility (supplements Tailwind sr-only) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

@@ -13,6 +13,13 @@ import OpportunityStatsCard from '../components/dashboard/OpportunityStatsCard';
 import OpportunityChart from '../components/dashboard/OpportunityChart';
 import TrendCard from '../components/dashboard/TrendCard';
 import UpgradePrompt from '../components/common/UpgradePrompt';
+import RecommendationsList from '../components/recommendations/RecommendationsList';
+import ForYouSection from '../components/dashboard/ForYouSection';
+import OnboardingFlow from '../components/onboarding/OnboardingFlow';
+import { useRealtimeDashboard } from '../hooks/useRealtimeDashboard';
+import { ConnectionStatus } from '../components/dashboard/RealTimeDashboard';
+import SEOHead from '../components/common/SEOHead';
+import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
 
 function DashboardPage() {
   const dispatch = useDispatch();
@@ -30,6 +37,8 @@ function DashboardPage() {
   const [activityPage, setActivityPage] = useState(1);
   const [chartType, setChartType] = useState('');
   const [chartPeriod, setChartPeriod] = useState('30d');
+
+  useRealtimeDashboard();
 
   useEffect(() => {
     dispatch(fetchStats());
@@ -56,13 +65,18 @@ function DashboardPage() {
 
   return (
     <div className="p-6">
+      <SEOHead title="Dashboard" path="/dashboard" />
+      <OnboardingFlow />
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-primary mb-6">Dashboard</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-primary dark:text-white">Dashboard</h1>
+          <ConnectionStatus />
+        </div>
 
         <UpgradePrompt />
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -93,15 +107,25 @@ function DashboardPage() {
 
         {/* Opportunity Overview */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Opportunity Overview
           </h2>
           <OpportunityStatsCard stats={opportunityStats} />
         </section>
 
+        {/* AI Personal Matches */}
+        <section className="mb-8">
+          <ForYouSection />
+        </section>
+
+        {/* AI Recommendations */}
+        <section className="mb-8">
+          <RecommendationsList />
+        </section>
+
         {/* Opportunity Chart (Premium) */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Opportunity Trends
           </h2>
           <OpportunityChart
@@ -114,19 +138,26 @@ function DashboardPage() {
 
         {/* Market Trends */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Market Trends
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <TrendCard type="gov_contract" trendData={trends?.gov_contract} />
             <TrendCard type="ai_job" trendData={trends?.ai_job} />
             <TrendCard type="investment" trendData={trends?.investment} />
+            <TrendCard type="grant" trendData={trends?.grant} />
+            <TrendCard type="ai_news" trendData={trends?.ai_news} />
           </div>
+        </section>
+
+        {/* Trending AI Tools */}
+        <section className="mb-8">
+          <AiToolTrendingWidget />
         </section>
 
         {/* Recent Activity */}
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Recent Activity</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Recent Activity</h2>
           <RecentActivity
             activities={activities}
             pagination={pagination}

@@ -19,6 +19,20 @@ services:
     networks:
       - internal
 
+  redis:
+    image: redis:7-alpine
+    container_name: op-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
   backend:
     build: ./backend
     container_name: op-backend
@@ -36,10 +50,10 @@ services:
       JWT_ACCESS_EXPIRY: 15m
       JWT_REFRESH_EXPIRY: 7d
       BCRYPT_ROUNDS: "12"
-      FRONTEND_URL: https://${DOMAIN}
+      FRONTEND_URL: http://${DOMAIN}
       RATE_LIMIT_WINDOW_MS: "900000"
-      RATE_LIMIT_MAX_REQUESTS: "100"
-      AUTH_RATE_LIMIT_MAX: "20"
+      RATE_LIMIT_MAX_REQUESTS: "500"
+      AUTH_RATE_LIMIT_MAX: "50"
       LOG_LEVEL: info
       AUDIT_LOG_ENABLED: "true"
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
@@ -47,8 +61,19 @@ services:
       SAM_GOV_API_KEY: ${SAM_GOV_API_KEY}
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@opportunitypulse.com}
+      EMAIL_VERIFICATION_URL: http://${DOMAIN}/verify-email
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      REDIS_URL: redis://redis:6379
+      USAJOBS_API_KEY: ${USAJOBS_API_KEY}
+      USAJOBS_EMAIL: ${USAJOBS_EMAIL}
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3002}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - internal
@@ -57,7 +82,7 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_API_BASE_URL: https://${DOMAIN}/api/v1
+        REACT_APP_API_BASE_URL: /api/v1
     container_name: op-frontend
     restart: unless-stopped
     networks:
@@ -92,10 +117,63 @@ services:
     networks:
       - internal
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: op-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: op-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+
+  backup:
+    image: postgres:15-alpine
+    container_name: op-backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./deploy/backup/backup.sh:/backup.sh:ro
+      - ./deploy/backup/crontab:/etc/crontabs/root:ro
+      - backups:/backups
+    entrypoint: ["crond", "-f", "-l", "2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
 volumes:
   pgdata:
+  redis-data:
   certbot-webroot:
   certbot-certs:
+  prometheus-data:
+  grafana-data:
+  backups:
 
 networks:
   internal:

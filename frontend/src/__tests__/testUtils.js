@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { configureStore } from '@reduxjs/toolkit';
 import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import authReducer from '../store/slices/authSlice';
 import roleReducer from '../store/slices/roleSlice';
 import dashboardReducer from '../store/slices/dashboardSlice';
@@ -37,7 +38,9 @@ export function renderWithProviders(
   function Wrapper({ children }) {
     return (
       <Provider store={store}>
-        <BrowserRouter>{children}</BrowserRouter>
+        <HelmetProvider>
+          <BrowserRouter>{children}</BrowserRouter>
+        </HelmetProvider>
       </Provider>
     );
   }

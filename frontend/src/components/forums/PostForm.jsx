@@ -17,42 +17,47 @@ function PostForm({ onSubmit, loading, initialValues }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-5">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
+    <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
+      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
         {initialValues ? 'Edit Post' : 'Create New Post'}
       </h3>
 
       {/* Title */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+        <label htmlFor="post-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
         <input
+          id="post-title"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Post title..."
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
+          aria-required="true"
         />
       </div>
 
       {/* Body */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+        <label htmlFor="post-body" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
         <textarea
+          id="post-body"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
           placeholder="Write your post..."
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
+          aria-required="true"
         />
       </div>
 
       {/* Category */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+        <label htmlFor="post-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
         <select
+          id="post-category"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
         >
           <option value="general">General</option>
           <option value="gov_contracts">Government Contracts</option>

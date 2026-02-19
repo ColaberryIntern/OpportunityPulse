@@ -1,6 +1,8 @@
 const { Op } = require('sequelize');
-const { Content, User } = require('../models');
+const { Content, User, Opportunity } = require('../models');
 const { PAGINATION } = require('../config/constants');
+const { getAIClient } = require('../analysis/ai.client');
+const logger = require('../logging/logger');
 
 /**
  * Search content with keyword, filters, pagination, and sorting.
@@ -104,4 +106,68 @@ async function search({
   };
 }
 
-module.exports = { search };
+/**
+ * Natural language search: parse user query with AI, then search Opportunities.
+ */
+async function naturalLanguageSearch(query) {
+  const aiClient = getAIClient();
+
+  const systemPrompt = `You are a search query parser for a government contracts and AI jobs platform. Extract structured search filters from the user's natural language query. Return a JSON object with these optional fields:
+- type: "gov_contract", "ai_job", or "investment" (if specified)
+- keywords: array of search keywords
+- location: state code or location name
+- minValue: minimum dollar value (number only)
+- category: NAICS code or category name
+Only include fields that are clearly specified in the query. Return empty object {} if the query is too vague.`;
+
+  const { content } = await aiClient.chat(systemPrompt, query, { temperature: 0.1, maxTokens: 500 });
+  let filters;
+  try {
+    filters = JSON.parse(content);
+  } catch {
+    filters = {};
+  }
+
+  logger.info('NL search parsed filters', { query, filters });
+
+  // Build Opportunity query from extracted filters
+  const where = { status: 'active' };
+
+  if (filters.type) where.type = filters.type;
+  if (filters.location) {
+    where.location = { [Op.iLike]: `%${filters.location}%` };
+  }
+  if (filters.minValue) {
+    where.value = { [Op.gte]: parseFloat(filters.minValue) };
+  }
+  if (filters.category) {
+    where.category = { [Op.iLike]: `%${filters.category}%` };
+  }
+
+  // Keyword search across title and description
+  if (filters.keywords && filters.keywords.length > 0) {
+    const keywordConditions = filters.keywords.map(kw => ({
+      [Op.or]: [
+        { title: { [Op.iLike]: `%${kw}%` } },
+        { description: { [Op.iLike]: `%${kw}%` } },
+      ],
+    }));
+    if (where[Op.or]) {
+      // Merge with existing
+      where[Op.and] = keywordConditions;
+    } else {
+      where[Op.and] = keywordConditions;
+    }
+  }
+
+  const results = await Opportunity.findAll({
+    where,
+    order: [['ai_score', 'DESC NULLS LAST']],
+    limit: 20,
+    attributes: ['id', 'type', 'title', 'description', 'sourceUrl', 'category', 'aiScore', 'value', 'location', 'publishedAt'],
+  });
+
+  return { results, filters, originalQuery: query };
+}
+
+module.exports = { search, naturalLanguageSearch };

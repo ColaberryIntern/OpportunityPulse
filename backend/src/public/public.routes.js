@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const controller = require('./public.controller');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
  *       200:
  *         description: Public opportunity statistics
  */
-router.get('/stats', controller.getStats);
+router.get('/stats', cacheResponse('public:stats', 120), controller.getStats);
 
 /**
  * @swagger
@@ -50,7 +51,7 @@ router.get('/stats', controller.getStats);
  *       200:
  *         description: Paginated list of public opportunities
  */
-router.get('/', controller.listOpportunities);
+router.get('/', cacheResponse('public:list', 120), controller.listOpportunities);
 
 /**
  * @swagger

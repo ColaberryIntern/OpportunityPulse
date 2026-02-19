@@ -30,12 +30,18 @@ const USER_ACTIVITY_ACTIONS = {
   CONTENT_DELETE: 'content_delete',
   SEARCH_QUERY: 'search_query',
   PROFILE_UPDATE: 'profile_update',
+  OPPORTUNITY_VIEW: 'opportunity_view',
+  OPPORTUNITY_CLICK: 'opportunity_click',
+  RECOMMENDATION_CLICK: 'recommendation_click',
+  TIME_ON_PAGE: 'time_on_page',
 };
 
 const OPPORTUNITY_TYPES = {
   GOV_CONTRACT: 'gov_contract',
   AI_JOB: 'ai_job',
   INVESTMENT: 'investment',
+  GRANT: 'grant',
+  AI_NEWS: 'ai_news',
 };
 
 const OPPORTUNITY_STATUS = {
@@ -108,6 +114,8 @@ const FORUM_CATEGORIES = {
   GOV_CONTRACTS: 'gov_contracts',
   AI_JOBS: 'ai_jobs',
   INVESTMENTS: 'investments',
+  GRANTS: 'grants',
+  AI_NEWS: 'ai_news',
   PLATFORM: 'platform',
 };
 

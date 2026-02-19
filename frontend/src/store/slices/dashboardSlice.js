@@ -88,6 +88,14 @@ const dashboardSlice = createSlice({
     clearDashboardError: (state) => {
       state.error = null;
     },
+    updateStatsFromSocket: (state, action) => {
+      if (action.payload.opportunityStats) {
+        state.opportunityStats = action.payload.opportunityStats;
+      }
+      if (action.payload.stats) {
+        state.stats = action.payload.stats;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -139,5 +147,5 @@ const dashboardSlice = createSlice({
   },
 });
 
-export const { clearDashboardError } = dashboardSlice.actions;
+export const { clearDashboardError, updateStatsFromSocket } = dashboardSlice.actions;
 export default dashboardSlice.reducer;

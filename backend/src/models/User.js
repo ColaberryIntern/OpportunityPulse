@@ -33,6 +33,11 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    profileData: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
+      field: 'profile_data',
+    },
     emailVerified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
@@ -42,6 +47,16 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(255),
       allowNull: true,
       field: 'verification_token',
+    },
+    resetToken: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'reset_token',
+    },
+    resetTokenExpiry: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'reset_token_expiry',
     },
     roleId: {
       type: DataTypes.INTEGER,
@@ -81,6 +96,8 @@ module.exports = (sequelize) => {
     const values = { ...this.get() };
     delete values.passwordHash;
     delete values.verificationToken;
+    delete values.resetToken;
+    delete values.resetTokenExpiry;
     return values;
   };
 
@@ -91,6 +108,7 @@ module.exports = (sequelize) => {
     User.hasMany(models.Feedback, { foreignKey: 'user_id', as: 'feedback' });
     User.hasMany(models.Subscription, { foreignKey: 'user_id', as: 'subscriptions' });
     User.hasOne(models.AlertPreference, { foreignKey: 'user_id', as: 'alertPreference' });
+    User.hasOne(models.BehaviorProfile, { foreignKey: 'user_id', as: 'behaviorProfile' });
     User.hasMany(models.ForumPost, { foreignKey: 'user_id', as: 'forumPosts' });
     User.hasMany(models.Comment, { foreignKey: 'user_id', as: 'comments' });
   };

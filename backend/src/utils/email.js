@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const { env } = require('../config/environment');
 const logger = require('../logging/logger');
-const { verificationEmailTemplate } = require('./emailTemplates');
+const { verificationEmailTemplate, resetPasswordEmailTemplate } = require('./emailTemplates');
 
 /**
  * Create a reusable Nodemailer transporter for Gmail SMTP.
@@ -68,4 +68,13 @@ async function sendVerificationEmail(to, token) {
   return sendEmail({ to, subject, html, text });
 }
 
-module.exports = { sendEmail, sendVerificationEmail };
+/**
+ * Send password reset email to a user.
+ */
+async function sendPasswordResetEmail(to, token) {
+  const resetUrl = `${env.frontendUrl}/reset-password?token=${token}`;
+  const { subject, html, text } = resetPasswordEmailTemplate({ resetUrl });
+  return sendEmail({ to, subject, html, text });
+}
+
+module.exports = { sendEmail, sendVerificationEmail, sendPasswordResetEmail };

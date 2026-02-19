@@ -27,4 +27,13 @@ function verifyToken(req, res, next) {
   }
 }
 
-module.exports = { verifyToken };
+/**
+ * Dual-auth middleware: tries JWT first, falls back to API key.
+ * Delegates to apiKeyAuth.middleware for the API key path.
+ */
+function verifyTokenOrApiKey(req, res, next) {
+  const { verifyTokenOrApiKey: dual } = require('./apiKeyAuth.middleware');
+  return dual(req, res, next);
+}
+
+module.exports = { verifyToken, verifyTokenOrApiKey };

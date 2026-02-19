@@ -66,6 +66,9 @@ const env = {
   logLevel: process.env.LOG_LEVEL || 'info',
   auditLogEnabled: process.env.AUDIT_LOG_ENABLED === 'true',
   encryptionKey: process.env.ENCRYPTION_KEY,
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
 };
 
 module.exports = { env, validateEnv };

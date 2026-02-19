@@ -22,32 +22,38 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
   }, [q, category, status, sort, minScore]); // onFilterChange is stable via useCallback
 
   return (
-    <div className="bg-white shadow rounded-lg p-4">
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
+          <label htmlFor="opp-filter-search" className="sr-only">Search opportunities</label>
           <input
+            id="opp-filter-search"
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search opportunities..."
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           />
         </div>
         <div>
+          <label htmlFor="opp-filter-category" className="sr-only">Category</label>
           <input
+            id="opp-filter-category"
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             placeholder="Category"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           />
         </div>
         {!isPublic && (
           <div>
+            <label htmlFor="opp-filter-status" className="sr-only">Status</label>
             <select
+              id="opp-filter-status"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
@@ -58,10 +64,12 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
           </div>
         )}
         <div>
+          <label htmlFor="opp-filter-sort" className="sr-only">Sort order</label>
           <select
+            id="opp-filter-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
@@ -71,14 +79,16 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
         </div>
         {!isPublic && (
           <div>
+            <label htmlFor="opp-filter-min-score" className="sr-only">Minimum score</label>
             <input
+              id="opp-filter-min-score"
               type="number"
               value={minScore}
               onChange={(e) => setMinScore(e.target.value)}
               placeholder="Min Score"
               min="0"
               max="100"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             />
           </div>
         )}

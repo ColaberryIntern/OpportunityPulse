@@ -67,7 +67,7 @@ function FeedbackPage() {
         <h1 className="text-2xl font-bold text-primary mb-6">Feedback</h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -82,7 +82,7 @@ function FeedbackPage() {
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="">All Types</option>
             <option value="platform">Platform</option>

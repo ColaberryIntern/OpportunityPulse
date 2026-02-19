@@ -11,7 +11,7 @@ function ForumFilters({ onFilterChange, filters }) {
       <select
         value={filters.category || ''}
         onChange={(e) => handleChange('category', e.target.value)}
-        className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
       >
         <option value="">All Categories</option>
         <option value="general">General</option>
@@ -25,7 +25,7 @@ function ForumFilters({ onFilterChange, filters }) {
       <select
         value={filters.status || ''}
         onChange={(e) => handleChange('status', e.target.value)}
-        className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
       >
         <option value="">All Statuses</option>
         <option value="open">Open</option>

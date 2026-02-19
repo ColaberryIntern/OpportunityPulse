@@ -1,6 +1,8 @@
 const { DataSource, Opportunity, IngestionLog } = require('../models');
 const { INGESTION_STATUS } = require('../config/constants');
 const logger = require('../logging/logger');
+const { invalidateCache } = require('../middleware/cache.middleware');
+const { emit, EVENTS } = require('../webhooks/eventBus');
 
 const SamGovAdapter = require('./adapters/samGov.adapter');
 const SamGovScraperAdapter = require('./adapters/samGovScraper.adapter');
@@ -11,6 +13,15 @@ const RemotiveAdapter = require('./adapters/remotive.adapter');
 const RemoteOkAdapter = require('./adapters/remoteOk.adapter');
 const HimalayasAdapter = require('./adapters/himalayas.adapter');
 const JobicyAdapter = require('./adapters/jobicy.adapter');
+const GrantsGovAdapter = require('./adapters/grantsGov.adapter');
+const SbirAdapter = require('./adapters/sbir.adapter');
+const UsaJobsAdapter = require('./adapters/usaJobs.adapter');
+const AdzunaAdapter = require('./adapters/adzuna.adapter');
+const FundingNewsAdapter = require('./adapters/fundingNews.adapter');
+const GoogleNewsAdapter = require('./adapters/googleNews.adapter');
+const HackerNewsAdapter = require('./adapters/hackerNews.adapter');
+const DevToAdapter = require('./adapters/devto.adapter');
+const RedditAIAdapter = require('./adapters/redditAI.adapter');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -45,6 +56,24 @@ function getAdapter(dataSource) {
       return new HimalayasAdapter(dataSource);
     case 'jobicy':
       return new JobicyAdapter(dataSource);
+    case 'grants_gov':
+      return new GrantsGovAdapter(dataSource);
+    case 'sbir_gov':
+      return new SbirAdapter(dataSource);
+    case 'usajobs':
+      return new UsaJobsAdapter(dataSource);
+    case 'adzuna':
+      return new AdzunaAdapter(dataSource);
+    case 'funding_news':
+      return new FundingNewsAdapter(dataSource);
+    case 'google_news':
+      return new GoogleNewsAdapter(dataSource);
+    case 'hacker_news':
+      return new HackerNewsAdapter(dataSource);
+    case 'devto':
+      return new DevToAdapter(dataSource);
+    case 'reddit_ai':
+      return new RedditAIAdapter(dataSource);
     default:
       throw new AppError(`Unknown data source adapter: ${dataSource.name}`, 400);
   }
@@ -119,11 +148,20 @@ async function runIngestion(dataSourceName) {
           recordsUpdated++;
         } else {
           // Create new record
-          await Opportunity.create({
+          const newOpp = await Opportunity.create({
             ...record,
             dataSourceId: dataSource.id,
           });
           recordsCreated++;
+
+          // Fire webhook event for new opportunity
+          emit(EVENTS.OPPORTUNITY_CREATED, {
+            id: newOpp.id,
+            title: newOpp.title,
+            type: newOpp.type,
+            source: newOpp.source,
+            dataSource: dataSourceName,
+          });
         }
       } catch (recordError) {
         recordsSkipped++;
@@ -166,6 +204,15 @@ async function runIngestion(dataSourceName) {
       errors: errors.length,
       ingestionLogId: ingestionLog.id,
     };
+
+    // Invalidate cached data since new opportunities were ingested
+    await invalidateCache('cache:dashboard:*');
+    await invalidateCache('cache:public:*');
+    await invalidateCache('cache:opportunities:*');
+    await invalidateCache('cache:recommendations:*');
+
+    // Fire webhook event for completed ingestion
+    emit(EVENTS.INGESTION_COMPLETED, summary);
 
     logger.info(`Ingestion complete for '${dataSourceName}':`, summary);
     return summary;

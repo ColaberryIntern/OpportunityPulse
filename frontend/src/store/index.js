@@ -10,6 +10,10 @@ import alertPrefReducer from './slices/alertPrefSlice';
 import uiReducer from './slices/uiSlice';
 import feedbackReducer from './slices/feedbackSlice';
 import forumReducer from './slices/forumSlice';
+import apiKeyReducer from './slices/apiKeySlice';
+import webhookReducer from './slices/webhookSlice';
+import subscriptionReducer from './slices/subscriptionSlice';
+import aiToolReducer from './slices/aiToolSlice';
 
 export const store = configureStore({
   reducer: {
@@ -24,5 +28,9 @@ export const store = configureStore({
     ui: uiReducer,
     feedback: feedbackReducer,
     forums: forumReducer,
+    apiKeys: apiKeyReducer,
+    webhooks: webhookReducer,
+    subscription: subscriptionReducer,
+    aiTools: aiToolReducer,
   },
 });

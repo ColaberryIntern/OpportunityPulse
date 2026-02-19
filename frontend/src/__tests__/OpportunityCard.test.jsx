@@ -53,13 +53,15 @@ describe('OpportunityCard', () => {
 
   it('links to opportunity detail page', () => {
     renderWithProviders(<OpportunityCard opportunity={mockOpportunity} />);
-    const link = screen.getByRole('link');
-    expect(link).toHaveAttribute('href', '/opportunities/1');
+    const links = screen.getAllByRole('link');
+    const cardLink = links.find((l) => l.getAttribute('href') === '/opportunities/1');
+    expect(cardLink).toBeTruthy();
   });
 
   it('links to browse page when isPublic', () => {
     renderWithProviders(<OpportunityCard opportunity={mockOpportunity} isPublic />);
-    const link = screen.getByRole('link');
-    expect(link).toHaveAttribute('href', '/browse/1');
+    const links = screen.getAllByRole('link');
+    const cardLink = links.find((l) => l.getAttribute('href') === '/browse/1');
+    expect(cardLink).toBeTruthy();
   });
 });

@@ -5,6 +5,7 @@ const { listOpportunitiesValidation } = require('./opportunity.validation');
 const { handleValidationErrors } = require('../middleware/validation.middleware');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkPremiumQuery } = require('../middleware/subscription.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 // All opportunity routes require authentication
 router.use(verifyToken);
@@ -80,6 +81,7 @@ router.get('/stats', opportunityController.getStats);
  */
 router.get(
   '/',
+  cacheResponse('opportunities:list', 60),
   checkPremiumQuery('minScore'),
   listOpportunitiesValidation,
   handleValidationErrors,

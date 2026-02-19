@@ -5,7 +5,7 @@ function Pagination({ pagination, onPageChange }) {
 
   return (
     <div className="mt-4 flex justify-between items-center text-sm">
-      <span className="text-gray-500">
+      <span className="text-gray-500 dark:text-gray-400">
         Page {pagination.page} of {pagination.pages}
         {pagination.total != null && ` (${pagination.total} total)`}
       </span>
@@ -13,14 +13,14 @@ function Pagination({ pagination, onPageChange }) {
         <button
           onClick={() => onPageChange(pagination.page - 1)}
           disabled={pagination.page <= 1}
-          className="px-3 py-1 border rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Previous
         </button>
         <button
           onClick={() => onPageChange(pagination.page + 1)}
           disabled={pagination.page >= pagination.pages}
-          className="px-3 py-1 border rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>

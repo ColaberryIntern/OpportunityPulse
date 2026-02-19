@@ -2,15 +2,15 @@ import React from 'react';
 import Pagination from '../common/Pagination';
 
 const TYPE_COLORS = {
-  platform: 'bg-blue-100 text-blue-800',
-  opportunity: 'bg-green-100 text-green-800',
-  content: 'bg-purple-100 text-purple-800',
+  platform: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800',
+  opportunity: 'bg-green-100 dark:bg-green-900/30 text-green-800',
+  content: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800',
 };
 
 const STATUS_COLORS = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  reviewed: 'bg-green-100 text-green-800',
-  resolved: 'bg-gray-100 text-gray-800',
+  pending: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800',
+  reviewed: 'bg-green-100 dark:bg-green-900/30 text-green-800',
+  resolved: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
 };
 
 function FeedbackList({ items, pagination, onPageChange, onDelete, loading, currentUserId, isAdmin }) {
@@ -27,7 +27,7 @@ function FeedbackList({ items, pagination, onPageChange, onDelete, loading, curr
 
   if (!items || items.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
+      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
         No feedback yet.
       </div>
     );
@@ -54,29 +54,29 @@ function FeedbackList({ items, pagination, onPageChange, onDelete, loading, curr
     <div>
       <div className="space-y-4">
         {items.map((item) => (
-          <div key={item.id} className="bg-white shadow rounded-lg p-5">
+          <div key={item.id} className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   {renderStars(item.score)}
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     {item.user?.name || 'Anonymous'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[item.type] || 'bg-gray-100 text-gray-800'}`}>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[item.type] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
                     {item.type}
                   </span>
                   {item.status && (
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[item.status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
                       {item.status}
                     </span>
                   )}
                 </div>
                 {item.comments && (
-                  <p className="text-sm text-gray-700 mt-2">{item.comments}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">{item.comments}</p>
                 )}
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                   {new Date(item.createdAt).toLocaleDateString()}
                 </p>
               </div>

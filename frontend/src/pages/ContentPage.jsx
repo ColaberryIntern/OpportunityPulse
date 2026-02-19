@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchContent } from '../store/slices/contentSlice';
 import ContentList from '../components/content/ContentList';
 import ContentEditor from '../components/content/ContentEditor';
+import ContentGenerator from '../components/content/ContentGenerator';
 
 function ContentPage() {
   const dispatch = useDispatch();
@@ -34,12 +35,15 @@ function ContentPage() {
         <h1 className="text-2xl font-bold text-primary mb-6">Content Management</h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}
 
         <div className="space-y-6">
+          {/* AI Content Generator */}
+          <ContentGenerator />
+
           {/* Editor */}
           <ContentEditor editItem={editItem} onCancel={handleCancelEdit} />
 
@@ -48,7 +52,7 @@ function ContentPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             >
               <option value="">All Statuses</option>
               <option value="draft">Draft</option>
@@ -60,7 +64,7 @@ function ContentPage() {
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
               placeholder="Filter by category..."
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
             />
           </div>
 

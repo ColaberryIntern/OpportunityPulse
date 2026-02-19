@@ -90,6 +90,35 @@ router.get('/', contentController.listContent);
 
 /**
  * @swagger
+ * /content/generate:
+ *   post:
+ *     tags: [Content]
+ *     summary: Generate AI content based on a topic
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [topic]
+ *             properties:
+ *               topic:
+ *                 type: string
+ *                 description: Topic for AI content generation (min 3 characters)
+ *     responses:
+ *       201:
+ *         description: Content generated successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/generate', contentController.generateContent);
+
+/**
+ * @swagger
  * /content/{id}:
  *   get:
  *     tags: [Content]

@@ -53,9 +53,49 @@ const resendVerificationValidation = [
     .normalizeEmail(),
 ];
 
+const changePasswordValidation = [
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required.'),
+  body('newPassword')
+    .isLength({ min: 8, max: 128 })
+    .withMessage('New password must be between 8 and 128 characters.')
+    .matches(/[A-Z]/)
+    .withMessage('New password must contain at least one uppercase letter.')
+    .matches(/[0-9]/)
+    .withMessage('New password must contain at least one number.')
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage('New password must contain at least one special character.'),
+];
+
+const forgotPasswordValidation = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address.')
+    .normalizeEmail(),
+];
+
+const resetPasswordValidation = [
+  body('token')
+    .notEmpty()
+    .withMessage('Reset token is required.'),
+  body('newPassword')
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be between 8 and 128 characters.')
+    .matches(/[A-Z]/)
+    .withMessage('Password must contain at least one uppercase letter.')
+    .matches(/[0-9]/)
+    .withMessage('Password must contain at least one number.')
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage('Password must contain at least one special character.'),
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
   profileUpdateValidation,
   resendVerificationValidation,
+  changePasswordValidation,
+  forgotPasswordValidation,
+  resetPasswordValidation,
 };

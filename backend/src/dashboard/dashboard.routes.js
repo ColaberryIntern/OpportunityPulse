@@ -3,6 +3,7 @@ const router = express.Router();
 const dashboardController = require('./dashboard.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkSubscription } = require('../middleware/subscription.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 // All dashboard routes require authentication
 router.use(verifyToken);
@@ -21,7 +22,7 @@ router.use(verifyToken);
  *       401:
  *         description: Unauthorized
  */
-router.get('/stats', dashboardController.getStats);
+router.get('/stats', cacheResponse('dashboard:stats', 60), dashboardController.getStats);
 
 /**
  * @swagger
@@ -53,7 +54,7 @@ router.get('/activity', dashboardController.getActivity);
  *       401:
  *         description: Unauthorized
  */
-router.get('/opportunity-stats', dashboardController.getOpportunityStats);
+router.get('/opportunity-stats', cacheResponse('dashboard:opp-stats', 120), dashboardController.getOpportunityStats);
 
 /**
  * @swagger
@@ -87,6 +88,6 @@ router.get('/charts', checkSubscription('premium'), dashboardController.getChart
  *       401:
  *         description: Unauthorized
  */
-router.get('/trends', dashboardController.getTrendSummary);
+router.get('/trends', cacheResponse('dashboard:trends', 300), dashboardController.getTrendSummary);
 
 module.exports = router;

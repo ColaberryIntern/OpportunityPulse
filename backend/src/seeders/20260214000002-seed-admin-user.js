@@ -4,7 +4,8 @@ const bcrypt = require('bcryptjs');
 
 module.exports = {
   async up(queryInterface) {
-    const passwordHash = await bcrypt.hash('Admin@12345', 12);
+    const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'Admin@12345';
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
 
     await queryInterface.bulkInsert('users', [
       {

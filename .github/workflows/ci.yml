@@ -273,3 +273,24 @@ jobs:
           docker image inspect op-backend:ci > /dev/null 2>&1
           docker image inspect op-frontend:ci > /dev/null 2>&1
           echo "Both images built successfully"
+
+  # Stage 9: Deploy to production (only on push to main)
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up -d --build
+            sleep 20
+            curl -f http://localhost:3001/api/v1/health || exit 1
+            echo "Deploy successful at $(date)"

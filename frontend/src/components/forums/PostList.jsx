@@ -16,7 +16,7 @@ function PostList({ posts, pagination, onPageChange, loading }) {
 
   if (!posts || posts.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
+      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
         No posts yet. Start a discussion!
       </div>
     );

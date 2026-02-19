@@ -2,36 +2,36 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const CATEGORY_COLORS = {
-  general: 'bg-gray-100 text-gray-800',
-  gov_contracts: 'bg-blue-100 text-blue-800',
-  ai_jobs: 'bg-purple-100 text-purple-800',
-  investments: 'bg-green-100 text-green-800',
+  general: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+  gov_contracts: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800',
+  ai_jobs: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800',
+  investments: 'bg-green-100 dark:bg-green-900/30 text-green-800',
   platform: 'bg-indigo-100 text-indigo-800',
 };
 
 const STATUS_COLORS = {
-  open: 'bg-green-100 text-green-800',
-  closed: 'bg-red-100 text-red-800',
-  pinned: 'bg-yellow-100 text-yellow-800',
+  open: 'bg-green-100 dark:bg-green-900/30 text-green-800',
+  closed: 'bg-red-100 dark:bg-red-900/30 text-red-800',
+  pinned: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800',
 };
 
 function PostCard({ post }) {
   return (
     <Link to={`/forums/${post.id}`}>
-      <div className="bg-white shadow rounded-lg p-5 hover:shadow-md transition">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5 hover:shadow-md transition">
         <div className="flex items-start justify-between">
-          <h3 className="text-lg font-bold text-gray-800">{post.title}</h3>
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">{post.title}</h3>
           <div className="flex items-center gap-2 ml-4 shrink-0">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${CATEGORY_COLORS[post.category] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${CATEGORY_COLORS[post.category] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
               {post.category?.replace('_', ' ')}
             </span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[post.status] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[post.status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
               {post.status}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+        <div className="flex items-center gap-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
           <span>{post.author?.name || post.user?.name || 'Unknown'}</span>
           <span>{new Date(post.createdAt).toLocaleDateString()}</span>
 

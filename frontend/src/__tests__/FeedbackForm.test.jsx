@@ -10,10 +10,11 @@ describe('FeedbackForm', () => {
     // Star rating label
     expect(screen.getByText('Rating')).toBeInTheDocument();
 
-    // Five star buttons
-    const starButtons = screen.getAllByRole('button', { name: '' });
-    // 5 star buttons + 1 submit button = at least 5 buttons
-    expect(starButtons.length).toBeGreaterThanOrEqual(5);
+    // Five star buttons (with aria-labels from accessibility)
+    const starButtons = [1, 2, 3, 4, 5].map((n) =>
+      screen.getByRole('button', { name: `${n} star${n > 1 ? 's' : ''}` })
+    );
+    expect(starButtons).toHaveLength(5);
 
     // Type dropdown
     expect(screen.getByText('Type')).toBeInTheDocument();

@@ -38,7 +38,7 @@ function OpportunityDetailPage() {
         <UpgradePrompt />
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}

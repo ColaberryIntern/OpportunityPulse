@@ -8,10 +8,10 @@ module.exports = (sequelize) => {
       autoIncrement: true,
     },
     type: {
-      type: DataTypes.STRING(30),
+      type: DataTypes.STRING(50),
       allowNull: false,
       validate: {
-        isIn: [['scoring', 'trend_detection', 'insight_generation']],
+        isIn: [['scoring', 'trend_detection', 'insight_generation', 'ai_tool_mention_extraction', 'ai_tool_trend_analysis', 'ai_tool_github_discovery', 'ai_tool_producthunt_discovery']],
       },
     },
     status: {

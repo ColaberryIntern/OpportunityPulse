@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import publicOpportunityService from '../services/publicOpportunityService';
 import OpportunityFilters from '../components/opportunities/OpportunityFilters';
 import OpportunityList from '../components/opportunities/OpportunityList';
+import SEOHead from '../components/common/SEOHead';
 
 function PublicBrowsePage() {
   const [items, setItems] = useState([]);
@@ -50,7 +51,8 @@ function PublicBrowsePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <SEOHead title="Browse Opportunities" description="Browse AI-scored government contracts, AI jobs, and investment opportunities. No account required." path="/browse" />
       {/* Minimal Public Header */}
       <header className="bg-primary text-white shadow-md sticky top-0 z-30">
         <div className="flex items-center justify-between px-4 h-14 max-w-6xl mx-auto">
@@ -77,12 +79,12 @@ function PublicBrowsePage() {
           <h1 className="text-2xl font-bold text-primary mb-2">
             Browse Opportunities
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             Explore government contracts, AI jobs, and investment opportunities.
           </p>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
               {error}
             </div>
           )}
@@ -90,29 +92,29 @@ function PublicBrowsePage() {
           {/* Quick Stats */}
           {stats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white shadow rounded-lg p-4 text-center">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-primary">
                   {stats.total ?? 0}
                 </div>
-                <div className="text-xs text-gray-500">Total Active</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Total Active</div>
               </div>
-              <div className="bg-white shadow rounded-lg p-4 text-center">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-blue-600">
                   {stats.gov_contract ?? 0}
                 </div>
-                <div className="text-xs text-gray-500">Gov Contracts</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Gov Contracts</div>
               </div>
-              <div className="bg-white shadow rounded-lg p-4 text-center">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-purple-600">
                   {stats.ai_job ?? 0}
                 </div>
-                <div className="text-xs text-gray-500">AI Jobs</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">AI Jobs</div>
               </div>
-              <div className="bg-white shadow rounded-lg p-4 text-center">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-green-600">
                   {stats.investment ?? 0}
                 </div>
-                <div className="text-xs text-gray-500">Investments</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Investments</div>
               </div>
             </div>
           )}
@@ -142,7 +144,7 @@ function PublicBrowsePage() {
             </p>
             <Link
               to="/register"
-              className="inline-block px-6 py-2.5 bg-white text-accent font-semibold rounded-md hover:bg-gray-100 transition"
+              className="inline-block px-6 py-2.5 bg-white text-accent font-semibold rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
             >
               Create Free Account
             </Link>

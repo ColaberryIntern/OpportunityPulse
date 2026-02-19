@@ -26,7 +26,7 @@ function SearchPage() {
         <h1 className="text-2xl font-bold text-primary mb-6">Search</h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}

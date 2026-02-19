@@ -39,12 +39,41 @@ export const fetchCurrentUser = createAsyncThunk(
   }
 );
 
+export const updateUserProfile = createAsyncThunk(
+  'auth/updateUserProfile',
+  async (data, { rejectWithValue }) => {
+    try {
+      await authService.updateProfile(data);
+      // Refresh user state from server
+      const response = await authService.getProfile();
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: 'Profile update failed' });
+    }
+  }
+);
+
+export const changeUserPassword = createAsyncThunk(
+  'auth/changeUserPassword',
+  async ({ currentPassword, newPassword }, { rejectWithValue }) => {
+    try {
+      const response = await authService.changePassword(currentPassword, newPassword);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: 'Password change failed' });
+    }
+  }
+);
+
 const initialState = {
   user: null,
   token: localStorage.getItem('token') || null,
   isAuthenticated: !!localStorage.getItem('token'),
   loading: false,
   error: null,
+  profileUpdateSuccess: false,
+  passwordChangeSuccess: false,
+  profileError: null,
 };
 
 const authSlice = createSlice({
@@ -60,6 +89,11 @@ const authSlice = createSlice({
     },
     clearError(state) {
       state.error = null;
+    },
+    clearProfileStatus(state) {
+      state.profileUpdateSuccess = false;
+      state.passwordChangeSuccess = false;
+      state.profileError = null;
     },
   },
   extraReducers: (builder) => {
@@ -100,9 +134,42 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         localStorage.removeItem('token');
+      })
+      // Update user profile
+      .addCase(updateUserProfile.pending, (state) => {
+        state.loading = true;
+        state.profileError = null;
+        state.profileUpdateSuccess = false;
+      })
+      .addCase(updateUserProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.profileUpdateSuccess = true;
+        state.profileError = null;
+      })
+      .addCase(updateUserProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.profileUpdateSuccess = false;
+        state.profileError = action.payload?.message || 'Profile update failed';
+      })
+      // Change password
+      .addCase(changeUserPassword.pending, (state) => {
+        state.loading = true;
+        state.profileError = null;
+        state.passwordChangeSuccess = false;
+      })
+      .addCase(changeUserPassword.fulfilled, (state) => {
+        state.loading = false;
+        state.passwordChangeSuccess = true;
+        state.profileError = null;
+      })
+      .addCase(changeUserPassword.rejected, (state, action) => {
+        state.loading = false;
+        state.passwordChangeSuccess = false;
+        state.profileError = action.payload?.message || 'Password change failed';
       });
   },
 });
 
-export const { logout, clearError } = authSlice.actions;
+export const { logout, clearError, clearProfileStatus } = authSlice.actions;
 export default authSlice.reducer;

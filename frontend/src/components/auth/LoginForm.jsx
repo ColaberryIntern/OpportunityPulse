@@ -24,40 +24,52 @@ function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Email
         </label>
         <input
-          id="email"
+          id="login-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border dark:bg-gray-800 dark:text-gray-100"
           required
+          aria-required="true"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'login-error' : undefined}
           autoComplete="email"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Password
         </label>
         <input
-          id="password"
+          id="login-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border dark:bg-gray-800 dark:text-gray-100"
           required
+          aria-required="true"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'login-error' : undefined}
           autoComplete="current-password"
         />
       </div>
 
       {error && (
-        <div className="text-red-600 text-sm" role="alert">
+        <span id="login-error" className="text-red-600 text-sm" role="alert">
           {error}
-        </div>
+        </span>
       )}
+
+      <div className="text-right">
+        <Link to="/forgot-password" className="text-sm text-accent hover:underline">
+          Forgot password?
+        </Link>
+      </div>
 
       <button
         type="submit"
@@ -67,7 +79,7 @@ function LoginForm() {
         {loading ? 'Signing in...' : 'Sign In'}
       </button>
 
-      <p className="text-sm text-center text-gray-600">
+      <p className="text-sm text-center text-gray-600 dark:text-gray-400">
         Don't have an account?{' '}
         <Link to="/register" className="text-accent hover:underline">
           Register

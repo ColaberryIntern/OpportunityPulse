@@ -3,9 +3,9 @@ import { useDispatch } from 'react-redux';
 import { deleteContent } from '../../store/slices/contentSlice';
 
 const STATUS_COLORS = {
-  draft: 'bg-yellow-100 text-yellow-800',
-  published: 'bg-green-100 text-green-800',
-  archived: 'bg-gray-100 text-gray-600',
+  draft: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800',
+  published: 'bg-green-100 dark:bg-green-900/30 text-green-800',
+  archived: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
 };
 
 function ContentList({ items, pagination, onPageChange, onEdit, loading }) {
@@ -18,12 +18,12 @@ function ContentList({ items, pagination, onPageChange, onEdit, loading }) {
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading content...</p>;
+    return <p className="text-gray-500 dark:text-gray-400">Loading content...</p>;
   }
 
   if (!items.length) {
     return (
-      <div className="bg-white shadow rounded-lg p-6 text-center text-gray-500">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 text-center text-gray-500 dark:text-gray-400">
         No content found. Create your first item above.
       </div>
     );
@@ -33,20 +33,20 @@ function ContentList({ items, pagination, onPageChange, onEdit, loading }) {
     <div>
       <div className="space-y-4">
         {items.map((item) => (
-          <div key={item.id} className="bg-white shadow rounded-lg p-5">
+          <div key={item.id} className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">{item.title}</h3>
-                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.body}</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{item.title}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{item.body}</p>
                 <div className="flex items-center gap-3 mt-3">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[item.status] || STATUS_COLORS.draft}`}>
                     {item.status}
                   </span>
                   {item.category && (
-                    <span className="text-xs text-gray-400">Category: {item.category}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">Category: {item.category}</span>
                   )}
                   {item.tags?.length > 0 && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       Tags: {item.tags.join(', ')}
                     </span>
                   )}
@@ -73,21 +73,21 @@ function ContentList({ items, pagination, onPageChange, onEdit, loading }) {
 
       {pagination && pagination.pages > 1 && (
         <div className="mt-4 flex justify-between items-center text-sm">
-          <span className="text-gray-500">
+          <span className="text-gray-500 dark:text-gray-400">
             Page {pagination.page} of {pagination.pages} ({pagination.total} total)
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => onPageChange(pagination.page - 1)}
               disabled={pagination.page <= 1}
-              className="px-3 py-1 border rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 border rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               onClick={() => onPageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.pages}
-              className="px-3 py-1 border rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 border rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

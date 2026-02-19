@@ -41,58 +41,69 @@ function RegisterForm() {
     }
   };
 
+  const hasError = !!(validationError || error);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Email
         </label>
         <input
-          id="email"
+          id="register-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border dark:bg-gray-800 dark:text-gray-100"
           required
+          aria-required="true"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? 'register-error' : undefined}
           autoComplete="email"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Password
         </label>
         <input
-          id="password"
+          id="register-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border dark:bg-gray-800 dark:text-gray-100"
           required
+          aria-required="true"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? 'register-error' : undefined}
           minLength={8}
           autoComplete="new-password"
         />
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="register-confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Confirm Password
         </label>
         <input
-          id="confirmPassword"
+          id="register-confirmPassword"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border"
+          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-accent focus:ring-accent px-3 py-2 border dark:bg-gray-800 dark:text-gray-100"
           required
+          aria-required="true"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? 'register-error' : undefined}
           autoComplete="new-password"
         />
       </div>
 
-      {(validationError || error) && (
-        <div className="text-red-600 text-sm" role="alert">
+      {hasError && (
+        <span id="register-error" className="text-red-600 text-sm" role="alert">
           {validationError || error}
-        </div>
+        </span>
       )}
 
       <button
@@ -103,7 +114,7 @@ function RegisterForm() {
         {loading ? 'Creating Account...' : 'Register'}
       </button>
 
-      <p className="text-sm text-center text-gray-600">
+      <p className="text-sm text-center text-gray-600 dark:text-gray-400">
         Already have an account?{' '}
         <Link to="/login" className="text-accent hover:underline">
           Log in

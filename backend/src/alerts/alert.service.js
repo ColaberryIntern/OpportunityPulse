@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Alert, Opportunity } = require('../models');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 const logger = require('../logging/logger');
+const { emit, EVENTS } = require('../webhooks/eventBus');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -97,6 +98,15 @@ async function createAlert({ userId, type, title, message, opportunityId, severi
     metadata: metadata || {},
   });
 
+  // Fire webhook event for new alert
+  emit(EVENTS.ALERT_CREATED, {
+    id: alert.id,
+    userId: alert.userId,
+    type: alert.type,
+    title: alert.title,
+    severity: alert.severity,
+  });
+
   return alert;
 }
 
@@ -106,6 +116,18 @@ async function createAlert({ userId, type, title, message, opportunityId, severi
 async function createAlertsBulk(alertRecords) {
   const alerts = await Alert.bulkCreate(alertRecords);
   logger.info(`Bulk created ${alerts.length} alerts`);
+
+  // Fire webhook events for bulk-created alerts
+  for (const alert of alerts) {
+    emit(EVENTS.ALERT_CREATED, {
+      id: alert.id,
+      userId: alert.userId,
+      type: alert.type,
+      title: alert.title,
+      severity: alert.severity,
+    });
+  }
+
   return alerts;
 }
 

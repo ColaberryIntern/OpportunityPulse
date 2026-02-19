@@ -1,5 +1,6 @@
 const { Content, User } = require('../models');
 const { PAGINATION, ROLES } = require('../config/constants');
+const { emit, EVENTS } = require('../webhooks/eventBus');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -89,6 +90,8 @@ async function updateContent(id, userId, userRole, { title, body, category, tags
     throw new AppError('Forbidden: you can only edit your own content.', 403);
   }
 
+  const previousStatus = content.status;
+
   if (title !== undefined) content.title = title;
   if (body !== undefined) content.body = body;
   if (category !== undefined) content.category = category;
@@ -96,6 +99,16 @@ async function updateContent(id, userId, userRole, { title, body, category, tags
   if (status !== undefined) content.status = status;
 
   await content.save();
+
+  // Fire webhook event when content transitions to published
+  if (status === 'published' && previousStatus !== 'published') {
+    emit(EVENTS.CONTENT_PUBLISHED, {
+      id: content.id,
+      title: content.title,
+      category: content.category,
+      userId: content.userId,
+    });
+  }
 
   return content.toJSON();
 }
@@ -119,11 +132,45 @@ async function deleteContent(id, userId, userRole) {
   return { message: 'Content deleted.' };
 }
 
+/**
+ * Generate content using AI based on a topic.
+ */
+async function generateContent(topic) {
+  const { getAIClient } = require('../analysis/ai.client');
+  const aiClient = getAIClient();
+
+  const systemPrompt = `You are a professional content writer for a platform focused on government AI contracts, AI job trends, and AI investment opportunities. Generate a well-structured article based on the given topic. Return JSON with:
+- title: a compelling article title
+- body: the full article text (500-1000 words, well-formatted with paragraphs)
+- category: one of "gov_contracts", "ai_jobs", "investments", "industry", "technology"
+- tags: array of 3-5 relevant tags`;
+
+  const { content } = await aiClient.chat(systemPrompt, `Write an article about: ${topic}`, {
+    temperature: 0.7,
+    maxTokens: 2000,
+  });
+
+  let generated;
+  try {
+    generated = JSON.parse(content);
+  } catch {
+    generated = { title: topic, body: content, category: 'industry', tags: [] };
+  }
+
+  return {
+    title: generated.title || topic,
+    body: generated.body || '',
+    category: generated.category || 'industry',
+    tags: Array.isArray(generated.tags) ? generated.tags : [],
+  };
+}
+
 module.exports = {
   createContent,
   listContent,
   getContentById,
   updateContent,
   deleteContent,
+  generateContent,
   AppError,
 };

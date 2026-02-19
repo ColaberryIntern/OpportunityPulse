@@ -23,40 +23,40 @@ function RoleList({ roles, loading }) {
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading roles...</p>;
+    return <p className="text-gray-500 dark:text-gray-400">Loading roles...</p>;
   }
 
   if (!roles.length) {
-    return <p className="text-gray-500">No roles found.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">No roles found.</p>;
   }
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-900">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role Name</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role Name</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
           {roles.map((role) => (
             <tr key={role.id}>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{role.id}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{role.id}</td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary capitalize">
                   {role.roleName}
                 </span>
               </td>
-              <td className="px-6 py-4 text-sm text-gray-600">
+              <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                 {editingId === role.id ? (
                   <input
                     type="text"
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
                   />
                 ) : (
                   role.description || '—'
@@ -73,7 +73,7 @@ function RoleList({ roles, loading }) {
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="text-gray-500 hover:text-gray-700 font-medium"
+                      className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium"
                     >
                       Cancel
                     </button>

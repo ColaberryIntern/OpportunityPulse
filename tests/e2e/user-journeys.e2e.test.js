@@ -19,7 +19,7 @@ process.env.LOG_LEVEL = 'error';
 process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef';
 
 const { app } = require('../../backend/src/server');
-const { sequelize, User, UserRole } = require('../../backend/src/models');
+const { sequelize, User, UserRole, DataSource, Opportunity } = require('../../backend/src/models');
 
 describe('E2E User Journeys', () => {
   let dbAvailable = false;
@@ -503,6 +503,263 @@ describe('E2E User Journeys', () => {
         .delete(`/api/v1/forums/${postId}`)
         .set('Authorization', `Bearer ${token}`);
       expect(delPost.status).toBe(200);
+    });
+  });
+
+  describe('Journey 10: Opportunity Browsing & Filtering', () => {
+    skipIfNoDb('should browse, filter, paginate, and view opportunity details', async () => {
+      // Seed a DataSource and Opportunities for this journey
+      const dataSource = await DataSource.create({
+        name: 'e2e_test_source',
+        type: 'mock',
+        enabled: true,
+        config: {},
+      });
+
+      await Opportunity.bulkCreate([
+        {
+          type: 'gov_contract',
+          title: 'Federal AI Infrastructure Contract',
+          description: 'Large-scale AI infrastructure deployment for federal agencies.',
+          source: 'e2e_test_source',
+          sourceId: 'e2e-gov-001',
+          sourceUrl: 'https://example.gov/contracts/e2e-gov-001',
+          status: 'active',
+          category: 'infrastructure',
+          tags: ['AI', 'federal', 'infrastructure'],
+          location: 'Washington, DC',
+          value: 5000000.00,
+          publishedAt: new Date(),
+          dataSourceId: dataSource.id,
+        },
+        {
+          type: 'gov_contract',
+          title: 'State Cybersecurity Modernization',
+          description: 'Cybersecurity modernization initiative for state agencies.',
+          source: 'e2e_test_source',
+          sourceId: 'e2e-gov-002',
+          sourceUrl: 'https://example.gov/contracts/e2e-gov-002',
+          status: 'active',
+          category: 'cybersecurity',
+          tags: ['cybersecurity', 'state'],
+          location: 'Austin, TX',
+          value: 2000000.00,
+          publishedAt: new Date(),
+          dataSourceId: dataSource.id,
+        },
+        {
+          type: 'ai_job',
+          title: 'Senior ML Engineer - NLP Team',
+          description: 'Seeking an experienced ML engineer for the NLP research team.',
+          source: 'e2e_test_source',
+          sourceId: 'e2e-job-001',
+          sourceUrl: 'https://example.com/jobs/e2e-job-001',
+          status: 'active',
+          category: 'engineering',
+          tags: ['ML', 'NLP', 'engineering'],
+          location: 'San Francisco, CA',
+          value: 250000.00,
+          publishedAt: new Date(),
+          dataSourceId: dataSource.id,
+        },
+      ]);
+
+      // Register and login
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({ email: 'opp-browse-j10@test.com', password: 'Str0ng!Pass' });
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: 'opp-browse-j10@test.com', password: 'Str0ng!Pass' });
+      const token = loginRes.body.data.accessToken;
+
+      // Step 1: GET all opportunities — verify 200, results array, and pagination
+      const allRes = await request(app)
+        .get('/api/v1/opportunities')
+        .set('Authorization', `Bearer ${token}`);
+      expect(allRes.status).toBe(200);
+      expect(Array.isArray(allRes.body.data.results)).toBe(true);
+      expect(allRes.body).toHaveProperty('pagination');
+      expect(allRes.body.pagination).toHaveProperty('total');
+      expect(allRes.body.pagination).toHaveProperty('page');
+      expect(allRes.body.pagination).toHaveProperty('limit');
+      expect(allRes.body.pagination).toHaveProperty('pages');
+      expect(allRes.body.pagination.total).toBeGreaterThanOrEqual(3);
+
+      // Step 2: Filter by type=gov_contract — verify filtered results
+      const govRes = await request(app)
+        .get('/api/v1/opportunities?type=gov_contract')
+        .set('Authorization', `Bearer ${token}`);
+      expect(govRes.status).toBe(200);
+      expect(govRes.body.data.results.length).toBeGreaterThanOrEqual(2);
+      govRes.body.data.results.forEach((opp) => {
+        expect(opp.type).toBe('gov_contract');
+      });
+
+      // Step 3: Filter by status=active — verify status filter
+      const activeRes = await request(app)
+        .get('/api/v1/opportunities?status=active')
+        .set('Authorization', `Bearer ${token}`);
+      expect(activeRes.status).toBe(200);
+      expect(activeRes.body.data.results.length).toBeGreaterThanOrEqual(3);
+      activeRes.body.data.results.forEach((opp) => {
+        expect(opp.status).toBe('active');
+      });
+
+      // Step 4: Verify pagination parameters — page=1&limit=2
+      const pageRes = await request(app)
+        .get('/api/v1/opportunities?page=1&limit=2')
+        .set('Authorization', `Bearer ${token}`);
+      expect(pageRes.status).toBe(200);
+      expect(pageRes.body.data.results.length).toBeLessThanOrEqual(2);
+      expect(pageRes.body.pagination.page).toBe(1);
+      expect(pageRes.body.pagination.limit).toBe(2);
+      expect(pageRes.body.pagination.pages).toBeGreaterThanOrEqual(2);
+
+      // Step 5: GET detail for the first opportunity
+      const firstOpp = allRes.body.data.results[0];
+      const detailRes = await request(app)
+        .get(`/api/v1/opportunities/${firstOpp.id}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.data.opportunity).toHaveProperty('id', firstOpp.id);
+      expect(detailRes.body.data.opportunity).toHaveProperty('title');
+      expect(detailRes.body.data.opportunity).toHaveProperty('type');
+      expect(detailRes.body.data.opportunity).toHaveProperty('status');
+      expect(detailRes.body.data.opportunity).toHaveProperty('description');
+    });
+  });
+
+  describe('Journey 11: Forum Post Lifecycle', () => {
+    skipIfNoDb('should create post, list, view detail, add comment, and verify comment appears', async () => {
+      // Register and login
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({ email: 'forum-j11@test.com', password: 'Str0ng!Pass' });
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: 'forum-j11@test.com', password: 'Str0ng!Pass' });
+      const token = loginRes.body.data.accessToken;
+
+      // Step 1: Create a forum post
+      const createRes = await request(app)
+        .post('/api/v1/forums')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'E2E Test Post', body: 'Testing forum lifecycle', category: 'general' });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.data.post).toHaveProperty('id');
+      expect(createRes.body.data.post.title).toBe('E2E Test Post');
+      const postId = createRes.body.data.post.id;
+
+      // Step 2: Verify the post appears in the list
+      const listRes = await request(app)
+        .get('/api/v1/forums')
+        .set('Authorization', `Bearer ${token}`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.data.posts.some((p) => p.id === postId)).toBe(true);
+
+      // Step 3: View post detail
+      const detailRes = await request(app)
+        .get(`/api/v1/forums/${postId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.data.post.id).toBe(postId);
+      expect(detailRes.body.data.post.title).toBe('E2E Test Post');
+      expect(detailRes.body.data.post.body).toBe('Testing forum lifecycle');
+      expect(detailRes.body.data.post.category).toBe('general');
+      expect(detailRes.body.data.post.comments).toEqual([]);
+
+      // Step 4: Add a comment
+      const commentRes = await request(app)
+        .post(`/api/v1/forums/${postId}/comments`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ body: 'Test comment' });
+      expect(commentRes.status).toBe(201);
+      expect(commentRes.body.data.comment).toHaveProperty('id');
+      expect(commentRes.body.data.comment.body).toBe('Test comment');
+
+      // Step 5: Verify comment appears on post detail
+      const afterCommentRes = await request(app)
+        .get(`/api/v1/forums/${postId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(afterCommentRes.status).toBe(200);
+      expect(afterCommentRes.body.data.post.comments.length).toBe(1);
+      expect(afterCommentRes.body.data.post.comments[0].body).toBe('Test comment');
+    });
+  });
+
+  describe('Journey 12: Subscription & Premium Gating', () => {
+    skipIfNoDb('should verify free plan, block premium endpoint, upgrade, access premium, downgrade', async () => {
+      // Register and login
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send({ email: 'sub-j12@test.com', password: 'Str0ng!Pass' });
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: 'sub-j12@test.com', password: 'Str0ng!Pass' });
+      const token = loginRes.body.data.accessToken;
+
+      // Step 1: Check current subscription — should be null (no subscription = free)
+      const subRes = await request(app)
+        .get('/api/v1/subscriptions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(subRes.status).toBe(200);
+      // New user has no subscription record — treated as free
+      const currentSub = subRes.body.data.subscription;
+      if (currentSub) {
+        expect(currentSub.planType).toBe('free');
+      } else {
+        expect(currentSub).toBeNull();
+      }
+
+      // Step 2: Try premium-gated endpoint (GET /analysis/trends/gov_contract) — expect 403
+      const premiumBlockedRes = await request(app)
+        .get('/api/v1/analysis/trends/gov_contract')
+        .set('Authorization', `Bearer ${token}`);
+      expect(premiumBlockedRes.status).toBe(403);
+      expect(premiumBlockedRes.body.errors).toBeDefined();
+      expect(premiumBlockedRes.body.errors.some((e) => e.upgradeRequired === true)).toBe(true);
+
+      // Step 3: Upgrade to premium
+      const upgradeRes = await request(app)
+        .post('/api/v1/subscriptions/upgrade')
+        .set('Authorization', `Bearer ${token}`);
+      expect(upgradeRes.status).toBe(201);
+      expect(upgradeRes.body.data.subscription.planType).toBe('premium');
+
+      // Step 4: Verify subscription is now premium
+      const premiumSubRes = await request(app)
+        .get('/api/v1/subscriptions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(premiumSubRes.status).toBe(200);
+      expect(premiumSubRes.body.data.subscription.planType).toBe('premium');
+
+      // Step 5: Try the same premium endpoint again — should NOT return 403 upgradeRequired
+      const premiumAllowedRes = await request(app)
+        .get('/api/v1/analysis/trends/gov_contract')
+        .set('Authorization', `Bearer ${token}`);
+      expect(premiumAllowedRes.status).not.toBe(403);
+
+      // Step 6: Downgrade back to free
+      const downgradeRes = await request(app)
+        .post('/api/v1/subscriptions/downgrade')
+        .set('Authorization', `Bearer ${token}`);
+      expect(downgradeRes.status).toBe(200);
+      expect(downgradeRes.body.data.subscription.planType).toBe('free');
+
+      // Step 7: Verify subscription is back to free
+      const freeSubRes = await request(app)
+        .get('/api/v1/subscriptions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(freeSubRes.status).toBe(200);
+      expect(freeSubRes.body.data.subscription.planType).toBe('free');
+
+      // Step 8: Verify premium endpoint is blocked again after downgrade
+      const blockedAgainRes = await request(app)
+        .get('/api/v1/analysis/trends/gov_contract')
+        .set('Authorization', `Bearer ${token}`);
+      expect(blockedAgainRes.status).toBe(403);
+      expect(blockedAgainRes.body.errors.some((e) => e.upgradeRequired === true)).toBe(true);
     });
   });
 });

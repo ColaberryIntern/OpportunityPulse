@@ -51,35 +51,35 @@ function AlertPreferencesForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6">
+    <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded text-red-700 text-sm">
           {error}
         </div>
       )}
       {updateSuccess && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 rounded text-green-700 text-sm">
           Preferences saved successfully.
         </div>
       )}
 
-      <h3 className="text-base font-semibold text-gray-900 mb-4">Notification Types</h3>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">Notification Types</h3>
       <div className="space-y-3 mb-6">
         <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={govContracts} onChange={(e) => setGovContracts(e.target.checked)} className="rounded border-gray-300" />
-          <span className="text-gray-700">Government Contracts</span>
+          <input type="checkbox" checked={govContracts} onChange={(e) => setGovContracts(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">Government Contracts</span>
         </label>
         <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={aiJobs} onChange={(e) => setAiJobs(e.target.checked)} className="rounded border-gray-300" />
-          <span className="text-gray-700">AI Jobs</span>
+          <input type="checkbox" checked={aiJobs} onChange={(e) => setAiJobs(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">AI Jobs</span>
         </label>
         <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={investments} onChange={(e) => setInvestments(e.target.checked)} className="rounded border-gray-300" />
-          <span className="text-gray-700">Investments</span>
+          <input type="checkbox" checked={investments} onChange={(e) => setInvestments(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">Investments</span>
         </label>
       </div>
 
-      <h3 className="text-base font-semibold text-gray-900 mb-4">Minimum AI Score</h3>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">Minimum AI Score</h3>
       <div className="mb-6">
         <input
           type="number"
@@ -87,20 +87,20 @@ function AlertPreferencesForm() {
           onChange={(e) => setMinScore(e.target.value)}
           min="0"
           max="100"
-          className="w-32 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-32 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
         />
-        <p className="text-xs text-gray-400 mt-1">Only notify for opportunities scoring above this threshold (0-100)</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Only notify for opportunities scoring above this threshold (0-100)</p>
       </div>
 
-      <h3 className="text-base font-semibold text-gray-900 mb-4">Delivery</h3>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">Delivery</h3>
       <div className="space-y-3 mb-6">
         <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={inAppNotify} onChange={(e) => setInAppNotify(e.target.checked)} className="rounded border-gray-300" />
-          <span className="text-gray-700">In-app notifications</span>
+          <input type="checkbox" checked={inAppNotify} onChange={(e) => setInAppNotify(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">In-app notifications</span>
         </label>
         <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} className="rounded border-gray-300" />
-          <span className="text-gray-700">Email notifications</span>
+          <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+          <span className="text-gray-700 dark:text-gray-300">Email notifications</span>
         </label>
       </div>
 

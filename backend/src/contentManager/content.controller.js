@@ -103,10 +103,24 @@ async function deleteContent(req, res, next) {
   }
 }
 
+async function generateContent(req, res) {
+  try {
+    const { topic } = req.body;
+    if (!topic || topic.trim().length < 3) {
+      return errorResponse(res, 'Topic must be at least 3 characters.', 400);
+    }
+    const result = await contentService.generateContent(topic.trim());
+    return successResponse(res, result, 'Content generated successfully.', 201);
+  } catch (error) {
+    return errorResponse(res, error.message, error.statusCode || 500);
+  }
+}
+
 module.exports = {
   createContent,
   listContent,
   getContent,
   updateContent,
   deleteContent,
+  generateContent,
 };

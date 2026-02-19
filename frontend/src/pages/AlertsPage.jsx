@@ -61,7 +61,7 @@ function AlertsPage() {
         <h1 className="text-2xl font-bold text-primary mb-6">Alerts</h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -74,7 +74,7 @@ function AlertsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-accent dark:bg-gray-800 dark:text-gray-100"
               >
                 <option value="">All Types</option>
                 <option value="new_opportunity">New Opportunity</option>
@@ -85,7 +85,7 @@ function AlertsPage() {
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-accent dark:bg-gray-800 dark:text-gray-100"
               >
                 <option value="">All Severities</option>
                 <option value="info">Info</option>
@@ -107,7 +107,7 @@ function AlertsPage() {
 
           {/* Preferences */}
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
               Alert Preferences
             </h2>
             <AlertPreferencesForm />

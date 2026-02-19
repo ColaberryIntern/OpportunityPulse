@@ -247,7 +247,7 @@ class SamGovAdapter extends BaseAdapter {
         sourceId: record.noticeId,
         title: record.title || 'Untitled Opportunity',
         description: SamGovAdapter.buildDescription(record),
-        sourceUrl: record.uiLink || `https://sam.gov/opp/${record.noticeId}/view`,
+        sourceUrl: `https://sam.gov/opp/${record.noticeId}/view`,
         status: 'active',
         category: record.naicsCode || 'General',
         tags,

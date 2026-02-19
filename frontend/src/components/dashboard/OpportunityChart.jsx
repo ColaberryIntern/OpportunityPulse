@@ -16,14 +16,14 @@ const PERIOD_OPTIONS = [
 
 function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) {
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-        <h3 className="text-lg font-semibold text-gray-900">Opportunity Trends</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Opportunity Trends</h3>
         <div className="flex gap-2">
           <select
             value={chartData?.type === 'all' ? '' : (chartData?.type || '')}
             onChange={(e) => onTypeChange(e.target.value || undefined)}
-            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           >
             {TYPE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -32,7 +32,7 @@ function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) 
           <select
             value={chartData?.period || '30d'}
             onChange={(e) => onPeriodChange(e.target.value)}
-            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
           >
             {PERIOD_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -42,7 +42,7 @@ function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) 
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-400">
+        <div className="h-64 flex items-center justify-center text-gray-400 dark:text-gray-500">
           Loading chart data...
         </div>
       ) : chartData?.dataPoints?.length > 0 ? (
@@ -70,7 +70,7 @@ function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) 
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        <div className="h-64 flex items-center justify-center text-gray-400">
+        <div className="h-64 flex items-center justify-center text-gray-400 dark:text-gray-500">
           {chartData === null
             ? 'Chart data requires Premium subscription.'
             : 'No data available for the selected period.'}

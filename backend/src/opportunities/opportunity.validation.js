@@ -3,8 +3,8 @@ const { query } = require('express-validator');
 const listOpportunitiesValidation = [
   query('type')
     .optional()
-    .isIn(['gov_contract', 'ai_job', 'investment'])
-    .withMessage('Type must be gov_contract, ai_job, or investment.'),
+    .isIn(['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'])
+    .withMessage('Type must be gov_contract, ai_job, investment, grant, or ai_news.'),
   query('status')
     .optional()
     .isIn(['active', 'closed', 'expired', 'archived'])

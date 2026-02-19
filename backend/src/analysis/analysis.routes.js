@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
 const { checkSubscription } = require('../middleware/subscription.middleware');
+const { analysisLimiter } = require('../middleware/rateLimiter.middleware');
 const controller = require('./analysis.controller');
 
 const router = Router();
@@ -31,7 +32,7 @@ const router = Router();
  *       403:
  *         description: Forbidden - admin only
  */
-router.post('/score/:type', verifyToken, checkPermissions('admin'), controller.triggerScoring);
+router.post('/score/:type', verifyToken, checkPermissions('admin'), analysisLimiter, controller.triggerScoring);
 
 /**
  * @swagger
@@ -57,7 +58,7 @@ router.post('/score/:type', verifyToken, checkPermissions('admin'), controller.t
  *       403:
  *         description: Forbidden - admin only
  */
-router.post('/trends/:type', verifyToken, checkPermissions('admin'), controller.triggerTrendDetection);
+router.post('/trends/:type', verifyToken, checkPermissions('admin'), analysisLimiter, controller.triggerTrendDetection);
 
 /**
  * @swagger
@@ -75,7 +76,7 @@ router.post('/trends/:type', verifyToken, checkPermissions('admin'), controller.
  *       403:
  *         description: Forbidden - admin only
  */
-router.post('/insights', verifyToken, checkPermissions('admin'), controller.triggerInsightGeneration);
+router.post('/insights', verifyToken, checkPermissions('admin'), analysisLimiter, controller.triggerInsightGeneration);
 
 // Authenticated + premium: read results
 /**

@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { body } = require('express-validator');
 const searchController = require('./search.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { handleValidationErrors } = require('../middleware/validation.middleware');
+const { searchLimiter } = require('../middleware/rateLimiter.middleware');
 
 /**
  * @swagger
@@ -50,6 +53,42 @@ const { verifyToken } = require('../middleware/auth.middleware');
  *         description: Unauthorized
  */
 // Search requires authentication
-router.get('/', verifyToken, searchController.search);
+router.get('/', verifyToken, searchLimiter, searchController.search);
+
+/**
+ * @swagger
+ * /search/natural:
+ *   post:
+ *     tags: [Search]
+ *     summary: Natural language search for opportunities
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [query]
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 description: Natural language search query (3-500 characters)
+ *     responses:
+ *       200:
+ *         description: Natural language search results
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/natural',
+  verifyToken,
+  searchLimiter,
+  [body('query').trim().isLength({ min: 3, max: 500 }).withMessage('Query must be 3-500 characters.')],
+  handleValidationErrors,
+  searchController.naturalLanguageSearch
+);
 
 module.exports = router;

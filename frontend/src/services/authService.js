@@ -20,6 +20,10 @@ const authService = {
   updateProfile(data) {
     return api.put('/auth/profile', data);
   },
+
+  changePassword(currentPassword, newPassword) {
+    return api.put('/auth/change-password', { currentPassword, newPassword });
+  },
 };
 
 export default authService;
