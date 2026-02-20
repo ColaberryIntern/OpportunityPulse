@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { fetchExecutiveBrief } from '../store/slices/actionEngineSlice';
 import actionEngineService from '../services/actionEngineService';
 import SEOHead from '../components/common/SEOHead';
+import StatCard from '../components/common/StatCard';
 
 const ACTION_TYPE_COLORS = {
   BUILD: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300',
@@ -307,17 +308,6 @@ function ExecutiveBriefPage() {
           </section>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, suffix = '' }) {
-  return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-center">
-      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-        {value}{suffix}
-      </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
     </div>
   );
 }

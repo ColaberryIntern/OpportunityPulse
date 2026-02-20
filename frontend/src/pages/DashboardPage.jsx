@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchStats,
   fetchActivity,
-  fetchOpportunityDashboardStats,
   fetchChartData,
   fetchTrendSummary,
 } from '../store/slices/dashboardSlice';
-import MetricsCard from '../components/dashboard/MetricsCard';
+import { fetchExecutiveBrief, fetchAnalytics } from '../store/slices/actionEngineSlice';
 import RecentActivity from '../components/dashboard/RecentActivity';
-import OpportunityStatsCard from '../components/dashboard/OpportunityStatsCard';
 import OpportunityChart from '../components/dashboard/OpportunityChart';
 import TrendCard from '../components/dashboard/TrendCard';
 import UpgradePrompt from '../components/common/UpgradePrompt';
@@ -21,40 +18,38 @@ import { ConnectionStatus } from '../components/dashboard/RealTimeDashboard';
 import SEOHead from '../components/common/SEOHead';
 import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
 import ToolMomentumBoard from '../components/dashboard/ToolMomentumBoard';
+import BriefHeroBanner from '../components/dashboard/BriefHeroBanner';
+import IntelligenceKPIs from '../components/dashboard/IntelligenceKPIs';
+import SectorHighlights from '../components/dashboard/SectorHighlights';
+import ToolSpotlight from '../components/dashboard/ToolSpotlight';
 import RssIntelligenceWidget from '../components/dashboard/RssIntelligenceWidget';
-import { fetchAnalytics } from '../store/slices/actionEngineSlice';
 
 function DashboardPage() {
   const dispatch = useDispatch();
   const {
-    stats,
     activities,
     pagination,
     loading,
     error,
-    opportunityStats,
     chartData,
     trends,
     chartLoading,
   } = useSelector((state) => state.dashboard);
-  const [activityPage, setActivityPage] = useState(1);
+  const { executiveBrief, briefLoading } = useSelector((state) => state.actionEngine);
   const [chartType, setChartType] = useState('');
   const [chartPeriod, setChartPeriod] = useState('30d');
-  const actionAnalytics = useSelector((state) => state.actionEngine.analytics);
 
   useRealtimeDashboard();
 
   useEffect(() => {
-    dispatch(fetchStats());
-    dispatch(fetchActivity({ page: 1, limit: 20 }));
-    dispatch(fetchOpportunityDashboardStats());
+    dispatch(fetchExecutiveBrief());
+    dispatch(fetchAnalytics());
     dispatch(fetchChartData({ period: '30d' }));
     dispatch(fetchTrendSummary());
-    dispatch(fetchAnalytics());
+    dispatch(fetchActivity({ page: 1, limit: 20 }));
   }, [dispatch]);
 
   const handlePageChange = (newPage) => {
-    setActivityPage(newPage);
     dispatch(fetchActivity({ page: newPage, limit: 20 }));
   };
 
@@ -86,89 +81,27 @@ function DashboardPage() {
           </div>
         )}
 
-        {/* Platform Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <MetricsCard
-            title="Total Users"
-            value={stats?.totalUsers}
-            description="Platform-wide"
-          />
-          <MetricsCard
-            title="Total Content"
-            value={stats?.totalContent}
-            description="All published items"
-          />
-          <MetricsCard
-            title="My Content"
-            value={stats?.myContentCount}
-            description="Items you created"
-          />
-          <MetricsCard
-            title="My Activity"
-            value={stats?.recentActivityCount}
-            description="Total actions"
-          />
-        </div>
+        {/* ===== SECTION 1: Intelligence Summary ===== */}
+        <BriefHeroBanner brief={executiveBrief} loading={briefLoading} />
 
-        {/* Strategic Intelligence */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Strategic Intelligence
-            </h2>
-            <a href="/executive-brief" className="text-sm text-accent hover:underline">
-              View Full Brief
-            </a>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricsCard
-              title="Signals Classified"
-              value={actionAnalytics?.signalsProcessed}
-              description="With action types"
-            />
-            <MetricsCard
-              title="Actions Tracked"
-              value={actionAnalytics?.signalsActedOn}
-              description="Opportunities in pipeline"
-            />
-            <MetricsCard
-              title="Revenue Influenced"
-              value={actionAnalytics?.totalRevenue ? `$${Math.round(actionAnalytics.totalRevenue).toLocaleString()}` : '$0'}
-              description="From executed actions"
-            />
-          </div>
-        </section>
+        <IntelligenceKPIs
+          marketStats={executiveBrief?.marketStats}
+          revenuePotentialEstimate={executiveBrief?.revenuePotentialEstimate}
+        />
 
-        {/* RSS Intelligence */}
-        <section className="mb-8">
-          <RssIntelligenceWidget />
-        </section>
+        <SectorHighlights highlights={executiveBrief?.sectorHighlights} />
 
-        {/* Opportunity Overview */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
-            Opportunity Overview
-          </h2>
-          <OpportunityStatsCard stats={opportunityStats} />
-        </section>
+        <RssIntelligenceWidget compact />
 
-        {/* AI Personal Matches */}
-        <section className="mb-8">
-          <ForYouSection />
-        </section>
+        {/* ===== SECTION 2: AI Tools & Momentum ===== */}
+        <ToolSpotlight />
 
-        {/* AI Recommendations */}
-        <section className="mb-8">
-          <RecommendationsList />
-        </section>
-
-        {/* AI Tools + Tool Momentum */}
         <section className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <AiToolTrendingWidget />
           <ToolMomentumBoard />
         </section>
 
-        {/* Opportunity Chart (Premium) */}
+        {/* ===== SECTION 3: Trends & Charts ===== */}
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Opportunity Trends
@@ -181,7 +114,6 @@ function DashboardPage() {
           />
         </section>
 
-        {/* Market Trends */}
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Market Trends
@@ -195,7 +127,16 @@ function DashboardPage() {
           </div>
         </section>
 
-        {/* Recent Activity */}
+        {/* ===== SECTION 4: AI Matches & Recommendations ===== */}
+        <section className="mb-8">
+          <ForYouSection />
+        </section>
+
+        <section className="mb-8">
+          <RecommendationsList />
+        </section>
+
+        {/* ===== Recent Activity ===== */}
         <section>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Recent Activity</h2>
           <RecentActivity

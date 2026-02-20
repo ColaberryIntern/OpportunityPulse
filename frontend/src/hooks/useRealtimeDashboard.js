@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { useSocket } from './useSocket';
-import { fetchStats, fetchOpportunityDashboardStats, fetchActivity } from '../store/slices/dashboardSlice';
+import { fetchActivity } from '../store/slices/dashboardSlice';
+import { fetchExecutiveBrief } from '../store/slices/actionEngineSlice';
 
 export function useRealtimeDashboard() {
   const dispatch = useDispatch();
@@ -10,21 +11,19 @@ export function useRealtimeDashboard() {
   useEffect(() => {
     const cleanups = [
       on('dashboard.stats_updated', () => {
-        dispatch(fetchOpportunityDashboardStats());
+        dispatch(fetchExecutiveBrief());
       }),
       on('opportunity.created', () => {
-        dispatch(fetchOpportunityDashboardStats());
-        dispatch(fetchStats());
+        dispatch(fetchExecutiveBrief());
       }),
       on('alert.created', () => {
         dispatch(fetchActivity({ page: 1, limit: 20 }));
       }),
       on('ingestion.completed', () => {
-        dispatch(fetchStats());
-        dispatch(fetchOpportunityDashboardStats());
+        dispatch(fetchExecutiveBrief());
       }),
       on('content.published', () => {
-        dispatch(fetchStats());
+        dispatch(fetchActivity({ page: 1, limit: 20 }));
       }),
     ];
 
