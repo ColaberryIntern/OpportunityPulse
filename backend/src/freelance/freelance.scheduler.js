@@ -5,7 +5,8 @@ const { scoreFreelanceOpportunities } = require('./freelanceScoring.service');
 const { generateDailySnapshot } = require('./freelanceTrend.service');
 const logger = require('../logging/logger');
 
-const FREELANCE_DATA_SOURCES = ['upwork_rss', 'freelancer_api', 'generic_freelance_rss'];
+// Upwork deprecated public RSS feeds in Aug 2024; only use active sources.
+const FREELANCE_DATA_SOURCES = ['freelancer_api', 'generic_freelance_rss'];
 
 /**
  * Run freelance ingestion for all configured data sources.
@@ -78,6 +79,16 @@ function startFreelanceScheduler() {
       logger.error('Freelance trend snapshot scheduler error', { error: error.message });
     }
   });
+
+  // Run first ingestion 15 seconds after startup so data is available immediately
+  setTimeout(async () => {
+    try {
+      logger.info('Freelance startup ingestion triggered');
+      await runFreelanceIngestion();
+    } catch (error) {
+      logger.error('Freelance startup ingestion failed', { error: error.message });
+    }
+  }, 15000);
 
   logger.info('Freelance scheduler started: ingestion (*/4h), enrichment (*/6h+30m), trends (2am)');
 }

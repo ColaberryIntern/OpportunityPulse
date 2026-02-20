@@ -17,7 +17,7 @@ class FreelancerApiAdapter extends BaseAdapter {
     const config = dataSource.config || {};
     this.searches = config.searches || DEFAULT_SEARCHES;
     this.limit = config.limit || DEFAULT_LIMIT;
-    this.baseUrl = config.baseUrl || FREELANCER_API_BASE;
+    this.baseUrl = FREELANCER_API_BASE;
   }
 
   async _fetchSearch(searchTerm) {
