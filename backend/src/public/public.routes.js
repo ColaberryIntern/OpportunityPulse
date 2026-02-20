@@ -8,11 +8,11 @@ const feedValidation = [
   query('type')
     .optional()
     .custom((value) => {
-      const validTypes = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
+      const validTypes = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
       const types = value.split(',').map(t => t.trim()).filter(Boolean);
       return types.length > 0 && types.every(t => validTypes.includes(t));
     })
-    .withMessage('Type must be comma-separated list of: gov_contract, ai_job, investment, grant, ai_news.'),
+    .withMessage('Type must be comma-separated list of: gov_contract, ai_job, investment, grant, ai_news, freelance.'),
   query('category')
     .optional()
     .isString()

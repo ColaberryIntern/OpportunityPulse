@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const PLATFORM_COLORS = {
   upwork: 'bg-green-600',
@@ -38,7 +39,8 @@ function FreelanceCard({ opportunity, onAction }) {
   const platformColor = PLATFORM_COLORS[platform] || PLATFORM_COLORS.default;
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 flex flex-col gap-3">
+    <Link to={`/opportunities/${opportunity.id}`} className="block">
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 flex-1">
@@ -48,6 +50,13 @@ function FreelanceCard({ opportunity, onAction }) {
           {platform}
         </span>
       </div>
+
+      {/* Date */}
+      {(opportunity.publishedAt || opportunity.createdAt) && (
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          {new Date(opportunity.publishedAt || opportunity.createdAt).toLocaleDateString()}
+        </span>
+      )}
 
       {/* Budget + Score Row */}
       <div className="flex items-center justify-between">
@@ -92,6 +101,17 @@ function FreelanceCard({ opportunity, onAction }) {
         {aiAnalysis.projectType && (
           <span className="capitalize">{aiAnalysis.projectType.replace('-', ' ')}</span>
         )}
+        {opportunity.sourceUrl && (
+          <a
+            href={opportunity.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-accent hover:underline ml-auto"
+          >
+            View Original &#8599;
+          </a>
+        )}
       </div>
 
       {/* Action buttons */}
@@ -99,7 +119,7 @@ function FreelanceCard({ opportunity, onAction }) {
         {['PROPOSAL', 'ARCHITECTURE', 'SOW', 'SAAS_IDEA', 'OUTREACH'].map((action) => (
           <button
             key={action}
-            onClick={() => onAction(opportunity.id, action)}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAction(opportunity.id, action); }}
             className="text-[10px] font-medium px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition"
           >
             {action === 'SAAS_IDEA' ? 'SaaS Idea' : action.charAt(0) + action.slice(1).toLowerCase()}
@@ -107,6 +127,7 @@ function FreelanceCard({ opportunity, onAction }) {
         ))}
       </div>
     </div>
+    </Link>
   );
 }
 

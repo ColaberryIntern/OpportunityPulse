@@ -1,7 +1,7 @@
 const { classifyOpportunities, classifySingle } = require('./classification.service');
 const { computeSaturationIndex } = require('./saturation.service');
 const { generateActionRecommendations, generateSingleActionPlan } = require('./actionRecommendation.service');
-const { getExecutiveBrief, generateExecutiveBrief } = require('./executiveBrief.service');
+const { getExecutiveBrief, generateExecutiveBrief, getSectionBrief } = require('./executiveBrief.service');
 const { createAction, updateAction, listActions, deleteAction, getActionAnalytics } = require('./opportunityAction.service');
 const { Opportunity } = require('../models');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/apiResponse');
@@ -60,6 +60,23 @@ async function getExecutiveBriefHandler(req, res) {
     return successResponse(res, brief, 'Executive brief retrieved');
   } catch (error) {
     logger.error('Get executive brief failed', { error: error.message });
+    return errorResponse(res, error.message, 500);
+  }
+}
+
+// --- User: Section brief ---
+
+async function getSectionBriefHandler(req, res) {
+  try {
+    const { section } = req.params;
+    const validSections = ['government', 'talent', 'freelance', 'capital', 'private-sector', 'alpha', 'all'];
+    if (!validSections.includes(section)) {
+      return errorResponse(res, `Invalid section: ${section}. Valid: ${validSections.join(', ')}`, 400);
+    }
+    const brief = await getSectionBrief(section);
+    return successResponse(res, brief, 'Section brief retrieved');
+  } catch (error) {
+    logger.error('Get section brief failed', { error: error.message, section: req.params.section });
     return errorResponse(res, error.message, 500);
   }
 }
@@ -162,6 +179,7 @@ module.exports = {
   triggerRecommendations,
   triggerExecutiveBrief,
   getExecutiveBriefHandler,
+  getSectionBriefHandler,
   getOpportunityActionPlan,
   generateActionPlanHandler,
   createActionHandler,

@@ -24,6 +24,7 @@ import SectorHighlights from '../components/dashboard/SectorHighlights';
 import ToolSpotlight from '../components/dashboard/ToolSpotlight';
 import RssIntelligenceWidget from '../components/dashboard/RssIntelligenceWidget';
 import MarketInsights from '../components/dashboard/MarketInsights';
+import FreelanceSkillsDemand from '../components/dashboard/FreelanceSkillsDemand';
 
 function DashboardPage() {
   const dispatch = useDispatch();
@@ -125,6 +126,11 @@ function DashboardPage() {
             <TrendCard type="grant" trendData={trends?.grant} />
             <TrendCard type="ai_news" trendData={trends?.ai_news} />
           </div>
+        </section>
+
+        {/* ===== Freelance Skills Demand ===== */}
+        <section className="mb-8">
+          <FreelanceSkillsDemand />
         </section>
 
         {/* ===== SECTION 4: AI Matches & Recommendations ===== */}

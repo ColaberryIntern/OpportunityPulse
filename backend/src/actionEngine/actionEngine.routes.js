@@ -44,6 +44,14 @@ router.get('/executive-brief',
   ctrl.getExecutiveBriefHandler
 );
 
+// --- Section briefs ---
+router.get('/section-brief/:section',
+  param('section').isString().trim(),
+  handleValidationErrors,
+  cacheResponse('section-brief', 900),
+  ctrl.getSectionBriefHandler
+);
+
 // --- Opportunity action plans ---
 router.get('/opportunity/:id/action-plan',
   param('id').isInt(),

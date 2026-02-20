@@ -1,31 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchFreelanceOpportunities,
   fetchFreelanceTrends,
   generateFreelanceAction,
   clearGeneratedAction,
-  setFreelanceFilters,
 } from '../store/slices/freelanceSlice';
 import FreelanceCard from '../components/freelance/FreelanceCard';
 import FreelanceTrendBar from '../components/freelance/FreelanceTrendBar';
 import FreelanceDemandChart from '../components/freelance/FreelanceDemandChart';
 import FreelanceActionModal from '../components/freelance/FreelanceActionModal';
+import StrategicNav from '../components/navigation/StrategicNav';
+import OpportunityFilters from '../components/opportunities/OpportunityFilters';
+import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
+import UpgradePrompt from '../components/common/UpgradePrompt';
+import SectionBrief from '../components/common/SectionBrief';
 import SEOHead from '../components/common/SEOHead';
 
-const SORT_OPTIONS = [
-  { value: 'score', label: 'AI Score' },
-  { value: 'budget', label: 'Budget' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'competition', label: 'Low Competition' },
-];
-
-const PLATFORM_OPTIONS = [
-  { value: '', label: 'All Platforms' },
-  { value: 'upwork', label: 'Upwork' },
-  { value: 'freelancer', label: 'Freelancer' },
-  { value: 'linkedin', label: 'LinkedIn' },
-];
+const VIEW_PRESET = { type: 'freelance' };
+const PROMINENT_FILTERS = ['category', 'status', 'actionType', 'sort', 'minScore', 'capability'];
 
 function FreelancePage() {
   const dispatch = useDispatch();
@@ -38,22 +31,30 @@ function FreelancePage() {
     trendsLoading,
     generatedAction,
     actionLoading,
-    filters,
   } = useSelector((state) => state.freelance);
 
   const [showModal, setShowModal] = useState(false);
+  const currentFilters = useRef({});
 
   useEffect(() => {
-    dispatch(fetchFreelanceOpportunities(filters));
+    dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, page: 1, limit: 20 }));
     dispatch(fetchFreelanceTrends());
-  }, [dispatch, filters]);
+  }, [dispatch]);
 
-  const handleFilterChange = (key, value) => {
-    dispatch(setFreelanceFilters({ [key]: value }));
+  const handleFilterChange = useCallback((filters) => {
+    currentFilters.current = filters;
+    dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...filters, page: 1, limit: 20 }));
+  }, [dispatch]);
+
+  const handleRemoveFilter = (filterKey) => {
+    const updated = { ...currentFilters.current };
+    delete updated[filterKey];
+    currentFilters.current = updated;
+    dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
   };
 
   const handlePageChange = (newPage) => {
-    dispatch(fetchFreelanceOpportunities({ ...filters, page: newPage }));
+    dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...currentFilters.current, page: newPage, limit: 20 }));
   };
 
   const handleAction = (opportunityId, actionType) => {
@@ -73,58 +74,16 @@ function FreelancePage() {
       <SEOHead title="AI Freelance" path="/freelance" />
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-primary dark:text-white">AI Freelance</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              AI freelance projects, demand trends, and actionable opportunities
-            </p>
-          </div>
-          {pagination && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {pagination.total} opportunities
-            </span>
-          )}
-        </div>
+        <h1 className="text-2xl font-bold text-primary dark:text-gray-100 mb-1">Freelance</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          AI freelance projects, demand trends, and actionable opportunities
+        </p>
 
-        {/* Filter Bar */}
-        <div className="flex flex-wrap items-center gap-3 mb-4 bg-white dark:bg-gray-800 shadow rounded-lg p-3">
-          <select
-            value={filters.sort}
-            onChange={(e) => handleFilterChange('sort', e.target.value)}
-            className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <StrategicNav />
 
-          <select
-            value={filters.platform}
-            onChange={(e) => handleFilterChange('platform', e.target.value)}
-            className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-          >
-            {PLATFORM_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <SectionBrief section="freelance" />
 
-          <input
-            type="text"
-            placeholder="Filter by skills (comma-separated)"
-            value={filters.skills}
-            onChange={(e) => handleFilterChange('skills', e.target.value)}
-            className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex-1 min-w-[180px]"
-          />
-
-          <input
-            type="number"
-            placeholder="Min budget"
-            value={filters.minBudget}
-            onChange={(e) => handleFilterChange('minBudget', e.target.value)}
-            className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 w-24"
-          />
-        </div>
+        <UpgradePrompt />
 
         {/* Error */}
         {error && (
@@ -133,8 +92,25 @@ function FreelancePage() {
           </div>
         )}
 
+        <div className="space-y-4">
+          <OpportunityFilters
+            onFilterChange={handleFilterChange}
+            filters={currentFilters.current}
+            lockedFilters={VIEW_PRESET}
+            prominentFilters={PROMINENT_FILTERS}
+          />
+
+          <ActiveFilterChips
+            filters={currentFilters.current}
+            presetFilters={VIEW_PRESET}
+            onRemove={handleRemoveFilter}
+          />
+        </div>
+
         {/* Trending Skills Bar */}
-        <FreelanceTrendBar trending={trending} loading={trendsLoading} />
+        <div className="mt-4">
+          <FreelanceTrendBar trending={trending} loading={trendsLoading} />
+        </div>
 
         {/* Opportunity Grid */}
         {loading ? (

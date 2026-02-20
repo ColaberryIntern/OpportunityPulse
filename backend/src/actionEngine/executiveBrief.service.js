@@ -314,4 +314,169 @@ function buildFallbackBrief(opportunities, stats) {
   };
 }
 
-module.exports = { getExecutiveBrief, generateExecutiveBrief };
+// --- Section Briefs ---
+
+const SECTION_BRIEF_CACHE_HOURS = 24;
+
+const SECTION_TYPE_MAP = {
+  government: ['gov_contract', 'grant'],
+  talent: ['ai_job'],
+  freelance: ['freelance'],
+  capital: ['investment'],
+  'private-sector': ['ai_news'],
+  alpha: null, // uses quadrant filter instead
+  all: null, // no type filter
+};
+
+/**
+ * Get a section-specific AI brief, using cache if fresh enough.
+ */
+async function getSectionBrief(section) {
+  const cacheKey = `section_brief_${section}`;
+  const cutoff = new Date(Date.now() - SECTION_BRIEF_CACHE_HOURS * 60 * 60 * 1000);
+
+  const cached = await AnalysisRun.findOne({
+    where: {
+      type: 'section_brief',
+      opportunityType: section,
+      status: 'success',
+      completedAt: { [Op.gte]: cutoff },
+    },
+    order: [['completed_at', 'DESC']],
+  });
+
+  if (cached) {
+    return cached.results;
+  }
+
+  return generateSectionBrief(section);
+}
+
+/**
+ * Generate a section-specific AI insight brief.
+ */
+async function generateSectionBrief(section) {
+  const run = await AnalysisRun.create({
+    type: 'section_brief',
+    opportunityType: section,
+    status: 'running',
+    startedAt: new Date(),
+  });
+
+  try {
+    const where = { status: 'active' };
+    const types = SECTION_TYPE_MAP[section];
+
+    if (types) {
+      where.type = { [Op.in]: types };
+    } else if (section === 'alpha') {
+      where.opportunityQuadrant = 'High Demand / Low Competition';
+      where.aiScore = { [Op.gte]: 70 };
+    }
+
+    const opportunities = await Opportunity.findAll({
+      where,
+      order: [['ai_score', 'DESC NULLS LAST'], ['published_at', 'DESC']],
+      limit: 20,
+      attributes: [
+        'id', 'type', 'title', 'description', 'actionType', 'aiScore',
+        'saturationIndex', 'opportunityQuadrant', 'value', 'category',
+        'tags', 'publishedAt', 'aiAnalysis',
+      ],
+    });
+
+    const totalCount = await Opportunity.count({ where: { status: 'active', ...(types ? { type: { [Op.in]: types } } : {}) } });
+    const avgScoreResult = await Opportunity.findOne({
+      attributes: [[fn('AVG', col('ai_score')), 'avgScore']],
+      where: { status: 'active', aiScore: { [Op.ne]: null }, ...(types ? { type: { [Op.in]: types } } : {}) },
+      raw: true,
+    });
+    const avgScore = avgScoreResult?.avgScore ? Math.round(parseFloat(avgScoreResult.avgScore)) : 0;
+
+    if (opportunities.length === 0) {
+      const emptyBrief = {
+        section,
+        briefDate: new Date().toISOString(),
+        headline: `No active opportunities in this section yet`,
+        summary: 'Check back after the next ingestion cycle for fresh insights.',
+        stats: { totalCount: 0, avgScore: 0 },
+      };
+
+      await run.update({ status: 'success', inputCount: 0, outputCount: 0, results: emptyBrief, completedAt: new Date() });
+      return emptyBrief;
+    }
+
+    // Build summaries for LLM
+    const oppSummaries = opportunities.slice(0, 10).map((o) => ({
+      title: o.title,
+      type: o.type,
+      actionType: o.actionType,
+      aiScore: o.aiScore,
+      value: o.value,
+      category: o.category,
+    }));
+
+    const sectionLabel = {
+      government: 'Government Contracts & Grants',
+      talent: 'AI Job Market',
+      freelance: 'Freelance Projects',
+      capital: 'Investment & Funding',
+      'private-sector': 'Private Sector & AI News',
+      alpha: 'Alpha (High-Demand Low-Competition)',
+      all: 'All Opportunities',
+    }[section] || section;
+
+    let briefData;
+    try {
+      const aiClient = getAIClient();
+      const systemPrompt = `You are a strategic intelligence analyst. Generate a concise section insight for the "${sectionLabel}" category of an opportunity tracking platform. Return valid JSON with: { "headline": "one punchy sentence", "summary": "2-3 sentences with actionable insights, trends, and notable patterns", "riskFlags": ["risk1"], "trendSignals": ["signal1"] }`;
+      const userPrompt = `Section: ${sectionLabel}\nTotal active: ${totalCount}\nAvg AI Score: ${avgScore}\n\nTop opportunities:\n${JSON.stringify(oppSummaries, null, 2)}`;
+
+      const { content, tokensUsed } = await aiClient.chat(systemPrompt, userPrompt, {
+        maxTokens: 500,
+        temperature: 0.5,
+      });
+
+      briefData = JSON.parse(content);
+      briefData.tokensUsed = tokensUsed;
+    } catch (err) {
+      logger.warn(`Section brief AI generation failed for ${section}, using fallback`, { error: err.message });
+      // Fallback
+      const topCategories = [...new Set(opportunities.map(o => o.category).filter(Boolean))].slice(0, 3);
+      briefData = {
+        headline: `${totalCount} active ${sectionLabel.toLowerCase()} opportunities with avg score ${avgScore}/100`,
+        summary: `Top categories include ${topCategories.join(', ') || 'various topics'}. ${opportunities.length >= 10 ? 'Strong pipeline with diverse options.' : 'Moderate pipeline — more opportunities expected soon.'}`,
+        riskFlags: [],
+        trendSignals: [],
+      };
+    }
+
+    const brief = {
+      section,
+      briefDate: new Date().toISOString(),
+      headline: briefData.headline || `${sectionLabel} Intelligence`,
+      summary: briefData.summary || '',
+      riskFlags: briefData.riskFlags || [],
+      trendSignals: briefData.trendSignals || [],
+      stats: { totalCount, avgScore },
+    };
+
+    await run.update({
+      status: 'success',
+      inputCount: opportunities.length,
+      outputCount: 1,
+      results: brief,
+      tokensUsed: briefData.tokensUsed || 0,
+      completedAt: new Date(),
+    });
+
+    logger.info(`Section brief generated for ${section}`, { totalCount, avgScore });
+    return brief;
+  } catch (error) {
+    logger.error(`Section brief generation failed for ${section}`, { error: error.message });
+    await run.update({ status: 'failed', errors: [{ error: error.message }], completedAt: new Date() });
+    throw error;
+  }
+}
+
+module.exports = { getExecutiveBrief, generateExecutiveBrief, getSectionBrief, generateSectionBrief };

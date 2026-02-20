@@ -21,6 +21,9 @@ const actionEngineService = {
   },
   deleteAction: (id) => api.delete(`/action-engine/actions/${id}`),
 
+  // Section Briefs
+  getSectionBrief: (section) => api.get(`/action-engine/section-brief/${section}`),
+
   // Analytics
   getAnalytics: () => api.get('/action-engine/analytics'),
 

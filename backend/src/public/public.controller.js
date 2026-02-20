@@ -71,7 +71,7 @@ async function getFeed(req, res, next) {
 
     const TYPE_LABELS = {
       gov_contract: 'Government Contract', ai_job: 'AI Job', investment: 'Investment',
-      grant: 'Grant', ai_news: 'AI News',
+      grant: 'Grant', ai_news: 'AI News', freelance: 'Freelance',
     };
 
     // Map raw types to strategic navigation groups
@@ -80,6 +80,7 @@ async function getFeed(req, res, next) {
       ai_news: 'Private Sector',
       ai_job: 'Talent',
       investment: 'Capital',
+      freelance: 'Freelance',
     };
 
     // Build self URL preserving query params
@@ -93,7 +94,7 @@ async function getFeed(req, res, next) {
 
     const feed = new RSS({
       title: 'Opportunity Pulse',
-      description: 'Latest opportunities — government contracts, AI jobs, investments, grants, and AI news',
+      description: 'Latest opportunities — government contracts, AI jobs, investments, grants, AI news, and freelance projects',
       feed_url: selfUrl,
       site_url: siteUrl,
       language: 'en',

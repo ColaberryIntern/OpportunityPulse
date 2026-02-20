@@ -8,6 +8,7 @@ import OpportunityFilters from '../components/opportunities/OpportunityFilters';
 import OpportunityList from '../components/opportunities/OpportunityList';
 import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
 import UpgradePrompt from '../components/common/UpgradePrompt';
+import SectionBrief from '../components/common/SectionBrief';
 
 function StrategicViewPage() {
   const dispatch = useDispatch();
@@ -70,6 +71,8 @@ function StrategicViewPage() {
         </p>
 
         <StrategicNav />
+
+        <SectionBrief section={viewConfig.key} />
 
         <UpgradePrompt />
 
