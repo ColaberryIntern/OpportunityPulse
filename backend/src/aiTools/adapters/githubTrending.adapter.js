@@ -22,6 +22,14 @@ async function fetchGithubTrendingAiTools() {
       'topic:machine-learning stars:>100',
       'topic:llm stars:>50',
       'topic:generative-ai stars:>50',
+      'topic:deep-learning stars:>50',
+      'topic:computer-vision stars:>50',
+      'topic:nlp stars:>50',
+      'topic:transformers stars:>30',
+      'topic:stable-diffusion stars:>30',
+      'topic:langchain stars:>30',
+      'topic:vector-database stars:>20',
+      'topic:ai-agents stars:>20',
     ];
 
     const allRepos = [];
@@ -37,7 +45,7 @@ async function fetchGithubTrendingAiTools() {
 
     for (const q of queries) {
       try {
-        const url = `${GITHUB_API}/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=10`;
+        const url = `${GITHUB_API}/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=25`;
         const response = await fetch(url, { headers });
 
         if (!response.ok) {

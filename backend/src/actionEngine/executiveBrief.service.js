@@ -1,5 +1,5 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { Opportunity, AnalysisRun } = require('../models');
+const { Opportunity, OpportunityClassification, AiDomain, AnalysisRun, sequelize } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
 const { buildExecutiveBriefPrompt } = require('./actionEngine.prompts');
 const logger = require('../logging/logger');
@@ -95,18 +95,70 @@ async function generateExecutiveBrief() {
       order: [['completed_at', 'DESC']],
     });
 
-    // Market stats
-    const totalActive = await Opportunity.count({ where: { status: 'active' } });
-    const classified = await Opportunity.count({ where: { status: 'active', actionType: { [Op.ne]: null } } });
-    const avgScore = await Opportunity.findOne({
-      attributes: [[fn('AVG', col('ai_score')), 'avgScore']],
-      where: { status: 'active', aiScore: { [Op.ne]: null } },
-      raw: true,
-    });
+    // Market stats — broad view across ALL active opportunities
+    const [totalActive, classified, avgScore, typeDistribution, quadrantDistribution, expiringSoon] = await Promise.all([
+      Opportunity.count({ where: { status: 'active' } }),
+      Opportunity.count({ where: { status: 'active', actionType: { [Op.ne]: null } } }),
+      Opportunity.findOne({
+        attributes: [[fn('AVG', col('ai_score')), 'avgScore']],
+        where: { status: 'active', aiScore: { [Op.ne]: null } },
+        raw: true,
+      }),
+      // Count by opportunity type
+      Opportunity.findAll({
+        attributes: ['type', [fn('COUNT', col('id')), 'count']],
+        where: { status: 'active' },
+        group: ['type'],
+        raw: true,
+      }),
+      // Count by quadrant
+      Opportunity.findAll({
+        attributes: ['opportunityQuadrant', [fn('COUNT', col('id')), 'count']],
+        where: { status: 'active', opportunityQuadrant: { [Op.ne]: null } },
+        group: ['opportunityQuadrant'],
+        raw: true,
+      }),
+      // Expiring within 7 days
+      Opportunity.count({
+        where: {
+          status: 'active',
+          expiresAt: { [Op.between]: [new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] },
+        },
+      }),
+    ]);
+
+    // Domain breakdown from classifications — top domains by opportunity count
+    let domainBreakdown = [];
+    try {
+      const [domainRows] = await sequelize.query(`
+        SELECT d.name, COUNT(oc.id) AS count
+        FROM opportunity_classifications oc
+        JOIN ai_domains d ON d.id = oc.domain_id
+        WHERE oc.domain_id IS NOT NULL
+        GROUP BY d.name
+        ORDER BY count DESC
+        LIMIT 10
+      `);
+      domainBreakdown = domainRows.map(r => ({ domain: r.name, count: parseInt(r.count, 10) }));
+    } catch (err) {
+      logger.warn('Domain breakdown query failed', { error: err.message });
+    }
 
     const actionTypeCounts = {};
     for (const opp of topOpportunities) {
       actionTypeCounts[opp.actionType] = (actionTypeCounts[opp.actionType] || 0) + 1;
+    }
+
+    const typeCounts = {};
+    for (const row of typeDistribution) {
+      typeCounts[row.type] = parseInt(row.count, 10);
+    }
+
+    const quadrantCounts = {};
+    for (const row of quadrantDistribution) {
+      if (row.opportunityQuadrant) {
+        quadrantCounts[row.opportunityQuadrant] = parseInt(row.count, 10);
+      }
     }
 
     const marketStats = {
@@ -114,6 +166,10 @@ async function generateExecutiveBrief() {
       classified,
       averageScore: avgScore?.avgScore ? Math.round(parseFloat(avgScore.avgScore)) : 0,
       actionTypeCounts,
+      typeCounts,
+      quadrantCounts,
+      domainBreakdown,
+      expiringSoon,
     };
 
     // Prepare data for LLM
@@ -143,7 +199,7 @@ async function generateExecutiveBrief() {
       );
 
       const { content, tokensUsed } = await aiClient.chat(systemPrompt, userPrompt, {
-        maxTokens: 2000,
+        maxTokens: 3000,
         temperature: 0.5,
       });
 
@@ -171,6 +227,7 @@ async function generateExecutiveBrief() {
         sourceUrl: opp.sourceUrl,
         recommendedAction: opp.aiAnalysis?.actionPlan?.summary || null,
       })).slice(0, 10),
+      sectorHighlights: briefData.sectorHighlights || [],
       recommendedActions: briefData.recommendedActions || [],
       marketPulse: briefData.marketPulse || '',
       riskFlags: briefData.riskFlags || [],
@@ -220,10 +277,15 @@ function calculateRevenuePotential(opportunities) {
 }
 
 function buildFallbackBrief(opportunities, stats) {
-  const topOpp = opportunities[0];
+  const typeList = Object.entries(stats.typeCounts || {}).map(([t, c]) => `${c} ${t.replace('_', ' ')}`).join(', ');
   return {
-    headline: `${stats.totalActive} active opportunities — ${stats.classified} classified and ready for action`,
-    executiveSummary: `Today's brief covers ${opportunities.length} top opportunities across ${Object.keys(stats.actionTypeCounts).length} action categories. Average AI relevance score: ${stats.averageScore}/100.`,
+    headline: `${stats.totalActive} active opportunities across ${Object.keys(stats.typeCounts || {}).length} categories — ${stats.expiringSoon || 0} expiring soon`,
+    executiveSummary: `Today's market landscape includes ${typeList || 'various opportunity types'}. ${stats.classified} opportunities are classified and actionable with an average AI score of ${stats.averageScore}/100.`,
+    sectorHighlights: (stats.domainBreakdown || []).slice(0, 5).map(d => ({
+      sector: d.domain,
+      summary: `${d.count} opportunities in ${d.domain}.`,
+      count: d.count,
+    })),
     recommendedActions: opportunities.slice(0, 5).map((opp, i) => ({
       priority: i + 1,
       action: `${opp.actionType}: ${opp.title}`,

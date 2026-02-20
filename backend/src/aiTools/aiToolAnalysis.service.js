@@ -728,13 +728,170 @@ async function discoverAndUpdateToolsFromProductHunt() {
 }
 
 /**
+ * Discover and update AI tools from HuggingFace.
+ * Fetches popular models/spaces, creates new tools or updates existing ones.
+ *
+ * @returns {Object} The AnalysisRun record tracking this discovery
+ */
+async function discoverAndUpdateToolsFromHuggingFace() {
+  const { fetchHuggingFaceAiTools } = require('./adapters/huggingface.adapter');
+
+  const run = await AnalysisRun.create({
+    type: 'ai_tool_huggingface_discovery',
+    status: 'running',
+    startedAt: new Date(),
+  });
+
+  try {
+    const models = await fetchHuggingFaceAiTools();
+    logger.info('HuggingFace discovery: fetched models', { count: models.length });
+
+    if (models.length === 0) {
+      run.status = 'success';
+      run.inputCount = 0;
+      run.outputCount = 0;
+      run.completedAt = new Date();
+      await run.save();
+      return run;
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+    let totalTokens = 0;
+
+    for (const model of models) {
+      try {
+        const slug = model.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+        let existingTool = await AiTool.findOne({ where: { slug } });
+        if (!existingTool) {
+          existingTool = await AiTool.findOne({
+            where: { name: { [Op.iLike]: model.name } },
+          });
+        }
+
+        if (existingTool) {
+          const sourceData = existingTool.sourceData || {};
+          sourceData.huggingface = {
+            likes: model.likes,
+            downloads: model.downloads,
+            fullName: model.fullName,
+            pipelineTag: model.pipelineTag,
+            sourceUrl: model.sourceUrl,
+            lastChecked: new Date().toISOString(),
+          };
+          await existingTool.update({
+            sourceData,
+            ...((!existingTool.website && model.website) ? { website: model.website } : {}),
+          });
+          updated++;
+        } else {
+          let categorization;
+          try {
+            categorization = sanitizeCategorization(await categorizeNewTool({
+              name: model.name,
+              context: `${model.description}. HuggingFace model by ${model.vendor}. Likes: ${model.likes}, Downloads: ${model.downloads}. Pipeline: ${model.pipelineTag}. Tags: ${model.tags?.join(', ')}`,
+              source: 'huggingface',
+            }));
+            totalTokens += 500;
+          } catch (catErr) {
+            logger.warn('AI categorization failed for HF model, using defaults', {
+              name: model.name,
+              error: catErr.message,
+            });
+            const categoryMap = {
+              'text-generation': 'LLM',
+              'text2text-generation': 'LLM',
+              'image-to-text': 'Image Generation',
+              'text-to-image': 'Image Generation',
+              'automatic-speech-recognition': 'Audio/Speech',
+              'text-to-speech': 'Audio/Speech',
+              'text-to-video': 'Video',
+              'text-classification': 'Analytics',
+              'token-classification': 'Analytics',
+            };
+            categorization = {
+              category: categoryMap[model.pipelineTag] || 'Other',
+              subcategory: model.pipelineTag || 'General',
+              industries: ['Technology', 'AI Research'],
+              description: model.description || `${model.name} — an AI model from HuggingFace.`,
+              vendor: model.vendor,
+              pricingTier: 'free',
+              tags: model.tags?.slice(0, 5) || [],
+            };
+          }
+
+          await AiTool.create({
+            name: categorization.name || model.name,
+            slug,
+            description: categorization.description || model.description,
+            website: model.website || model.sourceUrl,
+            vendor: categorization.vendor || model.vendor,
+            category: categorization.category || 'Other',
+            subcategory: categorization.subcategory || null,
+            industries: categorization.industries || ['Technology'],
+            tags: categorization.tags || [],
+            pricingTier: categorization.pricingTier || 'free',
+            trendingScore: Math.min(100, Math.round((model.likes / 500) * 10)),
+            trendDirection: 'rising',
+            sourceData: {
+              huggingface: {
+                likes: model.likes,
+                downloads: model.downloads,
+                fullName: model.fullName,
+                pipelineTag: model.pipelineTag,
+                sourceUrl: model.sourceUrl,
+                discoveredAt: new Date().toISOString(),
+                lastChecked: new Date().toISOString(),
+              },
+            },
+            status: 'active',
+          });
+          created++;
+        }
+      } catch (modelErr) {
+        skipped++;
+        errors.push({ model: model.name, error: modelErr.message });
+        logger.warn('HuggingFace discovery: failed to process model', {
+          model: model.name,
+          error: modelErr.message,
+        });
+      }
+    }
+
+    run.status = errors.length > 0 ? 'partial' : 'success';
+    run.inputCount = models.length;
+    run.outputCount = created + updated;
+    run.tokensUsed = totalTokens;
+    run.results = { created, updated, skipped };
+    run.errors = errors.length > 0 ? errors : null;
+    run.completedAt = new Date();
+    await run.save();
+
+    await invalidateCache('cache:aitools:*');
+
+    logger.info('HuggingFace discovery complete', { created, updated, skipped, models: models.length });
+    return run;
+  } catch (error) {
+    run.status = 'failed';
+    run.errors = [{ error: error.message }];
+    run.completedAt = new Date();
+    await run.save();
+    logger.error('HuggingFace discovery failed', { error: error.message });
+    throw error;
+  }
+}
+
+/**
  * Run the full tool discovery pipeline.
- * Always runs GitHub discovery. Runs Product Hunt if PRODUCT_HUNT_TOKEN is configured.
+ * Always runs GitHub and HuggingFace. Runs Product Hunt if token configured.
  *
  * @returns {Object} Combined results from all discovery sources
  */
 async function runToolDiscoveryPipeline() {
-  const results = { github: null, productHunt: null };
+  const results = { github: null, huggingface: null, productHunt: null };
 
   // Always run GitHub discovery (no token required)
   try {
@@ -746,6 +903,18 @@ async function runToolDiscoveryPipeline() {
   } catch (err) {
     logger.error('Discovery pipeline: GitHub failed', { error: err.message });
     results.github = { status: 'failed', error: err.message };
+  }
+
+  // Always run HuggingFace discovery (no token required)
+  try {
+    results.huggingface = await discoverAndUpdateToolsFromHuggingFace();
+    logger.info('Discovery pipeline: HuggingFace complete', {
+      status: results.huggingface.status,
+      output: results.huggingface.outputCount,
+    });
+  } catch (err) {
+    logger.error('Discovery pipeline: HuggingFace failed', { error: err.message });
+    results.huggingface = { status: 'failed', error: err.message };
   }
 
   // Run Product Hunt discovery only if token is configured
@@ -773,6 +942,7 @@ module.exports = {
   categorizeNewTool,
   updateMentionCounts,
   discoverAndUpdateToolsFromGithub,
+  discoverAndUpdateToolsFromHuggingFace,
   discoverAndUpdateToolsFromProductHunt,
   runToolDiscoveryPipeline,
 };
