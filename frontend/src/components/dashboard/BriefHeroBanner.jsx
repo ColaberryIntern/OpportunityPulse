@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 function BriefHeroBanner({ brief, loading }) {
   if (loading || !brief) {
@@ -22,6 +21,9 @@ function BriefHeroBanner({ brief, loading }) {
       })
     : 'Today';
 
+  const riskCount = brief.riskFlags?.length || 0;
+  const signalCount = brief.trendSignals?.length || 0;
+
   return (
     <div className="bg-gradient-to-r from-primary to-accent rounded-lg p-6 mb-6 text-white">
       <div className="flex items-center justify-between mb-2">
@@ -29,12 +31,18 @@ function BriefHeroBanner({ brief, loading }) {
           <span className="text-xs bg-white/20 px-2 py-1 rounded">AI-Generated</span>
           <span className="text-sm opacity-80">{dateStr}</span>
         </div>
-        <Link
-          to="/executive-brief"
-          className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition"
-        >
-          View Full Brief
-        </Link>
+        <div className="flex items-center gap-2">
+          {riskCount > 0 && (
+            <span className="text-xs bg-red-500/80 px-2 py-1 rounded font-medium">
+              &#9888; {riskCount} risk{riskCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          {signalCount > 0 && (
+            <span className="text-xs bg-green-500/80 px-2 py-1 rounded font-medium">
+              &#8599; {signalCount} signal{signalCount !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
       </div>
       <h1 className="text-xl font-bold mb-2">{brief.headline || 'Executive Intelligence Brief'}</h1>
       <p className="text-sm opacity-90 leading-relaxed">{brief.executiveSummary}</p>

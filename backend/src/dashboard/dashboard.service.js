@@ -84,8 +84,8 @@ async function getOpportunityStats() {
 }
 
 /**
- * Get time-series chart data for opportunities.
- * Groups opportunity counts by day within the requested period.
+ * Get time-series chart data for opportunities, broken down by type.
+ * Returns per-type counts per day within the requested period.
  */
 async function getChartData(type, period = '30d') {
   const periodDays = { '7d': 7, '30d': 30, '90d': 90 };
@@ -93,27 +93,46 @@ async function getChartData(type, period = '30d') {
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const where = { createdAt: { [Op.gte]: since } };
-  if (type) where.type = type;
+  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
 
   const results = await Opportunity.findAll({
     attributes: [
       [fn('DATE', col('created_at')), 'date'],
+      'type',
       [fn('COUNT', col('id')), 'count'],
     ],
-    where,
-    group: [fn('DATE', col('created_at'))],
+    where: { createdAt: { [Op.gte]: since } },
+    group: [fn('DATE', col('created_at')), 'type'],
     order: [[fn('DATE', col('created_at')), 'ASC']],
     raw: true,
   });
 
+  // Build date-keyed map with per-type counts
+  const dateMap = {};
+  for (const row of results) {
+    if (!dateMap[row.date]) {
+      dateMap[row.date] = { date: row.date };
+      for (const t of types) dateMap[row.date][t] = 0;
+    }
+    if (types.includes(row.type)) {
+      dateMap[row.date][row.type] = parseInt(row.count, 10);
+    }
+  }
+
+  // Fill missing dates with zeros
+  const allDates = [];
+  for (let d = new Date(since); d <= new Date(); d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    if (!dateMap[dateStr]) {
+      dateMap[dateStr] = { date: dateStr };
+      for (const t of types) dateMap[dateStr][t] = 0;
+    }
+    allDates.push(dateStr);
+  }
+
   return {
     period,
-    type: type || 'all',
-    dataPoints: results.map((r) => ({
-      date: r.date,
-      count: parseInt(r.count, 10),
-    })),
+    dataPoints: allDates.map((d) => dateMap[d]),
   };
 }
 
@@ -121,7 +140,7 @@ async function getChartData(type, period = '30d') {
  * Get summary of latest trends per opportunity type.
  */
 async function getTrendSummary() {
-  const types = ['gov_contract', 'ai_job', 'investment'];
+  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
   const summaries = {};
 
   for (const type of types) {

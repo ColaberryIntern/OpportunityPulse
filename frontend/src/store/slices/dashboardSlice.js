@@ -45,9 +45,9 @@ export const fetchOpportunityDashboardStats = createAsyncThunk(
 
 export const fetchChartData = createAsyncThunk(
   'dashboard/fetchChartData',
-  async ({ type, period } = {}, { rejectWithValue }) => {
+  async ({ period } = {}, { rejectWithValue }) => {
     try {
-      const response = await dashboardService.getChartData({ type, period });
+      const response = await dashboardService.getChartData({ period });
       return response.data.data.chartData;
     } catch (error) {
       return rejectWithValue(

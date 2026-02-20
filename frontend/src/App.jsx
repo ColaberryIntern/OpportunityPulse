@@ -23,10 +23,8 @@ import WebhooksPage from './pages/WebhooksPage';
 import SubscriptionPage from './pages/SubscriptionPage';
 import AdminPage from './pages/AdminPage';
 import NotificationsPage from './pages/NotificationsPage';
-import ForYouPage from './pages/ForYouPage';
 import AiToolsPage from './pages/AiToolsPage';
 import AiToolDetailPage from './pages/AiToolDetailPage';
-import ExecutiveBriefPage from './pages/ExecutiveBriefPage';
 import ActionTrackerPage from './pages/ActionTrackerPage';
 import StrategicClustersPage from './pages/StrategicClustersPage';
 import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
@@ -218,14 +216,7 @@ function App() {
             </ProtectedLayout>
           }
         />
-        <Route
-          path="/for-you"
-          element={
-            <ProtectedLayout>
-              <ForYouPage />
-            </ProtectedLayout>
-          }
-        />
+        <Route path="/for-you" element={<Navigate to="/dashboard" replace />} />
 
         <Route
           path="/ai-tools"
@@ -244,14 +235,7 @@ function App() {
           }
         />
 
-        <Route
-          path="/executive-brief"
-          element={
-            <ProtectedLayout>
-              <ExecutiveBriefPage />
-            </ProtectedLayout>
-          }
-        />
+        <Route path="/executive-brief" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/action-tracker"
           element={

@@ -1,12 +1,5 @@
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const TYPE_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'gov_contract', label: 'Gov Contracts' },
-  { value: 'ai_job', label: 'AI Jobs' },
-  { value: 'investment', label: 'Investments' },
-];
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const PERIOD_OPTIONS = [
   { value: '7d', label: '7 Days' },
@@ -14,31 +7,28 @@ const PERIOD_OPTIONS = [
   { value: '90d', label: '90 Days' },
 ];
 
-function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) {
+const TYPE_LINES = [
+  { dataKey: 'gov_contract', name: 'Gov Contracts', color: '#3B82F6' },
+  { dataKey: 'ai_job', name: 'AI Jobs', color: '#8B5CF6' },
+  { dataKey: 'investment', name: 'Investments', color: '#10B981' },
+  { dataKey: 'grant', name: 'Grants', color: '#F59E0B' },
+  { dataKey: 'ai_news', name: 'AI News', color: '#06B6D4' },
+];
+
+function OpportunityChart({ chartData, loading, onPeriodChange }) {
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Opportunity Trends</h3>
-        <div className="flex gap-2">
-          <select
-            value={chartData?.type === 'all' ? '' : (chartData?.type || '')}
-            onChange={(e) => onTypeChange(e.target.value || undefined)}
-            className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
-          >
-            {TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <select
-            value={chartData?.period || '30d'}
-            onChange={(e) => onPeriodChange(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
-          >
-            {PERIOD_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={chartData?.period || '30d'}
+          onChange={(e) => onPeriodChange(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100"
+        >
+          {PERIOD_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
@@ -57,16 +47,21 @@ function OpportunityChart({ chartData, loading, onTypeChange, onPeriodChange }) 
             <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
             <Tooltip
               labelFormatter={(value) => new Date(value).toLocaleDateString()}
-              formatter={(value) => [value, 'Opportunities']}
+              formatter={(value, name) => [value, name]}
             />
-            <Line
-              type="monotone"
-              dataKey="count"
-              stroke="#0f3460"
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
-            />
+            <Legend />
+            {TYPE_LINES.map((line) => (
+              <Line
+                key={line.dataKey}
+                type="monotone"
+                dataKey={line.dataKey}
+                name={line.name}
+                stroke={line.color}
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                activeDot={{ r: 5 }}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       ) : (

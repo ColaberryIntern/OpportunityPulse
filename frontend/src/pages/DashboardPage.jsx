@@ -23,6 +23,7 @@ import IntelligenceKPIs from '../components/dashboard/IntelligenceKPIs';
 import SectorHighlights from '../components/dashboard/SectorHighlights';
 import ToolSpotlight from '../components/dashboard/ToolSpotlight';
 import RssIntelligenceWidget from '../components/dashboard/RssIntelligenceWidget';
+import MarketInsights from '../components/dashboard/MarketInsights';
 
 function DashboardPage() {
   const dispatch = useDispatch();
@@ -36,7 +37,6 @@ function DashboardPage() {
     chartLoading,
   } = useSelector((state) => state.dashboard);
   const { executiveBrief, briefLoading } = useSelector((state) => state.actionEngine);
-  const [chartType, setChartType] = useState('');
   const [chartPeriod, setChartPeriod] = useState('30d');
 
   useRealtimeDashboard();
@@ -53,14 +53,9 @@ function DashboardPage() {
     dispatch(fetchActivity({ page: newPage, limit: 20 }));
   };
 
-  const handleChartTypeChange = (type) => {
-    setChartType(type);
-    dispatch(fetchChartData({ type: type || undefined, period: chartPeriod }));
-  };
-
   const handleChartPeriodChange = (period) => {
     setChartPeriod(period);
-    dispatch(fetchChartData({ type: chartType || undefined, period }));
+    dispatch(fetchChartData({ period }));
   };
 
   return (
@@ -91,6 +86,12 @@ function DashboardPage() {
 
         <SectorHighlights highlights={executiveBrief?.sectorHighlights} />
 
+        <MarketInsights
+          marketPulse={executiveBrief?.marketPulse}
+          riskFlags={executiveBrief?.riskFlags}
+          trendSignals={executiveBrief?.trendSignals}
+        />
+
         <RssIntelligenceWidget compact />
 
         {/* ===== SECTION 2: AI Tools & Momentum ===== */}
@@ -109,7 +110,6 @@ function DashboardPage() {
           <OpportunityChart
             chartData={chartData}
             loading={chartLoading}
-            onTypeChange={handleChartTypeChange}
             onPeriodChange={handleChartPeriodChange}
           />
         </section>

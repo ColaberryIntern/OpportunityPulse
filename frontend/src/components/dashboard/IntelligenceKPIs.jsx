@@ -1,6 +1,14 @@
 import React from 'react';
 import StatCard from '../common/StatCard';
 
+const TYPE_BAR_COLORS = {
+  gov_contract: 'bg-blue-500',
+  ai_job: 'bg-purple-500',
+  investment: 'bg-green-500',
+  grant: 'bg-amber-500',
+  ai_news: 'bg-cyan-500',
+};
+
 function formatCurrency(value) {
   if (!value || value === 0) return '$0';
   const abs = Math.abs(value);
@@ -8,6 +16,13 @@ function formatCurrency(value) {
   if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
   if (abs >= 1e3) return `$${(value / 1e3).toFixed(0)}K`;
   return `$${value.toLocaleString()}`;
+}
+
+function scoreColor(score) {
+  const num = parseFloat(score);
+  if (num >= 80) return 'text-green-600';
+  if (num >= 60) return 'text-yellow-600';
+  return 'text-gray-500';
 }
 
 function IntelligenceKPIs({ marketStats, revenuePotentialEstimate }) {
@@ -27,16 +42,17 @@ function IntelligenceKPIs({ marketStats, revenuePotentialEstimate }) {
   }
 
   const totalActive = marketStats.totalActive || 0;
+  const expiring = marketStats.expiringSoon || 0;
 
   return (
     <div className="mb-6">
       {/* KPI Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
-        <StatCard label="Active Opportunities" value={marketStats.totalActive} />
-        <StatCard label="Classified" value={marketStats.classified} />
-        <StatCard label="Avg AI Score" value={marketStats.averageScore} suffix="/100" />
-        <StatCard label="Revenue Potential" value={formatCurrency(revenuePotentialEstimate)} />
-        <StatCard label="Expiring This Week" value={marketStats.expiringSoon || 0} />
+        <StatCard label="Active Opportunities" value={marketStats.totalActive} valueColor="text-blue-600" />
+        <StatCard label="Classified" value={marketStats.classified} valueColor="text-green-600" />
+        <StatCard label="Avg AI Score" value={marketStats.averageScore} suffix="/100" valueColor={scoreColor(marketStats.averageScore)} />
+        <StatCard label="Revenue Potential" value={formatCurrency(revenuePotentialEstimate)} valueColor="text-green-600" />
+        <StatCard label="Expiring This Week" value={expiring} valueColor={expiring > 0 ? 'text-red-600' : ''} />
       </div>
 
       {/* Type & Domain Breakdown */}
@@ -56,7 +72,7 @@ function IntelligenceKPIs({ marketStats, revenuePotentialEstimate }) {
                     <div className="flex items-center gap-2">
                       <div className="w-24 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary rounded-full"
+                          className={`h-full rounded-full ${TYPE_BAR_COLORS[type] || 'bg-primary'}`}
                           style={{
                             width: `${Math.min(100, (count / Math.max(totalActive, 1)) * 100)}%`,
                           }}

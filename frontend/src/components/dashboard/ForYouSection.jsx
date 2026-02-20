@@ -5,6 +5,7 @@ import MatchCard from './MatchCard';
 
 function ForYouSection() {
   const navigate = useNavigate();
+  const [showAll, setShowAll] = useState(false);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,12 +92,6 @@ function ForYouSection() {
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button
-            onClick={() => navigate('/for-you')}
-            className="px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition"
-          >
-            View All
-          </button>
         </div>
       </div>
 
@@ -126,15 +121,15 @@ function ForYouSection() {
         </div>
       ) : (
         <div className="space-y-3">
-          {matches.slice(0, 5).map((match) => (
+          {(showAll ? matches : matches.slice(0, 5)).map((match) => (
             <MatchCard key={match.id} match={match} />
           ))}
-          {matches.length > 5 && (
+          {!showAll && matches.length > 5 && (
             <button
-              onClick={() => navigate('/for-you')}
+              onClick={() => setShowAll(true)}
               className="w-full py-2 text-sm text-center text-accent hover:text-accent/80 transition"
             >
-              View all {matches.length} matches
+              Show all {matches.length} matches
             </button>
           )}
         </div>
