@@ -25,6 +25,7 @@ import ToolSpotlight from '../components/dashboard/ToolSpotlight';
 import RssIntelligenceWidget from '../components/dashboard/RssIntelligenceWidget';
 import MarketInsights from '../components/dashboard/MarketInsights';
 import FreelanceSkillsDemand from '../components/dashboard/FreelanceSkillsDemand';
+import AIProfileWidget from '../components/dashboard/AIProfileWidget';
 
 function DashboardPage() {
   const dispatch = useDispatch();
@@ -80,6 +81,13 @@ function DashboardPage() {
         {/* ===== SECTION 1: Intelligence Summary ===== */}
         <BriefHeroBanner brief={executiveBrief} loading={briefLoading} />
 
+        {/* ===== AI Profile & Personalized Matches ===== */}
+        <AIProfileWidget />
+
+        <section className="mb-8">
+          <ForYouSection />
+        </section>
+
         <IntelligenceKPIs
           marketStats={executiveBrief?.marketStats}
           revenuePotentialEstimate={executiveBrief?.revenuePotentialEstimate}
@@ -133,11 +141,7 @@ function DashboardPage() {
           <FreelanceSkillsDemand />
         </section>
 
-        {/* ===== SECTION 4: AI Matches & Recommendations ===== */}
-        <section className="mb-8">
-          <ForYouSection />
-        </section>
-
+        {/* ===== SECTION 4: Recommendations ===== */}
         <section className="mb-8">
           <RecommendationsList />
         </section>

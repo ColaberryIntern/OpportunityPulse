@@ -4,13 +4,51 @@ const { getAIClient } = require('../analysis/ai.client');
 const { buildExecutiveBriefPrompt } = require('./actionEngine.prompts');
 const logger = require('../logging/logger');
 
+/**
+ * Fetch user profile context for personalized briefs.
+ * Returns null if user has no meaningful profile data.
+ */
+async function getUserProfileContext(userId) {
+  if (!userId) return null;
+  try {
+    const { assembleUserContext } = require('../personalMatch/personalMatch.service');
+    const ctx = await assembleUserContext(userId);
+    // Only personalize if user has meaningful profile data
+    if (!ctx.skills?.length && !ctx.industry && !ctx.goals?.length) return null;
+    return ctx;
+  } catch (err) {
+    logger.warn('Failed to fetch user context for personalized brief', { userId, error: err.message });
+    return null;
+  }
+}
+
+/**
+ * Build personalization addendum for LLM prompts.
+ */
+function buildPersonalizationContext(userCtx) {
+  if (!userCtx) return '';
+  const parts = [];
+  if (userCtx.professionalTitle) parts.push(`Title: ${userCtx.professionalTitle}`);
+  if (userCtx.industry) parts.push(`Industry: ${userCtx.industry}`);
+  if (userCtx.skills?.length) parts.push(`Skills: ${userCtx.skills.slice(0, 15).join(', ')}`);
+  if (userCtx.goals?.length) parts.push(`Goals: ${userCtx.goals.join(', ')}`);
+  if (userCtx.experienceLevel) parts.push(`Experience: ${userCtx.experienceLevel}`);
+
+  return `\n\nIMPORTANT - Personalize this insight for the following user:\n${parts.join('\n')}\n\nFrame insights in terms of what matters to THIS user. Highlight opportunities matching their skills and interests. Note relevant gaps or upskilling areas. Use "you/your" language where appropriate.`;
+}
+
 const BRIEF_CACHE_HOURS = 4;
 
 /**
  * Get the executive brief, using cache if fresh enough.
+ * When userId is provided and user has a profile, generates a personalized brief.
+ * Personalized briefs rely on Redis cache only (no AnalysisRun storage).
  */
-async function getExecutiveBrief({ forceRefresh = false } = {}) {
-  if (!forceRefresh) {
+async function getExecutiveBrief({ forceRefresh = false, userId = null } = {}) {
+  // For personalized briefs, skip AnalysisRun cache — rely on Redis middleware
+  const userCtx = await getUserProfileContext(userId);
+
+  if (!forceRefresh && !userCtx) {
     const cutoff = new Date(Date.now() - BRIEF_CACHE_HOURS * 60 * 60 * 1000);
     const cached = await AnalysisRun.findOne({
       where: {
@@ -26,15 +64,17 @@ async function getExecutiveBrief({ forceRefresh = false } = {}) {
     }
   }
 
-  return generateExecutiveBrief();
+  return generateExecutiveBrief({ userCtx });
 }
 
 /**
  * Generate a fresh executive brief.
  * Queries top opportunities, trend data, and calls OpenAI for synthesis.
  */
-async function generateExecutiveBrief() {
-  const run = await AnalysisRun.create({
+async function generateExecutiveBrief({ userCtx = null } = {}) {
+  // Only store in AnalysisRun for global (non-personalized) briefs
+  const isPersonalized = !!userCtx;
+  const run = isPersonalized ? null : await AnalysisRun.create({
     type: 'executive_brief',
     status: 'running',
     startedAt: new Date(),
@@ -73,13 +113,15 @@ async function generateExecutiveBrief() {
         revenuePotentialEstimate: 0,
       };
 
-      await run.update({
-        status: 'success',
-        inputCount: 0,
-        outputCount: 0,
-        results: emptyBrief,
-        completedAt: new Date(),
-      });
+      if (run) {
+        await run.update({
+          status: 'success',
+          inputCount: 0,
+          outputCount: 0,
+          results: emptyBrief,
+          completedAt: new Date(),
+        });
+      }
       return emptyBrief;
     }
 
@@ -213,7 +255,11 @@ async function generateExecutiveBrief() {
         marketStats
       );
 
-      const { content, tokensUsed } = await aiClient.chat(systemPrompt, userPrompt, {
+      // Append personalization context if available
+      const personalContext = buildPersonalizationContext(userCtx);
+      const finalSystemPrompt = systemPrompt + personalContext;
+
+      const { content, tokensUsed } = await aiClient.chat(finalSystemPrompt, userPrompt, {
         maxTokens: 3000,
         temperature: 0.5,
       });
@@ -249,26 +295,31 @@ async function generateExecutiveBrief() {
       trendSignals: briefData.trendSignals || [],
       revenuePotentialEstimate: calculateRevenuePotential(top20),
       marketStats,
+      personalized: isPersonalized,
     };
 
-    await run.update({
-      status: 'success',
-      inputCount: top20.length,
-      outputCount: 1,
-      results: brief,
-      tokensUsed: briefData.tokensUsed || 0,
-      completedAt: new Date(),
-    });
+    if (run) {
+      await run.update({
+        status: 'success',
+        inputCount: top20.length,
+        outputCount: 1,
+        results: brief,
+        tokensUsed: briefData.tokensUsed || 0,
+        completedAt: new Date(),
+      });
+    }
 
-    logger.info('Executive brief generated', { opportunityCount: top20.length });
+    logger.info('Executive brief generated', { opportunityCount: top20.length, personalized: isPersonalized });
     return brief;
   } catch (error) {
     logger.error('Executive brief generation failed', { error: error.message });
-    await run.update({
-      status: 'failed',
-      errors: [{ error: error.message }],
-      completedAt: new Date(),
-    });
+    if (run) {
+      await run.update({
+        status: 'failed',
+        errors: [{ error: error.message }],
+        completedAt: new Date(),
+      });
+    }
     throw error;
   }
 }
@@ -330,33 +381,40 @@ const SECTION_TYPE_MAP = {
 
 /**
  * Get a section-specific AI brief, using cache if fresh enough.
+ * When userId is provided and user has profile data, returns a personalized brief.
  */
-async function getSectionBrief(section) {
-  const cacheKey = `section_brief_${section}`;
-  const cutoff = new Date(Date.now() - SECTION_BRIEF_CACHE_HOURS * 60 * 60 * 1000);
+async function getSectionBrief(section, userId = null) {
+  const userCtx = await getUserProfileContext(userId);
 
-  const cached = await AnalysisRun.findOne({
-    where: {
-      type: 'section_brief',
-      opportunityType: section,
-      status: 'success',
-      completedAt: { [Op.gte]: cutoff },
-    },
-    order: [['completed_at', 'DESC']],
-  });
+  // For personalized briefs, skip AnalysisRun cache — rely on Redis middleware per-user caching
+  if (!userCtx) {
+    const cutoff = new Date(Date.now() - SECTION_BRIEF_CACHE_HOURS * 60 * 60 * 1000);
+    const cached = await AnalysisRun.findOne({
+      where: {
+        type: 'section_brief',
+        opportunityType: section,
+        status: 'success',
+        completedAt: { [Op.gte]: cutoff },
+      },
+      order: [['completed_at', 'DESC']],
+    });
 
-  if (cached) {
-    return cached.results;
+    if (cached) {
+      return cached.results;
+    }
   }
 
-  return generateSectionBrief(section);
+  return generateSectionBrief(section, userCtx);
 }
 
 /**
  * Generate a section-specific AI insight brief.
+ * When userCtx is provided, personalizes the insight for that user.
  */
-async function generateSectionBrief(section) {
-  const run = await AnalysisRun.create({
+async function generateSectionBrief(section, userCtx = null) {
+  const isPersonalized = !!userCtx;
+  // Only store in AnalysisRun for global (non-personalized) briefs
+  const run = isPersonalized ? null : await AnalysisRun.create({
     type: 'section_brief',
     opportunityType: section,
     status: 'running',
@@ -402,7 +460,9 @@ async function generateSectionBrief(section) {
         stats: { totalCount: 0, avgScore: 0 },
       };
 
-      await run.update({ status: 'success', inputCount: 0, outputCount: 0, results: emptyBrief, completedAt: new Date() });
+      if (run) {
+        await run.update({ status: 'success', inputCount: 0, outputCount: 0, results: emptyBrief, completedAt: new Date() });
+      }
       return emptyBrief;
     }
 
@@ -429,7 +489,8 @@ async function generateSectionBrief(section) {
     let briefData;
     try {
       const aiClient = getAIClient();
-      const systemPrompt = `You are a strategic intelligence analyst. Generate a concise section insight for the "${sectionLabel}" category of an opportunity tracking platform. Return valid JSON with: { "headline": "one punchy sentence", "summary": "2-3 sentences with actionable insights, trends, and notable patterns", "riskFlags": ["risk1"], "trendSignals": ["signal1"] }`;
+      const personalContext = buildPersonalizationContext(userCtx);
+      const systemPrompt = `You are a strategic intelligence analyst. Generate a concise section insight for the "${sectionLabel}" category of an opportunity tracking platform. Return valid JSON with: { "headline": "one punchy sentence", "summary": "2-3 sentences with actionable insights, trends, and notable patterns", "riskFlags": ["risk1"], "trendSignals": ["signal1"] }` + personalContext;
       const userPrompt = `Section: ${sectionLabel}\nTotal active: ${totalCount}\nAvg AI Score: ${avgScore}\n\nTop opportunities:\n${JSON.stringify(oppSummaries, null, 2)}`;
 
       const { content, tokensUsed } = await aiClient.chat(systemPrompt, userPrompt, {
@@ -459,22 +520,27 @@ async function generateSectionBrief(section) {
       riskFlags: briefData.riskFlags || [],
       trendSignals: briefData.trendSignals || [],
       stats: { totalCount, avgScore },
+      personalized: isPersonalized,
     };
 
-    await run.update({
-      status: 'success',
-      inputCount: opportunities.length,
-      outputCount: 1,
-      results: brief,
-      tokensUsed: briefData.tokensUsed || 0,
-      completedAt: new Date(),
-    });
+    if (run) {
+      await run.update({
+        status: 'success',
+        inputCount: opportunities.length,
+        outputCount: 1,
+        results: brief,
+        tokensUsed: briefData.tokensUsed || 0,
+        completedAt: new Date(),
+      });
+    }
 
-    logger.info(`Section brief generated for ${section}`, { totalCount, avgScore });
+    logger.info(`Section brief generated for ${section}`, { totalCount, avgScore, personalized: isPersonalized });
     return brief;
   } catch (error) {
     logger.error(`Section brief generation failed for ${section}`, { error: error.message });
-    await run.update({ status: 'failed', errors: [{ error: error.message }], completedAt: new Date() });
+    if (run) {
+      await run.update({ status: 'failed', errors: [{ error: error.message }], completedAt: new Date() });
+    }
     throw error;
   }
 }

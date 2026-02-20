@@ -56,7 +56,8 @@ async function triggerExecutiveBrief(req, res) {
 
 async function getExecutiveBriefHandler(req, res) {
   try {
-    const brief = await getExecutiveBrief();
+    const userId = req.user?.userId || null;
+    const brief = await getExecutiveBrief({ userId });
     return successResponse(res, brief, 'Executive brief retrieved');
   } catch (error) {
     logger.error('Get executive brief failed', { error: error.message });
@@ -73,7 +74,8 @@ async function getSectionBriefHandler(req, res) {
     if (!validSections.includes(section)) {
       return errorResponse(res, `Invalid section: ${section}. Valid: ${validSections.join(', ')}`, 400);
     }
-    const brief = await getSectionBrief(section);
+    const userId = req.user?.userId || null;
+    const brief = await getSectionBrief(section, userId);
     return successResponse(res, brief, 'Section brief retrieved');
   } catch (error) {
     logger.error('Get section brief failed', { error: error.message, section: req.params.section });

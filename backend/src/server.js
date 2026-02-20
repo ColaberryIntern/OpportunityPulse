@@ -253,6 +253,9 @@ app.use('/api/v1/intelligence', require('./intelligence/intelligence.routes'));
 // Freelance Demand Intelligence routes
 app.use('/api/v1/freelance', require('./freelance/freelance.routes'));
 
+// Resume upload & AI skill extraction
+app.use('/api/v1/resume-upload', require('./resumeUpload/resumeUpload.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({

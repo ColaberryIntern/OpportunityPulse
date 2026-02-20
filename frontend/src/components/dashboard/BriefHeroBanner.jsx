@@ -29,6 +29,9 @@ function BriefHeroBanner({ brief, loading }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <span className="text-xs bg-white/20 px-2 py-1 rounded">AI-Generated</span>
+          {brief.personalized && (
+            <span className="text-xs bg-white/20 px-2 py-1 rounded">Personalized for you</span>
+          )}
           <span className="text-sm opacity-80">{dateStr}</span>
         </div>
         <div className="flex items-center gap-2">

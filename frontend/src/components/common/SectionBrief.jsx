@@ -48,6 +48,9 @@ function SectionBrief({ section }) {
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-medium bg-accent/10 text-accent px-1.5 py-0.5 rounded">AI Insight</span>
+          {brief.personalized && (
+            <span className="text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded">Personalized</span>
+          )}
           <span className="text-[10px] text-gray-400 dark:text-gray-500">{dateStr}</span>
         </div>
         <div className="flex items-center gap-1.5">

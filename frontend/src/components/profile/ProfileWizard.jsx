@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import personalMatchService from '../../services/personalMatchService';
 import api from '../../services/api';
+import TagInput from '../common/TagInput';
+import ResumeUploadModal from './ResumeUploadModal';
 
 const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Government', 'Defense',
@@ -29,75 +31,12 @@ const SUGGESTED_SKILLS = [
   'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'React',
 ];
 
-function TagInput({ value, onChange, suggestions, placeholder, label }) {
-  const [input, setInput] = useState('');
-
-  const addTag = (tag) => {
-    const trimmed = tag.trim();
-    if (trimmed && !value.includes(trimmed)) {
-      onChange([...value, trimmed]);
-    }
-    setInput('');
-  };
-
-  const removeTag = (index) => {
-    onChange(value.filter((_, i) => i !== index));
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag(input);
-    } else if (e.key === 'Backspace' && !input && value.length > 0) {
-      removeTag(value.length - 1);
-    }
-  };
-
-  const filteredSuggestions = suggestions
-    ? suggestions.filter((s) => !value.includes(s) && s.toLowerCase().includes(input.toLowerCase()))
-    : [];
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-      <div className="flex flex-wrap gap-1.5 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 min-h-[42px]">
-        {value.map((tag, i) => (
-          <span key={i} className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-accent/10 text-accent rounded">
-            {tag}
-            <button type="button" onClick={() => removeTag(i)} className="hover:text-red-500">x</button>
-          </span>
-        ))}
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={value.length === 0 ? placeholder : ''}
-          className="flex-1 min-w-[120px] text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400"
-        />
-      </div>
-      {input && filteredSuggestions.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {filteredSuggestions.slice(0, 6).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => addTag(s)}
-              className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-accent/10 hover:text-accent transition"
-            >
-              + {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ProfileWizard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [showUpload, setShowUpload] = useState(false);
 
   const [profileData, setProfileData] = useState({
     professionalTitle: '',
@@ -198,11 +137,19 @@ function ProfileWizard() {
     <div className="space-y-6">
       <div className="bg-accent/5 dark:bg-accent/10 border border-accent/20 rounded-lg p-4 mb-4">
         <h3 className="text-sm font-semibold text-accent mb-1">AI-Powered Matching</h3>
-        <p className="text-xs text-gray-600 dark:text-gray-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
           Complete your profile below so our AI can match you with the most relevant opportunities.
           The more detail you provide, the better your matches will be.
         </p>
+        <button
+          type="button"
+          onClick={() => setShowUpload(true)}
+          className="text-xs font-medium text-accent hover:underline"
+        >
+          Or upload your resume to auto-fill &rarr;
+        </button>
       </div>
+      {showUpload && <ResumeUploadModal onClose={() => setShowUpload(false)} />}
 
       {/* Professional Title */}
       <div>
