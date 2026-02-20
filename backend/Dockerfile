@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --production
 
+COPY .sequelizerc ./
 COPY src/ ./src/
 
 RUN mkdir -p logs
