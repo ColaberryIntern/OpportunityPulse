@@ -139,6 +139,11 @@ function DashboardPage() {
           </div>
         </section>
 
+        {/* RSS Intelligence */}
+        <section className="mb-8">
+          <RssIntelligenceWidget />
+        </section>
+
         {/* Opportunity Overview */}
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
@@ -155,6 +160,12 @@ function DashboardPage() {
         {/* AI Recommendations */}
         <section className="mb-8">
           <RecommendationsList />
+        </section>
+
+        {/* AI Tools + Tool Momentum */}
+        <section className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AiToolTrendingWidget />
+          <ToolMomentumBoard />
         </section>
 
         {/* Opportunity Chart (Premium) */}
@@ -182,16 +193,6 @@ function DashboardPage() {
             <TrendCard type="grant" trendData={trends?.grant} />
             <TrendCard type="ai_news" trendData={trends?.ai_news} />
           </div>
-        </section>
-
-        {/* RSS Intelligence + Tool Momentum */}
-        <section className="mb-8">
-          <RssIntelligenceWidget />
-        </section>
-
-        <section className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AiToolTrendingWidget />
-          <ToolMomentumBoard />
         </section>
 
         {/* Recent Activity */}
