@@ -11,10 +11,15 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    const ACCEPTED_MIMES = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ];
+    if (ACCEPTED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are accepted.'), false);
+      cb(new Error('Only PDF and Word (.docx, .doc) files are accepted.'), false);
     }
   },
 });

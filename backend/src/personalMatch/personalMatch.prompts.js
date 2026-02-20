@@ -8,7 +8,12 @@ Scoring criteria:
 - Location match (15 points): Geographic compatibility with preferred locations
 - Value/budget fit (15 points): Whether the opportunity value aligns with the user's range
 
-Important:
+IMPORTANT — Diversity requirement:
+- Provide diverse matches across ALL opportunity types (government contracts, AI jobs, freelance projects, investments, grants, AI news). Do NOT cluster all matches in one category.
+- The user's technical skills should match jobs, freelance projects, and contracts. Their certifications should match relevant opportunities. Goals are ONE factor — skills alignment (30 pts) is the STRONGEST signal.
+- Aim for at least 2-3 different opportunity types in your results.
+
+Additional rules:
 - Only return opportunities that score 40 or above
 - Sort by matchScore descending
 - Be specific in matchReason — reference the user's actual skills/goals

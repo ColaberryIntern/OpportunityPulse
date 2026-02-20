@@ -7,25 +7,50 @@ function getPDFParse() {
   }
   return PDFParseClass;
 }
+
+// Lazy-load mammoth for Word doc parsing
+let mammothModule;
+function getMammoth() {
+  if (!mammothModule) {
+    mammothModule = require('mammoth');
+  }
+  return mammothModule;
+}
+
 const { getAIClient } = require('../analysis/ai.client');
 const { RESUME_EXTRACTION_SYSTEM_PROMPT, buildResumeExtractionPrompt } = require('./resumeUpload.prompts');
 const logger = require('../logging/logger');
 
 const MAX_TEXT_LENGTH = 8000;
 
+const WORD_MIMETYPES = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+];
+
 /**
- * Extract profile data from a PDF resume buffer using AI.
- * Returns extracted data, merged profile, and list of changes.
+ * Extract text from a file buffer based on mimetype.
  */
-async function extractProfileFromResume(pdfBuffer, existingProfileData = {}) {
-  // 1. Parse PDF to text using pdf-parse v2 class-based API
-  let rawText;
+async function extractTextFromBuffer(buffer, mimetype) {
+  if (WORD_MIMETYPES.includes(mimetype)) {
+    // Word document — use mammoth
+    try {
+      const mammoth = getMammoth();
+      const result = await mammoth.extractRawText({ buffer });
+      return (result.value || '').trim();
+    } catch (err) {
+      logger.error('Word document parsing failed', { error: err.message });
+      throw new Error('Could not read this Word document. Please try a different file or enter your skills manually.');
+    }
+  }
+
+  // Default: PDF
   try {
     const PDFParse = getPDFParse();
-    const parser = new PDFParse({ data: pdfBuffer });
+    const parser = new PDFParse({ data: buffer });
     try {
       const pdfData = await parser.getText();
-      rawText = (pdfData.text || '').trim();
+      return (pdfData.text || '').trim();
     } finally {
       await parser.destroy();
     }
@@ -33,9 +58,18 @@ async function extractProfileFromResume(pdfBuffer, existingProfileData = {}) {
     logger.error('PDF parsing failed', { error: err.message });
     throw new Error('Could not read this PDF. Please try a different file or enter your skills manually.');
   }
+}
+
+/**
+ * Extract profile data from a resume buffer (PDF or Word) using AI.
+ * Returns extracted data, merged profile, and list of changes.
+ */
+async function extractProfileFromResume(fileBuffer, existingProfileData = {}, mimetype = 'application/pdf') {
+  // 1. Extract text from file
+  const rawText = await extractTextFromBuffer(fileBuffer, mimetype);
 
   if (!rawText || rawText.length < 50) {
-    throw new Error('The PDF appears to be empty or contains too little text. Please try a different file.');
+    throw new Error('The file appears to be empty or contains too little text. Please try a different file.');
   }
 
   // 2. Truncate to keep tokens reasonable

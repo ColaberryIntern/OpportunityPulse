@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMetaSignals, fetchHeatmap, fetchClusters } from '../store/slices/intelligenceSlice';
+import StrategicNav from '../components/navigation/StrategicNav';
 
 function TrendArrow({ direction }) {
   if (direction === 'up') {
@@ -213,6 +214,8 @@ function IntelligenceDashboardPage() {
             Multi-dimensional AI market intelligence across domains, signals, and strategic clusters
           </p>
         </div>
+
+        <StrategicNav />
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-gray-700 rounded text-red-700 dark:text-red-400 text-sm">

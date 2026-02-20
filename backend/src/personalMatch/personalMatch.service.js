@@ -94,18 +94,30 @@ async function assembleUserContext(userId) {
 
 /**
  * Fetch candidate opportunities for matching.
+ * Uses type-balanced sampling to ensure diversity across opportunity types.
  */
 async function fetchCandidateOpportunities() {
-  return Opportunity.findAll({
-    where: { status: 'active' },
-    include: [{ model: DataSource, as: 'dataSource', attributes: ['name', 'type'] }],
-    order: [
-      ['ai_score', 'DESC NULLS LAST'],
-      ['published_at', 'DESC'],
-    ],
-    limit: MAX_OPPORTUNITIES,
-    attributes: ['id', 'type', 'title', 'description', 'sourceUrl', 'category', 'aiScore', 'value', 'location', 'publishedAt', 'tags'],
-  });
+  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
+  const perType = Math.ceil(MAX_OPPORTUNITIES / types.length);
+  const attributes = ['id', 'type', 'title', 'description', 'sourceUrl', 'category', 'aiScore', 'value', 'location', 'publishedAt', 'tags'];
+  const include = [{ model: DataSource, as: 'dataSource', attributes: ['name', 'type'] }];
+
+  const batches = await Promise.all(
+    types.map((type) =>
+      Opportunity.findAll({
+        where: { status: 'active', type },
+        order: [['ai_score', 'DESC NULLS LAST'], ['published_at', 'DESC']],
+        limit: perType,
+        attributes,
+        include,
+      })
+    )
+  );
+
+  // Combine, sort by AI score, and cap at MAX_OPPORTUNITIES
+  return batches.flat()
+    .sort((a, b) => (b.aiScore || 0) - (a.aiScore || 0))
+    .slice(0, MAX_OPPORTUNITIES);
 }
 
 /**

@@ -11,7 +11,7 @@ const logger = require('../logging/logger');
 async function uploadResume(req, res) {
   try {
     if (!req.file) {
-      return errorResponse(res, 'No file uploaded. Please select a PDF file.', 400);
+      return errorResponse(res, 'No file uploaded. Please select a PDF or Word document.', 400);
     }
 
     const user = await User.findByPk(req.user.userId, {
@@ -23,7 +23,7 @@ async function uploadResume(req, res) {
     }
 
     const existingProfileData = user.profileData || {};
-    const result = await extractProfileFromResume(req.file.buffer, existingProfileData);
+    const result = await extractProfileFromResume(req.file.buffer, existingProfileData, req.file.mimetype);
 
     return successResponse(res, {
       extractedData: result.extractedData,

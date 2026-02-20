@@ -15,8 +15,8 @@ const updateProfileDataValidation = [
   body('profileData.certifications').optional().isArray({ max: 20 }),
   body('profileData.certifications.*').optional().isString().trim().isLength({ max: 200 }),
   body('profileData.budgetRange').optional().isObject(),
-  body('profileData.budgetRange.min').optional().isInt({ min: 0 }),
-  body('profileData.budgetRange.max').optional().isInt({ min: 0 }),
+  body('profileData.budgetRange.min').optional().toInt().isInt({ min: 0 }),
+  body('profileData.budgetRange.max').optional().toInt().isInt({ min: 0 }),
 ];
 
 const feedbackValidation = [

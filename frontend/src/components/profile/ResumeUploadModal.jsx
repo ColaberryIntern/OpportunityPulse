@@ -20,7 +20,7 @@ const EXPERIENCE_LEVELS = [
 function ResumeUploadModal({ onClose }) {
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
-  const [stage, setStage] = useState('select'); // select | extracting | review | saving
+  const [stage, setStage] = useState('select'); // select | extracting | review | saving | success
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
@@ -36,8 +36,13 @@ function ResumeUploadModal({ onClose }) {
   const handleFile = useCallback(async (selectedFile) => {
     if (!selectedFile) return;
 
-    if (selectedFile.type !== 'application/pdf') {
-      setError('Please select a PDF file.');
+    const ACCEPTED_TYPES = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ];
+    if (!ACCEPTED_TYPES.includes(selectedFile.type)) {
+      setError('Please select a PDF or Word (.docx) file.');
       return;
     }
 
@@ -98,7 +103,7 @@ function ResumeUploadModal({ onClose }) {
 
       await resumeUploadService.confirmExtraction(finalProfile);
       await dispatch(fetchCurrentUser()).unwrap();
-      onClose();
+      setStage('success');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save profile. Please try again.');
       setStage('review');
@@ -122,6 +127,7 @@ function ResumeUploadModal({ onClose }) {
             {stage === 'select' && 'Upload Resume'}
             {stage === 'extracting' && 'Extracting Skills...'}
             {(stage === 'review' || stage === 'saving') && 'Review Extracted Profile'}
+            {stage === 'success' && 'Profile Updated!'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,15 +155,15 @@ function ResumeUploadModal({ onClose }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  Drag and drop your resume PDF here, or click to browse
+                  Drag and drop your resume here, or click to browse
                 </p>
                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                  PDF only, max 10MB. Works with resumes and LinkedIn PDF exports.
+                  PDF or Word (.docx) files, max 10MB. Works with resumes and LinkedIn exports.
                 </p>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,application/pdf"
+                  accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
                   onChange={(e) => handleFile(e.target.files[0])}
                   className="hidden"
                 />
@@ -277,6 +283,29 @@ function ResumeUploadModal({ onClose }) {
                 placeholder="Add certifications"
                 label="Certifications"
               />
+            </div>
+          )}
+
+          {/* Stage 4: Success */}
+          {stage === 'success' && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Profile Updated!
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Your skills and experience have been saved. AI matching will now use your updated profile.
+              </p>
+              <button
+                onClick={onClose}
+                className="px-6 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent/90 transition"
+              >
+                Done
+              </button>
             </div>
           )}
 
