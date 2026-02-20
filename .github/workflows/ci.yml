@@ -293,4 +293,5 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --build
             sleep 25
             curl -sf http://127.0.0.1/api/v1/health || curl -sf http://localhost:3001/api/v1/health || exit 1
+            docker exec op-backend npx sequelize-cli db:migrate
             echo "Deploy successful at $(date)"
