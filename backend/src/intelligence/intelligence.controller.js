@@ -11,12 +11,12 @@ const logger = require('../logging/logger');
  * List dimension values with opportunity counts.
  */
 async function listDimension(model, fkColumn) {
-  const tableName = model.getTableName();
+  const alias = model.name; // Sequelize uses model name as the SQL alias, not table name
   const rows = await model.findAll({
     attributes: {
       include: [
         [
-          sequelize.literal(`(SELECT COUNT(*) FROM opportunity_classifications WHERE ${fkColumn} = "${tableName}"."id")`),
+          sequelize.literal(`(SELECT COUNT(*) FROM opportunity_classifications WHERE ${fkColumn} = "${alias}"."id")`),
           'opportunityCount',
         ],
       ],
