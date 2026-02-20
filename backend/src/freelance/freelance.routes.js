@@ -1,11 +1,11 @@
 const express = require('express');
-const { authenticate } = require('../auth/auth.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
 const controller = require('./freelance.controller');
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(verifyToken);
 
 // Freelance opportunity endpoints
 router.get('/opportunities', controller.listOpportunities);
