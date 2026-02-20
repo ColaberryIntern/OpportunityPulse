@@ -118,7 +118,10 @@ ${JSON.stringify(topOpportunities, null, 2)}
 ## Recent Trends
 ${JSON.stringify(trendData || {}, null, 2)}
 
-Synthesize the full market landscape. Prioritize "High Demand / Low Competition" opportunities in recommended actions.`;
+## Tool Momentum (top accelerating AI tools)
+${JSON.stringify(marketStats.topMomentumTools || [], null, 2)}
+
+Synthesize the full market landscape. Prioritize "High Demand / Low Competition" opportunities in recommended actions. If tool momentum data is available, mention key accelerating tools in trend signals.`;
 
   return { systemPrompt, userPrompt };
 }

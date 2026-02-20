@@ -68,7 +68,56 @@ function startAiToolsScheduler() {
     }
   });
 
-  logger.info('AI Tools scheduler started (mention extraction: */6h, trend analysis: offset */6h, discovery: daily 3AM UTC)');
+  // Daily at 3:30 AM UTC: GitHub acceleration computation
+  cron.schedule(process.env.GITHUB_ACCEL_SCHEDULE || '30 3 * * *', async () => {
+    logger.info('Scheduled: GitHub acceleration computation starting');
+    try {
+      const { computeGithubAcceleration } = require('./githubAcceleration.service');
+      const run = await computeGithubAcceleration();
+      logger.info('Scheduled: GitHub acceleration complete', { status: run.status, output: run.outputCount });
+    } catch (error) {
+      logger.error('Scheduled: GitHub acceleration failed', { error: error.message });
+    }
+  });
+
+  // Daily at 3:45 AM UTC: Social velocity computation
+  cron.schedule(process.env.SOCIAL_VELOCITY_SCHEDULE || '45 3 * * *', async () => {
+    logger.info('Scheduled: Social velocity computation starting');
+    try {
+      const { computeSocialVelocity } = require('./socialVelocity.service');
+      const run = await computeSocialVelocity();
+      logger.info('Scheduled: Social velocity complete', { status: run.status, output: run.outputCount });
+    } catch (error) {
+      logger.error('Scheduled: Social velocity failed', { error: error.message });
+    }
+  });
+
+  // Daily at 4:00 AM UTC: Funding + enterprise signal scoring
+  cron.schedule(process.env.FUNDING_SCORING_SCHEDULE || '0 4 * * *', async () => {
+    logger.info('Scheduled: Funding & enterprise scoring starting');
+    try {
+      const { computeFundingScores, computeEnterpriseSignalScores } = require('./aiToolAnalysis.service');
+      await computeFundingScores();
+      await computeEnterpriseSignalScores();
+      logger.info('Scheduled: Funding & enterprise scoring complete');
+    } catch (error) {
+      logger.error('Scheduled: Funding & enterprise scoring failed', { error: error.message });
+    }
+  });
+
+  // Daily at 4:15 AM UTC: Momentum composite scoring
+  cron.schedule(process.env.MOMENTUM_SCORING_SCHEDULE || '15 4 * * *', async () => {
+    logger.info('Scheduled: Momentum scoring starting');
+    try {
+      const { computeMomentumScores } = require('./momentumScoring.service');
+      const run = await computeMomentumScores();
+      logger.info('Scheduled: Momentum scoring complete', { status: run.status, output: run.outputCount });
+    } catch (error) {
+      logger.error('Scheduled: Momentum scoring failed', { error: error.message });
+    }
+  });
+
+  logger.info('AI Tools scheduler started (mention extraction: */6h, trend analysis: offset */6h, discovery: daily 3AM UTC, momentum: daily 3:30-4:15AM UTC)');
 }
 
 module.exports = { startAiToolsScheduler };

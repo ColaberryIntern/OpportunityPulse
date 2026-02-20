@@ -64,6 +64,47 @@ function BookmarkIcon({ filled }) {
   );
 }
 
+function formatCompact(n) {
+  if (!n) return '';
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+  return `$${n}`;
+}
+
+function SignalBadges({ signals }) {
+  if (!signals || signals.method === 'llm_failed') return null;
+  const badges = [];
+  if (signals.budget?.allocationAmount) {
+    badges.push({ key: 'budget', label: formatCompact(signals.budget.allocationAmount), color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1' });
+  }
+  if (signals.actor?.actorName) {
+    badges.push({ key: 'actor', label: signals.actor.actorName, color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300', icon: 'M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172' });
+  }
+  if (signals.enterprise?.companyName) {
+    badges.push({ key: 'enterprise', label: signals.enterprise.companyName, color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300', icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15' });
+  }
+  if (signals.compliance?.regulationType) {
+    badges.push({ key: 'compliance', label: signals.compliance.regulationType.replace(/_/g, ' '), color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300', icon: 'M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75' });
+  }
+  if (badges.length === 0) return null;
+  const shown = badges.slice(0, 2);
+  const overflow = badges.length - 2;
+  return (
+    <>
+      {shown.map((b) => (
+        <span key={b.key} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${b.color}`}>
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d={b.icon} />
+          </svg>
+          {b.label.length > 15 ? b.label.slice(0, 13) + '..' : b.label}
+        </span>
+      ))}
+      {overflow > 0 && <span className="text-xs text-gray-400">+{overflow}</span>}
+    </>
+  );
+}
+
 function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
@@ -126,6 +167,7 @@ function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }
                   {opportunity.classification.cluster.name}
                 </span>
               )}
+              <SignalBadges signals={opportunity.aiAnalysis?.rssSignals} />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{opportunity.title}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{opportunity.description}</p>

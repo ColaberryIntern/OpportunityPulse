@@ -16,6 +16,7 @@ let schedulerStarted = false;
  * 6. Geographic tagging: every 2h at :45
  * 7. Meta signal computation: daily 4 AM UTC
  * 8. Cluster detection: daily 4:30 AM UTC
+ * 9. RSS signal enrichment: every 2h at :50
  */
 function startIntelligenceScheduler() {
   if (schedulerStarted) return;
@@ -29,6 +30,7 @@ function startIntelligenceScheduler() {
   const geoSchedule = process.env.GEO_CLASS_SCHEDULE || '45 */2 * * *';
   const metaSignalSchedule = process.env.META_SIGNAL_SCHEDULE || '0 4 * * *';
   const clusterSchedule = process.env.CLUSTER_SCHEDULE || '30 4 * * *';
+  const rssEnrichmentSchedule = process.env.RSS_ENRICHMENT_SCHEDULE || '50 */2 * * *';
 
   // Domain classification
   cron.schedule(domainSchedule, async () => {
@@ -126,7 +128,19 @@ function startIntelligenceScheduler() {
     }
   });
 
-  logger.info('Intelligence Engine scheduler started — 8 jobs registered');
+  // RSS signal enrichment
+  cron.schedule(rssEnrichmentSchedule, async () => {
+    logger.info('Scheduled: RSS signal enrichment starting');
+    try {
+      const { enrichRssSignals } = require('./rssEnrichment.service');
+      const result = await enrichRssSignals();
+      logger.info('Scheduled: RSS signal enrichment complete', { input: result.inputCount, output: result.outputCount });
+    } catch (error) {
+      logger.error('Scheduled: RSS signal enrichment failed', { error: error.message });
+    }
+  });
+
+  logger.info('Intelligence Engine scheduler started — 9 jobs registered');
 }
 
 module.exports = { startIntelligenceScheduler };

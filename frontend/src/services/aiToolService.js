@@ -8,6 +8,7 @@ const aiToolService = {
   getByIndustry: (industry) => api.get(`/ai-tools/industry/${encodeURIComponent(industry)}`),
   getMentions: (slug, params = {}) => api.get(`/ai-tools/${slug}/mentions`, { params }),
   refreshTrends: () => api.post('/ai-tools/refresh-trends'),
+  getMomentum: (params = {}) => api.get('/ai-tools/momentum', { params }),
 };
 
 export default aiToolService;

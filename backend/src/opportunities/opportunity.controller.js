@@ -7,13 +7,13 @@ async function listOpportunities(req, res, next) {
     const {
       type, category, status, tags, q,
       dateFrom, dateTo, minScore, sort, page, limit, actionType,
-      domain, capability, intent, monetization, maturity, geo, quadrant, cluster,
+      domain, capability, intent, monetization, maturity, geo, quadrant, cluster, source,
     } = req.query;
 
     const result = await opportunityService.listOpportunities({
       type, category, status, tags, q,
       dateFrom, dateTo, minScore, sort, page, limit, actionType,
-      domain, capability, intent, monetization, maturity, geo, quadrant, cluster,
+      domain, capability, intent, monetization, maturity, geo, quadrant, cluster, source,
     });
 
     logAuditEvent({

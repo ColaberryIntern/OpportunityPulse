@@ -127,6 +127,23 @@ async function triggerDiscovery(req, res, next) {
   }
 }
 
+async function getMomentumTools(req, res, next) {
+  try {
+    const { stage, minMomentum, category, limit } = req.query;
+    const tools = await aiToolService.getMomentumTools({
+      stage,
+      minMomentum,
+      category,
+      limit: limit ? parseInt(limit, 10) : 10,
+    });
+    return successResponse(res, { tools }, 'Momentum tools retrieved.');
+  } catch (error) {
+    logger.error('Failed to get momentum tools', { error: error.message });
+    if (error.statusCode) return errorResponse(res, error.message, error.statusCode);
+    next(error);
+  }
+}
+
 module.exports = {
   listTools,
   getToolBySlug,
@@ -137,4 +154,5 @@ module.exports = {
   triggerTrendRefresh,
   triggerSeed,
   triggerDiscovery,
+  getMomentumTools,
 };

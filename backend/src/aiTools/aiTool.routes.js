@@ -17,6 +17,9 @@ router.get('/stats', cacheResponse('aitools:stats', 300), controller.getToolStat
 // GET /ai-tools/trending — top trending tools
 router.get('/trending', cacheResponse('aitools:trending', 120), controller.getTopTrending);
 
+// GET /ai-tools/momentum — top tools by composite momentum score
+router.get('/momentum', cacheResponse('aitools:momentum', 120), controller.getMomentumTools);
+
 // GET /ai-tools/industry/:industry — tools filtered by industry
 router.get('/industry/:industry', cacheResponse('aitools:industry', 180), controller.getByIndustry);
 

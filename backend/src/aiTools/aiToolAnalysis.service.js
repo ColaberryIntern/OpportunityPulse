@@ -1,5 +1,5 @@
 const { Op, fn, col } = require('sequelize');
-const { AiTool, AiToolMention, Opportunity, AnalysisRun } = require('../models');
+const { AiTool, AiToolMention, Opportunity, AnalysisRun, ToolSignal } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
 const {
   TOOL_EXTRACTION_SYSTEM_PROMPT,
@@ -15,7 +15,7 @@ const logger = require('../logging/logger');
 const EXTRACTION_BATCH_SIZE = 30;
 
 // Valid enum values for AiTool model — used to sanitize AI categorization output
-const VALID_CATEGORIES = ['LLM', 'Image Generation', 'Code Assistant', 'Audio/Speech', 'Video', 'Analytics', 'Automation', 'Search', 'Writing', 'Design', 'Data Science', 'Other'];
+const VALID_CATEGORIES = ['LLM', 'Image Generation', 'Code Assistant', 'Audio/Speech', 'Video', 'Analytics', 'Automation', 'Search', 'Writing', 'Design', 'Data Science', 'Agent', 'Compliance', 'Infrastructure', 'Data', 'Vertical SaaS', 'Other'];
 const VALID_PRICING_TIERS = ['free', 'freemium', 'paid', 'enterprise'];
 
 /**
@@ -936,6 +936,182 @@ async function runToolDiscoveryPipeline() {
   return results;
 }
 
+/**
+ * Compute funding scores for tools based on RSS signal data.
+ * Scans AiToolMention records and checks if the linked opportunity
+ * has funding-related RSS signals.
+ */
+async function computeFundingScores() {
+  const run = await AnalysisRun.create({
+    type: 'tool_funding_scoring',
+    status: 'running',
+    startedAt: new Date(),
+  });
+
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Find mentions from the last 30 days with their opportunities
+    const mentions = await AiToolMention.findAll({
+      where: { mentionedAt: { [Op.gte]: thirtyDaysAgo } },
+      attributes: ['aiToolId', 'opportunityId'],
+      raw: true,
+    });
+
+    // Group by tool ID and collect opportunity IDs
+    const toolOpps = {};
+    for (const m of mentions) {
+      if (!m.opportunityId) continue;
+      if (!toolOpps[m.aiToolId]) toolOpps[m.aiToolId] = new Set();
+      toolOpps[m.aiToolId].add(m.opportunityId);
+    }
+
+    let updatedCount = 0;
+    const errors = [];
+
+    for (const [toolId, oppIds] of Object.entries(toolOpps)) {
+      try {
+        // Check if any of these opportunities have funding signals
+        const opps = await Opportunity.findAll({
+          where: {
+            id: { [Op.in]: [...oppIds] },
+            aiAnalysis: { rssSignals: { budget: { [Op.ne]: null } } },
+          },
+          attributes: ['id', 'aiAnalysis'],
+        });
+
+        if (opps.length === 0) continue;
+
+        // Compute funding score based on total funding amount detected
+        let totalFunding = 0;
+        for (const opp of opps) {
+          const amount = opp.aiAnalysis?.rssSignals?.budget?.allocationAmount;
+          if (amount) totalFunding += amount;
+        }
+
+        const fundingScore = Math.min(100, Math.log10(totalFunding + 1) * 15);
+
+        // Create signal record
+        await ToolSignal.create({
+          aiToolId: parseInt(toolId, 10),
+          signalType: 'funding',
+          signalValue: totalFunding,
+          signalDelta: fundingScore,
+          source: 'rss_enrichment',
+          sourceData: { opportunityCount: opps.length, totalFunding },
+        });
+
+        await AiTool.update(
+          { fundingScore },
+          { where: { id: parseInt(toolId, 10) } }
+        );
+
+        updatedCount++;
+      } catch (err) {
+        errors.push({ toolId, error: err.message });
+      }
+    }
+
+    await run.update({
+      status: errors.length > 0 ? 'partial' : 'success',
+      inputCount: Object.keys(toolOpps).length,
+      outputCount: updatedCount,
+      results: { updatedCount },
+      errors: errors.length > 0 ? errors : [],
+      completedAt: new Date(),
+    });
+
+    logger.info('Funding score computation complete', { updated: updatedCount });
+    return run;
+  } catch (error) {
+    logger.error('Funding score computation failed', { error: error.message });
+    await run.update({ status: 'failed', errors: [{ error: error.message }], completedAt: new Date() });
+    throw error;
+  }
+}
+
+/**
+ * Compute enterprise signal scores for tools based on RSS signal data.
+ * Counts enterprise adoption mentions per tool in the last 30 days.
+ */
+async function computeEnterpriseSignalScores() {
+  const run = await AnalysisRun.create({
+    type: 'tool_enterprise_scoring',
+    status: 'running',
+    startedAt: new Date(),
+  });
+
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const mentions = await AiToolMention.findAll({
+      where: { mentionedAt: { [Op.gte]: thirtyDaysAgo } },
+      attributes: ['aiToolId', 'opportunityId'],
+      raw: true,
+    });
+
+    const toolOpps = {};
+    for (const m of mentions) {
+      if (!m.opportunityId) continue;
+      if (!toolOpps[m.aiToolId]) toolOpps[m.aiToolId] = new Set();
+      toolOpps[m.aiToolId].add(m.opportunityId);
+    }
+
+    let updatedCount = 0;
+    const errors = [];
+
+    for (const [toolId, oppIds] of Object.entries(toolOpps)) {
+      try {
+        const opps = await Opportunity.findAll({
+          where: {
+            id: { [Op.in]: [...oppIds] },
+            aiAnalysis: { rssSignals: { enterprise: { [Op.ne]: null } } },
+          },
+          attributes: ['id'],
+        });
+
+        if (opps.length === 0) continue;
+
+        const enterpriseScore = Math.min(100, opps.length * 20);
+
+        await ToolSignal.create({
+          aiToolId: parseInt(toolId, 10),
+          signalType: 'enterprise_adoption',
+          signalValue: opps.length,
+          signalDelta: enterpriseScore,
+          source: 'rss_enrichment',
+          sourceData: { enterpriseMentions: opps.length },
+        });
+
+        await AiTool.update(
+          { enterpriseSignalScore: enterpriseScore },
+          { where: { id: parseInt(toolId, 10) } }
+        );
+
+        updatedCount++;
+      } catch (err) {
+        errors.push({ toolId, error: err.message });
+      }
+    }
+
+    await run.update({
+      status: errors.length > 0 ? 'partial' : 'success',
+      inputCount: Object.keys(toolOpps).length,
+      outputCount: updatedCount,
+      results: { updatedCount },
+      errors: errors.length > 0 ? errors : [],
+      completedAt: new Date(),
+    });
+
+    logger.info('Enterprise signal score computation complete', { updated: updatedCount });
+    return run;
+  } catch (error) {
+    logger.error('Enterprise signal score computation failed', { error: error.message });
+    await run.update({ status: 'failed', errors: [{ error: error.message }], completedAt: new Date() });
+    throw error;
+  }
+}
+
 module.exports = {
   extractToolMentionsFromNews,
   runToolTrendAnalysis,
@@ -945,4 +1121,6 @@ module.exports = {
   discoverAndUpdateToolsFromHuggingFace,
   discoverAndUpdateToolsFromProductHunt,
   runToolDiscoveryPipeline,
+  computeFundingScores,
+  computeEnterpriseSignalScores,
 };

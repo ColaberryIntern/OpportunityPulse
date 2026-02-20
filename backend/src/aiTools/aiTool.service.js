@@ -326,6 +326,41 @@ async function getMentionsForTool(toolId, { page = 1, limit = 20 } = {}) {
   };
 }
 
+/**
+ * Get top tools ranked by composite momentum score.
+ */
+async function getMomentumTools({ stage, minMomentum, category, limit = 10 } = {}) {
+  const where = { status: 'active' };
+
+  if (stage) {
+    where.momentumStage = stage;
+  }
+
+  if (minMomentum) {
+    where.compositeMomentumScore = { [Op.gte]: parseFloat(minMomentum) };
+  }
+
+  if (category) {
+    where.category = category;
+  }
+
+  const { AiCapability } = require('../models');
+
+  const tools = await AiTool.findAll({
+    where,
+    order: [['composite_momentum_score', 'DESC']],
+    limit: parseInt(limit, 10),
+    include: [{
+      model: AiCapability,
+      as: 'capability',
+      attributes: ['slug', 'name'],
+      required: false,
+    }],
+  });
+
+  return tools;
+}
+
 module.exports = {
   generateSlug,
   listAiTools,
@@ -339,4 +374,5 @@ module.exports = {
   bulkUpsertTools,
   createMention,
   getMentionsForTool,
+  getMomentumTools,
 };

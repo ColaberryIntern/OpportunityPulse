@@ -20,6 +20,8 @@ import { useRealtimeDashboard } from '../hooks/useRealtimeDashboard';
 import { ConnectionStatus } from '../components/dashboard/RealTimeDashboard';
 import SEOHead from '../components/common/SEOHead';
 import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
+import ToolMomentumBoard from '../components/dashboard/ToolMomentumBoard';
+import RssIntelligenceWidget from '../components/dashboard/RssIntelligenceWidget';
 import { fetchAnalytics } from '../store/slices/actionEngineSlice';
 
 function DashboardPage() {
@@ -182,9 +184,14 @@ function DashboardPage() {
           </div>
         </section>
 
-        {/* Trending AI Tools */}
+        {/* RSS Intelligence + Tool Momentum */}
         <section className="mb-8">
+          <RssIntelligenceWidget />
+        </section>
+
+        <section className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <AiToolTrendingWidget />
+          <ToolMomentumBoard />
         </section>
 
         {/* Recent Activity */}

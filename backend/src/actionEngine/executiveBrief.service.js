@@ -1,5 +1,5 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { Opportunity, OpportunityClassification, AiDomain, AnalysisRun, sequelize } = require('../models');
+const { Opportunity, OpportunityClassification, AiDomain, AiTool, AnalysisRun, sequelize } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
 const { buildExecutiveBriefPrompt } = require('./actionEngine.prompts');
 const logger = require('../logging/logger');
@@ -144,6 +144,20 @@ async function generateExecutiveBrief() {
       logger.warn('Domain breakdown query failed', { error: err.message });
     }
 
+    // Top 3 tools by momentum score for brief context
+    let topMomentumTools = [];
+    try {
+      topMomentumTools = await AiTool.findAll({
+        where: { status: 'active', compositeMomentumScore: { [Op.gt]: 0 } },
+        order: [['composite_momentum_score', 'DESC']],
+        limit: 3,
+        attributes: ['name', 'category', 'compositeMomentumScore', 'momentumStage'],
+        raw: true,
+      });
+    } catch (err) {
+      logger.warn('Failed to fetch momentum tools for brief', { error: err.message });
+    }
+
     const actionTypeCounts = {};
     for (const opp of topOpportunities) {
       actionTypeCounts[opp.actionType] = (actionTypeCounts[opp.actionType] || 0) + 1;
@@ -170,6 +184,7 @@ async function generateExecutiveBrief() {
       quadrantCounts,
       domainBreakdown,
       expiringSoon,
+      topMomentumTools,
     };
 
     // Prepare data for LLM

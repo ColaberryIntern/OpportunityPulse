@@ -35,6 +35,7 @@ async function listOpportunities({
   geo,
   quadrant,
   cluster,
+  source,
 } = {}) {
   const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit });
 
@@ -97,6 +98,11 @@ async function listOpportunities({
     if (!isNaN(score)) {
       where.aiScore = { [Op.gte]: score };
     }
+  }
+
+  // Source filter: rss_enriched = only opportunities with rssSignals data
+  if (source === 'rss_enriched') {
+    where.aiAnalysis = { rssSignals: { [Op.ne]: null } };
   }
 
   // Sort order

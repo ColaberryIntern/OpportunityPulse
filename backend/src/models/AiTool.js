@@ -38,7 +38,7 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false,
       validate: {
-        isIn: [['LLM', 'Image Generation', 'Code Assistant', 'Audio/Speech', 'Video', 'Analytics', 'Automation', 'Search', 'Writing', 'Design', 'Data Science', 'Other']],
+        isIn: [['LLM', 'Image Generation', 'Code Assistant', 'Audio/Speech', 'Video', 'Analytics', 'Automation', 'Search', 'Writing', 'Design', 'Data Science', 'Agent', 'Compliance', 'Infrastructure', 'Data', 'Vertical SaaS', 'Other']],
       },
     },
     subcategory: {
@@ -131,6 +131,65 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'last_analyzed_at',
     },
+    githubAccelerationScore: {
+      type: DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      field: 'github_acceleration_score',
+    },
+    fundingScore: {
+      type: DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      field: 'funding_score',
+    },
+    enterpriseSignalScore: {
+      type: DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      field: 'enterprise_signal_score',
+    },
+    socialVelocityScore: {
+      type: DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      field: 'social_velocity_score',
+    },
+    compositeMomentumScore: {
+      type: DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      field: 'composite_momentum_score',
+    },
+    momentumStage: {
+      type: DataTypes.STRING(20),
+      defaultValue: 'emerging',
+      field: 'momentum_stage',
+      validate: {
+        isIn: [['emerging', 'accelerating', 'dominant', 'explosive', 'declining']],
+      },
+    },
+    openSource: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'open_source',
+    },
+    githubUrl: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'github_url',
+    },
+    domainFocus: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'domain_focus',
+    },
+    capabilityId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'capability_id',
+      references: { model: 'ai_capabilities', key: 'id' },
+    },
+    launchDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      field: 'launch_date',
+    },
   }, {
     tableName: 'ai_tools',
     timestamps: true,
@@ -146,6 +205,8 @@ module.exports = (sequelize) => {
 
   AiTool.associate = (models) => {
     AiTool.hasMany(models.AiToolMention, { foreignKey: 'ai_tool_id', as: 'mentions' });
+    AiTool.hasMany(models.ToolSignal, { foreignKey: 'ai_tool_id', as: 'signals' });
+    AiTool.belongsTo(models.AiCapability, { foreignKey: 'capability_id', as: 'capability' });
   };
 
   return AiTool;

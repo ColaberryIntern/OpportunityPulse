@@ -2,6 +2,7 @@ const BaseAdapter = require('./base.adapter');
 const { OPPORTUNITY_TYPES } = require('../../config/constants');
 const logger = require('../../logging/logger');
 const Parser = require('rss-parser');
+const { extractFundingAmount } = require('../../utils/monetaryParser');
 
 const DEFAULT_FEEDS = [
   'https://techcrunch.com/category/fundraise/feed/',
@@ -24,49 +25,6 @@ function stripHtml(html) {
     .replace(/<[^>]*>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/**
- * Extract a funding amount from text.
- * Handles patterns like:
- *   "$50M" or "$50m"         -> 50000000
- *   "$50 million"            -> 50000000
- *   "$1.5B" or "$1.5 billion"-> 1500000000
- *   "$50,000,000"            -> 50000000
- *   "raised $50M"            -> 50000000
- *
- * @param {string} text - Text to search for funding amounts.
- * @returns {number|null} The extracted funding amount in dollars, or null.
- */
-function extractFundingAmount(text) {
-  if (!text || typeof text !== 'string') return null;
-
-  // Pattern 1: $NNN.NNM or $NNN.NNB (shorthand suffix)
-  const shorthandMatch = text.match(/\$\s*([\d,]+(?:\.\d+)?)\s*([mMbB])\b/);
-  if (shorthandMatch) {
-    const num = parseFloat(shorthandMatch[1].replace(/,/g, ''));
-    const suffix = shorthandMatch[2].toLowerCase();
-    if (suffix === 'm') return num * 1_000_000;
-    if (suffix === 'b') return num * 1_000_000_000;
-  }
-
-  // Pattern 2: $NNN.NN million or $NNN.NN billion (word suffix)
-  const wordMatch = text.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion)/i);
-  if (wordMatch) {
-    const num = parseFloat(wordMatch[1].replace(/,/g, ''));
-    const suffix = wordMatch[2].toLowerCase();
-    if (suffix === 'million') return num * 1_000_000;
-    if (suffix === 'billion') return num * 1_000_000_000;
-  }
-
-  // Pattern 3: $NNN,NNN,NNN (full numeric with commas, at least thousands)
-  const fullNumMatch = text.match(/\$\s*([\d,]{5,})/);
-  if (fullNumMatch) {
-    const num = parseFloat(fullNumMatch[1].replace(/,/g, ''));
-    if (!isNaN(num) && num > 0) return num;
-  }
-
-  return null;
 }
 
 /**

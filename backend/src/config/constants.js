@@ -81,6 +81,12 @@ const ANALYSIS_TYPES = {
   GEOGRAPHIC_TAGGING: 'geographic_tagging',
   META_SIGNAL_COMPUTATION: 'meta_signal_computation',
   CLUSTER_DETECTION: 'cluster_detection',
+  RSS_SIGNAL_ENRICHMENT: 'rss_signal_enrichment',
+  TOOL_GITHUB_ACCELERATION: 'tool_github_acceleration',
+  TOOL_SOCIAL_VELOCITY: 'tool_social_velocity',
+  TOOL_FUNDING_SCORING: 'tool_funding_scoring',
+  TOOL_ENTERPRISE_SCORING: 'tool_enterprise_scoring',
+  TOOL_MOMENTUM_SCORING: 'tool_momentum_scoring',
 };
 
 const ACTION_TYPES = {
