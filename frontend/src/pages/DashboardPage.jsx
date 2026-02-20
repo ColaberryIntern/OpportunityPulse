@@ -127,12 +127,13 @@ function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Market Trends
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <TrendCard type="gov_contract" trendData={trends?.gov_contract} />
             <TrendCard type="ai_job" trendData={trends?.ai_job} />
             <TrendCard type="investment" trendData={trends?.investment} />
             <TrendCard type="grant" trendData={trends?.grant} />
             <TrendCard type="ai_news" trendData={trends?.ai_news} />
+            <TrendCard type="freelance" trendData={trends?.freelance} />
           </div>
         </section>
 

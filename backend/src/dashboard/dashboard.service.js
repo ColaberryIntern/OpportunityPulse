@@ -93,7 +93,7 @@ async function getChartData(type, period = '30d') {
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
+  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
 
   const results = await Opportunity.findAll({
     attributes: [
@@ -140,7 +140,7 @@ async function getChartData(type, period = '30d') {
  * Get summary of latest trends per opportunity type.
  */
 async function getTrendSummary() {
-  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
+  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
   const summaries = {};
 
   for (const type of types) {

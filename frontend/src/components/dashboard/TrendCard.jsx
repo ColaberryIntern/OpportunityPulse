@@ -4,7 +4,9 @@ const TYPE_LABELS = {
   gov_contract: 'Gov Contracts',
   ai_job: 'AI Jobs',
   investment: 'Investments',
+  grant: 'Grants',
   ai_news: 'AI News',
+  freelance: 'Freelance',
 };
 
 function TrendCard({ type, trendData }) {

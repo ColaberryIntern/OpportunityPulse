@@ -12,7 +12,7 @@ class AppError extends Error {
   }
 }
 
-const VALID_TYPES = ['gov_contract', 'ai_job', 'investment'];
+const VALID_TYPES = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
 const BATCH_SIZE = 20;
 
 /**

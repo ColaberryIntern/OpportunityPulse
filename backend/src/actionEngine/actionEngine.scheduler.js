@@ -17,10 +17,33 @@ function startActionEngineScheduler() {
   if (schedulerStarted) return;
   schedulerStarted = true;
 
+  const trendDetectionSchedule = process.env.TREND_DETECTION_SCHEDULE || '30 4 * * *';
   const classificationSchedule = process.env.CLASSIFICATION_SCHEDULE || '15 */2 * * *';
   const saturationSchedule = process.env.SATURATION_SCHEDULE || '0 5 * * *';
   const actionRecSchedule = process.env.ACTION_REC_SCHEDULE || '30 5 * * *';
   const execBriefSchedule = process.env.EXEC_BRIEF_SCHEDULE || '0 6 * * *';
+
+  // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
+  cron.schedule(trendDetectionSchedule, async () => {
+    logger.info('Scheduled: Trend detection starting');
+    try {
+      const { detectTrends } = require('../analysis/analysis.service');
+      const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
+      for (const type of types) {
+        try {
+          const result = await detectTrends(type);
+          logger.info(`Scheduled: Trend detection complete for ${type}`, {
+            input: result.inputCount,
+            output: result.outputCount,
+          });
+        } catch (err) {
+          logger.error(`Scheduled: Trend detection failed for ${type}`, { error: err.message });
+        }
+      }
+    } catch (error) {
+      logger.error('Scheduled: Trend detection failed', { error: error.message });
+    }
+  });
 
   // Classification: every 2 hours
   cron.schedule(classificationSchedule, async () => {
@@ -79,7 +102,7 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 4 jobs registered');
+  logger.info('Action Engine scheduler started — 5 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

@@ -486,11 +486,34 @@ async function generateSectionBrief(section, userCtx = null) {
       all: 'All Opportunities',
     }[section] || section;
 
+    const SECTION_PROMPT_GUIDANCE = {
+      government: 'Focus exclusively on government contracts and grants. Analyze procurement trends, agency spending patterns, contract vehicles (IDIQ, BPA, GSA), set-aside categories, and compliance requirements. Highlight upcoming deadlines and high-value solicitations.',
+      talent: 'Focus exclusively on AI and technology job market trends. Analyze hiring patterns, in-demand skills and certifications, salary ranges, remote vs hybrid trends, and which companies/sectors are expanding. Highlight emerging roles and skill gaps.',
+      freelance: 'Focus exclusively on freelance and contract project opportunities. Analyze demand trends by skill area, typical budget ranges, client types, project durations, and competitive landscape. Highlight lucrative niches and emerging freelance specializations.',
+      capital: 'Focus exclusively on investment opportunities, venture capital, and funding rounds. Analyze funding stages (seed, Series A-E, IPO), sector allocation trends, investor activity, valuation patterns, and emerging sectors attracting capital. Highlight notable deals.',
+      'private-sector': 'Focus exclusively on private sector AI adoption and corporate technology news. Analyze enterprise AI deployments, vendor partnerships, digital transformation initiatives, and industry-specific adoption patterns. Highlight companies making strategic AI moves.',
+      alpha: 'Focus on high-demand, low-competition opportunities across all categories. These are the highest-leverage opportunities. Analyze why competition is low, what makes demand strong, and time-sensitivity factors.',
+      all: 'Provide a cross-sector overview of all opportunity types. Identify the strongest signals across government, talent, freelance, capital, and private sector. Highlight cross-cutting themes and the best opportunities regardless of category.',
+    };
+
     let briefData;
     try {
       const aiClient = getAIClient();
       const personalContext = buildPersonalizationContext(userCtx);
-      const systemPrompt = `You are a strategic intelligence analyst. Generate a concise section insight for the "${sectionLabel}" category of an opportunity tracking platform. Return valid JSON with: { "headline": "one punchy sentence", "summary": "2-3 sentences with actionable insights, trends, and notable patterns", "riskFlags": ["risk1"], "trendSignals": ["signal1"] }` + personalContext;
+      const sectionGuidance = SECTION_PROMPT_GUIDANCE[section] || '';
+      const briefStructure = userCtx
+        ? '1. MARKET OVERVIEW: Start with the overall market landscape — trends, volumes, notable shifts.\n2. PERSONAL IMPACT: Then explain specifically how these trends affect this user given their skills and experience. Use "you" language.'
+        : '1. MARKET OVERVIEW: Start with the overall market landscape — trends, volumes, notable shifts.\n2. KEY TAKEAWAYS: Summarize the most actionable insights.';
+      const systemPrompt = `You are a strategic intelligence analyst specializing in ${sectionLabel}. Generate a section insight for an opportunity tracking platform.
+
+${sectionGuidance}
+
+Structure your response in two parts:
+${briefStructure}
+
+Return valid JSON: { "headline": "one punchy sentence about ${sectionLabel}", "summary": "3-4 sentences — market overview first, then ${userCtx ? 'personal relevance' : 'actionable takeaways'}", "riskFlags": ["risk1"], "trendSignals": ["signal1"] }
+
+IMPORTANT: Only discuss ${sectionLabel}. Do NOT mention other categories.` + personalContext;
       const userPrompt = `Section: ${sectionLabel}\nTotal active: ${totalCount}\nAvg AI Score: ${avgScore}\n\nTop opportunities:\n${JSON.stringify(oppSummaries, null, 2)}`;
 
       const { content, tokensUsed } = await aiClient.chat(systemPrompt, userPrompt, {

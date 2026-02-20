@@ -1,8 +1,11 @@
 // Lazy-load pdf-parse to avoid native canvas handle in test environments
-let pdfParse;
-function getPdfParse() {
-  if (!pdfParse) pdfParse = require('pdf-parse');
-  return pdfParse;
+let PDFParseClass;
+function getPDFParse() {
+  if (!PDFParseClass) {
+    const pdfParseModule = require('pdf-parse');
+    PDFParseClass = pdfParseModule.PDFParse || pdfParseModule.default?.PDFParse || pdfParseModule;
+  }
+  return PDFParseClass;
 }
 const { getAIClient } = require('../analysis/ai.client');
 const { RESUME_EXTRACTION_SYSTEM_PROMPT, buildResumeExtractionPrompt } = require('./resumeUpload.prompts');
@@ -15,16 +18,22 @@ const MAX_TEXT_LENGTH = 8000;
  * Returns extracted data, merged profile, and list of changes.
  */
 async function extractProfileFromResume(pdfBuffer, existingProfileData = {}) {
-  // 1. Parse PDF to text
-  let pdfData;
+  // 1. Parse PDF to text using pdf-parse v2 class-based API
+  let rawText;
   try {
-    pdfData = await getPdfParse()(pdfBuffer);
+    const PDFParse = getPDFParse();
+    const parser = new PDFParse({ data: pdfBuffer });
+    try {
+      const pdfData = await parser.getText();
+      rawText = (pdfData.text || '').trim();
+    } finally {
+      await parser.destroy();
+    }
   } catch (err) {
     logger.error('PDF parsing failed', { error: err.message });
     throw new Error('Could not read this PDF. Please try a different file or enter your skills manually.');
   }
 
-  const rawText = (pdfData.text || '').trim();
   if (!rawText || rawText.length < 50) {
     throw new Error('The PDF appears to be empty or contains too little text. Please try a different file.');
   }
