@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Opportunity, OpportunityClassification } = require('../models');
+const { Opportunity, OpportunityClassification, StrategicCluster } = require('../models');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 class AppError extends Error {
@@ -82,22 +82,30 @@ async function listFeedOpportunities({ type, category, since, page, limit } = {}
   const offset = (safePage - 1) * safeLimit;
 
   const where = { status: 'active' };
-  if (type) where.type = type;
+  if (type) {
+    const types = type.split(',').map(t => t.trim()).filter(Boolean);
+    where.type = types.length === 1 ? types[0] : { [Op.in]: types };
+  }
   if (category) where.category = category;
   if (since) {
     where.createdAt = { [Op.gt]: new Date(since) };
   }
 
-  // Only include opportunities that have been through the classification pipeline
-  // (a row in opportunity_classifications exists once any engine has processed it)
+  // Include classification with cluster for strategic group tagging
   const { rows: opportunities, count: total } = await Opportunity.findAndCountAll({
     where,
-    attributes: { exclude: EXCLUDED_FIELDS },
+    attributes: { exclude: EXCLUDED_FIELDS.filter(f => f !== 'aiScore') },
     include: [{
       model: OpportunityClassification,
       as: 'classification',
       required: true,
-      attributes: [],
+      attributes: ['clusterId', 'saturationIndex'],
+      include: [{
+        model: StrategicCluster,
+        as: 'cluster',
+        attributes: ['slug', 'name'],
+        required: false,
+      }],
     }],
     order: [['published_at', 'DESC'], ['created_at', 'DESC']],
     limit: safeLimit,

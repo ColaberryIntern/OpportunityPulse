@@ -7,8 +7,12 @@ const { handleValidationErrors } = require('../middleware/validation.middleware'
 const feedValidation = [
   query('type')
     .optional()
-    .isIn(['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'])
-    .withMessage('Type must be gov_contract, ai_job, investment, grant, or ai_news.'),
+    .custom((value) => {
+      const validTypes = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
+      const types = value.split(',').map(t => t.trim()).filter(Boolean);
+      return types.length > 0 && types.every(t => validTypes.includes(t));
+    })
+    .withMessage('Type must be comma-separated list of: gov_contract, ai_job, investment, grant, ai_news.'),
   query('category')
     .optional()
     .isString()
@@ -90,8 +94,7 @@ router.get('/', cacheResponse('public:list', 120), controller.listOpportunities)
  *         name: type
  *         schema:
  *           type: string
- *           enum: [gov_contract, ai_job, investment, grant, ai_news]
- *         description: Filter by opportunity type
+ *         description: Filter by type (comma-separated for multi-type, e.g. gov_contract,grant)
  *       - in: query
  *         name: category
  *         schema:

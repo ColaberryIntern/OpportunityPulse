@@ -74,6 +74,14 @@ async function getFeed(req, res, next) {
       grant: 'Grant', ai_news: 'AI News',
     };
 
+    // Map raw types to strategic navigation groups
+    const TYPE_TO_GROUP = {
+      gov_contract: 'Government', grant: 'Government',
+      ai_news: 'Private Sector',
+      ai_job: 'Talent',
+      investment: 'Capital',
+    };
+
     // Build self URL preserving query params
     const selfParams = new URLSearchParams();
     if (type) selfParams.set('type', type);
@@ -93,6 +101,7 @@ async function getFeed(req, res, next) {
         ? new Date(result.opportunities[0].publishedAt || result.opportunities[0].createdAt)
         : new Date(),
       ttl: 5,
+      custom_namespaces: { op: 'https://opportunitypulse.ai/rss/1.0' },
       custom_elements: [
         { 'op:totalItems': result.total },
         { 'op:currentPage': result.pagination.page },
@@ -111,6 +120,21 @@ async function getFeed(req, res, next) {
       const categories = [];
       if (opp.type) categories.push(TYPE_LABELS[opp.type] || opp.type);
       if (opp.category) categories.push(opp.category);
+      const group = TYPE_TO_GROUP[opp.type];
+      if (group) categories.push(group);
+
+      // Custom elements for strategic intelligence
+      const custom_elements = [];
+      if (group) custom_elements.push({ 'op:strategicGroup': group });
+      if (opp.aiScore != null) custom_elements.push({ 'op:aiScore': opp.aiScore });
+      if (opp.opportunityQuadrant) custom_elements.push({ 'op:quadrant': opp.opportunityQuadrant });
+      const cluster = opp.classification?.cluster;
+      if (cluster) {
+        custom_elements.push({ 'op:cluster': cluster.name });
+        custom_elements.push({ 'op:clusterSlug': cluster.slug });
+      }
+      const saturation = opp.classification?.saturationIndex;
+      if (saturation != null) custom_elements.push({ 'op:saturationIndex': saturation });
 
       feed.item({
         title: opp.title,
@@ -119,6 +143,7 @@ async function getFeed(req, res, next) {
         description: desc,
         date: new Date(opp.publishedAt || opp.createdAt),
         categories,
+        custom_elements,
       });
     }
 
