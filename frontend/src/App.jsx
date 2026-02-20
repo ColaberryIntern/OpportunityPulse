@@ -10,7 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import ContentPage from './pages/ContentPage';
 import SearchPage from './pages/SearchPage';
 import RoleManagementPage from './pages/RoleManagementPage';
-import OpportunitiesPage from './pages/OpportunitiesPage';
+import StrategicViewPage from './pages/StrategicViewPage';
 import OpportunityDetailPage from './pages/OpportunityDetailPage';
 import AlertsPage from './pages/AlertsPage';
 import PublicBrowsePage from './pages/PublicBrowsePage';
@@ -102,14 +102,56 @@ function App() {
             </ProtectedLayout>
           }
         />
+        {/* Strategic opportunity views — all use StrategicViewPage */}
         <Route
           path="/opportunities"
           element={
             <ProtectedLayout>
-              <OpportunitiesPage />
+              <StrategicViewPage />
             </ProtectedLayout>
           }
         />
+        <Route
+          path="/government"
+          element={
+            <ProtectedLayout>
+              <StrategicViewPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/private-sector"
+          element={
+            <ProtectedLayout>
+              <StrategicViewPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/talent"
+          element={
+            <ProtectedLayout>
+              <StrategicViewPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/capital"
+          element={
+            <ProtectedLayout>
+              <StrategicViewPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/alpha"
+          element={
+            <ProtectedLayout>
+              <StrategicViewPage />
+            </ProtectedLayout>
+          }
+        />
+
         <Route
           path="/opportunities/:id"
           element={
@@ -259,6 +301,13 @@ function App() {
             </ProtectedLayout>
           }
         />
+
+        {/* Legacy route redirects */}
+        <Route path="/gov-contracts" element={<Navigate to="/government" replace />} />
+        <Route path="/jobs" element={<Navigate to="/talent" replace />} />
+        <Route path="/investments" element={<Navigate to="/capital" replace />} />
+        <Route path="/grants" element={<Navigate to="/government" replace />} />
+        <Route path="/ai-news" element={<Navigate to="/private-sector" replace />} />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

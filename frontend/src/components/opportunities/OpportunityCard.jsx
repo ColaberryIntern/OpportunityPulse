@@ -121,6 +121,11 @@ function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }
                   {QUADRANT_SHORT[opportunity.opportunityQuadrant].label}
                 </span>
               )}
+              {opportunity.classification?.cluster?.name && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-300">
+                  {opportunity.classification.cluster.name}
+                </span>
+              )}
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{opportunity.title}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{opportunity.description}</p>

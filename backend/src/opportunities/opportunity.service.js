@@ -41,8 +41,11 @@ async function listOpportunities({
   // Build where clause
   const where = {};
 
-  // Exact filters
-  if (type) where.type = type;
+  // Type filter (supports comma-separated for multi-type strategic views)
+  if (type) {
+    const types = type.split(',').map(t => t.trim()).filter(Boolean);
+    where.type = types.length === 1 ? types[0] : { [Op.in]: types };
+  }
   if (category) where.category = category;
   where.status = status || OPPORTUNITY_STATUS.ACTIVE;
 
@@ -155,6 +158,20 @@ async function listOpportunities({
       where: classificationWhere,
       required: true,
       attributes: ['domainId', 'capabilityId', 'strategicIntentId', 'monetizationAngleId', 'maturityPhaseId', 'geographicTagId', 'clusterId', 'demandScore', 'competitionScore', 'saturationIndex'],
+      include: [
+        { model: StrategicCluster, as: 'cluster', attributes: ['slug', 'name'], required: false },
+      ],
+    });
+  } else {
+    // Always include lightweight classification for cluster badge display
+    include.push({
+      model: OpportunityClassification,
+      as: 'classification',
+      required: false,
+      attributes: ['clusterId'],
+      include: [
+        { model: StrategicCluster, as: 'cluster', attributes: ['slug', 'name'], required: false },
+      ],
     });
   }
 

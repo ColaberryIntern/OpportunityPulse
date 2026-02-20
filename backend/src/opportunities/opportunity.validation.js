@@ -3,8 +3,12 @@ const { query } = require('express-validator');
 const listOpportunitiesValidation = [
   query('type')
     .optional()
-    .isIn(['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'])
-    .withMessage('Type must be gov_contract, ai_job, investment, grant, or ai_news.'),
+    .custom((value) => {
+      const validTypes = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
+      const types = value.split(',').map(t => t.trim()).filter(Boolean);
+      return types.length > 0 && types.every(t => validTypes.includes(t));
+    })
+    .withMessage('Type must be comma-separated list of: gov_contract, ai_job, investment, grant, ai_news.'),
   query('status')
     .optional()
     .isIn(['active', 'closed', 'expired', 'archived'])

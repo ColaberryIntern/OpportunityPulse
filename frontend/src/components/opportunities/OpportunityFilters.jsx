@@ -4,9 +4,19 @@ import { fetchAllDimensions } from '../../store/slices/intelligenceSlice';
 
 const selectClass = 'w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-gray-100';
 
-function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) {
+// All dimensional filter definitions
+const DIMENSIONAL_FILTERS = {
+  domain: { label: 'AI Domain', stateKey: 'domains', defaultLabel: 'All Domains', getLabel: (d) => `${d.name} (${d.dataValues?.opportunityCount || 0})` },
+  capability: { label: 'AI Capability', stateKey: 'capabilities', defaultLabel: 'All Capabilities', getLabel: (c) => c.name },
+  intent: { label: 'Strategic Intent', stateKey: 'intents', defaultLabel: 'All Intents', getLabel: (i) => i.name },
+  monetization: { label: 'Monetization', stateKey: 'monetizationAngles', defaultLabel: 'All Angles', getLabel: (m) => m.name },
+  maturity: { label: 'Maturity Phase', stateKey: 'maturityPhases', defaultLabel: 'All Phases', getLabel: (m) => m.name },
+  geo: { label: 'Geography', stateKey: 'geographicTags', defaultLabel: 'All Regions', getLabel: (g) => g.name },
+};
+
+function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false, lockedFilters = {}, prominentFilters = [] }) {
   const dispatch = useDispatch();
-  const { domains, capabilities, intents, monetizationAngles, maturityPhases, geographicTags } = useSelector((state) => state.intelligence);
+  const intelligence = useSelector((state) => state.intelligence);
 
   const [q, setQ] = useState(filters.q || '');
   const [category, setCategory] = useState(filters.category || '');
@@ -24,12 +34,15 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
   const [quadrant, setQuadrant] = useState(filters.quadrant || '');
   const debounceRef = useRef(null);
 
+  const dimensionSetters = { domain: setDomain, capability: setCapability, intent: setIntent, monetization: setMonetization, maturity: setMaturity, geo: setGeo };
+  const dimensionValues = { domain, capability, intent, monetization, maturity, geo };
+
   // Fetch dimension options on mount (non-public only)
   useEffect(() => {
-    if (!isPublic && domains.length === 0) {
+    if (!isPublic && intelligence.domains.length === 0) {
       dispatch(fetchAllDimensions());
     }
-  }, [dispatch, isPublic, domains.length]);
+  }, [dispatch, isPublic, intelligence.domains.length]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -52,7 +65,31 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
     return () => clearTimeout(debounceRef.current);
   }, [q, category, status, sort, minScore, actionType, domain, capability, intent, monetization, maturity, geo, quadrant]);
 
-  const hasAdvancedFilters = domain || capability || intent || monetization || maturity || geo || quadrant;
+  // Determine which dimensional filters are "promoted" to the primary row vs remain in advanced
+  const promotedDimensional = prominentFilters.filter(f => DIMENSIONAL_FILTERS[f]);
+  const advancedDimensional = Object.keys(DIMENSIONAL_FILTERS).filter(f => !prominentFilters.includes(f));
+
+  const hasAdvancedFilters = advancedDimensional.some(f => dimensionValues[f]) || (!lockedFilters.quadrant && quadrant);
+
+  // Render a single dimensional filter dropdown
+  const renderDimensionSelect = (key) => {
+    if (lockedFilters[key]) return null;
+    const config = DIMENSIONAL_FILTERS[key];
+    const options = intelligence[config.stateKey] || [];
+    const value = dimensionValues[key];
+    const setter = dimensionSetters[key];
+    return (
+      <div key={key}>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{config.label}</label>
+        <select value={value} onChange={(e) => setter(e.target.value)} className={selectClass}>
+          <option value="">{config.defaultLabel}</option>
+          {options.map((item) => (
+            <option key={item.slug} value={item.slug}>{config.getLabel(item)}</option>
+          ))}
+        </select>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
@@ -69,18 +106,20 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
             className={selectClass}
           />
         </div>
-        <div>
-          <label htmlFor="opp-filter-category" className="sr-only">Category</label>
-          <input
-            id="opp-filter-category"
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="Category"
-            className={selectClass}
-          />
-        </div>
-        {!isPublic && (
+        {!lockedFilters.category && (
+          <div>
+            <label htmlFor="opp-filter-category" className="sr-only">Category</label>
+            <input
+              id="opp-filter-category"
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Category"
+              className={selectClass}
+            />
+          </div>
+        )}
+        {!isPublic && !lockedFilters.status && (
           <div>
             <label htmlFor="opp-filter-status" className="sr-only">Status</label>
             <select id="opp-filter-status" value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass}>
@@ -92,7 +131,7 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
             </select>
           </div>
         )}
-        {!isPublic && (
+        {!isPublic && !lockedFilters.actionType && (
           <div>
             <label htmlFor="opp-filter-action-type" className="sr-only">Action Type</label>
             <select id="opp-filter-action-type" value={actionType} onChange={(e) => setActionType(e.target.value)} className={selectClass}>
@@ -107,16 +146,18 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
             </select>
           </div>
         )}
-        <div>
-          <label htmlFor="opp-filter-sort" className="sr-only">Sort order</label>
-          <select id="opp-filter-sort" value={sort} onChange={(e) => setSort(e.target.value)} className={selectClass}>
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            {!isPublic && <option value="score">Highest Score</option>}
-            <option value="value">Highest Value</option>
-          </select>
-        </div>
-        {!isPublic && (
+        {!lockedFilters.sort && (
+          <div>
+            <label htmlFor="opp-filter-sort" className="sr-only">Sort order</label>
+            <select id="opp-filter-sort" value={sort} onChange={(e) => setSort(e.target.value)} className={selectClass}>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              {!isPublic && <option value="score">Highest Score</option>}
+              <option value="value">Highest Value</option>
+            </select>
+          </div>
+        )}
+        {!isPublic && !lockedFilters.minScore && (
           <div>
             <label htmlFor="opp-filter-min-score" className="sr-only">Minimum score</label>
             <input
@@ -133,8 +174,27 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
         )}
       </div>
 
+      {/* Promoted dimensional filters (view-specific, shown in second row) */}
+      {!isPublic && promotedDimensional.length > 0 && (
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          {promotedDimensional.map(renderDimensionSelect)}
+          {!lockedFilters.quadrant && prominentFilters.includes('quadrant') && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Quadrant</label>
+              <select value={quadrant} onChange={(e) => setQuadrant(e.target.value)} className={selectClass}>
+                <option value="">All Quadrants</option>
+                <option value="HD_LC">High Demand / Low Competition</option>
+                <option value="HD_HC">High Demand / High Competition</option>
+                <option value="LD_LC">Low Demand / Low Competition</option>
+                <option value="LD_HC">Low Demand / High Competition</option>
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Advanced Filters Toggle (authenticated only) */}
-      {!isPublic && (
+      {!isPublic && advancedDimensional.length > 0 && (
         <div className="mt-3">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
@@ -143,80 +203,29 @@ function OpportunityFilters({ onFilterChange, filters = {}, isPublic = false }) 
             <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            Advanced Filters {hasAdvancedFilters ? `(${[domain, capability, intent, monetization, maturity, geo, quadrant].filter(Boolean).length} active)` : ''}
+            Advanced Filters {hasAdvancedFilters ? `(${[...advancedDimensional.map(f => dimensionValues[f]), !lockedFilters.quadrant && quadrant].filter(Boolean).length} active)` : ''}
           </button>
 
           {showAdvanced && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">AI Domain</label>
-                <select value={domain} onChange={(e) => setDomain(e.target.value)} className={selectClass}>
-                  <option value="">All Domains</option>
-                  {domains.map((d) => (
-                    <option key={d.slug} value={d.slug}>{d.name} ({d.dataValues?.opportunityCount || 0})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">AI Capability</label>
-                <select value={capability} onChange={(e) => setCapability(e.target.value)} className={selectClass}>
-                  <option value="">All Capabilities</option>
-                  {capabilities.map((c) => (
-                    <option key={c.slug} value={c.slug}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Strategic Intent</label>
-                <select value={intent} onChange={(e) => setIntent(e.target.value)} className={selectClass}>
-                  <option value="">All Intents</option>
-                  {intents.map((i) => (
-                    <option key={i.slug} value={i.slug}>{i.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Monetization</label>
-                <select value={monetization} onChange={(e) => setMonetization(e.target.value)} className={selectClass}>
-                  <option value="">All Angles</option>
-                  {monetizationAngles.map((m) => (
-                    <option key={m.slug} value={m.slug}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Maturity Phase</label>
-                <select value={maturity} onChange={(e) => setMaturity(e.target.value)} className={selectClass}>
-                  <option value="">All Phases</option>
-                  {maturityPhases.map((m) => (
-                    <option key={m.slug} value={m.slug}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Geography</label>
-                <select value={geo} onChange={(e) => setGeo(e.target.value)} className={selectClass}>
-                  <option value="">All Regions</option>
-                  {geographicTags.map((g) => (
-                    <option key={g.slug} value={g.slug}>{g.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Quadrant</label>
-                <select value={quadrant} onChange={(e) => setQuadrant(e.target.value)} className={selectClass}>
-                  <option value="">All Quadrants</option>
-                  <option value="HD_LC">High Demand / Low Competition</option>
-                  <option value="HD_HC">High Demand / High Competition</option>
-                  <option value="LD_LC">Low Demand / Low Competition</option>
-                  <option value="LD_HC">Low Demand / High Competition</option>
-                </select>
-              </div>
+              {advancedDimensional.map(renderDimensionSelect)}
+              {!lockedFilters.quadrant && !prominentFilters.includes('quadrant') && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Quadrant</label>
+                  <select value={quadrant} onChange={(e) => setQuadrant(e.target.value)} className={selectClass}>
+                    <option value="">All Quadrants</option>
+                    <option value="HD_LC">High Demand / Low Competition</option>
+                    <option value="HD_HC">High Demand / High Competition</option>
+                    <option value="LD_LC">Low Demand / Low Competition</option>
+                    <option value="LD_HC">Low Demand / High Competition</option>
+                  </select>
+                </div>
+              )}
               <div className="flex items-end">
                 <button
                   onClick={() => {
-                    setDomain(''); setCapability(''); setIntent('');
-                    setMonetization(''); setMaturity(''); setGeo(''); setQuadrant('');
+                    advancedDimensional.forEach(f => dimensionSetters[f]?.(''));
+                    if (!lockedFilters.quadrant) setQuadrant('');
                   }}
                   className="w-full px-3 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
