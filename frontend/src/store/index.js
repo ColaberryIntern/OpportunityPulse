@@ -16,6 +16,7 @@ import subscriptionReducer from './slices/subscriptionSlice';
 import aiToolReducer from './slices/aiToolSlice';
 import actionEngineReducer from './slices/actionEngineSlice';
 import intelligenceReducer from './slices/intelligenceSlice';
+import freelanceReducer from './slices/freelanceSlice';
 
 export const store = configureStore({
   reducer: {
@@ -36,5 +37,6 @@ export const store = configureStore({
     aiTools: aiToolReducer,
     actionEngine: actionEngineReducer,
     intelligence: intelligenceReducer,
+    freelance: freelanceReducer,
   },
 });

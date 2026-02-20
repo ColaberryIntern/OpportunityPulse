@@ -250,6 +250,9 @@ app.use('/api/v1/action-engine', require('./actionEngine/actionEngine.routes'));
 // Intelligence Engine routes (multi-dimensional classification)
 app.use('/api/v1/intelligence', require('./intelligence/intelligence.routes'));
 
+// Freelance Demand Intelligence routes
+app.use('/api/v1/freelance', require('./freelance/freelance.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({
@@ -313,6 +316,10 @@ async function startServer() {
       // Start Intelligence Engine scheduler (domain, capability, intent, monetization, maturity, geo, signals, clusters)
       const { startIntelligenceScheduler } = require('./intelligence/intelligence.scheduler');
       startIntelligenceScheduler();
+
+      // Start Freelance Demand Intelligence scheduler (ingestion, classification+scoring, trends)
+      const { startFreelanceScheduler } = require('./freelance/freelance.scheduler');
+      startFreelanceScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

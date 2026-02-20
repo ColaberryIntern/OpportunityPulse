@@ -11,7 +11,7 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(30),
       allowNull: false,
       validate: {
-        isIn: [['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news']],
+        isIn: [['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance']],
       },
     },
     title: {

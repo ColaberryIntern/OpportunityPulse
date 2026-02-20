@@ -11,7 +11,7 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false,
       validate: {
-        isIn: [['scoring', 'trend_detection', 'insight_generation', 'ai_tool_mention_extraction', 'ai_tool_trend_analysis', 'ai_tool_github_discovery', 'ai_tool_producthunt_discovery', 'ai_tool_huggingface_discovery', 'classification', 'saturation_computation', 'action_recommendation', 'executive_brief', 'domain_classification', 'capability_classification', 'strategic_intent', 'monetization_angle', 'maturity_phase', 'geographic_tagging', 'meta_signal_computation', 'cluster_detection', 'rss_signal_enrichment', 'tool_github_acceleration', 'tool_social_velocity', 'tool_funding_scoring', 'tool_enterprise_scoring', 'tool_momentum_scoring']],
+        isIn: [['scoring', 'trend_detection', 'insight_generation', 'ai_tool_mention_extraction', 'ai_tool_trend_analysis', 'ai_tool_github_discovery', 'ai_tool_producthunt_discovery', 'ai_tool_huggingface_discovery', 'classification', 'saturation_computation', 'action_recommendation', 'executive_brief', 'domain_classification', 'capability_classification', 'strategic_intent', 'monetization_angle', 'maturity_phase', 'geographic_tagging', 'meta_signal_computation', 'cluster_detection', 'rss_signal_enrichment', 'tool_github_acceleration', 'tool_social_velocity', 'tool_funding_scoring', 'tool_enterprise_scoring', 'tool_momentum_scoring', 'freelance_classification', 'freelance_scoring', 'freelance_trend_snapshot']],
       },
     },
     status: {

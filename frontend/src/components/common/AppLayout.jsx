@@ -16,7 +16,7 @@ function AppLayout({ children }) {
       <div className="flex flex-1">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        <main id="main-content" className="flex-1 overflow-auto" role="main">
+        <main id="main-content" className="flex-1 overflow-auto lg:ml-56" role="main">
           {children}
         </main>
       </div>

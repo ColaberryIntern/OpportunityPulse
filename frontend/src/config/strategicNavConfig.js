@@ -1,6 +1,6 @@
 /**
  * Strategic navigation configuration.
- * Single source of truth for all 8 strategic views.
+ * Single source of truth for all 9 strategic views.
  */
 
 export const STRATEGIC_VIEWS = [
@@ -43,6 +43,16 @@ export const STRATEGIC_VIEWS = [
     isOpportunityList: true,
     description: 'AI job openings, talent demand signals, and workforce trends',
     subFilters: ['category', 'sort', 'minScore', 'geo', 'capability'],
+  },
+  {
+    key: 'freelance',
+    label: 'Freelance',
+    path: '/freelance',
+    icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
+    filterPreset: { type: 'freelance' },
+    isOpportunityList: false,
+    description: 'AI freelance projects, demand trends, and actionable opportunities',
+    subFilters: ['category', 'sort', 'minScore', 'capability'],
   },
   {
     key: 'capital',

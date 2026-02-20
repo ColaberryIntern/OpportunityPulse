@@ -22,6 +22,10 @@ const GoogleNewsAdapter = require('./adapters/googleNews.adapter');
 const HackerNewsAdapter = require('./adapters/hackerNews.adapter');
 const DevToAdapter = require('./adapters/devto.adapter');
 const RedditAIAdapter = require('./adapters/redditAI.adapter');
+const UpworkRssAdapter = require('./adapters/upworkRss.adapter');
+const FreelancerApiAdapter = require('./adapters/freelancerApi.adapter');
+const LinkedInManualAdapter = require('./adapters/linkedinManual.adapter');
+const GenericFreelanceRssAdapter = require('./adapters/genericFreelanceRss.adapter');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -74,6 +78,14 @@ function getAdapter(dataSource) {
       return new DevToAdapter(dataSource);
     case 'reddit_ai':
       return new RedditAIAdapter(dataSource);
+    case 'upwork_rss':
+      return new UpworkRssAdapter(dataSource);
+    case 'freelancer_api':
+      return new FreelancerApiAdapter(dataSource);
+    case 'linkedin_manual':
+      return new LinkedInManualAdapter(dataSource);
+    case 'generic_freelance_rss':
+      return new GenericFreelanceRssAdapter(dataSource);
     default:
       throw new AppError(`Unknown data source adapter: ${dataSource.name}`, 400);
   }

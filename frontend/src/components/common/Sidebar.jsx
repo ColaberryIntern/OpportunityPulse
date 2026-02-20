@@ -80,7 +80,7 @@ function Sidebar({ open, onClose }) {
       <aside
         className={`fixed top-14 left-0 bottom-0 w-56 bg-primary z-40 transform transition-transform lg:translate-x-0 overflow-y-auto ${
           open ? 'translate-x-0' : '-translate-x-full'
-        } lg:static lg:z-auto`}
+        }`}
         aria-label="Main navigation"
       >
         <nav className="flex flex-col gap-0.5 p-3 mt-2" aria-label="Primary navigation">

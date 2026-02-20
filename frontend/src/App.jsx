@@ -28,6 +28,7 @@ import AiToolDetailPage from './pages/AiToolDetailPage';
 import ActionTrackerPage from './pages/ActionTrackerPage';
 import StrategicClustersPage from './pages/StrategicClustersPage';
 import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
+import FreelancePage from './pages/FreelancePage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -257,6 +258,14 @@ function App() {
           element={
             <ProtectedLayout>
               <IntelligenceDashboardPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/freelance"
+          element={
+            <ProtectedLayout>
+              <FreelancePage />
             </ProtectedLayout>
           }
         />

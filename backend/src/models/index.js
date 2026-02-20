@@ -55,6 +55,7 @@ const StrategicCluster = require('./StrategicCluster')(sequelize);
 const OpportunityClassification = require('./OpportunityClassification')(sequelize);
 const OpportunityMultiTag = require('./OpportunityMultiTag')(sequelize);
 const ToolSignal = require('./ToolSignal')(sequelize);
+const FreelanceTrendSnapshot = require('./FreelanceTrendSnapshot')(sequelize);
 
 const models = {
   UserRole,
@@ -93,6 +94,7 @@ const models = {
   OpportunityClassification,
   OpportunityMultiTag,
   ToolSignal,
+  FreelanceTrendSnapshot,
 };
 
 // Set up associations

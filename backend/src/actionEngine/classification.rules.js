@@ -27,6 +27,8 @@ function classifyByRules(opportunity) {
       return classifyInvestment(score, value);
     case 'ai_news':
       return classifyAiNews(score, tags);
+    case 'freelance':
+      return classifyFreelance(score, value, tags);
     default:
       return { actionType: ACTION_TYPES.IGNORE, confidenceScore: 50, reasoning: `Unknown opportunity type: ${type}` };
   }
@@ -99,6 +101,28 @@ function classifyAiNews(score, tags) {
     return { actionType: ACTION_TYPES.BUILD, confidenceScore: 55, reasoning: `High-relevance AI news (score: ${score}) — build opportunity` };
   }
   return { actionType: ACTION_TYPES.IGNORE, confidenceScore: 60, reasoning: 'General AI news — no immediate action required' };
+}
+
+function classifyFreelance(score, value, tags) {
+  const saasKeywords = ['saas', 'product', 'platform', 'mvp', 'startup', 'recurring', 'subscription'];
+  const hasSaasPotential = tags.some((t) => saasKeywords.some((k) => t.includes(k)));
+
+  if (value < 1000 && value > 0) {
+    return { actionType: ACTION_TYPES.IGNORE, confidenceScore: 80, reasoning: `Low budget ($${value}) — too small for strategic value` };
+  }
+  if (value >= 5000 && score >= 60) {
+    return { actionType: ACTION_TYPES.APPLY, confidenceScore: 88, reasoning: `High-value freelance project ($${(value / 1000).toFixed(0)}k) with strong match (score: ${score}) — submit proposal` };
+  }
+  if (hasSaasPotential && score >= 50) {
+    return { actionType: ACTION_TYPES.BUILD, confidenceScore: 75, reasoning: 'SaaS/product conversion opportunity — build reusable solution' };
+  }
+  if (score >= 50) {
+    return { actionType: ACTION_TYPES.APPLY, confidenceScore: 65, reasoning: `Good match (score: ${score}) — consider submitting a tailored proposal` };
+  }
+  if (score < 30) {
+    return { actionType: ACTION_TYPES.IGNORE, confidenceScore: 75, reasoning: `Low relevance (score: ${score}) — not aligned with skills` };
+  }
+  return { actionType: ACTION_TYPES.APPLY, confidenceScore: 55, reasoning: 'Moderate freelance opportunity — evaluate scope before proposing' };
 }
 
 module.exports = { classifyByRules };
