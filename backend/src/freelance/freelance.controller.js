@@ -1,7 +1,9 @@
 const { Op } = require('sequelize');
 const { Opportunity, DataSource } = require('../models');
-const { getTrendingSkills, getSkillTrend, getDemandHeatmap } = require('./freelanceTrend.service');
+const { getTrendingSkills, getSkillTrend, getDemandHeatmap, generateDailySnapshot } = require('./freelanceTrend.service');
 const { generateFreelanceAction } = require('./freelanceAction.service');
+const { classifyFreelanceOpportunities } = require('./freelanceClassification.service');
+const { scoreFreelanceOpportunities } = require('./freelanceScoring.service');
 const { runIngestion } = require('../ingestion/ingestion.service');
 const { PAGINATION } = require('../config/constants');
 const logger = require('../logging/logger');
@@ -208,6 +210,36 @@ async function importProjects(req, res, next) {
   }
 }
 
+/**
+ * POST /api/v1/freelance/refresh-pipeline
+ * Manually trigger classification → scoring → snapshot pipeline.
+ */
+async function refreshPipeline(req, res, next) {
+  try {
+    logger.info('Manual freelance pipeline refresh triggered');
+
+    const classificationRun = await classifyFreelanceOpportunities();
+    await scoreFreelanceOpportunities();
+    const snapshotRun = await generateDailySnapshot();
+
+    const result = {
+      message: 'Pipeline refresh complete',
+      classification: {
+        status: classificationRun.status,
+        classified: classificationRun.outputCount || 0,
+      },
+      snapshot: {
+        status: snapshotRun.status,
+      },
+    };
+
+    logger.info('Manual freelance pipeline refresh complete', result);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listOpportunities,
   getOpportunity,
@@ -215,4 +247,5 @@ module.exports = {
   getSkillTrendData,
   generateAction,
   importProjects,
+  refreshPipeline,
 };

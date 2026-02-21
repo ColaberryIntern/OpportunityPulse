@@ -51,7 +51,13 @@ async function generateDailySnapshot() {
         ? JSON.parse(opp.sourceData)
         : (opp.sourceData || {});
 
-      const skills = aiAnalysis.skills || [];
+      // Use aiAnalysis.skills (from LLM classification) if available,
+      // otherwise fall back to tags (from API ingestion) or sourceData.skills
+      const skills = (aiAnalysis.skills && aiAnalysis.skills.length > 0)
+        ? aiAnalysis.skills
+        : (opp.tags && opp.tags.length > 0)
+          ? opp.tags
+          : (sourceData.skills || []);
       const budget = parseFloat(opp.value) || parseFloat(sourceData.budget) || 0;
       const proposals = parseInt(sourceData.proposals || sourceData.bid_count || 0, 10);
       const platform = sourceData.platform || opp.source || 'unknown';

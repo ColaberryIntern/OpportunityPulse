@@ -21,4 +21,7 @@ router.post('/actions/:id/generate', controller.generateAction);
 // Manual import
 router.post('/import', controller.importProjects);
 
+// Pipeline refresh (manual trigger for classification + scoring + snapshot)
+router.post('/refresh-pipeline', controller.refreshPipeline);
+
 module.exports = router;

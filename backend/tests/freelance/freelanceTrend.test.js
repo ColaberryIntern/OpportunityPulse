@@ -138,13 +138,14 @@ describe('Freelance Trend Service', () => {
       expect(skills).not.toContain('Python');
     });
 
-    it('should handle opportunities with no skills', async () => {
+    it('should handle opportunities with no skills and no tags', async () => {
       Opportunity.findAll.mockResolvedValue([
         {
           id: 1,
           value: 2000,
           sourceData: {},
           aiAnalysis: {},
+          tags: [],
           source: 'upwork',
         },
       ]);
@@ -155,6 +156,67 @@ describe('Freelance Trend Service', () => {
       expect(run.update).toHaveBeenCalledWith(
         expect.objectContaining({ outputCount: 0 })
       );
+    });
+
+    it('should use tags as fallback when aiAnalysis.skills is empty', async () => {
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1,
+          value: 5000,
+          sourceData: { platform: 'freelancer' },
+          aiAnalysis: {},
+          tags: ['python', 'react'],
+          source: 'freelancer',
+        },
+      ]);
+
+      await generateDailySnapshot();
+
+      expect(FreelanceTrendSnapshot.upsert).toHaveBeenCalledTimes(2);
+      const skills = FreelanceTrendSnapshot.upsert.mock.calls.map((c) => c[0].skill);
+      expect(skills).toContain('python');
+      expect(skills).toContain('react');
+    });
+
+    it('should use sourceData.skills as fallback when both aiAnalysis.skills and tags are empty', async () => {
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1,
+          value: 3000,
+          sourceData: { platform: 'freelancer', skills: ['node.js', 'mongodb'] },
+          aiAnalysis: {},
+          tags: [],
+          source: 'freelancer',
+        },
+      ]);
+
+      await generateDailySnapshot();
+
+      expect(FreelanceTrendSnapshot.upsert).toHaveBeenCalledTimes(2);
+      const skills = FreelanceTrendSnapshot.upsert.mock.calls.map((c) => c[0].skill);
+      expect(skills).toContain('node.js');
+      expect(skills).toContain('mongodb');
+    });
+
+    it('should prefer aiAnalysis.skills over tags when both exist', async () => {
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1,
+          value: 5000,
+          sourceData: { platform: 'freelancer' },
+          aiAnalysis: { skills: ['tensorflow', 'pytorch'] },
+          tags: ['python', 'react'],
+          source: 'freelancer',
+        },
+      ]);
+
+      await generateDailySnapshot();
+
+      expect(FreelanceTrendSnapshot.upsert).toHaveBeenCalledTimes(2);
+      const skills = FreelanceTrendSnapshot.upsert.mock.calls.map((c) => c[0].skill);
+      expect(skills).toContain('tensorflow');
+      expect(skills).toContain('pytorch');
+      expect(skills).not.toContain('python');
     });
 
     it('should handle stringified JSON in sourceData and aiAnalysis', async () => {

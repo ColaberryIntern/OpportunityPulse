@@ -90,6 +90,18 @@ function startFreelanceScheduler() {
     }
   }, 15000);
 
+  // Run classification + scoring + snapshot 60s after startup (after ingestion completes)
+  setTimeout(async () => {
+    try {
+      logger.info('Freelance startup enrichment triggered');
+      await runFreelanceEnrichment();
+      await generateDailySnapshot();
+      logger.info('Freelance startup enrichment complete');
+    } catch (error) {
+      logger.error('Freelance startup enrichment failed', { error: error.message });
+    }
+  }, 60000);
+
   logger.info('Freelance scheduler started: ingestion (*/4h), enrichment (*/6h+30m), trends (2am)');
 }
 
