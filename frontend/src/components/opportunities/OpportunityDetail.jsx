@@ -325,7 +325,20 @@ function renderRssSignals(signals) {
   );
 }
 
+function hasDisplayableAnalysis(ai) {
+  if (!ai || typeof ai !== 'object') return false;
+  return Object.entries(ai).some(([k, v]) => !SKIP_KEYS.has(k) && v != null && v !== '');
+}
+
 function renderGenericAnalysis(ai) {
+  if (!hasDisplayableAnalysis(ai)) {
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+        Detailed analysis is not yet available for this opportunity.
+      </p>
+    );
+  }
+
   const shown = new Set();
 
   return (
