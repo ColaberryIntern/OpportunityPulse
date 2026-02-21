@@ -9,9 +9,13 @@ const TYPE_LABELS = {
   freelance: '\u{1F680} Freelance',
 };
 
-function TrendCard({ type, trendData }) {
+function TrendCard({ type, trendData, variant = 'default' }) {
+  const cardClass = variant === 'compact'
+    ? 'bg-white/60 dark:bg-gray-700/50 rounded-lg p-4'
+    : 'bg-white dark:bg-gray-800 shadow rounded-lg p-5';
+
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
+    <div className={cardClass}>
       <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
         {TYPE_LABELS[type] || type}
       </h4>

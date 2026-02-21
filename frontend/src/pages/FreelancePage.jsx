@@ -7,6 +7,7 @@ import {
   generateFreelanceAction,
   clearGeneratedAction,
 } from '../store/slices/freelanceSlice';
+import { fetchTrendSummary } from '../store/slices/dashboardSlice';
 import FreelanceCard from '../components/freelance/FreelanceCard';
 import FreelanceTrendBar from '../components/freelance/FreelanceTrendBar';
 import FreelanceDemandChart from '../components/freelance/FreelanceDemandChart';
@@ -15,7 +16,7 @@ import StrategicNav from '../components/navigation/StrategicNav';
 import OpportunityFilters from '../components/opportunities/OpportunityFilters';
 import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
 import UpgradePrompt from '../components/common/UpgradePrompt';
-import SectionBrief from '../components/common/SectionBrief';
+import TrendCard from '../components/dashboard/TrendCard';
 import SEOHead from '../components/common/SEOHead';
 
 const VIEW_PRESET = { type: 'freelance' };
@@ -35,6 +36,7 @@ function FreelancePage() {
     skillTrend,
     skillTrendLoading,
   } = useSelector((state) => state.freelance);
+  const dashTrends = useSelector((state) => state.dashboard.trends);
 
   const [showModal, setShowModal] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState(null);
@@ -43,7 +45,8 @@ function FreelancePage() {
   useEffect(() => {
     dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, page: 1, limit: 20 }));
     dispatch(fetchFreelanceTrends());
-  }, [dispatch]);
+    if (!dashTrends) dispatch(fetchTrendSummary());
+  }, [dispatch, dashTrends]);
 
   const handleFilterChange = useCallback((filters) => {
     currentFilters.current = filters;
@@ -103,7 +106,14 @@ function FreelancePage() {
 
         <StrategicNav />
 
-        <SectionBrief section="freelance" />
+        {/* Market Trends */}
+        {dashTrends?.freelance && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750 border border-blue-100 dark:border-gray-700 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-1 max-w-xl">
+              <TrendCard type="freelance" trendData={dashTrends.freelance} variant="compact" />
+            </div>
+          </div>
+        )}
 
         <UpgradePrompt />
 

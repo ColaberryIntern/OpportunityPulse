@@ -9,7 +9,6 @@ import OpportunityFilters from '../components/opportunities/OpportunityFilters';
 import OpportunityList from '../components/opportunities/OpportunityList';
 import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
 import UpgradePrompt from '../components/common/UpgradePrompt';
-import SectionBrief from '../components/common/SectionBrief';
 import TrendCard from '../components/dashboard/TrendCard';
 
 const VIEW_TREND_TYPES = {
@@ -89,14 +88,14 @@ function StrategicViewPage() {
 
         <StrategicNav />
 
-        <SectionBrief section={viewConfig.key} />
-
         {/* Market Trends */}
         {trends && VIEW_TREND_TYPES[viewConfig.key] && (
-          <div className={`grid gap-4 mb-4 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
-            {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
-              <TrendCard key={type} type={type} trendData={trends[type]} />
-            ))}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750 border border-blue-100 dark:border-gray-700 rounded-lg p-4 mb-4">
+            <div className={`grid gap-3 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
+              {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
+                <TrendCard key={type} type={type} trendData={trends[type]} variant="compact" />
+              ))}
+            </div>
           </div>
         )}
 
