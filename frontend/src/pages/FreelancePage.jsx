@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchFreelanceOpportunities,
   fetchFreelanceTrends,
+  fetchSkillTrend,
   generateFreelanceAction,
   clearGeneratedAction,
 } from '../store/slices/freelanceSlice';
@@ -31,6 +32,8 @@ function FreelancePage() {
     trendsLoading,
     generatedAction,
     actionLoading,
+    skillTrend,
+    skillTrendLoading,
   } = useSelector((state) => state.freelance);
 
   const [showModal, setShowModal] = useState(false);
@@ -63,11 +66,12 @@ function FreelancePage() {
       currentFilters.current = updated;
       dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
     } else {
-      // Select: filter by this skill
+      // Select: filter by this skill and fetch its time-series trend
       setSelectedSkill(skill);
       const updated = { ...currentFilters.current, skills: skill };
       currentFilters.current = updated;
       dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
+      dispatch(fetchSkillTrend({ skill, days: 30 }));
     }
   }, [dispatch, selectedSkill]);
 
@@ -185,7 +189,14 @@ function FreelancePage() {
         )}
 
         {/* Demand Trends Chart */}
-        <FreelanceDemandChart trending={trending} loading={trendsLoading} />
+        <FreelanceDemandChart
+          trending={trending}
+          loading={trendsLoading}
+          selectedSkill={selectedSkill}
+          skillTrend={skillTrend}
+          skillTrendLoading={skillTrendLoading}
+          onClearSkill={() => handleSkillClick(selectedSkill)}
+        />
 
         {/* Action Modal */}
         {showModal && (

@@ -292,6 +292,7 @@ async function getTrendingSkills(days = 30) {
 
 /**
  * Get daily time series for a specific skill.
+ * Falls back to real-time aggregation from opportunities when snapshots are sparse.
  */
 async function getSkillTrend(skill, days = 30) {
   const startDate = new Date();
@@ -306,12 +307,78 @@ async function getSkillTrend(skill, days = 30) {
     raw: true,
   });
 
-  return snapshots.map((s) => ({
-    date: s.snapshot_date,
-    demandCount: s.demand_count,
-    avgBudget: s.avg_budget,
-    avgProposals: s.avg_proposals,
-  }));
+  if (snapshots.length >= 2) {
+    return snapshots.map((s) => ({
+      date: s.snapshot_date,
+      demandCount: s.demand_count,
+      avgBudget: s.avg_budget,
+      avgProposals: s.avg_proposals,
+    }));
+  }
+
+  // Real-time fallback: aggregate from opportunities grouped by day
+  return getSkillTrendRealTime(skill, days);
+}
+
+/**
+ * Real-time skill trend aggregation grouped by day.
+ * Used when snapshot history is sparse (< 2 data points).
+ */
+async function getSkillTrendRealTime(skill, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const normalizedSkill = skill.toLowerCase();
+
+  const opportunities = await Opportunity.findAll({
+    where: {
+      type: 'freelance',
+      createdAt: { [Op.gte]: startDate },
+    },
+    attributes: ['id', 'value', 'sourceData', 'aiAnalysis', 'tags', 'createdAt'],
+    raw: true,
+  });
+
+  // Group by day, filter for opportunities that have this skill
+  const dayMap = {};
+
+  for (const opp of opportunities) {
+    const aiAnalysis = typeof opp.aiAnalysis === 'string'
+      ? JSON.parse(opp.aiAnalysis) : (opp.aiAnalysis || {});
+    const sourceData = typeof opp.sourceData === 'string'
+      ? JSON.parse(opp.sourceData) : (opp.sourceData || {});
+
+    const skills = (aiAnalysis.skills && aiAnalysis.skills.length > 0)
+      ? aiAnalysis.skills
+      : (opp.tags && opp.tags.length > 0)
+        ? opp.tags
+        : (sourceData.skills || []);
+
+    const hasSkill = skills.some((s) => s.toLowerCase().trim() === normalizedSkill);
+    if (!hasSkill) continue;
+
+    const day = new Date(opp.createdAt).toISOString().split('T')[0];
+    if (!dayMap[day]) {
+      dayMap[day] = { count: 0, totalBudget: 0, budgetCount: 0 };
+    }
+
+    dayMap[day].count++;
+    const budget = parseFloat(opp.value) || 0;
+    if (budget > 0) {
+      dayMap[day].totalBudget += budget;
+      dayMap[day].budgetCount++;
+    }
+  }
+
+  return Object.entries(dayMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, data]) => ({
+      date,
+      demandCount: data.count,
+      avgBudget: data.budgetCount > 0
+        ? Math.round((data.totalBudget / data.budgetCount) * 100) / 100
+        : null,
+      avgProposals: null,
+    }));
 }
 
 /**

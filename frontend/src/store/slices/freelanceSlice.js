@@ -59,6 +59,7 @@ const freelanceSlice = createSlice({
     trends: null,
     trendsLoading: false,
     skillTrend: null,
+    skillTrendLoading: false,
     selectedOpportunity: null,
     generatedAction: null,
     actionLoading: false,
@@ -104,8 +105,16 @@ const freelanceSlice = createSlice({
         state.error = action.payload;
       })
       // fetchSkillTrend
+      .addCase(fetchSkillTrend.pending, (state) => {
+        state.skillTrendLoading = true;
+        state.skillTrend = null;
+      })
       .addCase(fetchSkillTrend.fulfilled, (state, action) => {
+        state.skillTrendLoading = false;
         state.skillTrend = action.payload;
+      })
+      .addCase(fetchSkillTrend.rejected, (state) => {
+        state.skillTrendLoading = false;
       })
       // generateFreelanceAction
       .addCase(generateFreelanceAction.pending, (state) => {

@@ -440,12 +440,57 @@ describe('Freelance Trend Service', () => {
       );
     });
 
-    it('should return empty array when no data exists', async () => {
+    it('should return empty array when no snapshots and no opportunities', async () => {
       FreelanceTrendSnapshot.findAll.mockResolvedValue([]);
+      Opportunity.findAll.mockResolvedValue([]);
 
       const result = await getSkillTrend('nonexistent', 30);
 
       expect(result).toEqual([]);
+    });
+
+    it('should fall back to real-time aggregation when snapshots are sparse', async () => {
+      // Only 1 snapshot data point — triggers real-time fallback
+      FreelanceTrendSnapshot.findAll.mockResolvedValue([
+        { snapshot_date: '2026-02-21', demand_count: 5, avg_budget: 2000, avg_proposals: 3 },
+      ]);
+
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1, value: 3000,
+          sourceData: {},
+          aiAnalysis: {},
+          tags: ['Python', 'React'],
+          source: 'freelancer',
+          createdAt: '2026-02-19T10:00:00Z',
+        },
+        {
+          id: 2, value: 5000,
+          sourceData: {},
+          aiAnalysis: {},
+          tags: ['Python', 'LLM'],
+          source: 'freelancer',
+          createdAt: '2026-02-20T12:00:00Z',
+        },
+        {
+          id: 3, value: 4000,
+          sourceData: {},
+          aiAnalysis: {},
+          tags: ['Python'],
+          source: 'upwork',
+          createdAt: '2026-02-20T15:00:00Z',
+        },
+      ]);
+
+      const result = await getSkillTrend('python', 30);
+
+      // Should have 2 days of data
+      expect(result.length).toBe(2);
+      expect(result[0].date).toBe('2026-02-19');
+      expect(result[0].demandCount).toBe(1);
+      expect(result[1].date).toBe('2026-02-20');
+      expect(result[1].demandCount).toBe(2);
+      expect(result[1].avgBudget).toBe(4500); // (5000+4000)/2
     });
   });
 
