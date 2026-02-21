@@ -34,6 +34,7 @@ function FreelancePage() {
   } = useSelector((state) => state.freelance);
 
   const [showModal, setShowModal] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState(null);
   const currentFilters = useRef({});
 
   useEffect(() => {
@@ -52,6 +53,23 @@ function FreelancePage() {
     currentFilters.current = updated;
     dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
   };
+
+  const handleSkillClick = useCallback((skill) => {
+    if (selectedSkill === skill) {
+      // Deselect: remove skill filter
+      setSelectedSkill(null);
+      const updated = { ...currentFilters.current };
+      delete updated.skills;
+      currentFilters.current = updated;
+      dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
+    } else {
+      // Select: filter by this skill
+      setSelectedSkill(skill);
+      const updated = { ...currentFilters.current, skills: skill };
+      currentFilters.current = updated;
+      dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...updated, page: 1, limit: 20 }));
+    }
+  }, [dispatch, selectedSkill]);
 
   const handlePageChange = (newPage) => {
     dispatch(fetchFreelanceOpportunities({ ...VIEW_PRESET, ...currentFilters.current, page: newPage, limit: 20 }));
@@ -109,7 +127,12 @@ function FreelancePage() {
 
         {/* Trending Skills Bar */}
         <div className="mt-4">
-          <FreelanceTrendBar trending={trending} loading={trendsLoading} />
+          <FreelanceTrendBar
+            trending={trending}
+            loading={trendsLoading}
+            onSkillClick={handleSkillClick}
+            selectedSkill={selectedSkill}
+          />
         </div>
 
         {/* Opportunity Grid */}

@@ -374,6 +374,11 @@ describe('Freelance Trend Service', () => {
       expect(result.length).toBe(3);
       expect(result[0].skill).toBe('python');
       expect(result[0].demandCount).toBe(2);
+      expect(result[0].isRealTime).toBe(true);
+      // python appears in 2 of 2 opps → 100% demand share
+      expect(result[0].growthRate).toBe(100);
+      // react appears in 1 of 2 opps → 50% demand share
+      expect(result[1].growthRate).toBe(50);
       expect(result[1].demandCount).toBe(1);
     });
 
@@ -397,6 +402,9 @@ describe('Freelance Trend Service', () => {
       const skills = result.map((r) => r.skill);
       expect(skills).toContain('javascript');
       expect(skills).toContain('react');
+      // Both skills appear in 1 of 1 opps → 100% demand share
+      expect(result[0].growthRate).toBe(100);
+      expect(result[0].isRealTime).toBe(true);
     });
   });
 

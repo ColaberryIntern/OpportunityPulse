@@ -202,6 +202,8 @@ async function aggregateSkillsRealTime() {
     }
   }
 
+  const totalOpps = opportunities.length;
+
   return Object.entries(skillMap)
     .map(([skill, data]) => ({
       skill,
@@ -209,8 +211,10 @@ async function aggregateSkillsRealTime() {
       avgBudget: data.budgetCount > 0 ? Math.round((data.totalBudget / data.budgetCount) * 100) / 100 : null,
       avgProposals: data.proposalCount > 0 ? Math.round((data.totalProposals / data.proposalCount) * 100) / 100 : null,
       topPlatforms: [],
-      growthRate: 100,
+      // Demand share: what % of all freelance opportunities mention this skill
+      growthRate: Math.round((data.count / totalOpps) * 1000) / 10,
       priorCount: 0,
+      isRealTime: true,
     }))
     .sort((a, b) => b.demandCount - a.demandCount)
     .slice(0, 20);
