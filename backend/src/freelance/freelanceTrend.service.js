@@ -150,8 +150,76 @@ async function generateDailySnapshot() {
 }
 
 /**
+ * Real-time skill demand aggregation directly from opportunities.
+ * Used as a fallback when snapshot data is empty or stale.
+ */
+async function aggregateSkillsRealTime() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const opportunities = await Opportunity.findAll({
+    where: {
+      type: 'freelance',
+      createdAt: { [Op.gte]: thirtyDaysAgo },
+    },
+    attributes: ['id', 'value', 'sourceData', 'aiAnalysis', 'source', 'tags'],
+    raw: true,
+  });
+
+  if (opportunities.length === 0) return [];
+
+  const skillMap = {};
+
+  for (const opp of opportunities) {
+    const aiAnalysis = typeof opp.aiAnalysis === 'string'
+      ? JSON.parse(opp.aiAnalysis)
+      : (opp.aiAnalysis || {});
+    const sourceData = typeof opp.sourceData === 'string'
+      ? JSON.parse(opp.sourceData)
+      : (opp.sourceData || {});
+
+    const skills = (aiAnalysis.skills && aiAnalysis.skills.length > 0)
+      ? aiAnalysis.skills
+      : (opp.tags && opp.tags.length > 0)
+        ? opp.tags
+        : (sourceData.skills || []);
+
+    const budget = parseFloat(opp.value) || 0;
+    const proposals = parseInt(sourceData.proposals || sourceData.bid_count || 0, 10);
+
+    for (const skill of skills) {
+      const normalized = skill.toLowerCase().trim();
+      if (!normalized) continue;
+
+      if (!skillMap[normalized]) {
+        skillMap[normalized] = { count: 0, totalBudget: 0, budgetCount: 0, totalProposals: 0, proposalCount: 0 };
+      }
+
+      const entry = skillMap[normalized];
+      entry.count++;
+      if (budget > 0) { entry.totalBudget += budget; entry.budgetCount++; }
+      if (proposals > 0) { entry.totalProposals += proposals; entry.proposalCount++; }
+    }
+  }
+
+  return Object.entries(skillMap)
+    .map(([skill, data]) => ({
+      skill,
+      demandCount: data.count,
+      avgBudget: data.budgetCount > 0 ? Math.round((data.totalBudget / data.budgetCount) * 100) / 100 : null,
+      avgProposals: data.proposalCount > 0 ? Math.round((data.totalProposals / data.proposalCount) * 100) / 100 : null,
+      topPlatforms: [],
+      growthRate: 100,
+      priorCount: 0,
+    }))
+    .sort((a, b) => b.demandCount - a.demandCount)
+    .slice(0, 20);
+}
+
+/**
  * Get top trending skills by demand growth rate.
  * Compares latest snapshot to 7-day-ago snapshot.
+ * Falls back to real-time aggregation when snapshots are empty/stale.
  */
 async function getTrendingSkills(days = 30) {
   // Use the most recent snapshot date (handles cases where today's snapshot hasn't run yet)
@@ -168,6 +236,15 @@ async function getTrendingSkills(days = 30) {
     limit: 50,
     raw: true,
   });
+
+  // If no snapshots or all have zero demand, fall back to real-time aggregation
+  const hasValidData = latestSnapshots.length > 0 &&
+    latestSnapshots.some((s) => s.demand_count > 0);
+
+  if (!hasValidData) {
+    logger.info('Snapshot data empty or stale, using real-time skill aggregation');
+    return aggregateSkillsRealTime();
+  }
 
   // Get 7-day-ago snapshots for comparison
   const compareDate = new Date();

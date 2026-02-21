@@ -343,6 +343,61 @@ describe('Freelance Trend Service', () => {
 
       expect(result.length).toBe(20);
     });
+
+    it('should fall back to real-time aggregation when snapshots have all zero demands', async () => {
+      // Snapshot returns skills with 0 demand
+      FreelanceTrendSnapshot.max.mockResolvedValue('2026-02-21');
+      FreelanceTrendSnapshot.findAll.mockResolvedValueOnce([
+        { skill: 'php', demand_count: 0, avg_budget: null, avg_proposals: null, top_platforms: [] },
+      ]);
+
+      // Real-time query returns opportunities with tags
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1, value: 5000,
+          sourceData: { platform: 'freelancer', bid_count: 10 },
+          aiAnalysis: {},
+          tags: ['python', 'react'],
+          source: 'freelancer',
+        },
+        {
+          id: 2, value: 3000,
+          sourceData: { platform: 'freelancer', bid_count: 5 },
+          aiAnalysis: {},
+          tags: ['python', 'node.js'],
+          source: 'freelancer',
+        },
+      ]);
+
+      const result = await getTrendingSkills(30);
+
+      expect(result.length).toBe(3);
+      expect(result[0].skill).toBe('python');
+      expect(result[0].demandCount).toBe(2);
+      expect(result[1].demandCount).toBe(1);
+    });
+
+    it('should fall back to real-time aggregation when no snapshots exist', async () => {
+      FreelanceTrendSnapshot.max.mockResolvedValue(null);
+      FreelanceTrendSnapshot.findAll.mockResolvedValue([]);
+
+      Opportunity.findAll.mockResolvedValue([
+        {
+          id: 1, value: 2000,
+          sourceData: { platform: 'freelancer' },
+          aiAnalysis: {},
+          tags: ['javascript', 'react'],
+          source: 'freelancer',
+        },
+      ]);
+
+      const result = await getTrendingSkills(30);
+
+      expect(result.length).toBe(2);
+      const skills = result.map((r) => r.skill);
+      expect(skills).toContain('javascript');
+      expect(skills).toContain('react');
+    });
   });
 
   describe('getSkillTrend', () => {
