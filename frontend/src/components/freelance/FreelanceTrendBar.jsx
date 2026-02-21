@@ -3,9 +3,9 @@ import React from 'react';
 function FreelanceTrendBar({ trending, loading }) {
   if (loading) {
     return (
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 animate-pulse">
+      <div className="flex flex-wrap gap-2 pb-2 mb-4 animate-pulse">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-8 w-28 bg-gray-200 dark:bg-gray-700 rounded-full shrink-0" />
+          <div key={i} className="h-8 w-28 bg-gray-200 dark:bg-gray-700 rounded-full" />
         ))}
       </div>
     );
@@ -14,7 +14,7 @@ function FreelanceTrendBar({ trending, loading }) {
   if (!trending || trending.length === 0) return null;
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-thin">
+    <div className="flex flex-wrap gap-2 pb-2 mb-4">
       {trending.map((item) => {
         const isGrowing = item.growthRate > 0;
         const bgColor = isGrowing
@@ -28,7 +28,7 @@ function FreelanceTrendBar({ trending, loading }) {
         return (
           <div
             key={item.skill}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shrink-0 ${bgColor}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${bgColor}`}
           >
             <span className="text-xs font-medium text-gray-800 dark:text-gray-200 capitalize">
               {item.skill}

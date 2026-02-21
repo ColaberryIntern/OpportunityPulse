@@ -6,11 +6,15 @@ const { PAGINATION } = require('../config/constants');
  * Get aggregated platform statistics for the dashboard.
  */
 async function getStats(userId) {
-  const [totalUsers, totalContent, myContentCount, recentActivityCount] = await Promise.all([
+  const [totalUsers, totalContent, myContentCount, recentActivityCount, budgetSignals, actorSignals, enterpriseSignals, complianceSignals] = await Promise.all([
     User.count(),
     Content.count(),
     Content.count({ where: { userId } }),
     UserActivity.count({ where: { userId } }),
+    Opportunity.count({ where: { status: 'active', aiAnalysis: { rssSignals: { budget: { [Op.ne]: null } } } } }),
+    Opportunity.count({ where: { status: 'active', aiAnalysis: { rssSignals: { actor: { [Op.ne]: null } } } } }),
+    Opportunity.count({ where: { status: 'active', aiAnalysis: { rssSignals: { enterprise: { [Op.ne]: null } } } } }),
+    Opportunity.count({ where: { status: 'active', aiAnalysis: { rssSignals: { compliance: { [Op.ne]: null } } } } }),
   ]);
 
   return {
@@ -18,6 +22,12 @@ async function getStats(userId) {
     totalContent,
     myContentCount,
     recentActivityCount,
+    rssSignals: {
+      budget: budgetSignals,
+      actor: actorSignals,
+      enterprise: enterpriseSignals,
+      compliance: complianceSignals,
+    },
   };
 }
 

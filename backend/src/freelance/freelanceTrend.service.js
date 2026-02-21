@@ -148,7 +148,9 @@ async function generateDailySnapshot() {
  * Compares latest snapshot to 7-day-ago snapshot.
  */
 async function getTrendingSkills(days = 30) {
-  const endDate = new Date().toISOString().split('T')[0];
+  // Use the most recent snapshot date (handles cases where today's snapshot hasn't run yet)
+  const latestDateResult = await FreelanceTrendSnapshot.max('snapshotDate');
+  const endDate = latestDateResult || new Date().toISOString().split('T')[0];
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   const startStr = startDate.toISOString().split('T')[0];
@@ -195,8 +197,8 @@ async function getTrendingSkills(days = 30) {
     };
   });
 
-  // Sort by growth rate, then demand count
-  trending.sort((a, b) => b.growthRate - a.growthRate || b.demandCount - a.demandCount);
+  // Sort by demand count (most in-demand first), then growth rate
+  trending.sort((a, b) => b.demandCount - a.demandCount || b.growthRate - a.growthRate);
 
   return trending.slice(0, 20);
 }

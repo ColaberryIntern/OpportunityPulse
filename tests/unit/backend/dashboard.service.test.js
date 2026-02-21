@@ -6,10 +6,11 @@ jest.mock('../../../backend/src/models', () => {
     findAndCountAll: jest.fn(),
     count: jest.fn(),
   };
-  return { User: mockUser, Content: mockContent, UserActivity: mockUserActivity };
+  const mockOpportunity = { count: jest.fn() };
+  return { User: mockUser, Content: mockContent, UserActivity: mockUserActivity, Opportunity: mockOpportunity };
 });
 
-const { User, Content, UserActivity } = require('../../../backend/src/models');
+const { User, Content, UserActivity, Opportunity } = require('../../../backend/src/models');
 const dashboardService = require('../../../backend/src/dashboard/dashboard.service');
 
 describe('DashboardService', () => {
@@ -18,11 +19,16 @@ describe('DashboardService', () => {
   });
 
   describe('getStats', () => {
-    it('should return aggregated platform stats', async () => {
+    it('should return aggregated platform stats with RSS signals', async () => {
       User.count.mockResolvedValue(42);
       Content.count.mockResolvedValueOnce(156); // totalContent
       Content.count.mockResolvedValueOnce(12);  // myContentCount
       UserActivity.count.mockResolvedValue(25);
+      Opportunity.count
+        .mockResolvedValueOnce(10)  // budget signals
+        .mockResolvedValueOnce(8)   // actor signals
+        .mockResolvedValueOnce(5)   // enterprise signals
+        .mockResolvedValueOnce(3);  // compliance signals
 
       const result = await dashboardService.getStats(1);
 
@@ -31,15 +37,18 @@ describe('DashboardService', () => {
         totalContent: 156,
         myContentCount: 12,
         recentActivityCount: 25,
+        rssSignals: { budget: 10, actor: 8, enterprise: 5, compliance: 3 },
       });
       expect(User.count).toHaveBeenCalledTimes(1);
       expect(Content.count).toHaveBeenCalledTimes(2);
+      expect(Opportunity.count).toHaveBeenCalledTimes(4);
     });
 
     it('should return zeros when no data exists', async () => {
       User.count.mockResolvedValue(0);
       Content.count.mockResolvedValue(0);
       UserActivity.count.mockResolvedValue(0);
+      Opportunity.count.mockResolvedValue(0);
 
       const result = await dashboardService.getStats(1);
 
@@ -48,6 +57,7 @@ describe('DashboardService', () => {
         totalContent: 0,
         myContentCount: 0,
         recentActivityCount: 0,
+        rssSignals: { budget: 0, actor: 0, enterprise: 0, compliance: 0 },
       });
     });
   });
