@@ -1,5 +1,5 @@
-const { Op } = require('sequelize');
-const { Opportunity, DataSource } = require('../models');
+const { Op, literal } = require('sequelize');
+const { Opportunity, DataSource, sequelize } = require('../models');
 const { getTrendingSkills, getSkillTrend, getDemandHeatmap, generateDailySnapshot } = require('./freelanceTrend.service');
 const { generateFreelanceAction } = require('./freelanceAction.service');
 const { classifyFreelanceOpportunities } = require('./freelanceClassification.service');
@@ -44,8 +44,13 @@ async function listOpportunities(req, res, next) {
       where.source = platform;
     }
     if (skills) {
-      const skillList = skills.split(',').map((s) => s.trim());
-      where.tags = { [Op.overlap]: skillList };
+      // Case-insensitive match: trend bar sends lowercase skills, DB stores mixed case
+      const skillList = skills.split(',').map((s) => s.trim().toLowerCase());
+      const escaped = skillList.map((s) => sequelize.escape(s)).join(',');
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        literal(`EXISTS (SELECT 1 FROM unnest(tags) AS t WHERE lower(t) IN (${escaped}))`),
+      ];
     }
     if (complexity) {
       where[Op.and] = [

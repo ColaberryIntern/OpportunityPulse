@@ -21,6 +21,9 @@ jest.mock('../../src/models', () => ({
   DataSource: {
     findOne: jest.fn(),
   },
+  sequelize: {
+    escape: jest.fn((val) => `'${String(val).replace(/'/g, "''")}'`),
+  },
 }));
 
 // Mock services
@@ -93,14 +96,17 @@ describe('Freelance API Controller', () => {
       );
     });
 
-    it('should apply skill filter using overlap', async () => {
+    it('should apply skill filter using case-insensitive match', async () => {
       req.query.skills = 'python,react';
       Opportunity.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
 
       await listOpportunities(req, res, next);
 
       const callArgs = Opportunity.findAndCountAll.mock.calls[0][0];
-      expect(callArgs.where.tags).toBeDefined();
+      // Skills filter uses Op.and with a literal for case-insensitive matching
+      const { Op } = require('sequelize');
+      expect(callArgs.where[Op.and]).toBeDefined();
+      expect(callArgs.where[Op.and].length).toBeGreaterThan(0);
     });
 
     it('should apply budget range filters', async () => {
