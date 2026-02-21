@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOpportunities } from '../store/slices/opportunitySlice';
+import { fetchTrendSummary } from '../store/slices/dashboardSlice';
 import { getViewByPath } from '../config/strategicNavConfig';
 import StrategicNav from '../components/navigation/StrategicNav';
 import OpportunityFilters from '../components/opportunities/OpportunityFilters';
@@ -9,6 +10,16 @@ import OpportunityList from '../components/opportunities/OpportunityList';
 import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
 import UpgradePrompt from '../components/common/UpgradePrompt';
 import SectionBrief from '../components/common/SectionBrief';
+import TrendCard from '../components/dashboard/TrendCard';
+
+const VIEW_TREND_TYPES = {
+  all: ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'],
+  government: ['gov_contract', 'grant'],
+  'private-sector': ['ai_news'],
+  talent: ['ai_job'],
+  capital: ['investment'],
+  alpha: ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'],
+};
 
 function StrategicViewPage() {
   const dispatch = useDispatch();
@@ -16,6 +27,7 @@ function StrategicViewPage() {
   const { items, pagination, loading, error } = useSelector(
     (state) => state.opportunities
   );
+  const trends = useSelector((state) => state.dashboard.trends);
   const currentFilters = useRef({});
 
   const viewConfig = useMemo(
@@ -38,6 +50,11 @@ function StrategicViewPage() {
     currentFilters.current = {};
     dispatch(fetchOpportunities(buildParams()));
   }, [dispatch, viewConfig.key, buildParams]);
+
+  // Fetch trend data once
+  useEffect(() => {
+    if (!trends) dispatch(fetchTrendSummary());
+  }, [dispatch, trends]);
 
   const handleFilterChange = useCallback(
     (filters) => {
@@ -73,6 +90,15 @@ function StrategicViewPage() {
         <StrategicNav />
 
         <SectionBrief section={viewConfig.key} />
+
+        {/* Market Trends */}
+        {trends && VIEW_TREND_TYPES[viewConfig.key] && (
+          <div className={`grid gap-4 mb-4 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
+            {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
+              <TrendCard key={type} type={type} trendData={trends[type]} />
+            ))}
+          </div>
+        )}
 
         <UpgradePrompt />
 

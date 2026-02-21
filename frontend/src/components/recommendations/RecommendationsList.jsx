@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchRecommendations } from '../../services/recommendationService';
 import { useAdaptiveTracking } from '../../hooks/useAdaptiveTracking';
 
@@ -101,17 +102,13 @@ function RecommendationsList() {
                 {opp.value && <span>${Number(opp.value).toLocaleString()}</span>}
               </div>
             </div>
-            {opp.sourceUrl && (
-              <a
-                href={opp.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary hover:underline whitespace-nowrap"
-                onClick={() => trackRecommendationClick(opp.id, opp.type)}
-              >
-                View
-              </a>
-            )}
+            <Link
+              to={`/opportunities/${opp.id}`}
+              className="text-xs text-primary hover:underline whitespace-nowrap"
+              onClick={() => trackRecommendationClick(opp.id, opp.type)}
+            >
+              View
+            </Link>
           </div>
         ))}
       </div>
