@@ -25,7 +25,7 @@ async function generateDailySnapshot() {
         type: 'freelance',
         createdAt: { [Op.gte]: thirtyDaysAgo },
       },
-      attributes: ['id', 'value', 'sourceData', 'aiAnalysis', 'source'],
+      attributes: ['id', 'value', 'sourceData', 'aiAnalysis', 'source', 'tags'],
       raw: true,
     });
 
