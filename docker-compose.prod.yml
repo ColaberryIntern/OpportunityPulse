@@ -70,6 +70,7 @@ services:
       ADZUNA_APP_ID: ${ADZUNA_APP_ID}
       ADZUNA_APP_KEY: ${ADZUNA_APP_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3002}
+      BONFIRE_ENGINE_ENABLED: ${BONFIRE_ENGINE_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
