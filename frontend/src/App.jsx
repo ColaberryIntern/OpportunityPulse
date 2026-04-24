@@ -29,6 +29,7 @@ import ActionTrackerPage from './pages/ActionTrackerPage';
 import StrategicClustersPage from './pages/StrategicClustersPage';
 import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
 import FreelancePage from './pages/FreelancePage';
+import BonfirePage from './pages/BonfirePage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -266,6 +267,17 @@ function App() {
           element={
             <ProtectedLayout>
               <FreelancePage />
+            </ProtectedLayout>
+          }
+        />
+        {/* Bonfire Opportunity Engine (prototype — backend-gated by BONFIRE_ENGINE_ENABLED flag).
+            Route is always mounted; the backend returns 404 when the flag is off, and the
+            sidebar nav link is hidden based on a /bonfire/flag probe. */}
+        <Route
+          path="/bonfire"
+          element={
+            <ProtectedLayout>
+              <BonfirePage />
             </ProtectedLayout>
           }
         />

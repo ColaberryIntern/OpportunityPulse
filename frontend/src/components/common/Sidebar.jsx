@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { STRATEGIC_VIEWS } from '../../config/strategicNavConfig';
+import { fetchBonfireFlag } from '../../services/bonfireService';
 
 const NAV_SECTIONS = [
   {
@@ -58,6 +59,29 @@ function Sidebar({ open, onClose }) {
   const { user } = useSelector((state) => state.auth);
   const isAdmin = user?.role === 'admin';
 
+  // Bonfire nav link is probed from the backend flag, not hard-coded.
+  // Keeps the rest of the app oblivious to whether the prototype is on.
+  const [bonfireEnabled, setBonfireEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetchBonfireFlag().then((on) => { if (!cancelled) setBonfireEnabled(on); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Compose the final nav list — inject Bonfire into "Tools & Actions" only when enabled.
+  const navSections = NAV_SECTIONS.map((section) => {
+    if (bonfireEnabled && section.label === 'Tools & Actions') {
+      return {
+        ...section,
+        items: [
+          ...section.items,
+          { to: '/bonfire', label: '🔥 Bonfire', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.24 17 7.341 18.75 11.166 16.657 10.657 17.657 18.657z' },
+        ],
+      };
+    }
+    return section;
+  });
+
   const linkClasses = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium transition ${
       isActive
@@ -84,7 +108,7 @@ function Sidebar({ open, onClose }) {
         aria-label="Main navigation"
       >
         <nav className="flex flex-col gap-0.5 p-3 mt-2" aria-label="Primary navigation">
-          {NAV_SECTIONS.map((section, sIdx) => {
+          {navSections.map((section, sIdx) => {
             const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
             if (visibleItems.length === 0) return null;
 

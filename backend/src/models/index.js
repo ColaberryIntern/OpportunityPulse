@@ -56,6 +56,9 @@ const OpportunityClassification = require('./OpportunityClassification')(sequeli
 const OpportunityMultiTag = require('./OpportunityMultiTag')(sequelize);
 const ToolSignal = require('./ToolSignal')(sequelize);
 const FreelanceTrendSnapshot = require('./FreelanceTrendSnapshot')(sequelize);
+const BonfireOpportunity = require('./BonfireOpportunity')(sequelize);
+const BonfireOpportunityTag = require('./BonfireOpportunityTag')(sequelize);
+const BonfirePipeline = require('./BonfirePipeline')(sequelize);
 
 const models = {
   UserRole,
@@ -95,6 +98,9 @@ const models = {
   OpportunityMultiTag,
   ToolSignal,
   FreelanceTrendSnapshot,
+  BonfireOpportunity,
+  BonfireOpportunityTag,
+  BonfirePipeline,
 };
 
 // Set up associations

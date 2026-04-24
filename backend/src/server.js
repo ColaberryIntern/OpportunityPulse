@@ -256,6 +256,9 @@ app.use('/api/v1/freelance', require('./freelance/freelance.routes'));
 // Resume upload & AI skill extraction
 app.use('/api/v1/resume-upload', require('./resumeUpload/resumeUpload.routes'));
 
+// Bonfire Opportunity Engine (prototype, gated by BONFIRE_ENGINE_ENABLED env flag)
+app.use('/api/v1/bonfire', require('./bonfire/bonfire.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({
