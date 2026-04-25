@@ -42,6 +42,10 @@ deploy/nginx/active.conf
 backend/src/migrations/*.map
 backend/src/seeders/*.map
 
+# Bonfire scraper session cache (Playwright storageState + failure counter)
+.bonfire-session/
+backend/.bonfire-session/
+
 # Frontend build
 frontend/build/
 

@@ -1,0 +1,93 @@
+// Browser launch + context creation. All anti-detection settings live here so a
+// future change (e.g. trying playwright-extra-stealth) has exactly one touch point.
+//
+// IMPORTANT: never use `waitUntil: 'networkidle'` anywhere — Bonfire is a React SPA
+// and `networkidle` will never settle. All navigations use `domcontentloaded` and
+// explicit `waitForTimeout` calls per the Bonfire access guide.
+
+const fs = require('fs');
+const path = require('path');
+const { getScraperConfig } = require('./config');
+
+function loadStorageStateIfFresh() {
+  const cfg = getScraperConfig();
+  const file = path.join(cfg.storageDir, 'storageState.json');
+  if (!fs.existsSync(file)) return null;
+  const ageMs = Date.now() - fs.statSync(file).mtimeMs;
+  const ttlMs = cfg.sessionTtlMin * 60 * 1000;
+  if (ageMs > ttlMs) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function storageStatePath() {
+  const cfg = getScraperConfig();
+  return path.join(cfg.storageDir, 'storageState.json');
+}
+
+function ensureStorageDir() {
+  const cfg = getScraperConfig();
+  fs.mkdirSync(cfg.storageDir, { recursive: true });
+}
+
+async function launchBrowser({ headless } = {}) {
+  // Lazy require so unit tests that don't touch the browser don't pay the load cost
+  // and don't fail when Playwright's binary isn't installed in CI.
+  const { chromium } = require('playwright');
+  const cfg = getScraperConfig();
+  // Production runs on Alpine where Playwright's bundled Chromium doesn't work —
+  // the Dockerfile installs the system chromium and sets BONFIRE_CHROMIUM_PATH.
+  // Locally on macOS/Windows, leave this unset so Playwright uses its bundled binary.
+  const executablePath = process.env.BONFIRE_CHROMIUM_PATH || undefined;
+  return chromium.launch({
+    headless: headless == null ? cfg.headless : headless,
+    executablePath,
+    args: [
+      '--no-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+    ],
+  });
+}
+
+async function createContext(browser, { useStoredSession = true } = {}) {
+  const cfg = getScraperConfig();
+  ensureStorageDir();
+  const storageState = useStoredSession ? loadStorageStateIfFresh() : null;
+  return browser.newContext({
+    viewport: cfg.viewport,
+    userAgent: cfg.userAgent,
+    storageState: storageState || undefined,
+  });
+}
+
+async function persistStorageState(context) {
+  ensureStorageDir();
+  await context.storageState({ path: storageStatePath() });
+}
+
+function clearStorageState() {
+  const file = storageStatePath();
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+}
+
+// Promise-based jitter helper. Call between navigations to avoid burst patterns.
+async function jitter(baseMs, maxExtraMs) {
+  const cfg = getScraperConfig();
+  const max = maxExtraMs == null ? cfg.defaultJitterMaxMs : maxExtraMs;
+  const delay = baseMs + Math.floor(Math.random() * max);
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+module.exports = {
+  launchBrowser,
+  createContext,
+  persistStorageState,
+  clearStorageState,
+  loadStorageStateIfFresh,
+  storageStatePath,
+  jitter,
+};

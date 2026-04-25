@@ -75,4 +75,8 @@ router.post(
   controller.generateStrategy,
 );
 
+// ---- Scraper subsystem (Playwright). Has its own internal flag — when the
+//      scraper is disabled, /scrape/* returns 404 even though /api/bonfire is on.
+router.use('/scrape', require('./scraper.routes'));
+
 module.exports = router;

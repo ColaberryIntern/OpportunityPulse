@@ -106,6 +106,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'enrichment_hash',
     },
+    externalId: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+      field: 'external_id',
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,
@@ -115,6 +120,9 @@ module.exports = (sequelize) => {
       { fields: ['priority_score'] },
       { fields: ['close_date'] },
       { fields: ['enriched_at'] },
+      // Partial unique index lives in the migration (Sequelize doesn't express the
+      // WHERE clause cleanly here). This entry documents intent for sync({alter:true}).
+      { fields: ['external_id'] },
     ],
   });
 

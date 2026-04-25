@@ -76,6 +76,7 @@ function validateRow(row, index) {
     closeDate: normalizeCloseDate(row.close_date),
     sourceUrl: row.source_url ? String(row.source_url).trim() : null,
     rawText: truncateRawText(row.raw_text || row.description || row.title),
+    externalId: row.external_id ? String(row.external_id).trim().slice(0, 200) : null,
   };
   return { ok: true, row: normalized };
 }

@@ -69,6 +69,23 @@ const env = {
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
+  bonfire: {
+    engineEnabled: String(process.env.BONFIRE_ENGINE_ENABLED || '').toLowerCase() === 'true',
+    scraper: {
+      enabled: String(process.env.BONFIRE_SCRAPER_ENABLED || '').toLowerCase() === 'true',
+      cronEnabled: String(process.env.BONFIRE_SCRAPER_CRON_ENABLED || '').toLowerCase() === 'true',
+      cron: process.env.BONFIRE_SCRAPER_CRON || '0 7 * * 1,4',
+      headless: String(process.env.BONFIRE_SCRAPER_HEADLESS || 'true').toLowerCase() !== 'false',
+      username: process.env.BONFIRE_SCRAPER_USERNAME || '',
+      password: process.env.BONFIRE_SCRAPER_PASSWORD || '',
+      phase: (process.env.BONFIRE_SCRAPER_PHASE || 'C').toUpperCase(),
+      agencyAllowlist: (process.env.BONFIRE_SCRAPER_AGENCY_ALLOWLIST || '')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+      storageDir: process.env.BONFIRE_SCRAPER_STORAGE_DIR || './.bonfire-session',
+      sessionTtlMin: parseInt(process.env.BONFIRE_SCRAPER_SESSION_TTL_MIN, 10) || 25,
+      perAgencyDelayMs: parseInt(process.env.BONFIRE_SCRAPER_PER_AGENCY_DELAY_MS, 10) || 4000,
+    },
+  },
 };
 
 module.exports = { env, validateEnv };

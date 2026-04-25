@@ -94,6 +94,73 @@ async function ingestJsonArray(arr) {
   return insertNormalizedRows(arr);
 }
 
+// Scraper-only path: idempotent upsert keyed on external_id.
+//
+// The partial unique index `idx_bonfire_opps_external_id` (created in migration
+// 20260425000001) covers the conflict target. Rows without external_id fall through
+// to plain insert (NULLs do not collide under partial unique indexes).
+//
+// updateOnDuplicate deliberately EXCLUDES enrichment + scoring fields. Re-scraping
+// must NOT clobber AI work — `enrichAllUnenriched()` only picks up rows with
+// enrichedAt IS NULL, and we preserve that invariant by not touching enrichment columns.
+async function upsertJsonArray(arr) {
+  if (!Array.isArray(arr)) throw new Error('payload must be an array');
+  const errors = [];
+  const accepted = [];
+  arr.forEach((raw, i) => {
+    const check = validateRow(raw, i);
+    if (!check.ok) errors.push({ index: i, reason: check.reason });
+    else accepted.push(check.row);
+  });
+  if (!accepted.length) {
+    return { processed: 0, inserted: 0, updated: 0, skippedNoExternalId: 0, errors };
+  }
+
+  // Split: rows with external_id go through upsert, rows without go through plain insert.
+  // Without external_id we can't dedupe — the scraper logs a warning when this happens.
+  const withId = accepted.filter((r) => !!r.externalId);
+  const withoutId = accepted.filter((r) => !r.externalId);
+
+  let upsertCount = 0;
+  if (withId.length) {
+    // Postgres ON CONFLICT needs an explicit conflict target. Without
+    // conflictAttributes Sequelize falls back to the primary key (id),
+    // which forces the duplicate-handling path to fail with a unique-constraint
+    // error on external_id. Naming the target lets the partial unique index
+    // do its job.
+    await BonfireOpportunity.bulkCreate(withId, {
+      conflictAttributes: ['externalId'],
+      updateOnDuplicate: [
+        'title', 'agency', 'description', 'categoryRaw',
+        'closeDate', 'sourceUrl', 'rawText', 'updatedAt',
+      ],
+    });
+    upsertCount = withId.length;
+  }
+
+  let plainInserted = 0;
+  if (withoutId.length) {
+    logger.warn('Bonfire upsert: rows missing external_id, inserting without dedupe', {
+      count: withoutId.length,
+    });
+    const created = await BonfireOpportunity.bulkCreate(withoutId, { returning: true });
+    plainInserted = created.length;
+  }
+
+  logger.info('Bonfire upsert complete', {
+    processed: accepted.length,
+    upserted: upsertCount,
+    insertedNoId: plainInserted,
+    errors: errors.length,
+  });
+  return {
+    processed: accepted.length,
+    upserted: upsertCount,
+    insertedWithoutExternalId: plainInserted,
+    errors,
+  };
+}
+
 async function ingestCsvBuffer(buffer) {
   const text = buffer.toString('utf8');
   const rows = parseCsv(text);
@@ -183,6 +250,7 @@ module.exports = {
   listOpportunities,
   getOpportunity,
   ingestJsonArray,
+  upsertJsonArray,
   ingestCsvBuffer,
   ingestJsonBuffer,
   enrichOne,

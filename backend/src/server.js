@@ -326,6 +326,11 @@ async function startServer() {
       // Start Freelance Demand Intelligence scheduler (ingestion, classification+scoring, trends)
       const { startFreelanceScheduler } = require('./freelance/freelance.scheduler');
       startFreelanceScheduler();
+
+      // Start Bonfire scraper scheduler (no-op unless both BONFIRE_SCRAPER_ENABLED
+      // and BONFIRE_SCRAPER_CRON_ENABLED are true).
+      const { startBonfireScraperScheduler } = require('./bonfire/scraper.scheduler');
+      startBonfireScraperScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
