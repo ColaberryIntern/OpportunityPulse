@@ -29,9 +29,31 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
               {row.agency || 'Unknown agency'}
               {row.aiCategory && <> · <span className="font-medium">{row.aiCategory}</span></>}
             </div>
+            {row.sourceUrl && (
+              <a
+                href={row.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+              >
+                View Original RFP on Bonfire
+                <span aria-hidden="true">↗</span>
+              </a>
+            )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none">×</button>
         </div>
+
+        {row.overview && (
+          <div className="mb-4 p-3 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+            <div className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-300 mb-1 font-semibold">
+              What this is
+            </div>
+            <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line leading-relaxed">
+              {row.overview}
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
           <Stat label="Priority" value={row.priorityScore ?? '—'} />
@@ -152,16 +174,6 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
             >
               Generate Strategy
             </button>
-            {row.sourceUrl && (
-              <a
-                href={row.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50"
-              >
-                🔗 Source
-              </a>
-            )}
           </div>
         )}
       </aside>

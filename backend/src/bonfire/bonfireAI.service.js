@@ -29,6 +29,10 @@ function buildEnrichSystemPrompt() {
     'Return JSON ONLY. Do not echo the source material.',
     'Fields you must return:',
     '  ai_category: one of ' + CATEGORIES.map((c) => `"${c}"`).join(', '),
+    '  overview: 2-3 plain-English sentences explaining what the project is asking',
+    '    for. Cover: (a) what the buyer needs done, (b) the typical scope or',
+    '    deliverables, (c) what kind of vendor would bid. Use the title, agency,',
+    '    and category to infer when source text is thin. No corporate buzzwords.',
     '  fit_score: integer 0-100 (how well this matches Colaberry capabilities)',
     '  automation_potential: integer 0-100 (how amenable to AI/automation)',
     '  repeatability: integer 0-100 (how reusable the solution is across clients)',
@@ -146,6 +150,13 @@ async function enrichOpportunity(bonfireOp, { force = false } = {}) {
     ? ai.tags.filter((t) => typeof t === 'string').map((t) => t.trim().slice(0, 100)).filter(Boolean).slice(0, 5)
     : [];
 
+  // 2-3 sentence plain-language explanation. Trimmed defensively — the
+  // schema column is TEXT but we don't want a runaway 10k-char essay either.
+  const overview =
+    typeof ai.overview === 'string' && ai.overview.trim()
+      ? ai.overview.trim().slice(0, 1500)
+      : null;
+
   const fields = {
     aiCategory,
     fitScore: fit_score,
@@ -155,6 +166,7 @@ async function enrichOpportunity(bonfireOp, { force = false } = {}) {
     repeatability,
     easeOfEntry: ease_of_entry,
     recommendedProduct: recommended_product,
+    overview,
     signals,
     enrichedAt: new Date(),
     enrichmentVersion: ENRICHMENT_VERSION,

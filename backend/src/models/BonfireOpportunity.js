@@ -111,6 +111,10 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'external_id',
     },
+    overview: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,

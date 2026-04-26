@@ -99,10 +99,10 @@ function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy }) {
                             href={r.sourceUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-accent hover:underline"
-                            title="Admin-only: open source link"
+                            className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                            title="Open original RFP on Bonfire"
                           >
-                            🔗
+                            Bonfire ↗
                           </a>
                         </>
                       )}
