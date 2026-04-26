@@ -23,7 +23,10 @@ function getScraperConfig() {
     loginUrl: 'https://account.bonfirehub.com/login',
     dashboardUrl: 'https://account.bonfirehub.com/settings/dashboard',
     vendorHubUrl: 'https://vendor.bonfirehub.com/',
-    vendorNetworkUrl: 'https://vendor.bonfirehub.com/network',
+    // Bonfire renamed the My Network route from /network to /agencies somewhere
+    // along the way. /network now 404s ("Page Not Found"). Don't change this
+    // back without re-verifying with bonfire-discover-agencies.js.
+    vendorNetworkUrl: 'https://vendor.bonfirehub.com/agencies',
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
       '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

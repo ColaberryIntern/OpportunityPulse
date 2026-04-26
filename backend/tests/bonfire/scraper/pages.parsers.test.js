@@ -110,6 +110,33 @@ describe('pages/networkList API mappers', () => {
     expect(networkList.recordFromApi({})).toBeNull();
   });
 
+  it('recordFromApi handles the live Bonfire shape with nested organization.domain', () => {
+    const live = {
+      id: 2683932,
+      contactOrganizationName: 'Alexander-Williams DESIGN HOUSE LLC',
+      isActive: true,
+      dateJoinedOrganization: '2026-02-25 04:00:23',
+      organization: {
+        id: 131,
+        name: 'University of Texas - Dallas',
+        domain: 'utdallas.bonfirehub.com',
+      },
+    };
+    expect(networkList.recordFromApi(live)).toMatchObject({
+      subdomain: 'utdallas',
+      name: 'University of Texas - Dallas',
+      status: 'Active',
+      registeredAt: '2026-02-25 04:00:23',
+    });
+  });
+
+  it('recordFromApi drops inactive registrations', () => {
+    expect(networkList.recordFromApi({
+      isActive: false,
+      organization: { name: 'Foo', domain: 'foo.bonfirehub.com' },
+    })).toBeNull();
+  });
+
   it('findAgenciesArray finds the agencies array deep in a payload', () => {
     const payload = { data: { network: { agencies: [{ subdomain: 'a' }, { subdomain: 'b' }] } } };
     const arr = networkList.findAgenciesArray(payload);

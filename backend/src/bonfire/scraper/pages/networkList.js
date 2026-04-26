@@ -23,20 +23,34 @@ function extractSubdomain(href) {
   return sub;
 }
 
-// Pull subdomain + name from a single API record. We've seen multiple shapes —
-// be permissive about field names.
+// Pull subdomain + name from a single API record. The shape that Bonfire
+// actually returns from /v1.0/vendors/me/agencies?region=us|ca|eu is:
+//   { id, region, contactOrganizationName, ..., isActive,
+//     organization: { id, name, domain: "utdallas.bonfirehub.com", ... } }
+// Older shapes (subdomain, shortName) are kept as fallbacks for resilience.
 function recordFromApi(rec) {
   if (!rec || typeof rec !== 'object') return null;
+  // Skip inactive registrations — they wouldn't have biddable opportunities.
+  if (rec.isActive === false) return null;
+
   const subdomain =
-    rec.subdomain
+    (rec.organization && rec.organization.domain && extractSubdomain(`https://${rec.organization.domain}`))
+    || rec.subdomain
     || (rec.shortName && String(rec.shortName).toLowerCase())
     || (rec.url && extractSubdomain(rec.url))
     || (rec.portalUrl && extractSubdomain(rec.portalUrl))
     || (rec.hostname && extractSubdomain(`https://${rec.hostname}`));
   if (!subdomain) return null;
-  const name = rec.name || rec.agencyName || rec.organizationName || rec.displayName || subdomain;
-  const status = rec.status || rec.registrationStatus || rec.state || null;
-  const registeredAt = rec.createdAt || rec.registeredAt || rec.dateCreated || null;
+
+  const name =
+    (rec.organization && rec.organization.name)
+    || rec.name
+    || rec.agencyName
+    || rec.organizationName
+    || rec.displayName
+    || subdomain;
+  const status = rec.status || rec.registrationStatus || rec.state || (rec.isActive ? 'Active' : null);
+  const registeredAt = rec.dateJoinedOrganization || rec.createdAt || rec.registeredAt || rec.dateCreated || null;
   return { subdomain, name: String(name).trim(), status, registeredAt };
 }
 
@@ -82,49 +96,49 @@ function parseHtml(html) {
   return agencies;
 }
 
-// Live-page parser: opens its OWN page so it can attach the response listener
-// before navigation (the agency XHR fires during hydration — too late if we
-// listen post-goto). Falls back to DOM scrape if the API call doesn't surface.
+// Live-page parser. The Bonfire UI only fires the agencies XHR for the user's
+// home region — to get the full set we explicitly fetch all 3 regions
+// (us, ca, eu) via in-page fetch (so cookies + auth headers are inherited).
+// DOM scraping kept as last-resort fallback.
+const AGENCY_REGIONS = ['us', 'ca', 'eu'];
+const AGENCY_API_BASE =
+  'https://common-production-api-global.bonfirehub.com/v1.0/vendors/me/agencies';
+
 async function parse(context, url, { navTimeoutMs = 30000, postNavWaitMs = 8000 } = {}) {
   const page = await context.newPage();
-  const apiResponses = [];
-  const handler = async (response) => {
-    try {
-      const respUrl = response.url();
-      if (!API_URL_HINT_RE.test(respUrl)) return;
-      const ct = String(response.headers()['content-type'] || '');
-      if (!ct.includes('json')) return;
-      const body = await response.json().catch(() => null);
-      if (body) apiResponses.push({ url: respUrl, body });
-    } catch {
-      // ignore — interception is best-effort
-    }
-  };
-  page.on('response', handler);
-
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: navTimeoutMs });
     await page.waitForTimeout(postNavWaitMs);
 
-    // Try API path first.
-    for (const { body } of apiResponses) {
-      const arr = findAgenciesArray(body);
-      if (arr) {
-        const out = arr.map(recordFromApi).filter(Boolean);
-        const seen = new Set();
-        const dedup = [];
-        for (const r of out) {
-          if (!seen.has(r.subdomain)) { seen.add(r.subdomain); dedup.push(r); }
-        }
-        if (dedup.length) return dedup;
+    // Pull all 3 regions in one in-page evaluate.
+    const apiAll = await page.evaluate(async ({ base, regions }) => {
+      const out = [];
+      for (const region of regions) {
+        try {
+          const r = await fetch(`${base}?region=${region}`, { credentials: 'include' });
+          if (r.ok) {
+            const arr = await r.json();
+            if (Array.isArray(arr)) for (const a of arr) out.push(a);
+          }
+        } catch { /* ignore one region failing */ }
       }
+      return out;
+    }, { base: AGENCY_API_BASE, regions: AGENCY_REGIONS });
+
+    if (Array.isArray(apiAll) && apiAll.length) {
+      const out = apiAll.map(recordFromApi).filter(Boolean);
+      const seen = new Set();
+      const dedup = [];
+      for (const r of out) {
+        if (!seen.has(r.subdomain)) { seen.add(r.subdomain); dedup.push(r); }
+      }
+      if (dedup.length) return dedup;
     }
 
-    // Fallback: parse whatever DOM we got.
+    // Fallback: DOM scrape if the API path didn't yield anything.
     const html = await page.content();
     return parseHtml(html);
   } finally {
-    page.off('response', handler);
     await page.close().catch(() => {});
   }
 }
