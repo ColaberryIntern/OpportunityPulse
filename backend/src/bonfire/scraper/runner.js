@@ -131,8 +131,21 @@ async function runScrape(opts = {}, deps = {}) {
       targetAgencies = agencies;
     }
 
-    for (const agency of targetAgencies) {
+    logger.info('Bonfire scrape: starting agency loop', {
+      total: targetAgencies.length,
+      phase,
+    });
+
+    for (let idx = 0; idx < targetAgencies.length; idx++) {
+      const agency = targetAgencies[idx];
       summary.agenciesAttempted += 1;
+      // Per-agency progress log — also keeps long SSH sessions from going
+      // silent for 60+s (which can trigger client-side timeouts).
+      logger.info('Bonfire scrape: agency', {
+        index: idx + 1,
+        total: targetAgencies.length,
+        subdomain: agency.subdomain,
+      });
       await $.sleep(cfg.perAgencyDelayMs + Math.floor(Math.random() * 2000));
 
       let portal;
