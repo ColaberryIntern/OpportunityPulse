@@ -63,6 +63,11 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'business_viability',
     },
+    sourceHash: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      field: 'source_hash',
+    },
     runId: { type: DataTypes.STRING(60), allowNull: false, field: 'run_id' },
     generatedForDate: {
       type: DataTypes.DATEONLY,

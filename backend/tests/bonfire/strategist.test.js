@@ -49,6 +49,50 @@ describe('strategist.clusterCandidates', () => {
   });
 });
 
+describe('strategist.computeSourceHash', () => {
+  it('produces a stable 64-char hex hash', () => {
+    const opps = [
+      { id: 'a', enrichmentHash: 'h1' },
+      { id: 'b', enrichmentHash: 'h2' },
+    ];
+    const h = strategist.computeSourceHash(opps);
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('is order-independent (same opps in different order = same hash)', () => {
+    const a = strategist.computeSourceHash([
+      { id: 'a', enrichmentHash: 'h1' },
+      { id: 'b', enrichmentHash: 'h2' },
+    ]);
+    const b = strategist.computeSourceHash([
+      { id: 'b', enrichmentHash: 'h2' },
+      { id: 'a', enrichmentHash: 'h1' },
+    ]);
+    expect(a).toBe(b);
+  });
+
+  it('changes when an opportunity is re-enriched (enrichmentHash differs)', () => {
+    const before = strategist.computeSourceHash([
+      { id: 'a', enrichmentHash: 'h1' },
+    ]);
+    const after = strategist.computeSourceHash([
+      { id: 'a', enrichmentHash: 'h1-new' },
+    ]);
+    expect(before).not.toBe(after);
+  });
+
+  it('changes when the source set membership changes', () => {
+    const small = strategist.computeSourceHash([
+      { id: 'a', enrichmentHash: 'h1' },
+    ]);
+    const grown = strategist.computeSourceHash([
+      { id: 'a', enrichmentHash: 'h1' },
+      { id: 'b', enrichmentHash: 'h2' },
+    ]);
+    expect(small).not.toBe(grown);
+  });
+});
+
 describe('strategist.isValidStrategicShape', () => {
   const validBase = {
     title: 'AI-Driven Construction RFP Triage',

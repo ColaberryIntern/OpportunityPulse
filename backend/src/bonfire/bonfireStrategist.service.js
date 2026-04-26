@@ -38,6 +38,12 @@ const STANDALONE_THRESHOLDS = {
 
 const CLUSTER_MIN_SIZE = 3;
 
+// Cache freshness: if a strategic opp with the same source_hash exists and
+// was synthesized within this many days, reuse it instead of paying for a
+// new AI call. 14 days matches the candidate-recency window — a strategy
+// generated for a bid that's still fresh in the candidate pool stays valid.
+const CACHE_FRESHNESS_DAYS = 14;
+
 // -----------------------------------------------------------------------
 // Candidate selection
 // -----------------------------------------------------------------------
@@ -233,10 +239,12 @@ async function synthesizeStrategic(targetType, target, { aiClient, runId, genera
 
   let raw;
   try {
+    // 800 tokens covers the JSON output comfortably (typical = 400-600).
+    // The previous 1200 was wasteful headroom that we paid for every call.
     const response = await aiClient.chat(
       buildSystemPrompt(),
       userPrompt,
-      { temperature: 0.3, maxTokens: 1200 }
+      { temperature: 0.3, maxTokens: 800 }
     );
     raw = response.content;
   } catch (e) {
@@ -260,15 +268,15 @@ async function synthesizeStrategic(targetType, target, { aiClient, runId, genera
     return null;
   }
 
-  const sourceIds = targetType === 'standalone'
-    ? [target.id]
-    : target.opps.map((o) => o.id);
+  const sourceOpps = targetType === 'standalone' ? [target] : target.opps;
+  const sourceIds = sourceOpps.map((o) => o.id);
 
   return {
     title: String(parsed.title).slice(0, 500),
     summary: String(parsed.summary),
     patternType: targetType,
     sourceOpportunityIds: sourceIds,
+    sourceHash: computeSourceHash(sourceOpps),
     strategicScore: clamp(Number(parsed.strategic_score), 0, 100),
     money: parsed.money,
     roi: parsed.roi,
@@ -284,6 +292,31 @@ async function synthesizeStrategic(targetType, target, { aiClient, runId, genera
 function clamp(n, lo, hi) {
   if (!Number.isFinite(n)) return null;
   return Math.max(lo, Math.min(hi, Math.round(n)));
+}
+
+// Compute a content-stable hash of the source set. Two runs that look at the
+// same opportunities (same IDs, same enrichment state) produce identical
+// hashes — so the second run can short-circuit instead of paying for AI.
+// Including enrichmentHash in the input means a re-enriched bid invalidates
+// its cached strategy.
+function computeSourceHash(opps) {
+  const items = opps
+    .map((o) => `${o.id}:${o.enrichmentHash || ''}`)
+    .sort();
+  return crypto.createHash('sha256').update(items.join('|')).digest('hex');
+}
+
+// Look up a still-fresh cached strategic opp for this source set.
+async function findCachedStrategic(sourceHash) {
+  if (!sourceHash) return null;
+  const cutoff = new Date(Date.now() - CACHE_FRESHNESS_DAYS * 24 * 60 * 60 * 1000);
+  return BonfireStrategicOpportunity.findOne({
+    where: {
+      sourceHash,
+      createdAt: { [Op.gte]: cutoff },
+    },
+    order: [['createdAt', 'DESC']],
+  });
 }
 
 // -----------------------------------------------------------------------
@@ -324,6 +357,7 @@ async function runStrategist({ now = new Date(), force = false } = {}) {
   const aiClient = getAIClient();
   const generated = [];
   let rejected = 0;
+  let cacheHits = 0;
 
   // Generate cluster syntheses first (they're higher leverage), then fill
   // remainder with standalones until we hit MIN_OPPS_PER_RUN (or MAX cap).
@@ -334,35 +368,52 @@ async function runStrategist({ now = new Date(), force = false } = {}) {
 
   for (const t of targets) {
     if (generated.length >= MAX_OPPS_PER_RUN) break;
+
+    // Cache check — skip the expensive AI call when source content is unchanged.
+    const sourceOpps = t.type === 'standalone' ? [t.payload] : t.payload.opps;
+    const sourceHash = computeSourceHash(sourceOpps);
+    const cached = await findCachedStrategic(sourceHash);
+    if (cached) {
+      // Touch updatedAt so the UI can show "still active" for fresh patterns.
+      cached.changed('updatedAt', true);
+      cached.updatedAt = new Date();
+      await cached.save({ silent: false });
+      cacheHits += 1;
+      // Don't add to `generated` — those are NEW rows we'll bulkCreate below.
+      // The cached row is already in the DB and visible in the UI.
+      continue;
+    }
+
     const out = await synthesizeStrategic(t.type, t.payload, {
       aiClient, runId, generatedForDate,
     });
     if (out) generated.push(out);
     else rejected += 1;
-    // Soft early exit once we have plenty.
-    if (generated.length >= MIN_OPPS_PER_RUN
-        && generated.length >= MAX_OPPS_PER_RUN * 0.75) {
-      // keep going up to MAX
-    }
   }
 
-  if (generated.length === 0) {
+  if (generated.length === 0 && cacheHits === 0) {
     logger.warn('Strategist: no strategic opportunities passed validation', { rejected });
-    return { runId, generated: 0, rejected };
+    return { runId, generated: 0, cacheHits, rejected };
   }
 
-  await BonfireStrategicOpportunity.bulkCreate(generated);
+  if (generated.length > 0) {
+    await BonfireStrategicOpportunity.bulkCreate(generated);
+  }
+
   logger.info('Strategist: persisted batch', {
     runId,
     count: generated.length,
+    cacheHits,
     rejected,
     standaloneCount: generated.filter((g) => g.patternType === 'standalone').length,
     clusterCount: generated.filter((g) => g.patternType === 'cluster').length,
+    estimated_cost_usd: (generated.length * 0.05).toFixed(2),
   });
 
   return {
     runId,
     generated: generated.length,
+    cacheHits,
     rejected,
     standaloneCount: generated.filter((g) => g.patternType === 'standalone').length,
     clusterCount: generated.filter((g) => g.patternType === 'cluster').length,
@@ -404,12 +455,15 @@ module.exports = {
   selectCandidates,
   clusterCandidates,
   isValidStrategicShape,
+  computeSourceHash,
+  findCachedStrategic,
   listStrategic,
   getStrategic,
   updateStrategicStatus,
   CANDIDATE_FILTERS,
   STANDALONE_THRESHOLDS,
   CLUSTER_MIN_SIZE,
+  CACHE_FRESHNESS_DAYS,
   MIN_OPPS_PER_RUN,
   MAX_OPPS_PER_RUN,
 };
