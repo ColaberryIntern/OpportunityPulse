@@ -24,12 +24,27 @@ function BonfirePage() {
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState(null);
+  // Pagination + sort. Default order matches the backend default (priority_desc)
+  // so refreshing without changing anything yields the same view as before.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sort, setSort] = useState('priority_desc');
+
+  // Reset to page 1 whenever filters or sort change — otherwise users can land
+  // on a non-existent page (e.g., page 5 of 1).
+  useEffect(() => { setPage(1); }, [filters, sort, pageSize]);
 
   const params = useMemo(() => {
-    const out = { limit: 50, offset: 0 };
+    const out = {
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      order: sort,
+    };
     Object.entries(filters).forEach(([k, v]) => { if (v !== '' && v != null) out[k] = v; });
     return out;
-  }, [filters]);
+  }, [filters, page, pageSize, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +154,65 @@ function BonfirePage() {
       )}
 
       <BonfireFilters value={filters} onChange={setFilters} />
+
+      {/* Sort + page-size + pagination controls. Default order keeps the
+          highest-priority opportunities at the top; users can swap. */}
+      <div className="flex items-center justify-between flex-wrap gap-3 px-1">
+        <div className="flex items-center gap-3 text-sm">
+          <label className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+            Sort:
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1 text-sm"
+            >
+              <option value="priority_desc">Priority (high → low)</option>
+              <option value="priority_asc">Priority (low → high)</option>
+              <option value="close_asc">Close date (soonest first)</option>
+              <option value="created_desc">Recently added</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+            Per page:
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1 text-sm"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </label>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-600 dark:text-gray-400">
+            {total === 0
+              ? '0 results'
+              : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+          </span>
+          <button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            ← Prev
+          </button>
+          <span className="text-gray-600 dark:text-gray-400 text-xs whitespace-nowrap">
+            Page {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
 
       {err && (
         <div className="p-3 rounded bg-red-50 dark:bg-red-900/30 text-sm text-red-700 dark:text-red-300">
