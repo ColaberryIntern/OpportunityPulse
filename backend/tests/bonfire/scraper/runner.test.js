@@ -8,6 +8,15 @@ jest.mock('../../../src/bonfire/bonfire.service', () => ({
     processed: 0, succeeded: 0, skipped: 0, failed: 0, results: [],
   }),
 }));
+// Mock models so the runner's lazy BonfireAgency lookup doesn't try to
+// connect to Postgres in unit tests.
+jest.mock('../../../src/models', () => ({
+  sequelize: {},
+  BonfireAgency: {
+    findAll: jest.fn().mockResolvedValue([]),
+    upsert: jest.fn().mockResolvedValue([{}, true]),
+  },
+}));
 // Mock escalation so failure-counter writes don't touch the filesystem.
 jest.mock('../../../src/bonfire/scraper/escalation', () => ({
   recordSuccess: jest.fn(),
@@ -28,6 +37,8 @@ jest.mock('../../../src/bonfire/scraper/config', () => ({
     sessionTtlMin: 25,
     perAgencyDelayMs: 1, // fast tests
     autoEnrich: false,   // unit tests don't exercise enrichment path by default
+    agencyFreshnessHours: 0, // disabled by default in tests
+    shuffleAgencies: false,  // deterministic order by default in tests
     loginUrl: 'https://account.bonfirehub.com/login',
     dashboardUrl: 'https://account.bonfirehub.com/settings/dashboard',
     vendorHubUrl: 'https://vendor.bonfirehub.com/',
@@ -259,6 +270,70 @@ describe('runner.runScrape', () => {
       sleep: () => Promise.resolve(),
     });
     expect(enrichSpy).not.toHaveBeenCalled();
+  });
+
+  it('skip-if-recent: agencies scraped within freshness window are not visited', async () => {
+    const context = makeContext();
+    const recentTs = new Date(Date.now() - 24 * 60 * 60 * 1000); // 1 day ago
+    const findAgencyState = jest.fn().mockResolvedValue([
+      { subdomain: 'fresh-a', lastScrapedAt: recentTs, consecutiveBlocks: 0 },
+      { subdomain: 'fresh-b', lastScrapedAt: recentTs, consecutiveBlocks: 0 },
+      // 'stale-c' has no row -> never scraped, should run
+    ]);
+    const openSpy = jest.fn().mockResolvedValue({ page: makePage(), blocked: false });
+    const parseSpy = jest.fn().mockResolvedValue({ records: [], blocked: false });
+    const upsertSpy = jest.fn();
+
+    const summary = await runScrape({ phase: 'C', agencyFreshnessHours: 72 }, {
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({ counts: {}, aiRecommended: [] }),
+      parseNetwork: jest.fn().mockResolvedValue([
+        { subdomain: 'fresh-a', name: 'A' },
+        { subdomain: 'fresh-b', name: 'B' },
+        { subdomain: 'stale-c', name: 'C' },
+      ]),
+      openAgencyPortal: openSpy,
+      parseAgencyOpps: parseSpy,
+      upsert: upsertSpy,
+      findAgencyState,
+      upsertAgency: jest.fn(),
+      sleep: () => Promise.resolve(),
+    });
+
+    expect(summary.agenciesAttempted).toBe(1); // only stale-c
+    expect(summary.agenciesSkippedFresh).toHaveLength(2);
+    expect(summary.agenciesSkippedFresh.map((a) => a.subdomain).sort()).toEqual(['fresh-a', 'fresh-b']);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy.mock.calls[0][1]).toBe('stale-c');
+  });
+
+  it('persists per-agency outcome via upsertAgency dep', async () => {
+    const context = makeContext();
+    const upsertAgencySpy = jest.fn();
+    await runScrape({ phase: 'C' }, {
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({ counts: {}, aiRecommended: [] }),
+      parseNetwork: jest.fn().mockResolvedValue([{ subdomain: 'a', name: 'A' }]),
+      openAgencyPortal: jest.fn().mockResolvedValue({ page: makePage(), blocked: false }),
+      parseAgencyOpps: jest.fn().mockResolvedValue({
+        records: [{ refNumber: 'R1', projectName: 'P1', status: 'Open' }],
+        blocked: false,
+      }),
+      findAgencyState: jest.fn().mockResolvedValue([]),
+      upsertAgency: upsertAgencySpy,
+      sleep: () => Promise.resolve(),
+    });
+    expect(upsertAgencySpy).toHaveBeenCalledTimes(1);
+    const persisted = upsertAgencySpy.mock.calls[0][0];
+    expect(persisted.subdomain).toBe('a');
+    expect(persisted.lastScrapedAt).toBeInstanceOf(Date);
+    expect(persisted.lastSucceededAt).toBeInstanceOf(Date);
+    expect(persisted.lastOpenCount).toBe(1);
+    expect(persisted.consecutiveBlocks).toBe(0);
   });
 
   it('escalates and surfaces error when ensureLoggedIn throws', async () => {

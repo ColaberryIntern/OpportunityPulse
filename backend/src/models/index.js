@@ -59,6 +59,7 @@ const FreelanceTrendSnapshot = require('./FreelanceTrendSnapshot')(sequelize);
 const BonfireOpportunity = require('./BonfireOpportunity')(sequelize);
 const BonfireOpportunityTag = require('./BonfireOpportunityTag')(sequelize);
 const BonfirePipeline = require('./BonfirePipeline')(sequelize);
+const BonfireAgency = require('./BonfireAgency')(sequelize);
 
 const models = {
   UserRole,
@@ -101,6 +102,7 @@ const models = {
   BonfireOpportunity,
   BonfireOpportunityTag,
   BonfirePipeline,
+  BonfireAgency,
 };
 
 // Set up associations

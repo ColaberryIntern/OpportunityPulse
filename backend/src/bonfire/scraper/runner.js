@@ -3,6 +3,7 @@
 
 const logger = require('../../logging/logger');
 const service = require('../bonfire.service');
+const models = require('../../models');
 const { getScraperConfig } = require('./config');
 const { ensureLoggedIn, openAgencyPortal } = require('./session');
 const { jitter } = require('./browser');
@@ -11,6 +12,66 @@ const networkList = require('./pages/networkList');
 const agencyOpportunities = require('./pages/agencyOpportunities');
 const normalize = require('./normalize');
 const escalation = require('./escalation');
+
+// Fisher-Yates shuffle. Returns a NEW array; never mutates input.
+function shuffleCopy(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Look up per-agency state. Returns a map { subdomain -> { lastScrapedAt, ... } }.
+// Defensive: returns {} if the table doesn't exist yet (migration hasn't run).
+async function loadAgencyState(subdomains, deps) {
+  if (!subdomains.length) return {};
+  const fetch = deps.findAgencyState || (async (subs) => {
+    if (!models.BonfireAgency) return [];
+    return models.BonfireAgency.findAll({ where: { subdomain: subs } });
+  });
+  try {
+    const rows = await fetch(subdomains);
+    const out = {};
+    for (const r of rows) {
+      out[r.subdomain] = {
+        lastScrapedAt: r.lastScrapedAt,
+        consecutiveBlocks: r.consecutiveBlocks || 0,
+      };
+    }
+    return out;
+  } catch (e) {
+    logger.warn('Bonfire scrape: agency-state lookup failed; treating all as fresh', { error: e.message });
+    return {};
+  }
+}
+
+// Persist a per-agency outcome. Best-effort — failure to write doesn't abort
+// the scrape (the opportunity rows are the load-bearing data).
+async function recordAgencyOutcome(agency, outcome, deps) {
+  const upsert = deps.upsertAgency || (async (rec) => {
+    if (!models.BonfireAgency) return;
+    await models.BonfireAgency.upsert(rec);
+  });
+  try {
+    await upsert({
+      subdomain: agency.subdomain,
+      name: agency.name,
+      region: agency.region || null,
+      lastScrapedAt: new Date(),
+      lastSucceededAt: outcome.blocked ? null : new Date(),
+      lastOpenCount: outcome.openCount != null ? outcome.openCount : 0,
+      consecutiveBlocks: outcome.blocked ? (outcome.priorBlocks + 1) : 0,
+      lastBlockReason: outcome.blocked ? String(outcome.reason || '').slice(0, 500) : null,
+    });
+  } catch (e) {
+    logger.warn('Bonfire scrape: failed to record agency outcome', {
+      subdomain: agency.subdomain,
+      error: e.message,
+    });
+  }
+}
 
 // Catastrophic-failure heuristics, per the plan:
 // - Login fails (signaled by ensureLoggedIn throwing).
@@ -26,6 +87,12 @@ async function runScrape(opts = {}, deps = {}) {
   // Allow opts to override the scraper-config flag — useful for tests and for
   // a one-off `/scrape/run { autoEnrich: false }` admin call.
   const autoEnrich = opts.autoEnrich != null ? !!opts.autoEnrich : !!cfg.autoEnrich;
+  const agencyFreshnessHours = opts.agencyFreshnessHours != null
+    ? Number(opts.agencyFreshnessHours)
+    : cfg.agencyFreshnessHours || 0;
+  const shuffleAgencies = opts.shuffleAgencies != null
+    ? !!opts.shuffleAgencies
+    : !!cfg.shuffleAgencies;
 
   // Dependency injection. Tests pass in mocks; production uses the real modules.
   const $ = {
@@ -38,6 +105,8 @@ async function runScrape(opts = {}, deps = {}) {
     parseAgencyOpps: deps.parseAgencyOpps || agencyOpportunities.parse,
     upsert: deps.upsert || service.upsertJsonArray,
     enrichAll: deps.enrichAll || service.enrichAllUnenriched,
+    findAgencyState: deps.findAgencyState,
+    upsertAgency: deps.upsertAgency,
     sleep: deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
   };
 
@@ -131,39 +200,76 @@ async function runScrape(opts = {}, deps = {}) {
       targetAgencies = agencies;
     }
 
+    // Shuffle for anti-detection: same agencies in the same order every day
+    // is a recognisable pattern. Skip-if-recent caps the per-agency cadence.
+    const orderedAgencies = shuffleAgencies ? shuffleCopy(targetAgencies) : targetAgencies;
+    const agencyState = await loadAgencyState(
+      orderedAgencies.map((a) => a.subdomain),
+      $,
+    );
+    const freshnessMs = agencyFreshnessHours * 60 * 60 * 1000;
+    summary.agenciesSkippedFresh = [];
+
     logger.info('Bonfire scrape: starting agency loop', {
-      total: targetAgencies.length,
+      total: orderedAgencies.length,
       phase,
+      shuffle: shuffleAgencies,
+      freshnessHours: agencyFreshnessHours,
     });
 
-    for (let idx = 0; idx < targetAgencies.length; idx++) {
-      const agency = targetAgencies[idx];
+    for (let idx = 0; idx < orderedAgencies.length; idx++) {
+      const agency = orderedAgencies[idx];
+
+      // Skip-if-recent: if this agency was successfully scraped within the
+      // freshness window, don't re-hit the portal. We still iterate the loop
+      // so the index/total log is accurate for observability.
+      const state = agencyState[agency.subdomain];
+      if (freshnessMs > 0 && state && state.lastScrapedAt) {
+        const ageMs = Date.now() - new Date(state.lastScrapedAt).getTime();
+        if (ageMs < freshnessMs) {
+          summary.agenciesSkippedFresh.push({
+            subdomain: agency.subdomain,
+            ageHours: Math.round(ageMs / 3600000),
+          });
+          continue;
+        }
+      }
+
       summary.agenciesAttempted += 1;
       // Per-agency progress log — also keeps long SSH sessions from going
       // silent for 60+s (which can trigger client-side timeouts).
       logger.info('Bonfire scrape: agency', {
         index: idx + 1,
-        total: targetAgencies.length,
+        total: orderedAgencies.length,
         subdomain: agency.subdomain,
       });
       await $.sleep(cfg.perAgencyDelayMs + Math.floor(Math.random() * 2000));
 
+      const priorBlocks = (state && state.consecutiveBlocks) || 0;
       let portal;
+      let outcome = { blocked: false, openCount: 0, reason: null, priorBlocks };
       try {
         portal = await $.openAgencyPortal(context, agency.subdomain);
       } catch (e) {
         summary.errors.push({ stage: 'portal', subdomain: agency.subdomain, reason: e.message });
+        outcome.blocked = true;
+        outcome.reason = e.message;
+        await recordAgencyOutcome(agency, outcome, $);
         continue;
       }
 
       try {
         if (portal.blocked) {
           summary.agenciesBlocked.push({ subdomain: agency.subdomain, reason: portal.reason });
+          outcome.blocked = true;
+          outcome.reason = portal.reason;
           continue;
         }
         const result = await $.parseAgencyOpps(portal.page);
         if (result.blocked) {
           summary.agenciesBlocked.push({ subdomain: agency.subdomain, reason: 'parser-flagged' });
+          outcome.blocked = true;
+          outcome.reason = 'parser-flagged';
           continue;
         }
 
@@ -171,6 +277,7 @@ async function runScrape(opts = {}, deps = {}) {
           .map((r) => normalize.fromAgencyOpportunity(r, agency.subdomain, { agencyName: agency.name }))
           .filter(Boolean);
 
+        outcome.openCount = rows.length;
         if (rows.length && !dryRun) {
           const out = await $.upsert(rows);
           summary.opportunitiesUpserted += (out.upserted || 0);
@@ -185,6 +292,9 @@ async function runScrape(opts = {}, deps = {}) {
         summary.errors.push({ stage: 'agency-parse', subdomain: agency.subdomain, reason: detail });
       } finally {
         if (portal && portal.page) await portal.page.close().catch(() => {});
+        // Persist per-agency outcome regardless of success/failure so
+        // skip-if-recent has a record for the next run.
+        if (!dryRun) await recordAgencyOutcome(agency, outcome, $);
       }
     }
 

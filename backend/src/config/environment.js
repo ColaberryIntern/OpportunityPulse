@@ -85,6 +85,11 @@ const env = {
       sessionTtlMin: parseInt(process.env.BONFIRE_SCRAPER_SESSION_TTL_MIN, 10) || 25,
       perAgencyDelayMs: parseInt(process.env.BONFIRE_SCRAPER_PER_AGENCY_DELAY_MS, 10) || 4000,
       autoEnrich: String(process.env.BONFIRE_SCRAPER_AUTO_ENRICH || 'true').toLowerCase() !== 'false',
+      // Anti-detection / footprint controls. Default 72h means an agency that
+      // was scraped successfully <3 days ago gets skipped on the next run —
+      // cuts our portal-load count by ~3x without losing data freshness.
+      agencyFreshnessHours: parseInt(process.env.BONFIRE_SCRAPER_AGENCY_FRESHNESS_HOURS, 10) || 72,
+      shuffleAgencies: String(process.env.BONFIRE_SCRAPER_SHUFFLE_AGENCIES || 'true').toLowerCase() !== 'false',
     },
   },
 };

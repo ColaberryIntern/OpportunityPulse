@@ -19,6 +19,8 @@ function getScraperConfig() {
     sessionTtlMin: env.bonfire.scraper.sessionTtlMin,
     perAgencyDelayMs: env.bonfire.scraper.perAgencyDelayMs,
     autoEnrich: env.bonfire.scraper.autoEnrich,
+    agencyFreshnessHours: env.bonfire.scraper.agencyFreshnessHours,
+    shuffleAgencies: env.bonfire.scraper.shuffleAgencies,
     // Constants — not env-overridable on purpose.
     loginUrl: 'https://account.bonfirehub.com/login',
     dashboardUrl: 'https://account.bonfirehub.com/settings/dashboard',
