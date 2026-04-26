@@ -76,6 +76,7 @@ function Sidebar({ open, onClose }) {
         items: [
           ...section.items,
           { to: '/bonfire', label: '🔥 Bonfire', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.24 17 7.341 18.75 11.166 16.657 10.657 17.657 18.657z' },
+          { to: '/bonfire/strategic', label: '🎯 Strategic', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
         ],
       };
     }

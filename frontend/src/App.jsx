@@ -30,6 +30,7 @@ import StrategicClustersPage from './pages/StrategicClustersPage';
 import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
 import FreelancePage from './pages/FreelancePage';
 import BonfirePage from './pages/BonfirePage';
+import BonfireStrategicPage from './pages/BonfireStrategicPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -278,6 +279,14 @@ function App() {
           element={
             <ProtectedLayout>
               <BonfirePage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/bonfire/strategic"
+          element={
+            <ProtectedLayout>
+              <BonfireStrategicPage />
             </ProtectedLayout>
           }
         />

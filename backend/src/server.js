@@ -331,6 +331,11 @@ async function startServer() {
       // and BONFIRE_SCRAPER_CRON_ENABLED are true).
       const { startBonfireScraperScheduler } = require('./bonfire/scraper.scheduler');
       startBonfireScraperScheduler();
+
+      // Start Bonfire strategist scheduler — runs an hour after the scraper
+      // (default 08:00 M/W/F) to produce curated strategic opportunities.
+      const { startBonfireStrategistScheduler } = require('./bonfire/bonfireStrategist.scheduler');
+      startBonfireStrategistScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

@@ -61,6 +61,28 @@ export async function generateStrategy(id) {
   return res.data?.data;
 }
 
+// ---- Strategic Curation Agent ----------------------------------------------
+
+export async function listStrategic(params = {}) {
+  const res = await api.get(`${base}/strategic`, { params });
+  return res.data; // { status, data: [...], pagination: {...} }
+}
+
+export async function getStrategic(id) {
+  const res = await api.get(`${base}/strategic/${id}`);
+  return res.data?.data;
+}
+
+export async function runStrategist({ force = false } = {}) {
+  const res = await api.post(`${base}/strategic/run`, { force });
+  return res.data?.data;
+}
+
+export async function patchStrategic(id, body) {
+  const res = await api.patch(`${base}/strategic/${id}`, body);
+  return res.data?.data;
+}
+
 // ---- Client-side constants (used for filter UI) -----------------------------
 
 export const BONFIRE_CATEGORIES = [

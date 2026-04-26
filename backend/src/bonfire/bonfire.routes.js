@@ -79,4 +79,9 @@ router.post(
 //      scraper is disabled, /scrape/* returns 404 even though /api/bonfire is on.
 router.use('/scrape', require('./scraper.routes'));
 
+// ---- Strategic Curation Agent — runs after the scraper to produce
+//      productizable opportunity strategies. Reads open to all auth'd users;
+//      runs/edits are admin-only (gated inside strategic.routes.js).
+router.use('/strategic', require('./strategic.routes'));
+
 module.exports = router;
