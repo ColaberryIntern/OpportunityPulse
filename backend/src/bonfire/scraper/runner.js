@@ -239,7 +239,11 @@ async function runScrape(opts = {}, deps = {}) {
 async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
   if (!autoEnrich || dryRun || summary.opportunitiesUpserted <= 0) return;
   try {
-    const enrichResult = await $.enrichAll({ concurrency: 2, maxRows: 200 });
+    // 500-row cap accommodates a full network scrape (92 agencies × ~5 Open
+    // bids each ≈ 460 max). After first-day saturation, daily delta is small.
+    // enrichAllUnenriched only picks rows with enrichedAt IS NULL, so cost
+    // is bounded by genuinely-new opportunities, not total row count.
+    const enrichResult = await $.enrichAll({ concurrency: 2, maxRows: 500 });
     summary.enrichment = {
       processed: enrichResult.processed,
       succeeded: enrichResult.succeeded,

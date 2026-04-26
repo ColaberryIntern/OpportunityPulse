@@ -108,9 +108,14 @@ services:
     image: nginx:alpine
     container_name: op-nginx
     restart: unless-stopped
+    # Multi-tenant servers (running multiple stacks) can override these via
+    # NGINX_HTTP_PORT / NGINX_HTTPS_PORT in .env.prod. Default 80/443 is the
+    # right answer for any single-app box. Parameterizing here so the prod
+    # docker-compose.prod.yml stays unmodified locally and `git pull` keeps
+    # auto-fast-forwarding without merge conflicts.
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
     volumes:
       - ./deploy/nginx/active.conf:/etc/nginx/templates/default.conf.template:ro
       - certbot-webroot:/var/www/certbot:ro

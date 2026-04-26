@@ -11,6 +11,10 @@
 
 const cheerio = require('cheerio');
 
+// Default column ordering on the standard DHA-style portal. Some agencies
+// (e.g. metra) inject an extra column (Department) — buildColumnMap() resolves
+// the actual indices from the <thead> text so we don't mis-extract close_date
+// when columns shift.
 const COL = {
   status:    0,
   refNumber: 1,
@@ -19,6 +23,27 @@ const COL = {
   daysLeft:  4,
   action:    5,
 };
+
+// Map header text -> our canonical key.
+const HEADER_PATTERNS = [
+  { key: 'status',    re: /^status$/i },
+  { key: 'refNumber', re: /\bref\.?\s*#?$/i },
+  { key: 'project',   re: /\bproject\b/i },
+  { key: 'closeDate', re: /\bclose\b/i },
+  { key: 'daysLeft',  re: /\bdays?\s*left\b/i },
+  { key: 'action',    re: /\baction\b/i },
+];
+
+function buildColumnMap(headerCells) {
+  const map = {};
+  headerCells.forEach((text, idx) => {
+    const t = String(text).trim();
+    for (const { key, re } of HEADER_PATTERNS) {
+      if (re.test(t) && map[key] == null) map[key] = idx;
+    }
+  });
+  return map;
+}
 
 function tryParseDate(s) {
   if (!s) return null;
@@ -45,25 +70,29 @@ function parseHtml(html) {
 
   $('table.dataTable').each((_, tbl) => {
     const $tbl = $(tbl);
-    // Sanity-check the headers — if they don't include "Ref" we're looking at
-    // the wrong DataTable (Bonfire ships several with different schemas).
-    const headers = $tbl.find('thead th').map((__, h) => $(h).text().trim().toLowerCase()).get();
-    const looksRight = headers.some((h) => h.includes('ref')) && headers.some((h) => h.includes('project'));
+    // Build a per-table column map from <thead>. Falls back to the canonical
+    // DHA layout when a header doesn't match anything.
+    const headerCells = $tbl.find('thead th').map((__, h) => $(h).text().trim()).get();
+    const headersLower = headerCells.map((h) => h.toLowerCase());
+    const looksRight = headersLower.some((h) => h.includes('ref')) && headersLower.some((h) => h.includes('project'));
     if (!looksRight) return;
+
+    const colMap = buildColumnMap(headerCells);
+    const get = (key) => (colMap[key] != null ? colMap[key] : COL[key]);
 
     $tbl.find('tbody tr').each((__, row) => {
       const $row = $(row);
       const cells = $row.find('td');
       if (cells.length < 5) return;
 
-      const ref = $(cells[COL.refNumber]).text().trim();
-      const project = $(cells[COL.project]).text().trim();
+      const ref = $(cells[get('refNumber')]).text().trim();
+      const project = $(cells[get('project')]).text().trim();
       if (!ref || !project || seen.has(ref)) return;
 
-      const status = $(cells[COL.status]).text().trim();
-      const closeRaw = $(cells[COL.closeDate]).text().trim();
-      const daysLeft = tryParseInt($(cells[COL.daysLeft]).text());
-      const actionAnchor = $(cells[COL.action]).find('a[href]').first().attr('href') || null;
+      const status = $(cells[get('status')]).text().trim();
+      const closeRaw = $(cells[get('closeDate')]).text().trim();
+      const daysLeft = tryParseInt($(cells[get('daysLeft')]).text());
+      const actionAnchor = $(cells[get('action')]).find('a[href]').first().attr('href') || null;
 
       seen.add(ref);
       records.push({

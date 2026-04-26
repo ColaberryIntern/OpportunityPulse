@@ -221,4 +221,36 @@ describe('pages/agencyOpportunities.parseHtml (DataTables structure)', () => {
   it('returns empty when no DataTables present', () => {
     expect(agencyOpportunities.parseHtml('<html><body></body></html>')).toEqual([]);
   });
+
+  it('handles agencies with an extra Department column (metra-style 7-col layout)', () => {
+    // metra inserts Department between Project and Close Date. Fixed-index
+    // mapping would mis-extract close_date as "Purchasing"; the header-name
+    // lookup pins the right column.
+    const html = `
+      <html><body>
+        <table class="dataTable">
+          <thead><tr>
+            <th>Status</th><th>Ref. #</th><th>Project</th>
+            <th>Department</th><th>Close Date</th><th>Days Left</th><th>Action</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td>Open</td>
+              <td>IFB No. 186546A</td>
+              <td>Catalog Contract for Fasteners</td>
+              <td>Purchasing</td>
+              <td>Apr 27th 2026, 2:00 PM CDT</td>
+              <td>2</td>
+              <td><a href="/portal/bid/x">View</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </body></html>`;
+    const records = agencyOpportunities.parseHtml(html);
+    expect(records).toHaveLength(1);
+    expect(records[0].refNumber).toBe('IFB No. 186546A');
+    expect(records[0].projectName).toBe('Catalog Contract for Fasteners');
+    expect(records[0].closeDate).toMatch(/^2026-04-27/); // not "Purchasing"
+    expect(records[0].daysLeft).toBe(2);
+  });
 });
