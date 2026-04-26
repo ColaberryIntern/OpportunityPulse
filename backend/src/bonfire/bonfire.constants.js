@@ -8,11 +8,18 @@ const CATEGORIES = [
   'IT Services',
 ];
 
+// Canonical product mapping by category. Picking a product is what unlocks
+// the PRODUCTIZABLE signal for repeatable categories — without an entry here
+// the AI can return null and the rule falls through. Names follow the existing
+// pattern (Match/Bot/Sense/Pulse). Rename freely.
 const PRODUCT_MAP = {
   Staffing: 'StaffMatch',
   Compliance: 'ComplianceBot',
   'Financial Services': 'BudgetSense',
   Education: 'EduPulse',
+  'IT Services': 'OpsBot',
+  'Data & Analytics': 'DataLens',
+  Consulting: 'AdvisorAI',
 };
 
 const CATEGORY_HEURISTICS = {
