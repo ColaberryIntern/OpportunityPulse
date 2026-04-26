@@ -51,6 +51,12 @@ async function listOpportunities(filters = {}) {
     default:             orderClause = [['priorityScore', 'DESC'], ['createdAt', 'DESC']];
   }
 
+  // NOTE: with a hasMany tag include, Sequelize's default behavior wraps the
+  // outer SELECT in a subquery so LIMIT/OFFSET apply to distinct opportunities,
+  // not to the post-JOIN cartesian. The previous `subQuery: false` was breaking
+  // pagination — a request for 25 rows was returning ~5 distinct opportunities
+  // because LIMIT applied to (opportunity × tag) JOIN rows. Removing the flag
+  // lets Sequelize do the right thing; `distinct: true` keeps the count clean.
   const { rows, count } = await BonfireOpportunity.findAndCountAll({
     where,
     order: orderClause,
@@ -58,7 +64,6 @@ async function listOpportunities(filters = {}) {
     offset: Number(offset) || 0,
     include: [{ model: BonfireOpportunityTag, as: 'tags', attributes: ['tag'] }],
     distinct: true,
-    subQuery: false,
   });
   return { rows, total: count };
 }
