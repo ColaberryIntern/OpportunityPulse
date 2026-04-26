@@ -35,6 +35,11 @@ module.exports = (sequelize) => {
       defaultValue: 0,
       field: 'consecutive_blocks',
     },
+    priorityScore: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'priority_score',
+    },
     lastBlockReason: {
       type: DataTypes.STRING(500),
       allowNull: true,

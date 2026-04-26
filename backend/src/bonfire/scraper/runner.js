@@ -12,6 +12,7 @@ const networkList = require('./pages/networkList');
 const agencyOpportunities = require('./pages/agencyOpportunities');
 const normalize = require('./normalize');
 const escalation = require('./escalation');
+const agencyScoring = require('./agencyScoring');
 
 // Fisher-Yates shuffle. Returns a NEW array; never mutates input.
 function shuffleCopy(arr) {
@@ -21,6 +22,25 @@ function shuffleCopy(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+// Sort agencies priority_score DESC, then within each score bucket optionally
+// shuffle so the exact iteration order varies run-to-run (anti-detection).
+// Best-fit-for-us agencies always come first regardless of shuffle.
+function sortAndShuffle(agencies, shuffle) {
+  const buckets = new Map();
+  for (const a of agencies) {
+    const k = a._priorityScore != null ? a._priorityScore : 0;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(a);
+  }
+  const orderedKeys = [...buckets.keys()].sort((a, b) => b - a);
+  const out = [];
+  for (const k of orderedKeys) {
+    const group = buckets.get(k);
+    out.push(...(shuffle ? shuffleCopy(group) : group));
+  }
+  return out;
 }
 
 // Look up per-agency state. Returns a map { subdomain -> { lastScrapedAt, ... } }.
@@ -38,6 +58,8 @@ async function loadAgencyState(subdomains, deps) {
       out[r.subdomain] = {
         lastScrapedAt: r.lastScrapedAt,
         consecutiveBlocks: r.consecutiveBlocks || 0,
+        lastOpenCount: r.lastOpenCount || 0,
+        priorityScore: r.priorityScore != null ? r.priorityScore : null,
       };
     }
     return out;
@@ -54,6 +76,17 @@ async function recordAgencyOutcome(agency, outcome, deps) {
     if (!models.BonfireAgency) return;
     await models.BonfireAgency.upsert(rec);
   });
+  // Compute the agency's new priority_score from the fresh outcome + any
+  // prior state. Used to sort the next run's iteration order.
+  const priorityScore = agencyScoring.scoreAgency({
+    subdomain: agency.subdomain,
+    agencyName: agency.name,
+    priorAgency: outcome.priorAgency,
+    openCount: outcome.openCount,
+    highFitCount: outcome.highFitCount,
+    blocked: outcome.blocked,
+    priorBlocks: outcome.priorBlocks,
+  });
   try {
     await upsert({
       subdomain: agency.subdomain,
@@ -64,6 +97,7 @@ async function recordAgencyOutcome(agency, outcome, deps) {
       lastOpenCount: outcome.openCount != null ? outcome.openCount : 0,
       consecutiveBlocks: outcome.blocked ? (outcome.priorBlocks + 1) : 0,
       lastBlockReason: outcome.blocked ? String(outcome.reason || '').slice(0, 500) : null,
+      priorityScore,
     });
   } catch (e) {
     logger.warn('Bonfire scrape: failed to record agency outcome', {
@@ -200,13 +234,24 @@ async function runScrape(opts = {}, deps = {}) {
       targetAgencies = agencies;
     }
 
-    // Shuffle for anti-detection: same agencies in the same order every day
-    // is a recognisable pattern. Skip-if-recent caps the per-agency cadence.
-    const orderedAgencies = shuffleAgencies ? shuffleCopy(targetAgencies) : targetAgencies;
+    // Order strategy:
+    // 1. Always sort by priority_score DESC first — best-fit agencies for our
+    //    situation (TX-region + high-volume + good fit) get scraped before
+    //    a partial run gets killed.
+    // 2. Within each priority bucket, optionally shuffle for anti-detection
+    //    so two consecutive runs don't always hit identical sequences.
     const agencyState = await loadAgencyState(
-      orderedAgencies.map((a) => a.subdomain),
+      targetAgencies.map((a) => a.subdomain),
       $,
     );
+    const withScore = targetAgencies.map((a) => {
+      const state = agencyState[a.subdomain];
+      const score = state && state.priorityScore != null
+        ? state.priorityScore
+        : agencyScoring.defaultScoreFor(a.subdomain);
+      return { ...a, _priorityScore: score };
+    });
+    const orderedAgencies = sortAndShuffle(withScore, shuffleAgencies);
     const freshnessMs = agencyFreshnessHours * 60 * 60 * 1000;
     summary.agenciesSkippedFresh = [];
 
@@ -247,7 +292,14 @@ async function runScrape(opts = {}, deps = {}) {
 
       const priorBlocks = (state && state.consecutiveBlocks) || 0;
       let portal;
-      let outcome = { blocked: false, openCount: 0, reason: null, priorBlocks };
+      let outcome = {
+        blocked: false,
+        openCount: 0,
+        reason: null,
+        priorBlocks,
+        priorAgency: state || null,
+        highFitCount: 0,
+      };
       try {
         portal = await $.openAgencyPortal(context, agency.subdomain);
       } catch (e) {
@@ -278,6 +330,15 @@ async function runScrape(opts = {}, deps = {}) {
           .filter(Boolean);
 
         outcome.openCount = rows.length;
+        // Count rows that are likely to be high-fit. We don't have priority
+        // scores yet at scrape time (enrichment happens later) — use volume
+        // alone as a soft signal here, and the scoring fn will pick up the
+        // sharper post-enrichment signal on subsequent runs via priorAgency.
+        outcome.highFitCount = result.records.filter((r) => {
+          const refLooksRecent = /^(20)?2[5-7]/i.test(String(r.refNumber || ''));
+          return refLooksRecent;
+        }).length;
+
         if (rows.length && !dryRun) {
           const out = await $.upsert(rows);
           summary.opportunitiesUpserted += (out.upserted || 0);
