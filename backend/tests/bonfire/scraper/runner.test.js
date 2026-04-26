@@ -146,7 +146,7 @@ describe('runner.runScrape', () => {
         return { page: makePage(), blocked: false };
       }),
       parseAgencyOpps: jest.fn().mockImplementation(async () => ({
-        records: [{ refNumber: 'RFP-1', projectName: 'P1' }],
+        records: [{ refNumber: 'RFP-1', projectName: 'P1', status: 'Open' }],
         blocked: false,
       })),
       sleep: () => Promise.resolve(),

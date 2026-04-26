@@ -69,43 +69,59 @@ describe('scraper/normalize', () => {
   });
 
   describe('fromAgencyOpportunity', () => {
+    // All happy-path tests must pass status: 'Open' — the Bonfire portal renders
+    // multiple tabs (Open/Closed/Awarded/Cancelled) as separate DataTables, so
+    // normalize filters to Open rows only.
+    const openRow = (over = {}) => ({
+      refNumber: 'RFP-25-007',
+      projectName: 'Title I Compliance',
+      status: 'Open',
+      ...over,
+    });
+
     it('produces the agency external_id prefix with subdomain and ref', () => {
-      const row = fromAgencyOpportunity(
-        { refNumber: 'RFP-25-007', projectName: 'Title I Compliance' },
-        'dhantx',
-        { agencyName: 'DHA' },
-      );
+      const row = fromAgencyOpportunity(openRow(), 'dhantx', { agencyName: 'DHA' });
       expect(row.external_id).toBe('bonfire:agency:dhantx:RFP-25-007');
       expect(row.title).toBe('Title I Compliance');
       expect(row.agency).toBe('DHA (dhantx)');
     });
 
     it('returns null when ref or projectName is missing', () => {
-      expect(fromAgencyOpportunity({ refNumber: '', projectName: 'T' }, 'sub')).toBeNull();
-      expect(fromAgencyOpportunity({ refNumber: 'R', projectName: '' }, 'sub')).toBeNull();
+      expect(fromAgencyOpportunity(openRow({ refNumber: '' }), 'sub')).toBeNull();
+      expect(fromAgencyOpportunity(openRow({ projectName: '' }), 'sub')).toBeNull();
+    });
+
+    it('drops rows whose status is not Open (Closed, Awarded, Cancelled)', () => {
+      expect(fromAgencyOpportunity(openRow({ status: 'Closed' }), 'sub')).toBeNull();
+      expect(fromAgencyOpportunity(openRow({ status: 'Awarded' }), 'sub')).toBeNull();
+      expect(fromAgencyOpportunity(openRow({ status: 'Cancelled' }), 'sub')).toBeNull();
+    });
+
+    it('drops rows with no status (defensive — could be from an unknown DataTable)', () => {
+      expect(fromAgencyOpportunity(openRow({ status: null }), 'sub')).toBeNull();
+      expect(fromAgencyOpportunity(openRow({ status: '' }), 'sub')).toBeNull();
+    });
+
+    it('matches Open status case-insensitively', () => {
+      expect(fromAgencyOpportunity(openRow({ status: 'open' }), 'sub')).not.toBeNull();
+      expect(fromAgencyOpportunity(openRow({ status: 'OPEN' }), 'sub')).not.toBeNull();
     });
 
     it('builds an absolute portal URL when given a relative href', () => {
-      const row = fromAgencyOpportunity(
-        { refNumber: 'R', projectName: 'T', portalUrl: '/portal/bid/1' },
-        'dhantx',
-      );
+      const row = fromAgencyOpportunity(openRow({ portalUrl: '/portal/bid/1' }), 'dhantx');
       expect(row.source_url).toBe('https://dhantx.bonfirehub.com/portal/bid/1');
     });
 
     it('keeps absolute portal URLs intact', () => {
       const row = fromAgencyOpportunity(
-        { refNumber: 'R', projectName: 'T', portalUrl: 'https://other.example.com/x' },
+        openRow({ portalUrl: 'https://other.example.com/x' }),
         'dhantx',
       );
       expect(row.source_url).toBe('https://other.example.com/x');
     });
 
     it('falls back to a default portal URL when none is given', () => {
-      const row = fromAgencyOpportunity(
-        { refNumber: 'R', projectName: 'T' },
-        'dhantx',
-      );
+      const row = fromAgencyOpportunity(openRow(), 'dhantx');
       expect(row.source_url).toContain('dhantx.bonfirehub.com');
     });
   });

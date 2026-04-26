@@ -47,10 +47,17 @@ function fromVendorRecCard(card) {
 
 // Agency portal "My Opportunities" row -> ingest row.
 // `subdomain` is required to namespace the external_id correctly.
+//
+// Bonfire portals render every tab (Open / Closed / Awarded / Cancelled / Past)
+// as a separate DataTable into the same DOM. The parser collects from all of
+// them, so we filter to status="Open" here. Anything missing or non-Open
+// status drops out — only actionable bids land in the DB.
 function fromAgencyOpportunity(record, subdomain, { agencyName } = {}) {
   const ref = clean(record.refNumber);
   const title = clean(record.projectName);
   if (!ref || !title) return null;
+  const status = clean(record.status);
+  if (!status || !/^open$/i.test(status)) return null;
   const portalUrl =
     record.portalUrl
       ? (record.portalUrl.startsWith('http')
