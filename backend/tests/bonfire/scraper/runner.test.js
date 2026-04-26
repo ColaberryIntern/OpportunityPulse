@@ -4,6 +4,9 @@
 // Mock the service module that runner.js requires at the top level.
 jest.mock('../../../src/bonfire/bonfire.service', () => ({
   upsertJsonArray: jest.fn(),
+  enrichAllUnenriched: jest.fn().mockResolvedValue({
+    processed: 0, succeeded: 0, skipped: 0, failed: 0, results: [],
+  }),
 }));
 // Mock escalation so failure-counter writes don't touch the filesystem.
 jest.mock('../../../src/bonfire/scraper/escalation', () => ({
@@ -24,6 +27,7 @@ jest.mock('../../../src/bonfire/scraper/config', () => ({
     storageDir: '/tmp/.test-bonfire',
     sessionTtlMin: 25,
     perAgencyDelayMs: 1, // fast tests
+    autoEnrich: false,   // unit tests don't exercise enrichment path by default
     loginUrl: 'https://account.bonfirehub.com/login',
     dashboardUrl: 'https://account.bonfirehub.com/settings/dashboard',
     vendorHubUrl: 'https://vendor.bonfirehub.com/',
@@ -217,6 +221,44 @@ describe('runner.runScrape', () => {
     expect(escalation.recordSuccess).toHaveBeenCalled();
     expect(escalation.recordFailure).not.toHaveBeenCalled();
     expect(summary.escalated).toBeFalsy();
+  });
+
+  it('auto-enriches after a successful scrape when autoEnrich is on', async () => {
+    const context = makeContext();
+    const enrichSpy = jest.fn().mockResolvedValue({
+      processed: 2, succeeded: 2, skipped: 0, failed: 0, results: [],
+    });
+    const summary = await runScrape({ phase: 'A', autoEnrich: true }, {
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({
+        counts: { invitations: 100 },
+        aiRecommended: [{ title: 'C', agency: 'A' }],
+      }),
+      enrichAll: enrichSpy,
+      sleep: () => Promise.resolve(),
+    });
+    expect(enrichSpy).toHaveBeenCalledTimes(1);
+    expect(summary.enrichment).toEqual({
+      processed: 2, succeeded: 2, skipped: 0, failed: 0,
+    });
+  });
+
+  it('does NOT call enrichAll on dryRun even when autoEnrich is on', async () => {
+    const context = makeContext();
+    const enrichSpy = jest.fn();
+    await runScrape({ phase: 'A', dryRun: true, autoEnrich: true }, {
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({
+        counts: {}, aiRecommended: [{ title: 'C', agency: 'A' }],
+      }),
+      enrichAll: enrichSpy,
+      sleep: () => Promise.resolve(),
+    });
+    expect(enrichSpy).not.toHaveBeenCalled();
   });
 
   it('escalates and surfaces error when ensureLoggedIn throws', async () => {

@@ -32,6 +32,11 @@ function buildEnrichSystemPrompt() {
     '  fit_score: integer 0-100 (how well this matches Colaberry capabilities)',
     '  automation_potential: integer 0-100 (how amenable to AI/automation)',
     '  repeatability: integer 0-100 (how reusable the solution is across clients)',
+    '  estimated_value_usd: integer USD whole-dollar value. Estimate the contract',
+    '    size from the title, agency, and category if no explicit number is given.',
+    '    Use procurement norms: housing/construction RFPs typically $100k–$5M;',
+    '    consulting engagements $50k–$500k; staffing contracts $200k–$2M;',
+    '    enterprise IT $500k–$10M. Return 0 only if you truly cannot estimate.',
     '  recommended_product: short product name or null',
     '  signals: subset of ["HIGH_ROI","HIGH_AUTOMATION","QUICK_WIN","PRODUCTIZABLE"]',
     '  strategy_hint: one concise sentence',
@@ -88,8 +93,18 @@ async function enrichOpportunity(bonfireOp, { force = false } = {}) {
 
   // AI-resolved category drives the final heuristics (re-seed if it changed the category).
   const aiCategory = normalizeCategory(ai.ai_category);
+
+  // If the source didn't have an explicit estimated_value, accept the AI's
+  // best-guess (returned as whole USD; convert to cents). Never overwrite a
+  // value we already had — manual uploads / future detail-page scrapes win.
+  let effectiveEstimatedValue = bonfireOp.estimatedValue;
+  if ((effectiveEstimatedValue == null || Number(effectiveEstimatedValue) === 0) &&
+      Number(ai.estimated_value_usd) > 0) {
+    effectiveEstimatedValue = Math.round(Number(ai.estimated_value_usd) * 100);
+  }
+
   const finalSeeds = computeRuleSeeds({
-    estimatedValue: bonfireOp.estimatedValue,
+    estimatedValue: effectiveEstimatedValue,
     aiCategory,
   });
 
@@ -119,7 +134,7 @@ async function enrichOpportunity(bonfireOp, { force = false } = {}) {
   // Server-derived signals override anything the AI claims for consistency.
   const signals = computeSignals({
     priority_score,
-    estimated_value: Number(bonfireOp.estimatedValue) || 0,
+    estimated_value: Number(effectiveEstimatedValue) || 0,
     automation_potential,
     ease_of_entry,
     repeatability,
@@ -131,24 +146,27 @@ async function enrichOpportunity(bonfireOp, { force = false } = {}) {
     ? ai.tags.filter((t) => typeof t === 'string').map((t) => t.trim().slice(0, 100)).filter(Boolean).slice(0, 5)
     : [];
 
-  return {
-    updated: true,
-    fields: {
-      aiCategory,
-      fitScore: fit_score,
-      priorityScore: priority_score,
-      automationPotential: automation_potential,
-      revenueWeight: revenue_weight,
-      repeatability,
-      easeOfEntry: ease_of_entry,
-      recommendedProduct: recommended_product,
-      signals,
-      enrichedAt: new Date(),
-      enrichmentVersion: ENRICHMENT_VERSION,
-      enrichmentHash: incomingHash,
-    },
-    tags,
+  const fields = {
+    aiCategory,
+    fitScore: fit_score,
+    priorityScore: priority_score,
+    automationPotential: automation_potential,
+    revenueWeight: revenue_weight,
+    repeatability,
+    easeOfEntry: ease_of_entry,
+    recommendedProduct: recommended_product,
+    signals,
+    enrichedAt: new Date(),
+    enrichmentVersion: ENRICHMENT_VERSION,
+    enrichmentHash: incomingHash,
   };
+  // Persist the AI-estimated value only if we filled in a previously-empty slot.
+  if ((bonfireOp.estimatedValue == null || Number(bonfireOp.estimatedValue) === 0) &&
+      effectiveEstimatedValue && effectiveEstimatedValue > 0) {
+    fields.estimatedValue = effectiveEstimatedValue;
+  }
+
+  return { updated: true, fields, tags };
 }
 
 // ---------------------------------------------------------------------------

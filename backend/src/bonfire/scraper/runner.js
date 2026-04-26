@@ -23,6 +23,9 @@ async function runScrape(opts = {}, deps = {}) {
   const cfg = getScraperConfig();
   const phase = (opts.phase || cfg.phase || 'C').toUpperCase();
   const dryRun = !!opts.dryRun;
+  // Allow opts to override the scraper-config flag — useful for tests and for
+  // a one-off `/scrape/run { autoEnrich: false }` admin call.
+  const autoEnrich = opts.autoEnrich != null ? !!opts.autoEnrich : !!cfg.autoEnrich;
 
   // Dependency injection. Tests pass in mocks; production uses the real modules.
   const $ = {
@@ -34,6 +37,7 @@ async function runScrape(opts = {}, deps = {}) {
     parseNetwork: deps.parseNetwork || networkList.parse,
     parseAgencyOpps: deps.parseAgencyOpps || agencyOpportunities.parse,
     upsert: deps.upsert || service.upsertJsonArray,
+    enrichAll: deps.enrichAll || service.enrichAllUnenriched,
     sleep: deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
   };
 
@@ -84,6 +88,7 @@ async function runScrape(opts = {}, deps = {}) {
 
     if (phase === 'A') {
       escalation.recordSuccess();
+      await maybeAutoEnrich(summary, $, autoEnrich, dryRun);
       summary.endedAt = new Date().toISOString();
       return summary;
     }
@@ -196,6 +201,8 @@ async function runScrape(opts = {}, deps = {}) {
       escalation.recordSuccess();
     }
 
+    await maybeAutoEnrich(summary, $, autoEnrich, dryRun);
+
     summary.endedAt = new Date().toISOString();
     logger.info('Bonfire scrape run complete', summary);
     return summary;
@@ -209,6 +216,26 @@ async function runScrape(opts = {}, deps = {}) {
   } finally {
     if (context) await context.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
+  }
+}
+
+// Shared by Phase A (early-return) and Phase B/C (post-loop) success paths.
+// Runs the existing enrichAllUnenriched flow so the UI shows scored data
+// without requiring an admin click. Failures are logged + recorded on the
+// summary but never escalate the scrape itself.
+async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
+  if (!autoEnrich || dryRun || summary.opportunitiesUpserted <= 0) return;
+  try {
+    const enrichResult = await $.enrichAll({ concurrency: 2, maxRows: 200 });
+    summary.enrichment = {
+      processed: enrichResult.processed,
+      succeeded: enrichResult.succeeded,
+      skipped: enrichResult.skipped,
+      failed: enrichResult.failed,
+    };
+  } catch (e) {
+    summary.errors.push({ stage: 'enrich', reason: e.message });
+    logger.error('Bonfire auto-enrich failed', { error: e.message });
   }
 }
 

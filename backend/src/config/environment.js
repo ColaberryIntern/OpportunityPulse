@@ -84,6 +84,7 @@ const env = {
       storageDir: process.env.BONFIRE_SCRAPER_STORAGE_DIR || './.bonfire-session',
       sessionTtlMin: parseInt(process.env.BONFIRE_SCRAPER_SESSION_TTL_MIN, 10) || 25,
       perAgencyDelayMs: parseInt(process.env.BONFIRE_SCRAPER_PER_AGENCY_DELAY_MS, 10) || 4000,
+      autoEnrich: String(process.env.BONFIRE_SCRAPER_AUTO_ENRICH || 'true').toLowerCase() !== 'false',
     },
   },
 };

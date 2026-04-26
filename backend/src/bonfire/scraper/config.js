@@ -18,6 +18,7 @@ function getScraperConfig() {
     storageDir: path.resolve(env.bonfire.scraper.storageDir),
     sessionTtlMin: env.bonfire.scraper.sessionTtlMin,
     perAgencyDelayMs: env.bonfire.scraper.perAgencyDelayMs,
+    autoEnrich: env.bonfire.scraper.autoEnrich,
     // Constants — not env-overridable on purpose.
     loginUrl: 'https://account.bonfirehub.com/login',
     dashboardUrl: 'https://account.bonfirehub.com/settings/dashboard',

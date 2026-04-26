@@ -290,8 +290,15 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
             git pull origin main
-            docker compose -f docker-compose.prod.yml up -d --build
+            # Prefer .env.prod when present (server convention) and fall back to
+            # the docker-compose default of .env. The --env-file flag affects
+            # ${VAR} substitution in docker-compose.prod.yml, NOT what gets passed
+            # into the running containers (those still come from each service's
+            # own `environment:` block).
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+            docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
             sleep 25
-            curl -sf http://127.0.0.1/api/v1/health || curl -sf http://localhost:3001/api/v1/health || exit 1
+            curl -sf http://127.0.0.1/api/v1/health || curl -sf http://localhost:3001/api/v1/health || curl -sf http://127.0.0.1:8091/api/v1/health || exit 1
             docker exec op-backend npx sequelize-cli db:migrate
             echo "Deploy successful at $(date)"
