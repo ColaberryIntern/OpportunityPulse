@@ -3,7 +3,10 @@ import OpportunityCard from './OpportunityCard';
 import Pagination from '../common/Pagination';
 import savedOpportunityService from '../../services/savedOpportunityService';
 
-function OpportunityList({ items, pagination, onPageChange, loading, isPublic = false }) {
+// `interleavedSlots`: optional array of { afterIndex, node } to render between
+// rows. Used by StrategicViewPage to sparse trend-tab bars throughout the
+// list. Slots whose afterIndex >= items.length render after the last item.
+function OpportunityList({ items, pagination, onPageChange, loading, isPublic = false, interleavedSlots = [] }) {
   const [savedMap, setSavedMap] = useState({});
 
   useEffect(() => {
@@ -42,14 +45,26 @@ function OpportunityList({ items, pagination, onPageChange, loading, isPublic = 
         </p>
       )}
       <div className="space-y-4">
-        {items.map((opportunity) => (
-          <OpportunityCard
-            key={opportunity.id}
-            opportunity={opportunity}
-            isPublic={isPublic}
-            initialSaved={savedMap[opportunity.id] || false}
-          />
+        {items.map((opportunity, idx) => (
+          <React.Fragment key={opportunity.id}>
+            <OpportunityCard
+              opportunity={opportunity}
+              isPublic={isPublic}
+              initialSaved={savedMap[opportunity.id] || false}
+            />
+            {interleavedSlots
+              .filter((s) => s.afterIndex === idx)
+              .map((s, j) => (
+                <React.Fragment key={`slot-${idx}-${j}`}>{s.node}</React.Fragment>
+              ))}
+          </React.Fragment>
         ))}
+        {/* Slots scheduled past the last item — render after the loop. */}
+        {interleavedSlots
+          .filter((s) => s.afterIndex >= items.length)
+          .map((s, j) => (
+            <React.Fragment key={`slot-tail-${j}`}>{s.node}</React.Fragment>
+          ))}
       </div>
       <Pagination pagination={pagination} onPageChange={onPageChange} />
     </div>

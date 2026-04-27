@@ -9,7 +9,7 @@ import OpportunityFilters from '../components/opportunities/OpportunityFilters';
 import OpportunityList from '../components/opportunities/OpportunityList';
 import ActiveFilterChips from '../components/opportunities/ActiveFilterChips';
 import UpgradePrompt from '../components/common/UpgradePrompt';
-import TrendCard from '../components/dashboard/TrendCard';
+import TrendTabBar from '../components/dashboard/TrendTabBar';
 
 const VIEW_TREND_TYPES = {
   all: ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'],
@@ -88,6 +88,16 @@ function StrategicViewPage() {
 
         <StrategicNav />
 
+        {/* Top trend tabs — collapsible pills near the top of the page so
+            users can hit any trend quickly. Click to expand details. */}
+        {trends && VIEW_TREND_TYPES[viewConfig.key] && (
+          <TrendTabBar
+            trendTypes={VIEW_TREND_TYPES[viewConfig.key]}
+            trends={trends}
+            scope="top"
+          />
+        )}
+
         <UpgradePrompt />
 
         {error && (
@@ -115,31 +125,39 @@ function StrategicViewPage() {
             pagination={pagination}
             onPageChange={handlePageChange}
             loading={loading}
+            interleavedSlots={
+              trends && VIEW_TREND_TYPES[viewConfig.key]
+                ? [
+                    // Mid-list interstitial — appears after the 5th opportunity
+                    // (only when the list has >= 6 items) so users hit it as a
+                    // natural break point while scrolling.
+                    items && items.length > 5
+                      ? {
+                          afterIndex: 5,
+                          node: (
+                            <TrendTabBar
+                              trendTypes={VIEW_TREND_TYPES[viewConfig.key]}
+                              trends={trends}
+                              scope="mid"
+                            />
+                          ),
+                        }
+                      : null,
+                    // Tail — after the last item, before pagination.
+                    {
+                      afterIndex: 9999,
+                      node: (
+                        <TrendTabBar
+                          trendTypes={VIEW_TREND_TYPES[viewConfig.key]}
+                          trends={trends}
+                          scope="bottom"
+                        />
+                      ),
+                    },
+                  ].filter(Boolean)
+                : []
+            }
           />
-
-          {/* Market Trends — moved from top so the opportunity list is the
-              first thing on the page. The cards live at the bottom now and
-              read like an "advanced insights" section users land on after
-              scanning the actual list. */}
-          {trends && VIEW_TREND_TYPES[viewConfig.key] && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  📊 Market Trends &amp; Insights
-                </h2>
-                <span className="text-xs text-gray-400">
-                  AI-analyzed across all data in this view
-                </span>
-              </div>
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750 border border-blue-100 dark:border-gray-700 rounded-lg p-4">
-                <div className={`grid gap-3 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
-                  {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
-                    <TrendCard key={type} type={type} trendData={trends[type]} variant="compact" />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
