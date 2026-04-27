@@ -88,17 +88,6 @@ function StrategicViewPage() {
 
         <StrategicNav />
 
-        {/* Market Trends */}
-        {trends && VIEW_TREND_TYPES[viewConfig.key] && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750 border border-blue-100 dark:border-gray-700 rounded-lg p-4 mb-4">
-            <div className={`grid gap-3 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
-              {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
-                <TrendCard key={type} type={type} trendData={trends[type]} variant="compact" />
-              ))}
-            </div>
-          </div>
-        )}
-
         <UpgradePrompt />
 
         {error && (
@@ -127,6 +116,30 @@ function StrategicViewPage() {
             onPageChange={handlePageChange}
             loading={loading}
           />
+
+          {/* Market Trends — moved from top so the opportunity list is the
+              first thing on the page. The cards live at the bottom now and
+              read like an "advanced insights" section users land on after
+              scanning the actual list. */}
+          {trends && VIEW_TREND_TYPES[viewConfig.key] && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  📊 Market Trends &amp; Insights
+                </h2>
+                <span className="text-xs text-gray-400">
+                  AI-analyzed across all data in this view
+                </span>
+              </div>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750 border border-blue-100 dark:border-gray-700 rounded-lg p-4">
+                <div className={`grid gap-3 ${VIEW_TREND_TYPES[viewConfig.key].length > 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : VIEW_TREND_TYPES[viewConfig.key].length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-xl'}`}>
+                  {VIEW_TREND_TYPES[viewConfig.key].map((type) => (
+                    <TrendCard key={type} type={type} trendData={trends[type]} variant="compact" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
