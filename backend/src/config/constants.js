@@ -43,6 +43,11 @@ const OPPORTUNITY_TYPES = {
   GRANT: 'grant',
   AI_NEWS: 'ai_news',
   FREELANCE: 'freelance',
+  // bonfire = procurement bids scraped from the user's Bonfire vendor account
+  // and synced into the unified opportunities table. Source rows live in
+  // bonfire_opportunities; the sync (bonfire/sync.service.js) keeps a
+  // type='bonfire' shadow here so they show up in the main /opportunities view.
+  BONFIRE: 'bonfire',
 };
 
 const FREELANCE_ACTION_TYPES = {

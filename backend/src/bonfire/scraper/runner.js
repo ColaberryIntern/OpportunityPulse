@@ -3,6 +3,7 @@
 
 const logger = require('../../logging/logger');
 const service = require('../bonfire.service');
+const { syncBonfireToOpportunities } = require('../bonfireSync.service');
 const models = require('../../models');
 const { getScraperConfig } = require('./config');
 const { ensureLoggedIn, openAgencyPortal } = require('./session');
@@ -139,6 +140,7 @@ async function runScrape(opts = {}, deps = {}) {
     parseAgencyOpps: deps.parseAgencyOpps || agencyOpportunities.parse,
     upsert: deps.upsert || service.upsertJsonArray,
     enrichAll: deps.enrichAll || service.enrichAllUnenriched,
+    syncToOpportunities: deps.syncToOpportunities || syncBonfireToOpportunities,
     findAgencyState: deps.findAgencyState,
     upsertAgency: deps.upsertAgency,
     sleep: deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
@@ -424,6 +426,18 @@ async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
   } catch (e) {
     summary.errors.push({ stage: 'enrich', reason: e.message });
     logger.error('Bonfire auto-enrich failed', { error: e.message });
+  }
+
+  // Mirror enriched bonfire opps into the unified opportunities table so they
+  // show up in the main /opportunities view. Idempotent on (source, source_id).
+  // Failures here are non-fatal — the canonical data is in bonfire_opportunities;
+  // this is just a presentation shadow.
+  try {
+    const syncResult = await $.syncToOpportunities({});
+    summary.opportunityTableSync = syncResult;
+  } catch (e) {
+    summary.errors.push({ stage: 'sync', reason: e.message });
+    logger.error('Bonfire opportunity-table sync failed', { error: e.message });
   }
 }
 

@@ -8,6 +8,13 @@ jest.mock('../../../src/bonfire/bonfire.service', () => ({
     processed: 0, succeeded: 0, skipped: 0, failed: 0, results: [],
   }),
 }));
+// Sync to unified opportunities table — mocked because tests don't exercise
+// the Opportunity model.
+jest.mock('../../../src/bonfire/bonfireSync.service', () => ({
+  syncBonfireToOpportunities: jest.fn().mockResolvedValue({
+    processed: 0, upserted: 0, skipped: 0, errors: 0,
+  }),
+}));
 // Mock models so the runner's lazy BonfireAgency lookup doesn't try to
 // connect to Postgres in unit tests.
 jest.mock('../../../src/models', () => ({
