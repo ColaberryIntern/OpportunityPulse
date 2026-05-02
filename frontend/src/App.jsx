@@ -31,6 +31,8 @@ import IntelligenceDashboardPage from './pages/IntelligenceDashboardPage';
 import FreelancePage from './pages/FreelancePage';
 import BonfirePage from './pages/BonfirePage';
 import BonfireStrategicPage from './pages/BonfireStrategicPage';
+import MyOpportunitiesPage from './pages/MyOpportunitiesPage';
+import ReviewQueuePage from './pages/ReviewQueuePage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -287,6 +289,22 @@ function App() {
           element={
             <ProtectedLayout>
               <BonfireStrategicPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/opportunities/my"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <MyOpportunitiesPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/opportunities/review"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ReviewQueuePage />
             </ProtectedLayout>
           }
         />

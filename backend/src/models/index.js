@@ -61,6 +61,9 @@ const BonfireOpportunityTag = require('./BonfireOpportunityTag')(sequelize);
 const BonfirePipeline = require('./BonfirePipeline')(sequelize);
 const BonfireAgency = require('./BonfireAgency')(sequelize);
 const BonfireStrategicOpportunity = require('./BonfireStrategicOpportunity')(sequelize);
+const OpportunityFitScore = require('./OpportunityFitScore')(sequelize);
+const OpportunityOutput = require('./OpportunityOutput')(sequelize);
+const OpportunityEvent = require('./OpportunityEvent')(sequelize);
 
 const models = {
   UserRole,
@@ -105,6 +108,9 @@ const models = {
   BonfirePipeline,
   BonfireAgency,
   BonfireStrategicOpportunity,
+  OpportunityFitScore,
+  OpportunityOutput,
+  OpportunityEvent,
 };
 
 // Set up associations

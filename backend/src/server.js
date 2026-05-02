@@ -259,6 +259,10 @@ app.use('/api/v1/resume-upload', require('./resumeUpload/resumeUpload.routes'));
 // Bonfire Opportunity Engine (prototype, gated by BONFIRE_ENGINE_ENABLED env flag)
 app.use('/api/v1/bonfire', require('./bonfire/bonfire.routes'));
 
+// OIED — Opportunity Intelligence & Execution Department
+// (My Opportunities, action generator, review queue, events)
+app.use('/api/v1/oied', require('./oied/oied.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({
@@ -336,6 +340,11 @@ async function startServer() {
       // (default 08:00 M/W/F) to produce curated strategic opportunities.
       const { startBonfireStrategistScheduler } = require('./bonfire/bonfireStrategist.scheduler');
       startBonfireStrategistScheduler();
+
+      // OIED daily digest — top-5 opportunities by fit_score emailed daily 08:00.
+      // OFF by default; enable with OIED_DIGEST_ENABLED=true.
+      const { startOiedDigestScheduler } = require('./oied/oied.scheduler');
+      startOiedDigestScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

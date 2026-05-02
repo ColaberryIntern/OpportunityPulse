@@ -77,6 +77,8 @@ function Sidebar({ open, onClose }) {
           ...section.items,
           { to: '/bonfire', label: '🔥 Bonfire', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.24 17 7.341 18.75 11.166 16.657 10.657 17.657 18.657z' },
           { to: '/bonfire/strategic', label: '🎯 Strategic', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+          { to: '/admin/opportunities/my', label: '🎯 My Opps', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+          { to: '/admin/opportunities/review', label: '📋 Review Queue', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
         ],
       };
     }
