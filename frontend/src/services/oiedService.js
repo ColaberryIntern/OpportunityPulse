@@ -30,6 +30,30 @@ export async function patchOutputStatus(id, body) {
   return res.data?.data;
 }
 
+// ---- Profile ----------------------------------------------------------------
+export async function getProfile() {
+  const res = await api.get(`${base}/profile`);
+  return res.data?.data;
+}
+export async function saveProfile(body) {
+  const res = await api.post(`${base}/profile`, body);
+  return res.data?.data;
+}
+export async function patchProfile(body) {
+  const res = await api.patch(`${base}/profile`, body);
+  return res.data?.data;
+}
+
+// ---- Bundles ----------------------------------------------------------------
+export async function listBundles(params = {}) {
+  const res = await api.get(`${base}/bundles`, { params });
+  return res.data?.data || [];
+}
+export async function runBundler() {
+  const res = await api.post(`${base}/bundles/run`);
+  return res.data?.data;
+}
+
 // ---- Events -----------------------------------------------------------------
 export async function recordEvent(opportunityId, eventType, payload = {}) {
   try {

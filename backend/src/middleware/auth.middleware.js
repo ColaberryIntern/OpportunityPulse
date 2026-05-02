@@ -17,7 +17,13 @@ function verifyToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    // Normalize: the auth/login flow signs `userId`, the older test path
+    // signed `id`. Expose both so downstream code that reads either works.
+    req.user = {
+      ...decoded,
+      id: decoded.id != null ? decoded.id : decoded.userId,
+      userId: decoded.userId != null ? decoded.userId : decoded.id,
+    };
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

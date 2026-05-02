@@ -20,6 +20,7 @@ module.exports = (sequelize) => {
     easeOfEntry:         { type: DataTypes.INTEGER, allowNull: false, field: 'ease_of_entry' },
     strategicAlignment:  { type: DataTypes.INTEGER, allowNull: false, field: 'strategic_alignment' },
     fitScore:            { type: DataTypes.INTEGER, allowNull: false, field: 'fit_score' },
+    priorityScore:       { type: DataTypes.INTEGER, allowNull: true,  field: 'priority_score' },
     reasoning:           { type: DataTypes.JSONB,   defaultValue: {} },
   }, {
     tableName: 'opportunity_fit_scores',

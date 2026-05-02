@@ -3,24 +3,81 @@ const { successResponse, errorResponse, paginatedResponse } = require('../utils/
 const myOpps = require('./myOpportunities.service');
 const actions = require('./actionGenerator.service');
 const events = require('./events.service');
+const profileSvc = require('./profile.service');
+const bundler = require('./opportunityBundler.service');
 
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
   try {
-    const { rows, total } = await myOpps.listMyOpportunities({
+    const { rows, total, profileWasDefault } = await myOpps.listMyOpportunities({
       limit: req.query.limit,
       offset: req.query.offset,
       type: req.query.type,
       minScore: req.query.minScore,
+      userId: (req.user && req.user.id) || null,
     });
     return paginatedResponse(res, rows, {
       total,
       limit: Number(req.query.limit) || 50,
       offset: Number(req.query.offset) || 0,
+      profileWasDefault,
     });
   } catch (e) {
     logger.error('OIED listMy failed', { error: e.message });
     return errorResponse(res, 'Failed to list my opportunities', 500);
+  }
+}
+
+// GET /api/v1/oied/profile  — current user's profile (or default fall-back).
+async function getMyProfile(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    const real = await profileSvc.getProfile(userId);
+    if (real) return successResponse(res, real);
+    const def = await profileSvc.getOrDefault(userId);
+    return successResponse(res, { ...def, _isDefault: true });
+  } catch (e) {
+    return errorResponse(res, 'Failed to load profile', 500);
+  }
+}
+
+// POST /api/v1/oied/profile  — create-or-replace.
+async function postMyProfile(req, res) {
+  try {
+    const row = await profileSvc.createProfile(req.user && req.user.id, req.body || {});
+    return successResponse(res, row, 'Profile saved', 201);
+  } catch (e) {
+    return errorResponse(res, e.message, 400);
+  }
+}
+
+// PATCH /api/v1/oied/profile  — partial update.
+async function patchMyProfile(req, res) {
+  try {
+    const row = await profileSvc.patchProfile(req.user && req.user.id, req.body || {});
+    return successResponse(res, row);
+  } catch (e) {
+    return errorResponse(res, e.message, 400);
+  }
+}
+
+// GET /api/v1/oied/bundles
+async function listBundles(req, res) {
+  try {
+    const rows = await bundler.listBundles({ limit: req.query.limit });
+    return successResponse(res, rows);
+  } catch (e) {
+    return errorResponse(res, 'Failed to list bundles', 500);
+  }
+}
+
+// POST /api/v1/oied/bundles/run  (admin) — rebuilds the bundle table.
+async function runBundler(req, res) {
+  try {
+    const result = await bundler.buildBundles();
+    return successResponse(res, result, 'Bundles rebuilt');
+  } catch (e) {
+    return errorResponse(res, 'Bundle build failed: ' + e.message, 500);
   }
 }
 
@@ -134,4 +191,9 @@ module.exports = {
   getOutput,
   patchOutput,
   postEvent,
+  getMyProfile,
+  postMyProfile,
+  patchMyProfile,
+  listBundles,
+  runBundler,
 };

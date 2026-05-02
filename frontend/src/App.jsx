@@ -33,6 +33,8 @@ import BonfirePage from './pages/BonfirePage';
 import BonfireStrategicPage from './pages/BonfireStrategicPage';
 import MyOpportunitiesPage from './pages/MyOpportunitiesPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
+import ProfileEditorPage from './pages/ProfileEditorPage';
+import BundlesPage from './pages/BundlesPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -305,6 +307,22 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <ReviewQueuePage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedLayout>
+              <ProfileEditorPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/opportunities/bundles"
+          element={
+            <ProtectedLayout>
+              <BundlesPage />
             </ProtectedLayout>
           }
         />

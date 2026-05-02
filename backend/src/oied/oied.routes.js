@@ -29,4 +29,13 @@ router.patch(
 // Events: any authenticated user can record (UI tracking).
 router.post('/opportunity-events', verifyToken, c.postEvent);
 
+// Per-user business profile.
+router.get('/profile',    verifyToken, c.getMyProfile);
+router.post('/profile',   verifyToken, c.postMyProfile);
+router.patch('/profile',  verifyToken, c.patchMyProfile);
+
+// Bundles: read open to all auth'd; rebuild is admin-only.
+router.get('/bundles',         verifyToken, c.listBundles);
+router.post('/bundles/run',    verifyToken, checkPermissions(ROLES.ADMIN), c.runBundler);
+
 module.exports = router;

@@ -46,6 +46,9 @@ backend/src/seeders/*.map
 .bonfire-session/
 backend/.bonfire-session/
 
+# OIED Playwright UI test screenshots / results
+backend/.oied-screenshots/
+
 # Frontend build
 frontend/build/
 

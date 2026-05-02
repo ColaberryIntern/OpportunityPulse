@@ -77,6 +77,33 @@ function OppRow({ opp, onGenerated }) {
   );
 }
 
+// One of the priority sections at the top of the page (Act Now / High Value
+// / Quick Wins). Collapses gracefully when it has zero matching rows so the
+// admin doesn't see empty placeholders.
+function BucketSection({ title, hint, rows, tone = 'blue', testId }) {
+  if (!rows || rows.length === 0) return null;
+  const toneMap = {
+    red: 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/40 text-red-700 dark:text-red-300',
+    green: 'border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-900/40 text-green-700 dark:text-green-300',
+    amber: 'border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-900/40 text-amber-700 dark:text-amber-300',
+    blue: 'border-blue-200 bg-blue-50 dark:bg-blue-900/10 dark:border-blue-900/40 text-blue-700 dark:text-blue-300',
+  };
+  return (
+    <section className="mb-6" data-testid={testId}>
+      <div className={`px-3 py-2 mb-3 border rounded-md flex items-center justify-between ${toneMap[tone]}`}>
+        <div>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          {hint && <p className="text-xs opacity-80">{hint}</p>}
+        </div>
+        <span className="text-xs font-mono">{rows.length}</span>
+      </div>
+      <ul className="list-none p-0">
+        {rows.slice(0, 8).map((opp) => <OppRow key={opp.id} opp={opp} />)}
+      </ul>
+    </section>
+  );
+}
+
 function MyOpportunitiesPage() {
   const { user } = useSelector((s) => s.auth);
   const [rows, setRows] = useState([]);
@@ -115,6 +142,15 @@ function MyOpportunitiesPage() {
     );
   }
 
+  // Group by bucket — OIED v2 surfaces "Act Now / High Value / Quick Wins"
+  // sections at the top so admins triage the most important rows first.
+  const grouped = {
+    act_now:    rows.filter((r) => r.bucket === 'act_now'),
+    high_value: rows.filter((r) => r.bucket === 'high_value'),
+    quick_win:  rows.filter((r) => r.bucket === 'quick_win'),
+    standard:   rows.filter((r) => !r.bucket || r.bucket === 'standard'),
+  };
+
   return (
     <div className="p-6">
       <div className="max-w-6xl mx-auto">
@@ -126,9 +162,9 @@ function MyOpportunitiesPage() {
             </span>
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            All active opportunities ≥ $1,000 ranked by Fit Score (deterministic
-            scoring across service match, revenue, automation, repeatability,
-            ease, strategic alignment).
+            Active opportunities ≥ $1,000, scored against your business profile
+            and ranked by priority. Top sections surface the rows that matter most;
+            full list below.
           </p>
         </header>
 
@@ -178,9 +214,36 @@ function MyOpportunitiesPage() {
             No opportunities match the filters.
           </div>
         ) : (
-          <ul className="list-none p-0" data-testid="my-opportunities-list">
-            {rows.map((opp) => <OppRow key={opp.id} opp={opp} />)}
-          </ul>
+          <>
+            <BucketSection
+              title="🔥 Act Now"
+              tone="red"
+              hint="Priority ≥ 80 or close date is days away."
+              rows={grouped.act_now}
+              testId="bucket-act-now"
+            />
+            <BucketSection
+              title="💰 High Value"
+              tone="green"
+              hint="Revenue weight ≥ 16 (≥ $500k) and meaningful fit."
+              rows={grouped.high_value}
+              testId="bucket-high-value"
+            />
+            <BucketSection
+              title="⚡ Quick Wins"
+              tone="amber"
+              hint="High ease + automation, closes within 30 days."
+              rows={grouped.quick_win}
+              testId="bucket-quick-wins"
+            />
+
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-8 mb-2">
+              All matching ({rows.length})
+            </h2>
+            <ul className="list-none p-0" data-testid="my-opportunities-list">
+              {rows.map((opp) => <OppRow key={opp.id} opp={opp} />)}
+            </ul>
+          </>
         )}
       </div>
     </div>
