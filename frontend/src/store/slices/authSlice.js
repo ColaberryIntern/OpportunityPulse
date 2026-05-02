@@ -20,6 +20,10 @@ export const loginUser = createAsyncThunk(
       const response = await authService.login(credentials);
       const { accessToken, user } = response.data.data;
       localStorage.setItem('token', accessToken);
+      // Persist user blob too — without it, hard navigation after login
+      // re-initializes the store with user=null, kicking the admin out of
+      // role-gated pages until they re-fetch /auth/me.
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch { /* quota — ignore */ }
       return { accessToken, user };
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: 'Login failed' });
@@ -65,8 +69,15 @@ export const changeUserPassword = createAsyncThunk(
   }
 );
 
+function loadStoredUser() {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 const initialState = {
-  user: null,
+  user: loadStoredUser(),
   token: localStorage.getItem('token') || null,
   isAuthenticated: !!localStorage.getItem('token'),
   loading: false,
@@ -86,6 +97,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     },
     clearError(state) {
       state.error = null;
@@ -134,6 +146,7 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
       })
       // Update user profile
       .addCase(updateUserProfile.pending, (state) => {
