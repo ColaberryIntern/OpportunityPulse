@@ -60,7 +60,9 @@ async function generateOutput({ opportunityId, type, generatedBy = null }) {
   const { content } = await aiClient.chat(
     SYSTEM_PROMPTS[type],
     buildUserPrompt(opp),
-    { temperature: 0.4, maxTokens: 900 }
+    // responseFormat:'text' → emits markdown, not JSON. OpenAI rejects
+    // json_object mode when the prompt doesn't ask for JSON.
+    { temperature: 0.4, maxTokens: 900, responseFormat: 'text' }
   );
 
   if (!content || !content.trim()) {

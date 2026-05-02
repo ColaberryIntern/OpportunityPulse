@@ -12,7 +12,15 @@ class AIClient {
   }
 
   async chat(systemPrompt, userPrompt, options = {}) {
-    const { temperature = 0.3, maxTokens = 2000 } = options;
+    const { temperature = 0.3, maxTokens = 2000, responseFormat } = options;
+
+    // Default to json_object (used by enrichment / strategist / etc.).
+    // Free-text callers (OIED proposal/offer/analysis generators that emit
+    // markdown) pass responseFormat: 'text' to opt out, since OpenAI rejects
+    // json_object when the prompt itself doesn't mention 'json'.
+    const fmt = responseFormat === 'text'
+      ? undefined
+      : { type: responseFormat || 'json_object' };
 
     try {
       const response = await this.client.chat.completions.create({
@@ -23,7 +31,7 @@ class AIClient {
         ],
         temperature,
         max_tokens: maxTokens,
-        response_format: { type: 'json_object' },
+        ...(fmt ? { response_format: fmt } : {}),
       });
 
       const content = response.choices[0].message.content;
