@@ -27,7 +27,6 @@ function OppRow({ opp, onGenerated }) {
   useEffect(() => {
     // 'viewed' event — best-effort. Fires once per row mount.
     recordEvent(opp.id, 'viewed', { source: 'my_opportunities_list' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opp.id]);
 
   return (
