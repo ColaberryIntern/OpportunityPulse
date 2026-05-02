@@ -18,7 +18,16 @@ export const loginUser = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       const response = await authService.login(credentials);
-      const { accessToken, user } = response.data.data;
+      const { accessToken, user: rawUser } = response.data.data;
+      // Auth API returns role as a joined object {id, roleName, ...}; the
+      // rest of the SPA checks `user.role === 'admin'` — normalize once
+      // here so every page's role gate works uniformly.
+      const user = {
+        ...rawUser,
+        role: typeof rawUser?.role === 'object' && rawUser.role
+          ? rawUser.role.roleName || rawUser.role.name
+          : rawUser?.role,
+      };
       localStorage.setItem('token', accessToken);
       // Persist user blob too — without it, hard navigation after login
       // re-initializes the store with user=null, kicking the admin out of
