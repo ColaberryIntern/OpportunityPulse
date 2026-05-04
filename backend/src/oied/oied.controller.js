@@ -6,6 +6,8 @@ const events = require('./events.service');
 const profileSvc = require('./profile.service');
 const bundler = require('./opportunityBundler.service');
 const recommendations = require('./recommendation.service');
+const briefingSvc = require('./briefing.service');
+const triggerSvc = require('./triggerEngine.service');
 
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
@@ -258,6 +260,82 @@ async function getConversionStats(req, res) {
   }
 }
 
+// ----- v4 endpoints --------------------------------------------------
+
+// GET  /api/v1/oied/briefing — today's structured payload (no email).
+async function getBriefing(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await briefingSvc.buildBriefing({ userId });
+    return successResponse(res, data);
+  } catch (e) {
+    logger.error('OIED briefing failed', { error: e.message });
+    return errorResponse(res, 'Failed to build briefing', 500);
+  }
+}
+
+// POST /api/v1/oied/briefing/send  (admin) — composes + emails.
+async function sendBriefing(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const to = (req.body && req.body.to) || process.env.OIED_BRIEFING_TO;
+    const out = await briefingSvc.deliverBriefing({ userId, to });
+    return successResponse(res, out, out.sent ? 'Briefing sent' : 'Briefing skipped');
+  } catch (e) {
+    logger.error('OIED briefing send failed', { error: e.message });
+    return errorResponse(res, 'Failed to send briefing: ' + e.message, 500);
+  }
+}
+
+// POST /api/v1/oied/triggers/run  (admin) — runs the engine; body
+// { dryRun?: bool, maxProposals?: int, maxStrategies?: int }.
+async function runTriggers(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const dryRun = req.body && req.body.dryRun === true;
+    const out = await triggerSvc.runTriggers({
+      userId,
+      dryRun,
+      maxProposals: req.body && Number(req.body.maxProposals) || undefined,
+      maxStrategies: req.body && Number(req.body.maxStrategies) || undefined,
+    });
+    return successResponse(res, out, dryRun ? 'Trigger dry-run complete' : 'Triggers run');
+  } catch (e) {
+    logger.error('OIED triggers run failed', { error: e.message });
+    return errorResponse(res, 'Triggers failed: ' + e.message, 500);
+  }
+}
+
+// GET /api/v1/oied/triggers/logs (admin) — paginated log read.
+async function listTriggerLogs(req, res) {
+  try {
+    const { rows, total } = await triggerSvc.listLogs({
+      limit: req.query.limit, offset: req.query.offset,
+    });
+    return paginatedResponse(res, rows, {
+      total,
+      limit: Number(req.query.limit) || 50,
+      offset: Number(req.query.offset) || 0,
+    });
+  } catch (e) {
+    return errorResponse(res, 'Failed to list trigger logs', 500);
+  }
+}
+
+// POST /api/v1/oied/bundles/:id/blueprint  (admin)
+async function generateBundleBlueprint(req, res) {
+  const bundleId = Number(req.params.id);
+  if (!bundleId) return errorResponse(res, 'Invalid bundle id', 400);
+  try {
+    const force = req.body && req.body.force === true;
+    const out = await bundler.generateProductBlueprint(bundleId, { force });
+    return successResponse(res, out, out.cached ? 'Cached blueprint' : 'Blueprint generated');
+  } catch (e) {
+    logger.error('OIED bundle blueprint failed', { bundleId, error: e.message });
+    return errorResponse(res, 'Blueprint generation failed: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   listMy,
   generate,
@@ -275,4 +353,10 @@ module.exports = {
   markResult,
   generateBundleStrategy,
   getConversionStats,
+  // v4
+  getBriefing,
+  sendBriefing,
+  runTriggers,
+  listTriggerLogs,
+  generateBundleBlueprint,
 };

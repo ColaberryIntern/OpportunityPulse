@@ -93,3 +93,29 @@ export async function generateBundleStrategy(bundleId, force = false) {
   const res = await api.post(`${base}/bundles/${bundleId}/strategy`, { force });
   return res.data?.data;
 }
+
+// ---- v4: Daily briefing -----------------------------------------------------
+export async function getBriefing() {
+  const res = await api.get(`${base}/briefing`);
+  return res.data?.data || null;
+}
+export async function sendBriefingEmail(to) {
+  const res = await api.post(`${base}/briefing/send`, to ? { to } : {});
+  return res.data?.data;
+}
+
+// ---- v4: Trigger engine -----------------------------------------------------
+export async function runTriggers(dryRun = true) {
+  const res = await api.post(`${base}/triggers/run`, { dryRun });
+  return res.data?.data;
+}
+export async function listTriggerLogs(params = {}) {
+  const res = await api.get(`${base}/triggers/logs`, { params });
+  return res.data;
+}
+
+// ---- v4: Bundle product blueprint ------------------------------------------
+export async function generateBundleBlueprint(bundleId, force = false) {
+  const res = await api.post(`${base}/bundles/${bundleId}/blueprint`, { force });
+  return res.data?.data;
+}

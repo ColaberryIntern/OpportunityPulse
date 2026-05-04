@@ -167,13 +167,16 @@ function calculateFitScore({ opportunity, userProfile }) {
 // ---------------------------------------------------------------------------
 // Persistence (cache). Idempotent on (opportunity_id, profile_hash).
 // ---------------------------------------------------------------------------
-async function getOrCreateFitScore({ opportunity, userProfile, force = false }) {
+async function getOrCreateFitScore({ opportunity, userProfile, organizationId, force = false }) {
   if (!OpportunityFitScore) return calculateFitScore({ opportunity, userProfile });
 
   const hash = profileHash(userProfile);
+  // v4: cache key is (organization_id, opportunity_id, profile_hash). When
+  // organizationId is omitted (legacy callers), default to org 1.
+  const orgId = organizationId || 1;
   if (!force) {
     const cached = await OpportunityFitScore.findOne({
-      where: { opportunityId: opportunity.id, profileHash: hash },
+      where: { opportunityId: opportunity.id, profileHash: hash, organizationId: orgId },
     });
     if (cached) return cached.toJSON();
   }
@@ -181,6 +184,7 @@ async function getOrCreateFitScore({ opportunity, userProfile, force = false }) 
   const [row] = await OpportunityFitScore.upsert({
     opportunityId: opportunity.id,
     profileHash: hash,
+    organizationId: orgId,
     serviceMatch: computed.service_match,
     revenueWeight: computed.revenue_weight,
     automationScore: computed.automation_score,

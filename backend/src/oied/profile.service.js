@@ -1,15 +1,16 @@
-// Per-user business profile. One row per user, keyed on user_id.
-// Used by the fit-scoring engine to personalize matches.
+// Per-organization business profile. One row per org (renamed in v4
+// from per-user). Used by the fit-scoring engine to personalize matches.
 //
-// Fall-through: when a user has no profile row, getOrDefault returns a
-// "global default" profile so the scorer always has something concrete to
-// work with. This preserves day-1 behavior for users who never visit
-// /admin/profile.
+// Fall-through: when an org has no profile row, getOrDefault returns the
+// global default. This preserves day-1 behavior for any tenant that never
+// visits /admin/profile.
+//
+// Backwards-compat: getProfile / getOrDefault still accept a userId for
+// older callers; we resolve to the user's organizationId internally. New
+// callers should pass organizationId directly via the *ByOrg variants.
 
-const { UserProfile } = require('../models');
+const { OrganizationProfile, User } = require('../models');
 
-// The global default. Mirrors the prior hardcoded DEFAULT_PROFILE in
-// fitScoring.service.js. Used only when a user has no profile of their own.
 const GLOBAL_DEFAULT = {
   services: ['ai-systems', 'data-analytics', 'staffing', 'compliance', 'consulting', 'it-services', 'automation', 'data-science'],
   industries: ['IT Services', 'Data & Analytics', 'Staffing', 'Compliance', 'Consulting'],
@@ -23,16 +24,42 @@ const GLOBAL_DEFAULT = {
   },
 };
 
-async function getProfile(userId) {
-  if (!userId) return null;
-  const row = await UserProfile.findOne({ where: { userId } });
+const DEFAULT_ORG_ID = 1;
+
+// Resolve a userId → organizationId via the users table. Falls back to
+// DEFAULT_ORG_ID when userId is null OR the user has no org_id set.
+async function resolveOrgId(userId) {
+  if (!userId) return DEFAULT_ORG_ID;
+  try {
+    const u = await User.findByPk(userId, { attributes: ['id', 'organizationId'] });
+    return (u && u.organizationId) || DEFAULT_ORG_ID;
+  } catch {
+    return DEFAULT_ORG_ID;
+  }
+}
+
+async function getProfileByOrg(organizationId) {
+  if (!organizationId) return null;
+  const row = await OrganizationProfile.findOne({ where: { organizationId } });
   return row ? row.toJSON() : null;
 }
 
-async function getOrDefault(userId) {
-  const real = await getProfile(userId);
+async function getOrDefaultByOrg(organizationId) {
+  const orgId = organizationId || DEFAULT_ORG_ID;
+  const real = await getProfileByOrg(orgId);
   if (real) return real;
-  return { ...GLOBAL_DEFAULT, userId, _isDefault: true };
+  return { ...GLOBAL_DEFAULT, organizationId: orgId, _isDefault: true };
+}
+
+// Legacy entry point — caller passes userId; we resolve org internally.
+async function getProfile(userId) {
+  const orgId = await resolveOrgId(userId);
+  return getProfileByOrg(orgId);
+}
+
+async function getOrDefault(userId) {
+  const orgId = await resolveOrgId(userId);
+  return getOrDefaultByOrg(orgId);
 }
 
 const ALLOWED_FIELDS = [
@@ -49,24 +76,27 @@ function pick(obj) {
 }
 
 async function createProfile(userId, body) {
-  if (!userId) throw new Error('userId required');
+  const orgId = await resolveOrgId(userId);
   // Idempotent: if it exists, treat as update.
-  const existing = await UserProfile.findOne({ where: { userId } });
+  const existing = await OrganizationProfile.findOne({ where: { organizationId: orgId } });
   if (existing) {
     Object.assign(existing, pick(body));
     await existing.save();
     return existing.toJSON();
   }
-  const row = await UserProfile.create({ userId, ...pick(body) });
+  const row = await OrganizationProfile.create({
+    organizationId: orgId, userId: userId || null, ...pick(body),
+  });
   return row.toJSON();
 }
 
 async function patchProfile(userId, body) {
-  if (!userId) throw new Error('userId required');
-  let row = await UserProfile.findOne({ where: { userId } });
+  const orgId = await resolveOrgId(userId);
+  let row = await OrganizationProfile.findOne({ where: { organizationId: orgId } });
   if (!row) {
-    // Create with the patched fields when the user has no profile yet.
-    row = await UserProfile.create({ userId, ...pick(body) });
+    row = await OrganizationProfile.create({
+      organizationId: orgId, userId: userId || null, ...pick(body),
+    });
     return row.toJSON();
   }
   Object.assign(row, pick(body));
@@ -77,7 +107,11 @@ async function patchProfile(userId, body) {
 module.exports = {
   getProfile,
   getOrDefault,
+  getProfileByOrg,
+  getOrDefaultByOrg,
+  resolveOrgId,
   createProfile,
   patchProfile,
   GLOBAL_DEFAULT,
+  DEFAULT_ORG_ID,
 };

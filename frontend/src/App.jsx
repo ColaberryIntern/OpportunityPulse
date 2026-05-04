@@ -36,6 +36,8 @@ import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
 import RecommendationsPage from './pages/RecommendationsPage';
+import BriefingPage from './pages/BriefingPage';
+import TriggerLogsPage from './pages/TriggerLogsPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -332,6 +334,22 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <RecommendationsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/briefing"
+          element={
+            <ProtectedLayout>
+              <BriefingPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/triggers"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <TriggerLogsPage />
             </ProtectedLayout>
           }
         />

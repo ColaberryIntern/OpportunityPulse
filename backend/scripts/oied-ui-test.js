@@ -45,6 +45,11 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     recommendation_card_count: 0,
     mark_result_event_logged: false,
     bundle_strategy_button_present: false,
+    // v4
+    briefing_loaded: false,
+    trigger_logs_loaded: false,
+    trigger_dry_run_fired: false,
+    blueprint_button_present: false,
     screenshots: [],
     errors: [],
   };
@@ -235,6 +240,54 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     } else {
       log('skipping mark-result test (no recommendations rendered)');
     }
+
+    // 12. v4: /admin/briefing — daily briefing renders.
+    log('navigating to /admin/briefing');
+    await page.goto(`${BASE_URL}/admin/briefing`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="briefing-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+    const briefingPresent = await page.locator('[data-testid="briefing-page"]').count();
+    const totalsPresent = await page.locator('[data-testid="briefing-totals"]').count();
+    results.briefing_loaded = briefingPresent > 0 && totalsPresent > 0;
+    const screenshotBriefing = path.join(OUT_DIR, 'briefing.png');
+    await page.screenshot({ path: screenshotBriefing, fullPage: true });
+    results.screenshots.push('briefing.png');
+    log(`briefing page in DOM: ${briefingPresent}, totals: ${totalsPresent}`);
+
+    // 13. v4: /admin/triggers — trigger logs page + run a dry-run.
+    log('navigating to /admin/triggers');
+    await page.goto(`${BASE_URL}/admin/triggers`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="trigger-logs-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    results.trigger_logs_loaded = (await page.locator('[data-testid="trigger-logs-page"]').count()) > 0;
+
+    // Click "Run Triggers" with the dry-run toggle on (default).
+    const runBtn = page.locator('[data-testid="trigger-run-btn"]').first();
+    if (await runBtn.count() > 0) {
+      const runPromise = page.waitForResponse(
+        (resp) => /\/api\/v1\/oied\/triggers\/run/.test(resp.url())
+          && resp.request().method() === 'POST',
+        { timeout: 30000 },
+      ).catch(() => null);
+      await runBtn.click();
+      const resp = await runPromise;
+      results.trigger_dry_run_fired = !!(resp && resp.status() === 200);
+      log(`triggers/run POST status: ${resp ? resp.status() : 'no response'}`);
+    }
+    await page.waitForTimeout(1500);
+    const screenshotTriggers = path.join(OUT_DIR, 'trigger_logs.png');
+    await page.screenshot({ path: screenshotTriggers, fullPage: true });
+    results.screenshots.push('trigger_logs.png');
+
+    // 14. v4: blueprint button on the bundles page (after re-loading).
+    log('checking for blueprint controls on bundles page');
+    await page.goto(`${BASE_URL}/admin/opportunities/bundles`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    const blueprintCount = await page.locator(
+      '[data-testid="generate-blueprint-btn"], [data-testid="regenerate-blueprint-btn"], [data-testid="bundle-blueprint"]',
+    ).count();
+    results.blueprint_button_present = blueprintCount > 0;
+    log(`blueprint controls in DOM: ${blueprintCount}`);
   } catch (e) {
     results.errors.push('flow: ' + e.message);
     console.error(e);
@@ -250,7 +303,10 @@ function log(...a) { console.log('[oied-ui]', ...a); }
       && results.review_loaded
       && results.profile_editor_loaded
       && results.bundles_page_loaded
-      && results.recommendations_loaded;
+      && results.recommendations_loaded
+      && results.briefing_loaded
+      && results.trigger_logs_loaded
+      && results.trigger_dry_run_fired;
     process.exit(passed ? 0 : 1);
   }
 })().catch((e) => { console.error(e); process.exit(1); });

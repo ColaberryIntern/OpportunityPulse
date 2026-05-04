@@ -267,6 +267,145 @@ async function generateBundleStrategy(bundleId, { force = false } = {}) {
   };
 }
 
+// ----- v4: Bundle → Product Blueprint -----------------------------------
+//
+// generateProductBlueprint(bundleId) — extends a bundle's strategy with
+// concrete build details (MVP scope, features, required agents, time to
+// market, monetization). Cached on bundles.blueprint_hash. Independent
+// hash from strategy_hash so blueprint can regenerate without
+// invalidating the strategy cache.
+
+const BLUEPRINT_SYSTEM_PROMPT =
+  'You are a product designer turning a strategic play into a concrete '
+  + 'build plan. Output strict JSON with these keys ONLY: '
+  + '`mvp_scope` (1 sentence — what ships first), '
+  + '`features` (array of 4-7 strings, each ≤120 chars — concrete capabilities), '
+  + '`required_agents` (array of role names like "Data Engineer", '
+  + '"Compliance Lead", "AI Pilot Lead", "Frontend Engineer"), '
+  + '`time_to_market_weeks` (integer between 4 and 52), '
+  + '`monetization_strategy` (1 sentence — pricing model + contract type). '
+  + 'No prose outside the JSON. Be specific — name actual technologies '
+  + 'and roles, never empty phrases.';
+
+function blueprintHashFor(bundle, members) {
+  const ids = members.map((m) => m.id).sort((a, b) => a - b).join('|');
+  return crypto
+    .createHash('sha256')
+    .update(`${bundle.theme}::${ids}::blueprint-v1`)
+    .digest('hex');
+}
+
+function buildBlueprintUserPrompt(bundle, members, strategy) {
+  const lines = [
+    `Cluster theme: ${bundle.theme}`,
+    `Member count: ${members.length}`,
+    `Total estimated value: $${Number(bundle.estimatedTotalValue || 0).toFixed(0)}`,
+    '',
+    'Strategy already chosen for this cluster:',
+    `  what_to_build: ${strategy.what_to_build || ''}`,
+    `  why_it_works: ${strategy.why_it_works || ''}`,
+    `  suggested_solution: ${strategy.suggested_solution || ''}`,
+    `  revenue_potential_usd: ${strategy.revenue_potential_usd || 0}`,
+    '',
+    'Member opportunities (title · category · value):',
+  ];
+  for (const m of members.slice(0, 12)) {
+    lines.push(`  • ${m.title} · ${m.category || 'n/a'} · $${Number(m.value || 0).toFixed(0)}`);
+  }
+  return lines.join('\n');
+}
+
+function safeParseBlueprint(raw) {
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const features = Array.isArray(obj.features)
+      ? obj.features.map((f) => String(f).slice(0, 200)).slice(0, 10)
+      : [];
+    const agents = Array.isArray(obj.required_agents)
+      ? obj.required_agents.map((a) => String(a).slice(0, 80)).slice(0, 10)
+      : [];
+    return {
+      mvp_scope:             String(obj.mvp_scope || '').slice(0, 500),
+      features,
+      required_agents:       agents,
+      time_to_market_weeks:  Number(obj.time_to_market_weeks) || null,
+      monetization_strategy: String(obj.monetization_strategy || '').slice(0, 500),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function generateProductBlueprint(bundleId, { force = false } = {}) {
+  const bundle = await Bundle.findByPk(bundleId);
+  if (!bundle) throw new Error(`bundle ${bundleId} not found`);
+
+  // Blueprint extends a populated strategy. Without a strategy we don't
+  // have enough context to design the build — fail loud rather than
+  // generate a generic blueprint that papers over the gap.
+  const strategy = bundle.strategy || {};
+  if (!strategy.what_to_build) {
+    throw new Error('bundle has no strategy yet — generate a strategy first');
+  }
+
+  const ids = Array.isArray(bundle.opportunityIds) ? bundle.opportunityIds : [];
+  if (ids.length === 0) {
+    throw new Error(`bundle ${bundleId} has no member opportunities`);
+  }
+  const members = await Opportunity.findAll({
+    where: { id: ids },
+    attributes: ['id', 'title', 'category', 'value'],
+  });
+  const hash = blueprintHashFor(bundle, members);
+
+  if (!force
+      && bundle.blueprintHash === hash
+      && bundle.blueprint
+      && bundle.blueprint.mvp_scope) {
+    return {
+      cached: true,
+      bundleId: bundle.id,
+      blueprint: bundle.blueprint,
+      blueprintHash: bundle.blueprintHash,
+    };
+  }
+
+  const aiClient = getAIClient();
+  const { content } = await aiClient.chat(
+    BLUEPRINT_SYSTEM_PROMPT,
+    buildBlueprintUserPrompt(bundle, members, strategy),
+    { temperature: 0.4, maxTokens: 700, responseFormat: 'json_object' },
+  );
+
+  const parsed = safeParseBlueprint(content);
+  if (!parsed) {
+    throw new Error('AI returned unparseable JSON for bundle blueprint');
+  }
+  const blueprintRow = {
+    ...parsed,
+    generated_at: new Date().toISOString(),
+    model: 'gpt-4o-mini',
+  };
+
+  bundle.blueprint = blueprintRow;
+  bundle.blueprintHash = hash;
+  await bundle.save();
+
+  logger.info('OIED bundler: blueprint generated', {
+    bundleId: bundle.id,
+    theme: bundle.theme,
+    features: parsed.features.length,
+    timeToMarket: parsed.time_to_market_weeks,
+  });
+
+  return {
+    cached: false,
+    bundleId: bundle.id,
+    blueprint: bundle.blueprint,
+    blueprintHash: bundle.blueprintHash,
+  };
+}
+
 module.exports = {
   buildBundles,
   listBundles,
@@ -275,9 +414,14 @@ module.exports = {
   buildTheme,
   topKeywords,
   generateBundleStrategy,
+  generateProductBlueprint,
   strategyHashFor,
+  blueprintHashFor,
   safeParseStrategy,
+  safeParseBlueprint,
   buildStrategyUserPrompt,
+  buildBlueprintUserPrompt,
   STRATEGY_SYSTEM_PROMPT,
+  BLUEPRINT_SYSTEM_PROMPT,
   MIN_BUNDLE_SIZE,
 };

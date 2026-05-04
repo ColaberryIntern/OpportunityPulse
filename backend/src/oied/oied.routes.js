@@ -53,4 +53,16 @@ router.post(
   c.markResult,
 );
 
+// v4 — Autonomous Revenue Engine.
+router.get('/briefing',         verifyToken, c.getBriefing);
+router.post('/briefing/send',   verifyToken, checkPermissions(ROLES.ADMIN), c.sendBriefing);
+router.post('/triggers/run',    verifyToken, checkPermissions(ROLES.ADMIN), c.runTriggers);
+router.get('/triggers/logs',    verifyToken, checkPermissions(ROLES.ADMIN), c.listTriggerLogs);
+router.post(
+  '/bundles/:id/blueprint',
+  verifyToken,
+  checkPermissions(ROLES.ADMIN),
+  c.generateBundleBlueprint,
+);
+
 module.exports = router;

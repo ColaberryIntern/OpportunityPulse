@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { listBundles, runBundler, generateBundleStrategy } from '../services/oiedService';
+import { listBundles, runBundler, generateBundleStrategy, generateBundleBlueprint } from '../services/oiedService';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -8,6 +8,48 @@ function fmtUSD(n) {
   if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(1) + 'M';
   if (v >= 1_000) return '$' + Math.round(v / 1_000) + 'k';
   return '$' + v;
+}
+
+function BlueprintView({ blueprint }) {
+  if (!blueprint || !blueprint.mvp_scope) return null;
+  return (
+    <div
+      className="mt-2 p-3 rounded bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800"
+      data-testid="bundle-blueprint"
+    >
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+          📐 Blueprint
+        </h4>
+        <span className="text-xs text-indigo-700 dark:text-indigo-300">
+          {blueprint.time_to_market_weeks ? `${blueprint.time_to_market_weeks}w to market` : ''}
+        </span>
+      </div>
+      <p className="text-sm text-gray-800 dark:text-gray-200 mb-2">
+        <span className="font-medium">MVP: </span>{blueprint.mvp_scope}
+      </p>
+      {Array.isArray(blueprint.features) && blueprint.features.length > 0 && (
+        <div className="mb-2">
+          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Features:</div>
+          <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc list-inside space-y-0.5">
+            {blueprint.features.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </div>
+      )}
+      {Array.isArray(blueprint.required_agents) && blueprint.required_agents.length > 0 && (
+        <p className="text-xs text-gray-700 dark:text-gray-300 mb-1">
+          <span className="font-medium">Required agents: </span>
+          {blueprint.required_agents.join(', ')}
+        </p>
+      )}
+      {blueprint.monetization_strategy && (
+        <p className="text-xs text-gray-700 dark:text-gray-300">
+          <span className="font-medium">Monetization: </span>
+          {blueprint.monetization_strategy}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function StrategyView({ strategy }) {
@@ -41,7 +83,9 @@ function StrategyView({ strategy }) {
 
 function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
   const [busy, setBusy] = useState(false);
+  const [busyBlueprint, setBusyBlueprint] = useState(false);
   const [localStrategy, setLocalStrategy] = useState(bundle.strategy || {});
+  const [localBlueprint, setLocalBlueprint] = useState(bundle.blueprint || {});
   const [err, setErr] = useState(null);
 
   async function handleGenerate(force = false) {
@@ -60,7 +104,23 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
     }
   }
 
+  async function handleBlueprint(force = false) {
+    if (!isAdmin) return;
+    if (force && !window.confirm('Re-generate blueprint? Existing copy will be replaced.')) return;
+    setBusyBlueprint(true);
+    setErr(null);
+    try {
+      const out = await generateBundleBlueprint(bundle.id, force);
+      setLocalBlueprint(out.blueprint || {});
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Failed');
+    } finally {
+      setBusyBlueprint(false);
+    }
+  }
+
   const hasStrategy = !!(localStrategy && localStrategy.what_to_build);
+  const hasBlueprint = !!(localBlueprint && localBlueprint.mvp_scope);
 
   return (
     <article className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-3" data-testid="bundle-card">
@@ -87,13 +147,14 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
       )}
 
       <StrategyView strategy={localStrategy} />
+      <BlueprintView blueprint={localBlueprint} />
 
       {err && (
         <div className="mt-2 p-2 rounded bg-red-50 text-sm text-red-700">{err}</div>
       )}
 
       {isAdmin && (
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           {!hasStrategy ? (
             <button
               type="button"
@@ -112,7 +173,29 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
               className="px-3 py-1.5 rounded border border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300 text-sm hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50"
               data-testid="regenerate-strategy-btn"
             >
-              {busy ? 'Re-generating…' : '🔄 Re-generate'}
+              {busy ? 'Re-generating…' : '🔄 Re-generate Strategy'}
+            </button>
+          )}
+          {hasStrategy && !hasBlueprint && (
+            <button
+              type="button"
+              disabled={busyBlueprint}
+              onClick={() => handleBlueprint(false)}
+              className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-50"
+              data-testid="generate-blueprint-btn"
+            >
+              {busyBlueprint ? 'Designing…' : '📐 Generate Blueprint'}
+            </button>
+          )}
+          {hasBlueprint && (
+            <button
+              type="button"
+              disabled={busyBlueprint}
+              onClick={() => handleBlueprint(true)}
+              className="px-3 py-1.5 rounded border border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50"
+              data-testid="regenerate-blueprint-btn"
+            >
+              {busyBlueprint ? 'Re-designing…' : '🔄 Re-generate Blueprint'}
             </button>
           )}
         </div>

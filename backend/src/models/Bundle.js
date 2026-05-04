@@ -35,6 +35,12 @@ module.exports = (sequelize) => {
     },
     strategy: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     strategyHash: { type: DataTypes.STRING(64), allowNull: true, field: 'strategy_hash' },
+    // v4: org scoping + product blueprint.
+    organizationId: {
+      type: DataTypes.INTEGER, allowNull: true, field: 'organization_id',
+    },
+    blueprint:     { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    blueprintHash: { type: DataTypes.STRING(64), allowNull: true, field: 'blueprint_hash' },
   }, {
     tableName: 'bundles',
     timestamps: true,
@@ -42,6 +48,7 @@ module.exports = (sequelize) => {
     indexes: [
       { fields: ['key'] },
       { fields: ['estimated_total_value'] },
+      { fields: ['organization_id'] },
     ],
   });
 

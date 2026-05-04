@@ -13,6 +13,12 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'profile_hash',
     },
+    // v4: org scoping. profile_hash continues to identify the profile
+    // contents; organization_id partitions the cache so two orgs with
+    // the same hash by coincidence don't collide.
+    organizationId: {
+      type: DataTypes.INTEGER, allowNull: true, field: 'organization_id',
+    },
     serviceMatch:        { type: DataTypes.INTEGER, allowNull: false, field: 'service_match' },
     revenueWeight:       { type: DataTypes.INTEGER, allowNull: false, field: 'revenue_weight' },
     automationScore:     { type: DataTypes.INTEGER, allowNull: false, field: 'automation_score' },

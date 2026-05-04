@@ -41,9 +41,19 @@ jest.mock('../../src/models', () => {
     OpportunityEvent: {
       create: jest.fn(async (rec) => ({ ...rec, id: 1 })),
     },
-    // v3: profile.service.getOrDefault hits UserProfile.findOne.
+    // v4: profile.service.getOrDefault hits OrganizationProfile.findOne
+    // (renamed from UserProfile in 20260506000001-oied-v4-multitenant).
+    // We expose both names because some legacy paths still reach for
+    // UserProfile.
     UserProfile: {
       findOne: jest.fn(async () => null),
+    },
+    OrganizationProfile: {
+      findOne: jest.fn(async () => null),
+    },
+    // v4: profile.service.resolveOrgId calls User.findByPk to derive org.
+    User: {
+      findByPk: jest.fn(async (id) => (id ? { id, organizationId: 1 } : null)),
     },
   };
 });

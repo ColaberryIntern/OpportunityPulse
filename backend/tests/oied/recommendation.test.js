@@ -37,13 +37,16 @@ describe('recommendation.winProbabilityFor', () => {
     const p = rec.winProbabilityFor(fakeOpp({ category: 'IT Services', fitScore: 50 }), stats, []);
     expect(p).toBeCloseTo(0.20, 2);
   });
-  it('+10% when category is in wonCategories', () => {
+  it('rises above baseline when category is in wonCategories (v4: +0.075 with 1 synthetic win)', () => {
     const p = rec.winProbabilityFor(
       fakeOpp({ category: 'Staffing', fitScore: 50 }),
       { win_rate: null },
       ['Staffing'],
     );
-    expect(p).toBeCloseTo(0.30, 2);
+    // v4 learning engine: 1 synthetic same-category, same-deal-size,
+    // same-effort win → 0.04 + 0.02 + 0.015 = 0.075 above baseline.
+    expect(p).toBeGreaterThan(0.20);
+    expect(p).toBeCloseTo(0.275, 2);
   });
   it('+5% when fitScore >= 70', () => {
     const p = rec.winProbabilityFor(

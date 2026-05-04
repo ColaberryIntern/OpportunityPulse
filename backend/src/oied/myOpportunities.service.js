@@ -16,9 +16,11 @@ async function listMyOpportunities({
   offset = 0,
   type,
   minScore,
-  userId, // who's asking — used to load their profile
+  userId,           // who's asking — resolved to org via profile.service
+  organizationId,   // explicit org override (multi-tenant callers)
 } = {}) {
-  const userProfile = await profileSvc.getOrDefault(userId);
+  const orgId = organizationId || await profileSvc.resolveOrgId(userId);
+  const userProfile = await profileSvc.getOrDefaultByOrg(orgId);
 
   const where = {
     status: 'active',
@@ -33,8 +35,14 @@ async function listMyOpportunities({
   });
 
   const hash = profileHash(userProfile);
+  // Cache scoped by (org_id, opportunity_id, profile_hash). Older rows
+  // pre-v4 carry org_id=1 from the migration backfill.
   const cached = await OpportunityFitScore.findAll({
-    where: { opportunityId: candidates.map((c) => c.id), profileHash: hash },
+    where: {
+      opportunityId: candidates.map((c) => c.id),
+      profileHash: hash,
+      organizationId: orgId,
+    },
   });
   const cacheMap = new Map();
   for (const c of cached) cacheMap.set(c.opportunityId, c);
@@ -43,7 +51,7 @@ async function listMyOpportunities({
   for (const opp of candidates) {
     let score = cacheMap.get(opp.id);
     if (!score) {
-      score = await getOrCreateFitScore({ opportunity: opp, userProfile });
+      score = await getOrCreateFitScore({ opportunity: opp, userProfile, organizationId: orgId });
     }
     const fit = score.fitScore != null ? score.fitScore : score.fit_score;
     if (minScore != null && fit < Number(minScore)) continue;
@@ -95,11 +103,12 @@ async function listMyOpportunities({
     rows: scored.slice(start, stop),
     total: scored.length,
     profileWasDefault: !!userProfile._isDefault,
+    organizationId: orgId,
   };
 }
 
-async function topByFitScore({ n = 5, userId } = {}) {
-  const { rows } = await listMyOpportunities({ limit: n, offset: 0, userId });
+async function topByFitScore({ n = 5, userId, organizationId } = {}) {
+  const { rows } = await listMyOpportunities({ limit: n, offset: 0, userId, organizationId });
   return rows;
 }
 

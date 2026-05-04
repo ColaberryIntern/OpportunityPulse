@@ -64,8 +64,15 @@ const BonfireStrategicOpportunity = require('./BonfireStrategicOpportunity')(seq
 const OpportunityFitScore = require('./OpportunityFitScore')(sequelize);
 const OpportunityOutput = require('./OpportunityOutput')(sequelize);
 const OpportunityEvent = require('./OpportunityEvent')(sequelize);
-const UserProfile = require('./UserProfile')(sequelize);
+// v4: user_profiles renamed → organization_profiles. UserProfile is kept as
+// an alias so legacy imports (some tests, older controllers) keep working —
+// it points at the same model definition as OrganizationProfile.
+const OrganizationProfile = require('./OrganizationProfile')(sequelize);
+const UserProfile = OrganizationProfile;
+const Organization = require('./Organization')(sequelize);
 const Bundle = require('./Bundle')(sequelize);
+const WinProbabilityHistory = require('./WinProbabilityHistory')(sequelize);
+const TriggerLog = require('./TriggerLog')(sequelize);
 
 const models = {
   UserRole,
@@ -114,7 +121,11 @@ const models = {
   OpportunityOutput,
   OpportunityEvent,
   UserProfile,
+  OrganizationProfile,
+  Organization,
   Bundle,
+  WinProbabilityHistory,
+  TriggerLog,
 };
 
 // Set up associations

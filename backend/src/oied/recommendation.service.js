@@ -3,26 +3,46 @@
 //   recommendation_score = priority_score × win_probability / effort_factor
 // and returns the top N (default 3).
 //
-// Win-probability is heuristic — until we have ≥30 won/lost data points
-// to calibrate, we use a baseline rate plus small boosts for category
-// fit and high fitScore.
+// v4: win-probability is now history-driven via winProbability.service.
+// Same baseline (20%) when there's no outcome data, but adjusts as
+// won/lost events accrue per category / deal size / effort similarity.
+// The legacy winProbabilityFor() is kept as a thin wrapper so existing
+// tests + callers don't break.
 
 const myOppsSvc = require('./myOpportunities.service');
 const { estimateEffort } = require('./effortEstimator.service');
-const { getConversionStats, topWonCategories } = require('./events.service');
+const { calculateWinProbability, computeProbabilityFromHistory } = require('./winProbability.service');
+const profileSvc = require('./profile.service');
 
-const BASELINE_WIN_RATE = 0.20;
-const INDUSTRY_BOOST = 0.10;
-const FIT_BOOST = 0.05;
-
+// Legacy v3 surface — used by tests that assert the heuristic shape.
+// Now backed by the same pure-function core.
 function winProbabilityFor(opp, stats, wonCategories) {
-  const baseRate = stats.win_rate != null ? stats.win_rate : BASELINE_WIN_RATE;
-  const inWonCat = wonCategories.includes(opp.category);
-  const industryBoost = inWonCat ? INDUSTRY_BOOST : 0;
-  const fitBoost = (opp.fitScore || 0) >= 70 ? FIT_BOOST : 0;
-  const raw = baseRate + industryBoost + fitBoost;
-  // Floor at 5% (so even a long-shot row gets ranked) and cap at 85%.
-  return Math.max(0.05, Math.min(0.85, raw));
+  // Translate v3-style stats + wonCategories into outcome rows the
+  // pure core understands. With no per-row outcomes available, we
+  // approximate from the rolled-up counts so legacy tests still
+  // exercise the same probability bands.
+  const outcomes = [];
+  if (stats && stats.win_rate != null) {
+    // Distribute stats counts across synthetic rows that match the
+    // candidate's category iff it's in wonCategories.
+    const won = stats.won || 0;
+    const lost = stats.lost || 0;
+    const sameCat = wonCategories && wonCategories.includes(opp.category);
+    for (let i = 0; i < won;  i += 1) {
+      outcomes.push({ eventType: 'won',  opportunity: { category: sameCat ? opp.category : 'other', value: opp.value, effortScore: 50 } });
+    }
+    for (let i = 0; i < lost; i += 1) {
+      outcomes.push({ eventType: 'lost', opportunity: { category: sameCat ? opp.category : 'other', value: opp.value, effortScore: 50 } });
+    }
+  } else if (wonCategories && wonCategories.includes(opp.category)) {
+    // Pre-v4 behavior: a single synthetic win in same category boosts.
+    outcomes.push({ eventType: 'won', opportunity: { category: opp.category, value: opp.value, effortScore: 50 } });
+  }
+  const out = computeProbabilityFromHistory({
+    candidate: { category: opp.category, value: opp.value, fitScore: opp.fitScore || 0, effortScore: 50 },
+    outcomes,
+  });
+  return out.win_probability;
 }
 
 // Build a one-line "why this matters" string from the dominant signal.
@@ -43,29 +63,37 @@ function buildReason(opp, effort) {
 }
 
 function effortDivisor(effortScore) {
-  // Effort score 50 = neutral (divisor = 1). Higher effort → divisor > 1
-  // → score gets penalized. Lower effort → divisor < 1 → score boosted.
-  // Floor at 0.5 so even ultra-low-effort rows don't dominate by 10x.
   return Math.max(0.5, (effortScore || 50) / 50);
 }
 
-async function getTopActions(userId, { limit = 3, now = new Date() } = {}) {
-  // Pull a generous window from My Opps (already profile-scored + bucketed).
+async function getTopActions(userId, {
+  limit = 3,
+  now = new Date(),
+  organizationId,
+  persistHistory = true,
+} = {}) {
+  const orgId = organizationId || (await profileSvc.resolveOrgId(userId));
+
   const { rows } = await myOppsSvc.listMyOpportunities({
-    userId, limit: 50, offset: 0,
+    userId, organizationId: orgId, limit: 50, offset: 0,
   });
   if (!rows || rows.length === 0) return [];
 
-  const stats = await getConversionStats({
-    since: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
-  });
-  const wonCategories = await topWonCategories({ limit: 3 });
-
-  const ranked = rows.map((opp) => {
+  // Compute win probability per row using the learning engine. We persist
+  // a history snapshot per recommendation emit so we can audit how
+  // predictions shift as outcomes accrue.
+  const ranked = await Promise.all(rows.map(async (opp) => {
     const effort = estimateEffort(opp);
-    const winProb = winProbabilityFor(opp, stats, wonCategories);
+    const wp = await calculateWinProbability({
+      opportunity: opp,
+      organizationId: orgId,
+      fitScore: opp.fitScore,
+      effortScore: effort.effort_score,
+      now,
+      persist: persistHistory,
+    });
     const divisor = effortDivisor(effort.effort_score);
-    const score = (Number(opp.priorityScore) || 0) * winProb / divisor;
+    const score = (Number(opp.priorityScore) || 0) * wp.win_probability / divisor;
     return {
       opportunity_id: opp.id,
       title: opp.title,
@@ -74,14 +102,15 @@ async function getTopActions(userId, { limit = 3, now = new Date() } = {}) {
       expected_value: Number(opp.value) || 0,
       urgency: Number(opp.urgency) || 0,
       effort_estimate: effort,
-      win_probability: Number(winProb.toFixed(3)),
+      win_probability: wp.win_probability,
+      win_probability_components: wp.components,
       recommendation_score: Number(score.toFixed(2)),
-      // Pass through bucket + priority for the UI to render alongside.
       bucket: opp.bucket,
       priority_score: Number(opp.priorityScore) || 0,
       fit_score: Number(opp.fitScore) || 0,
+      organization_id: orgId,
     };
-  });
+  }));
 
   ranked.sort((a, b) => b.recommendation_score - a.recommendation_score);
   return ranked.slice(0, Math.max(1, Math.min(limit, 10)));
@@ -92,5 +121,5 @@ module.exports = {
   winProbabilityFor,
   buildReason,
   effortDivisor,
-  BASELINE_WIN_RATE,
+  BASELINE_WIN_RATE: 0.20,
 };

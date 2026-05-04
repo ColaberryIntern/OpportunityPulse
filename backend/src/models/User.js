@@ -68,6 +68,14 @@ module.exports = (sequelize) => {
         key: 'id',
       },
     },
+    // v4: each user belongs to one organization. Default org seeded as 1.
+    organizationId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1,
+      field: 'organization_id',
+      references: { model: 'organizations', key: 'id' },
+    },
   }, {
     tableName: 'users',
     timestamps: true,

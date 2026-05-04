@@ -345,6 +345,13 @@ async function startServer() {
       // OFF by default; enable with OIED_DIGEST_ENABLED=true.
       const { startOiedDigestScheduler } = require('./oied/oied.scheduler');
       startOiedDigestScheduler();
+
+      // OIED v4: daily briefing (top-3 + bundle + ignore + totals) and the
+      // auto-execution trigger engine. Both default OFF and dry-run-first.
+      const { startBriefingScheduler } = require('./oied/briefing.scheduler');
+      startBriefingScheduler();
+      const { startTriggerEngineScheduler } = require('./oied/triggerEngine.scheduler');
+      startTriggerEngineScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
