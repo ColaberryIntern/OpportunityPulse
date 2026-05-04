@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { listBundles, runBundler } from '../services/oiedService';
+import { listBundles, runBundler, generateBundleStrategy } from '../services/oiedService';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -10,7 +10,58 @@ function fmtUSD(n) {
   return '$' + v;
 }
 
-function BundleCard({ bundle }) {
+function StrategyView({ strategy }) {
+  if (!strategy || !strategy.what_to_build) return null;
+  return (
+    <div
+      className="mt-3 p-3 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800"
+      data-testid="bundle-strategy"
+    >
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <h4 className="text-sm font-semibold text-purple-900 dark:text-purple-200">
+          🧠 Strategy: {strategy.suggested_solution || strategy.what_to_build}
+        </h4>
+        <span className="text-xs text-purple-700 dark:text-purple-300">
+          {fmtUSD(strategy.revenue_potential_usd)} potential ·
+          {' '}{strategy.build_time_days || '?'}d build ·
+          {' '}{strategy.opportunities_unlocked || 0} opps
+        </span>
+      </div>
+      <p className="text-sm text-gray-800 dark:text-gray-200 mb-1">
+        <span className="font-medium">What to build: </span>
+        {strategy.what_to_build}
+      </p>
+      <p className="text-sm text-gray-700 dark:text-gray-300">
+        <span className="font-medium">Why it works: </span>
+        {strategy.why_it_works}
+      </p>
+    </div>
+  );
+}
+
+function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
+  const [busy, setBusy] = useState(false);
+  const [localStrategy, setLocalStrategy] = useState(bundle.strategy || {});
+  const [err, setErr] = useState(null);
+
+  async function handleGenerate(force = false) {
+    if (!isAdmin) return;
+    if (force && !window.confirm('Re-generate strategy? Existing copy will be replaced.')) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const out = await generateBundleStrategy(bundle.id, force);
+      setLocalStrategy(out.strategy || {});
+      onStrategyUpdate && onStrategyUpdate(bundle.id, out);
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasStrategy = !!(localStrategy && localStrategy.what_to_build);
+
   return (
     <article className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-3" data-testid="bundle-card">
       <div className="flex items-center justify-between mb-2">
@@ -33,6 +84,38 @@ function BundleCard({ bundle }) {
         <pre className="text-sm whitespace-pre-wrap font-sans text-gray-700 dark:text-gray-300 max-h-48 overflow-y-auto">
 {bundle.summary}
         </pre>
+      )}
+
+      <StrategyView strategy={localStrategy} />
+
+      {err && (
+        <div className="mt-2 p-2 rounded bg-red-50 text-sm text-red-700">{err}</div>
+      )}
+
+      {isAdmin && (
+        <div className="flex gap-2 mt-3">
+          {!hasStrategy ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleGenerate(false)}
+              className="px-3 py-1.5 rounded bg-purple-600 text-white text-sm hover:bg-purple-700 disabled:opacity-50"
+              data-testid="generate-strategy-btn"
+            >
+              {busy ? 'Generating…' : '🧠 Generate Strategy'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleGenerate(true)}
+              className="px-3 py-1.5 rounded border border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300 text-sm hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50"
+              data-testid="regenerate-strategy-btn"
+            >
+              {busy ? 'Re-generating…' : '🔄 Re-generate'}
+            </button>
+          )}
+        </div>
       )}
     </article>
   );
@@ -126,7 +209,25 @@ function BundlesPage() {
           </div>
         ) : (
           <div data-testid="bundles-list">
-            {bundles.map((b) => <BundleCard key={b.id} bundle={b} />)}
+            {bundles.map((b) => (
+              <BundleCard
+                key={b.id}
+                bundle={b}
+                isAdmin={isAdmin}
+                onStrategyUpdate={(id, out) => {
+                  setBundles((prev) => prev.map((row) => (
+                    row.id === id
+                      ? {
+                          ...row,
+                          strategy: out.strategy,
+                          suggestedSolution: out.suggestedSolution,
+                          estimatedBuildTimeDays: out.estimatedBuildTimeDays,
+                        }
+                      : row
+                  )));
+                }}
+              />
+            ))}
           </div>
         )}
       </div>

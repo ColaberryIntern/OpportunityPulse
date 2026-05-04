@@ -25,6 +25,9 @@ module.exports = (sequelize) => {
     reviewerId:  { type: DataTypes.INTEGER, allowNull: true, field: 'reviewer_id' },
     reviewedAt:  { type: DataTypes.DATE, allowNull: true, field: 'reviewed_at' },
     reviewNotes: { type: DataTypes.TEXT, allowNull: true, field: 'review_notes' },
+    // v3: execution-intelligence metadata — template_used, personalization_score,
+    // past_wins_used, profile_hash, colaberry_positioning, generated_at.
+    metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   }, {
     tableName: 'opportunity_outputs',
     timestamps: true,

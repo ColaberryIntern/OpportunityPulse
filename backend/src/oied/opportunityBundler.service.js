@@ -10,8 +10,10 @@
 // A cluster needs >= 3 opportunities to be persisted as a bundle.
 
 const { Op } = require('sequelize');
+const crypto = require('crypto');
 const logger = require('../logging/logger');
 const { Opportunity, Bundle } = require('../models');
+const { getAIClient } = require('../analysis/ai.client');
 
 const MIN_BUNDLE_SIZE = 3;
 const MAX_BUNDLE_SIZE = 50;
@@ -140,6 +142,131 @@ async function getBundle(id) {
   return row ? row.toJSON() : null;
 }
 
+// ----- v3: Bundle Monetization -----------------------------------------
+//
+// generateBundleStrategy(bundleId) — calls gpt-4o-mini once to produce a
+// strategic play for the cluster (what to build, why it works, how many
+// opportunities it unlocks, revenue potential). Cached on
+// `bundles.strategy_hash` so re-runs against the same opportunity set
+// return the cached row without an LLM round-trip.
+
+const STRATEGY_SYSTEM_PROMPT =
+  'You are a strategic product designer reviewing a cluster of related '
+  + 'public-sector opportunities. Output strict JSON with these keys ONLY: '
+  + '`what_to_build` (1 sentence — concrete product/service name), '
+  + '`why_it_works` (2-3 sentences — why this play wins THIS cluster), '
+  + '`opportunities_unlocked` (integer — count of cluster members this would address), '
+  + '`revenue_potential_usd` (integer — realistic 12-month revenue), '
+  + '`build_time_days` (integer — engineering days), '
+  + '`suggested_solution` (≤80 char product name). '
+  + 'No prose outside the JSON. Be specific — name actual technologies, '
+  + 'not generic phrases.';
+
+function strategyHashFor(bundle, members) {
+  const ids = members.map((m) => m.id).sort((a, b) => a - b).join('|');
+  return crypto
+    .createHash('sha256')
+    .update(`${bundle.theme}::${ids}`)
+    .digest('hex');
+}
+
+function buildStrategyUserPrompt(bundle, members) {
+  const lines = [
+    `Cluster theme: ${bundle.theme}`,
+    `Cluster key: ${bundle.key}`,
+    `Member count: ${members.length}`,
+    `Total estimated value: $${Number(bundle.estimatedTotalValue || 0).toFixed(0)}`,
+    '',
+    'Members (title · category · value):',
+  ];
+  for (const m of members.slice(0, 12)) {
+    lines.push(`  • ${m.title} · ${m.category || 'n/a'} · $${Number(m.value || 0).toFixed(0)}`);
+  }
+  return lines.join('\n');
+}
+
+function safeParseStrategy(raw) {
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return {
+      what_to_build:           String(obj.what_to_build || '').slice(0, 500),
+      why_it_works:            String(obj.why_it_works || '').slice(0, 800),
+      opportunities_unlocked:  Number(obj.opportunities_unlocked) || 0,
+      revenue_potential_usd:   Number(obj.revenue_potential_usd) || 0,
+      build_time_days:         Number(obj.build_time_days) || null,
+      suggested_solution:      String(obj.suggested_solution || '').slice(0, 300),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function generateBundleStrategy(bundleId, { force = false } = {}) {
+  const bundle = await Bundle.findByPk(bundleId);
+  if (!bundle) throw new Error(`bundle ${bundleId} not found`);
+
+  const ids = Array.isArray(bundle.opportunityIds) ? bundle.opportunityIds : [];
+  if (ids.length === 0) {
+    throw new Error(`bundle ${bundleId} has no member opportunities`);
+  }
+  const members = await Opportunity.findAll({
+    where: { id: ids },
+    attributes: ['id', 'title', 'category', 'value'],
+  });
+  const hash = strategyHashFor(bundle, members);
+
+  // Cache hit — return without LLM round-trip.
+  if (!force && bundle.strategyHash === hash && bundle.strategy && bundle.strategy.what_to_build) {
+    return {
+      cached: true,
+      bundleId: bundle.id,
+      strategy: bundle.strategy,
+      suggestedSolution: bundle.suggestedSolution,
+      estimatedBuildTimeDays: bundle.estimatedBuildTimeDays,
+      strategyHash: bundle.strategyHash,
+    };
+  }
+
+  const aiClient = getAIClient();
+  const { content } = await aiClient.chat(
+    STRATEGY_SYSTEM_PROMPT,
+    buildStrategyUserPrompt(bundle, members),
+    { temperature: 0.4, maxTokens: 600, responseFormat: 'json_object' },
+  );
+
+  const parsed = safeParseStrategy(content);
+  if (!parsed) {
+    throw new Error('AI returned unparseable JSON for bundle strategy');
+  }
+  const strategyRow = {
+    ...parsed,
+    generated_at: new Date().toISOString(),
+    model: 'gpt-4o-mini',
+  };
+
+  bundle.strategy = strategyRow;
+  bundle.suggestedSolution = parsed.suggested_solution || null;
+  bundle.estimatedBuildTimeDays = parsed.build_time_days || null;
+  bundle.strategyHash = hash;
+  await bundle.save();
+
+  logger.info('OIED bundler: strategy generated', {
+    bundleId: bundle.id,
+    theme: bundle.theme,
+    members: members.length,
+    revenuePotential: parsed.revenue_potential_usd,
+  });
+
+  return {
+    cached: false,
+    bundleId: bundle.id,
+    strategy: bundle.strategy,
+    suggestedSolution: bundle.suggestedSolution,
+    estimatedBuildTimeDays: bundle.estimatedBuildTimeDays,
+    strategyHash: bundle.strategyHash,
+  };
+}
+
 module.exports = {
   buildBundles,
   listBundles,
@@ -147,5 +274,10 @@ module.exports = {
   clusterKey,
   buildTheme,
   topKeywords,
+  generateBundleStrategy,
+  strategyHashFor,
+  safeParseStrategy,
+  buildStrategyUserPrompt,
+  STRATEGY_SYSTEM_PROMPT,
   MIN_BUNDLE_SIZE,
 };

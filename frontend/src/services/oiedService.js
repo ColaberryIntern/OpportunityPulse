@@ -66,3 +66,30 @@ export async function recordEvent(opportunityId, eventType, payload = {}) {
     return null;
   }
 }
+
+// ---- v3: Recommendations ----------------------------------------------------
+export async function getRecommendations(limit = 3) {
+  const res = await api.get(`${base}/recommendations`, { params: { limit } });
+  return res.data?.data || [];
+}
+
+// ---- v3: Conversion tracking ------------------------------------------------
+export async function markResult(opportunityId, status, extras = {}) {
+  const res = await api.post(
+    `${base}/opportunities/${opportunityId}/mark-result`,
+    { status, ...extras },
+  );
+  return res.data?.data;
+}
+
+export async function getConversionStats(since = null) {
+  const params = since ? { since } : {};
+  const res = await api.get(`${base}/conversion-stats`, { params });
+  return res.data?.data || null;
+}
+
+// ---- v3: Bundle strategy ----------------------------------------------------
+export async function generateBundleStrategy(bundleId, force = false) {
+  const res = await api.post(`${base}/bundles/${bundleId}/strategy`, { force });
+  return res.data?.data;
+}

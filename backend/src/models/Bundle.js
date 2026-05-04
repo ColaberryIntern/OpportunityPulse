@@ -22,6 +22,19 @@ module.exports = (sequelize) => {
     },
     summary: { type: DataTypes.TEXT, allowNull: true },
     generatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW, field: 'generated_at' },
+    // v3: monetization layer — what to build to monetize this cluster.
+    suggestedSolution: {
+      type: DataTypes.STRING(300),
+      allowNull: true,
+      field: 'suggested_solution',
+    },
+    estimatedBuildTimeDays: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'estimated_build_time_days',
+    },
+    strategy: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    strategyHash: { type: DataTypes.STRING(64), allowNull: true, field: 'strategy_hash' },
   }, {
     tableName: 'bundles',
     timestamps: true,

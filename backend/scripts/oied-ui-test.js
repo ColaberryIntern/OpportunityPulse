@@ -40,6 +40,11 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     new_output_visible_in_dom: false,
     profile_editor_loaded: false,
     bundles_page_loaded: false,
+    // v3
+    recommendations_loaded: false,
+    recommendation_card_count: 0,
+    mark_result_event_logged: false,
+    bundle_strategy_button_present: false,
     screenshots: [],
     errors: [],
   };
@@ -182,10 +187,54 @@ function log(...a) { console.log('[oied-ui]', ...a); }
       '[data-testid="bundles-list"], [data-testid="bundles-empty"]',
     ).count();
     results.bundles_page_loaded = bundlesPresent > 0;
+    // v3: verify the strategy button is present on the first bundle card.
+    const strategyBtnCount = await page.locator(
+      '[data-testid="generate-strategy-btn"], [data-testid="regenerate-strategy-btn"], [data-testid="bundle-strategy"]',
+    ).count();
+    results.bundle_strategy_button_present = strategyBtnCount > 0;
     const screenshotBundles = path.join(OUT_DIR, 'bundles_page.png');
     await page.screenshot({ path: screenshotBundles, fullPage: true });
     results.screenshots.push('bundles_page.png');
-    log(`bundles page in DOM: ${bundlesPresent}`);
+    log(`bundles page in DOM: ${bundlesPresent}, strategy controls: ${strategyBtnCount}`);
+
+    // 10. v3: /admin/opportunities/recommendations — top-3 actions.
+    log('navigating to /admin/opportunities/recommendations');
+    await page.goto(`${BASE_URL}/admin/opportunities/recommendations`, { waitUntil: 'domcontentloaded' });
+    await Promise.race([
+      page.waitForSelector('[data-testid="recommendations-list"]', { timeout: 15000 }),
+      page.waitForSelector('[data-testid="recommendations-empty"]', { timeout: 15000 }),
+    ]).catch(() => {});
+    await page.waitForTimeout(2000);
+    const recCards = await page.locator('[data-testid="recommendation-card"]').count();
+    results.recommendation_card_count = recCards;
+    results.recommendations_loaded = recCards > 0
+      || (await page.locator('[data-testid="recommendations-empty"]').count()) > 0;
+    const screenshotRec = path.join(OUT_DIR, 'recommendations.png');
+    await page.screenshot({ path: screenshotRec, fullPage: true });
+    results.screenshots.push('recommendations.png');
+    log(`recommendation cards in DOM: ${recCards}`);
+
+    // 11. v3: Mark a result on the first recommendation (real click → POST).
+    if (recCards > 0) {
+      const markBtn = page.locator('[data-testid="mark-result-btn"]').first();
+      const markPromise = page.waitForResponse(
+        (resp) => /\/api\/v1\/oied\/opportunities\/\d+\/mark-result/.test(resp.url())
+          && resp.request().method() === 'POST',
+        { timeout: 15000 },
+      ).catch(() => null);
+      await markBtn.click();
+      await page.waitForSelector('[data-testid="mark-result-menu"]', { timeout: 5000 }).catch(() => {});
+      // Click the "Submitted" choice (first menu item).
+      const submittedChoice = page.locator('[data-testid="mark-result-menu"] button').first();
+      if (await submittedChoice.count() > 0) {
+        await submittedChoice.click();
+      }
+      const resp = await markPromise;
+      results.mark_result_event_logged = !!(resp && resp.status() === 201);
+      log(`mark-result POST status: ${resp ? resp.status() : 'no response'}`);
+    } else {
+      log('skipping mark-result test (no recommendations rendered)');
+    }
   } catch (e) {
     results.errors.push('flow: ' + e.message);
     console.error(e);
@@ -200,7 +249,8 @@ function log(...a) { console.log('[oied-ui]', ...a); }
       && results.generate_dom_change_observed
       && results.review_loaded
       && results.profile_editor_loaded
-      && results.bundles_page_loaded;
+      && results.bundles_page_loaded
+      && results.recommendations_loaded;
     process.exit(passed ? 0 : 1);
   }
 })().catch((e) => { console.error(e); process.exit(1); });

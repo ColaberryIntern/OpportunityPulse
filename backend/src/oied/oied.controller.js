@@ -5,6 +5,7 @@ const actions = require('./actionGenerator.service');
 const events = require('./events.service');
 const profileSvc = require('./profile.service');
 const bundler = require('./opportunityBundler.service');
+const recommendations = require('./recommendation.service');
 
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
@@ -94,6 +95,7 @@ async function generate(req, res) {
       opportunityId,
       type,
       generatedBy: (req.user && req.user.id) || null,
+      userId: (req.user && req.user.id) || null,
     });
     // Side-effect: track 'generated' event.
     await events.recordEvent({
@@ -184,6 +186,78 @@ async function postEvent(req, res) {
   }
 }
 
+// ----- v3 endpoints --------------------------------------------------
+
+// GET /api/v1/oied/recommendations  — top-3 actions for the calling user.
+async function listRecommendations(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const limit = Math.min(Number(req.query.limit) || 3, 10);
+    const data = await recommendations.getTopActions(userId, { limit });
+    return successResponse(res, data);
+  } catch (e) {
+    logger.error('OIED recommendations failed', { error: e.message });
+    return errorResponse(res, 'Failed to compute recommendations', 500);
+  }
+}
+
+// POST /api/v1/oied/opportunities/:id/mark-result
+// Body: { status: 'submitted'|'won'|'lost'|'responded'|'response_received',
+//         notes?: string, dollarAmount?: number }
+async function markResult(req, res) {
+  const opportunityId = Number(req.params.id);
+  if (!opportunityId) return errorResponse(res, 'Invalid opportunity id', 400);
+  const raw = req.body && req.body.status;
+  const eventType = events.normalizeResultStatus(raw);
+  if (!events.CONVERSION_TYPES.has(eventType)) {
+    return errorResponse(
+      res,
+      `status must be one of: submitted, response_received (alias: responded), won, lost`,
+      400,
+    );
+  }
+  try {
+    const ev = await events.recordEvent({
+      opportunityId,
+      eventType,
+      userId: (req.user && req.user.id) || null,
+      payload: {
+        notes: (req.body && req.body.notes) || null,
+        dollar_amount: (req.body && Number(req.body.dollarAmount)) || null,
+      },
+    });
+    return successResponse(res, ev, 'Result recorded', 201);
+  } catch (e) {
+    logger.error('OIED markResult failed', { id: opportunityId, status: raw, error: e.message });
+    return errorResponse(res, e.message, 400);
+  }
+}
+
+// POST /api/v1/oied/bundles/:id/strategy   (admin)
+async function generateBundleStrategy(req, res) {
+  const bundleId = Number(req.params.id);
+  if (!bundleId) return errorResponse(res, 'Invalid bundle id', 400);
+  try {
+    const force = req.body && req.body.force === true;
+    const out = await bundler.generateBundleStrategy(bundleId, { force });
+    return successResponse(res, out, out.cached ? 'Cached strategy' : 'Strategy generated');
+  } catch (e) {
+    logger.error('OIED bundle strategy failed', { bundleId, error: e.message });
+    return errorResponse(res, 'Strategy generation failed: ' + e.message, 500);
+  }
+}
+
+// GET /api/v1/oied/conversion-stats — small summary for dashboards.
+async function getConversionStats(req, res) {
+  try {
+    const since = req.query.since ? new Date(req.query.since) : null;
+    const data = await events.getConversionStats({ since });
+    return successResponse(res, data);
+  } catch (e) {
+    return errorResponse(res, 'Failed to compute conversion stats', 500);
+  }
+}
+
 module.exports = {
   listMy,
   generate,
@@ -196,4 +270,9 @@ module.exports = {
   patchMyProfile,
   listBundles,
   runBundler,
+  // v3
+  listRecommendations,
+  markResult,
+  generateBundleStrategy,
+  getConversionStats,
 };

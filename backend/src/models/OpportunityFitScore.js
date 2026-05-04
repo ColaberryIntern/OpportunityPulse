@@ -21,6 +21,8 @@ module.exports = (sequelize) => {
     strategicAlignment:  { type: DataTypes.INTEGER, allowNull: false, field: 'strategic_alignment' },
     fitScore:            { type: DataTypes.INTEGER, allowNull: false, field: 'fit_score' },
     priorityScore:       { type: DataTypes.INTEGER, allowNull: true,  field: 'priority_score' },
+    // v3: cached effort score from effortEstimator.
+    effortScore:         { type: DataTypes.INTEGER, allowNull: true,  field: 'effort_score' },
     reasoning:           { type: DataTypes.JSONB,   defaultValue: {} },
   }, {
     tableName: 'opportunity_fit_scores',

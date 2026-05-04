@@ -29,10 +29,21 @@ jest.mock('../../src/models', () => {
         const start = offset || 0;
         return { rows: rows.slice(start, start + (limit || 50)), count: total };
       }),
+      // v3: pastWins.service.getRecentApproved calls findAll on this model.
+      findAll: jest.fn(async ({ where = {}, limit } = {}) => {
+        let rows = mockOutputs.slice();
+        if (where.status) rows = rows.filter((r) => r.status === where.status);
+        if (where.type) rows = rows.filter((r) => r.type === where.type);
+        return rows.slice(0, limit || 5);
+      }),
     },
     OpportunityFitScore: { findOne: jest.fn(), upsert: jest.fn() },
     OpportunityEvent: {
       create: jest.fn(async (rec) => ({ ...rec, id: 1 })),
+    },
+    // v3: profile.service.getOrDefault hits UserProfile.findOne.
+    UserProfile: {
+      findOne: jest.fn(async () => null),
     },
   };
 });

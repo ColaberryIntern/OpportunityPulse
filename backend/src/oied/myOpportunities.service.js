@@ -7,6 +7,7 @@ const { Opportunity, OpportunityFitScore } = require('../models');
 const { getOrCreateFitScore, profileHash } = require('./fitScoring.service');
 const { calculatePriorityScore } = require('./priorityScoring.service');
 const profileSvc = require('./profile.service');
+const { estimateEffort } = require('./effortEstimator.service');
 
 const MIN_VALUE_USD = 1000;
 
@@ -59,6 +60,10 @@ async function listMyOpportunities({
         strategic_alignment: score.strategicAlignment ?? score.strategic_alignment,
       } });
 
+    // v3: attach effort estimate so the UI / recommendation engine
+    // doesn't need a second pass.
+    const effort = estimateEffort(opp);
+
     scored.push({
       ...opp.toJSON(),
       fitScore: fit,
@@ -66,6 +71,7 @@ async function listMyOpportunities({
       urgency,
       revenueVelocity,
       bucket,
+      effortEstimate: effort,
       fitBreakdown: {
         service_match: score.serviceMatch ?? score.service_match,
         revenue_weight: score.revenueWeight ?? score.revenue_weight,

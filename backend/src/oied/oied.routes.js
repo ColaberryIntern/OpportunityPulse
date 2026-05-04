@@ -34,8 +34,23 @@ router.get('/profile',    verifyToken, c.getMyProfile);
 router.post('/profile',   verifyToken, c.postMyProfile);
 router.patch('/profile',  verifyToken, c.patchMyProfile);
 
-// Bundles: read open to all auth'd; rebuild is admin-only.
+// Bundles: read open to all auth'd; rebuild + strategy are admin-only.
 router.get('/bundles',         verifyToken, c.listBundles);
 router.post('/bundles/run',    verifyToken, checkPermissions(ROLES.ADMIN), c.runBundler);
+router.post(
+  '/bundles/:id/strategy',
+  verifyToken,
+  checkPermissions(ROLES.ADMIN),
+  c.generateBundleStrategy,
+);
+
+// v3 — Revenue Intelligence Layer.
+router.get('/recommendations',          verifyToken, c.listRecommendations);
+router.get('/conversion-stats',         verifyToken, c.getConversionStats);
+router.post(
+  '/opportunities/:id/mark-result',
+  verifyToken,
+  c.markResult,
+);
 
 module.exports = router;

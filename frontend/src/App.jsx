@@ -35,6 +35,7 @@ import MyOpportunitiesPage from './pages/MyOpportunitiesPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
+import RecommendationsPage from './pages/RecommendationsPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -323,6 +324,14 @@ function App() {
           element={
             <ProtectedLayout>
               <BundlesPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/opportunities/recommendations"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <RecommendationsPage />
             </ProtectedLayout>
           }
         />

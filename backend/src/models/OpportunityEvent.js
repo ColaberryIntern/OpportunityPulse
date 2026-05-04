@@ -14,7 +14,11 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'event_type',
       validate: {
-        isIn: [['viewed', 'clicked', 'generated', 'approved', 'rejected', 'edited']],
+        // v3: + submitted, response_received, won, lost (conversion tracking).
+        isIn: [[
+          'viewed', 'clicked', 'generated', 'approved', 'rejected', 'edited',
+          'submitted', 'response_received', 'won', 'lost',
+        ]],
       },
     },
     userId:  { type: DataTypes.INTEGER, allowNull: true, field: 'user_id' },
