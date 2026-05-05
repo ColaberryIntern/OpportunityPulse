@@ -103,7 +103,6 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
         .catch(() => { /* 404 = no plan yet */ });
     }
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle.id]);
 
   async function handleGenerate(force = false) {
