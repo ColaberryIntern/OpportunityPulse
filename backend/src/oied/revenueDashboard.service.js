@@ -20,6 +20,7 @@ const {
 } = require('../models');
 const myOppsSvc = require('./myOpportunities.service');
 const profileSvc = require('./profile.service');
+const velocitySvc = require('./velocity.service');
 
 const BASELINE_WIN_PROB = 0.20;
 
@@ -212,13 +213,26 @@ async function getDashboard({ organizationId, userId = null, now = new Date() } 
     });
   }
 
-  return computeDashboard({
+  const dashboard = computeDashboard({
     draftOpps,
     wpByOppId,
     conversionEvents,
     organizationId: orgId,
     now,
   });
+
+  // v6: embed velocity so the existing /admin/revenue page can render it
+  // without a second fetch.
+  let velocity = null;
+  try {
+    velocity = await velocitySvc.getVelocity({ organizationId: orgId, now });
+  } catch (e) {
+    logger.warn('revenueDashboard: velocity lookup failed (continuing)', {
+      error: e.message,
+    });
+  }
+
+  return { ...dashboard, velocity };
 }
 
 module.exports = {

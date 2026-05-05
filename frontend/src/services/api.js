@@ -60,6 +60,22 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
+    // v6: OIED billing 402 — surface a global toast + suggest upgrade.
+    // The error body carries { tier, used, limit, metric }.
+    if (error.response?.status === 402) {
+      const errs = error.response.data?.errors || {};
+      const metric = errs.metric || 'usage';
+      const tier   = errs.tier || 'basic';
+      const used   = errs.used != null ? errs.used : '?';
+      const limit  = errs.limit != null ? errs.limit : '?';
+      const detail = `Plan limit reached for ${metric} (${used}/${limit} on ${tier}). Upgrade your plan in Billing.`;
+      try {
+        window.dispatchEvent(new CustomEvent('oied-plan-limit', {
+          detail: { tier, used, limit, metric, message: detail },
+        }));
+      } catch { /* ignore window-not-defined edge cases */ }
+    }
     return Promise.reject(error);
   }
 );

@@ -228,6 +228,12 @@ async function generateBundleStrategy(bundleId, { force = false } = {}) {
     };
   }
 
+  // v6: enforce plan limit on cache MISS only. Cached responses are free.
+  await billing.enforceOrThrow({
+    organizationId: bundle.organizationId || null,
+    metric: 'strategies_generated',
+  });
+
   const aiClient = getAIClient();
   const { content } = await aiClient.chat(
     STRATEGY_SYSTEM_PROMPT,
@@ -377,6 +383,12 @@ async function generateProductBlueprint(bundleId, { force = false } = {}) {
       blueprintHash: bundle.blueprintHash,
     };
   }
+
+  // v6: enforce plan limit on cache MISS only.
+  await billing.enforceOrThrow({
+    organizationId: bundle.organizationId || null,
+    metric: 'blueprints_generated',
+  });
 
   const aiClient = getAIClient();
   const { content } = await aiClient.chat(

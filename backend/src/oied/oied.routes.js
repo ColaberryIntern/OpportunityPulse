@@ -78,4 +78,7 @@ router.get('/billing/usage',  verifyToken, c.getBillingUsage);
 router.get('/billing/plan',   verifyToken, c.getBillingPlan);
 router.patch('/billing/plan', verifyToken, checkPermissions(ROLES.ADMIN), c.changeBillingPlan);
 
+// v6 — Autonomous + Monetization Layer.
+router.get('/velocity', verifyToken, c.getVelocity);
+
 module.exports = router;

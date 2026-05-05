@@ -40,6 +40,7 @@ import BriefingPage from './pages/BriefingPage';
 import TriggerLogsPage from './pages/TriggerLogsPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
+import BillingPage from './pages/BillingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -58,6 +59,50 @@ function SocketManager() {
   return null;
 }
 
+// v6: global toast that surfaces 402 plan-limit responses dispatched
+// by the api.js interceptor. Auto-dismisses after 8 seconds.
+function PlanLimitToast() {
+  const [event, setEvent] = React.useState(null);
+  React.useEffect(() => {
+    function handler(e) {
+      setEvent(e.detail);
+      const t = setTimeout(() => setEvent(null), 8000);
+      return () => clearTimeout(t);
+    }
+    window.addEventListener('oied-plan-limit', handler);
+    return () => window.removeEventListener('oied-plan-limit', handler);
+  }, []);
+  if (!event) return null;
+  return (
+    <div
+      className="fixed top-4 right-4 z-50 max-w-sm p-4 rounded-lg bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 shadow-lg"
+      data-testid="plan-limit-toast"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold text-red-900 dark:text-red-200 mb-1">
+            💳 Plan limit reached
+          </div>
+          <div className="text-sm text-red-900 dark:text-red-100">
+            {event.message}
+          </div>
+          <a
+            href="/admin/billing"
+            className="inline-block mt-2 text-sm text-red-700 dark:text-red-300 underline"
+          >
+            Upgrade plan →
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEvent(null)}
+          className="text-red-700 dark:text-red-300 text-xs"
+        >✕</button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedLayout({ children, requiredRole }) {
   return (
     <ProtectedRoute requiredRole={requiredRole}>
@@ -70,6 +115,7 @@ function App() {
   return (
     <ErrorBoundary>
       <SocketManager />
+      <PlanLimitToast />
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -368,6 +414,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <RevenueDashboardPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/billing"
+          element={
+            <ProtectedLayout>
+              <BillingPage />
             </ProtectedLayout>
           }
         />

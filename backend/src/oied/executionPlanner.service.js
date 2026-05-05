@@ -72,6 +72,96 @@ function orderFeatures(features = []) {
     .map((x) => x.f);
 }
 
+// ---- v6: Dynamic execution planning ------------------------------------
+
+// Per-task complexity weight. Long descriptions + complex keywords
+// (real-time, ML, encryption) bump it; simple keywords (dashboard,
+// report) trim it. Floored at 0.5 so even trivial features don't
+// vanish from the schedule.
+const COMPLEX_KEYWORDS = /\b(real-time|machine learning|integration|encryption|secure|predictive|model|inference)\b/i;
+const SIMPLE_KEYWORDS  = /\b(dashboard|report|export|simple|view|display|chart)\b/i;
+
+function complexityWeight(feature) {
+  let w = 1;
+  const f = String(feature || '');
+  if (f.length > 80) w += 0.5;
+  if (COMPLEX_KEYWORDS.test(f)) w += 0.5;
+  if (SIMPLE_KEYWORDS.test(f)) w -= 0.2;
+  return Math.max(0.5, Number(w.toFixed(2)));
+}
+
+// Pure: rebalance assignments so that fallback-agent tasks (where the
+// keyword match didn't bind to a specific role) move to the
+// underloaded agents. Tasks bound to a specific role by keyword are
+// left alone.
+function rebalanceAssignments(tasks, availableAgents, fallbackAgent) {
+  if (!Array.isArray(availableAgents) || availableAgents.length < 2) return tasks;
+  const counts = new Map();
+  for (const a of availableAgents) counts.set(a, 0);
+  for (const t of tasks) counts.set(t.assigned_agent, (counts.get(t.assigned_agent) || 0) + 1);
+
+  // Walk through fallback-assigned tasks; reassign to whoever has the
+  // lowest count (and isn't already over-loaded).
+  for (const t of tasks) {
+    if (t.assigned_agent !== fallbackAgent) continue;
+    let best = null;
+    let bestCount = Infinity;
+    for (const [agent, c] of counts) {
+      if (agent === fallbackAgent) continue;
+      if (c < bestCount) { best = agent; bestCount = c; }
+    }
+    if (best && bestCount < (counts.get(fallbackAgent) || 0)) {
+      counts.set(fallbackAgent, counts.get(fallbackAgent) - 1);
+      counts.set(best, bestCount + 1);
+      t.assigned_agent = best;
+    }
+  }
+  return tasks;
+}
+
+// Pure: greedy parallel-wave packer. Each task slots into the smallest
+// wave whose agent set doesn't already include this task's
+// assigned_agent. Returns tasks with `parallel_group` (0..N) attached.
+// Wave duration = max estimated_days within the wave; subsequent
+// waves start when the prior wave's longest task ends.
+function assignParallelGroups(tasks) {
+  // wave[i] = Set of agents busy in wave i.
+  const waves = [];
+  for (const t of tasks) {
+    let placed = false;
+    for (let i = 0; i < waves.length; i += 1) {
+      if (!waves[i].has(t.assigned_agent)) {
+        waves[i].add(t.assigned_agent);
+        t.parallel_group = i;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      waves.push(new Set([t.assigned_agent]));
+      t.parallel_group = waves.length - 1;
+    }
+  }
+
+  // Now compute start_offset_days: each wave starts when the prior
+  // wave's longest task ends.
+  const waveDurations = [];
+  for (let i = 0; i < waves.length; i += 1) {
+    const inWave = tasks.filter((t) => t.parallel_group === i);
+    const dur = Math.max(0, ...inWave.map((t) => t.estimated_days || 0));
+    waveDurations.push(dur);
+  }
+  const cumulativeStart = [0];
+  for (let i = 1; i <= waveDurations.length; i += 1) {
+    cumulativeStart.push(cumulativeStart[i - 1] + waveDurations[i - 1]);
+  }
+  for (const t of tasks) {
+    t.start_offset_days = cumulativeStart[t.parallel_group];
+  }
+  const criticalPathDays = cumulativeStart[waveDurations.length] || 0;
+  return { tasks, criticalPathDays, waveCount: waves.length };
+}
+
 // Pure: build the {tasks, timeline, assigned_agents} payload from a
 // blueprint snapshot. now() defaults to current time so the start_date is
 // stable in tests when injected.
@@ -86,31 +176,43 @@ function buildPlanFromBlueprint(blueprint, { now = new Date() } = {}) {
 
   const totalWeeks = Math.max(1, Number(blueprint.time_to_market_weeks) || 12);
   const totalDays = totalWeeks * 7;
-  const baseDays = Math.max(1, Math.floor(totalDays / ordered.length));
-  let runningOffset = 0;
 
   const availableAgents = Array.isArray(blueprint.required_agents)
     ? blueprint.required_agents
     : [];
+  const fallbackAgent = availableAgents.length > 0
+    ? String(availableAgents[0])
+    : 'AI Pilot Lead';
 
-  const tasks = ordered.map((feature, idx) => {
-    // Last task absorbs the remainder so cumulative offsets sum to totalDays.
-    const days = idx === ordered.length - 1
-      ? Math.max(1, totalDays - runningOffset)
-      : baseDays;
-    const task = {
-      title: String(feature).slice(0, 200),
-      assigned_agent: pickAgentForFeature(feature, availableAgents),
-      estimated_days: days,
-      start_offset_days: runningOffset,
-    };
-    runningOffset += days;
-    return task;
+  // ---- Step 1: assign agent + complexity per task ------------------
+  const draftTasks = ordered.map((feature) => ({
+    title: String(feature).slice(0, 200),
+    assigned_agent: pickAgentForFeature(feature, availableAgents),
+    complexity: complexityWeight(feature),
+  }));
+
+  // ---- Step 2: rebalance fallback-agent tasks to underloaded agents
+  rebalanceAssignments(draftTasks, availableAgents, fallbackAgent);
+
+  // ---- Step 3: distribute totalDays proportional to complexity ----
+  const totalWeight = draftTasks.reduce((s, t) => s + t.complexity, 0) || 1;
+  let allocated = 0;
+  draftTasks.forEach((t, i) => {
+    if (i === draftTasks.length - 1) {
+      // Last task absorbs the rounding remainder so weights sum to total.
+      t.estimated_days = Math.max(1, totalDays - allocated);
+    } else {
+      t.estimated_days = Math.max(1, Math.round((totalDays * t.complexity) / totalWeight));
+      allocated += t.estimated_days;
+    }
   });
+
+  // ---- Step 4: greedy parallel packing -----------------------------
+  const { tasks, criticalPathDays } = assignParallelGroups(draftTasks);
 
   const startDate = new Date(now);
   startDate.setUTCHours(0, 0, 0, 0);
-  const endDate = new Date(startDate.getTime() + totalDays * 86400000);
+  const endDate = new Date(startDate.getTime() + criticalPathDays * 86_400_000);
 
   // Distinct agents actually assigned, in first-appearance order.
   const seen = new Set();
@@ -122,11 +224,19 @@ function buildPlanFromBlueprint(blueprint, { now = new Date() } = {}) {
     }
   }
 
+  // parallel_efficiency = serial duration / critical-path duration.
+  // Always >= 1.0 (with critical path floored at 1d).
+  const parallelEfficiency = criticalPathDays > 0
+    ? Number((totalDays / Math.max(1, criticalPathDays)).toFixed(2))
+    : 1;
+
   return {
     tasks,
     timeline: {
       total_weeks: totalWeeks,
-      total_days: totalDays,
+      total_days: criticalPathDays,
+      serial_total_days: totalDays,
+      parallel_efficiency: parallelEfficiency,
       start_date: startDate.toISOString().slice(0, 10),
       end_date:   endDate.toISOString().slice(0, 10),
     },
@@ -219,5 +329,9 @@ module.exports = {
   buildPlanFromBlueprint,
   pickAgentForFeature,
   orderFeatures,
+  // v6
+  complexityWeight,
+  rebalanceAssignments,
+  assignParallelGroups,
   AGENT_RULES,
 };

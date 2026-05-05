@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { getRevenueDashboard } from '../services/oiedService';
+import VelocityPanel from '../components/oied/VelocityPanel';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -165,6 +166,8 @@ function RevenueDashboardPage() {
                 value={data.submit_to_win_rate != null ? `${Math.round(data.submit_to_win_rate * 100)}%` : '—'}
                 hint="wins / submissions" tone="gray" />
             </div>
+
+            <VelocityPanel velocity={data.velocity} />
 
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
               data-testid="rev-pipeline-by-bucket">

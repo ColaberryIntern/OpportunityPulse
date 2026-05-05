@@ -118,14 +118,18 @@ describe('executionPlanner.buildPlanFromBlueprint (pure)', () => {
   it('SPEC: blueprint generates execution tasks', () => {
     const out = ep.buildPlanFromBlueprint(SAMPLE_BLUEPRINT, { now: FROZEN_NOW });
     expect(out.tasks).toHaveLength(6);
-    // Cumulative offsets sum to total_days (last task absorbs remainder).
-    expect(out.timeline.total_days).toBe(84); // 12 weeks
-    const lastTask = out.tasks[out.tasks.length - 1];
-    expect(lastTask.start_offset_days + lastTask.estimated_days).toBe(84);
-    // Each task has a non-empty assigned_agent.
+    // v6: total_days is now the CRITICAL-PATH duration (parallel-packed),
+    // not the serial sum. Serial sum is exposed as serial_total_days.
+    expect(out.timeline.serial_total_days).toBe(84);
+    expect(out.timeline.total_days).toBeLessThanOrEqual(out.timeline.serial_total_days);
+    expect(out.timeline.total_days).toBeGreaterThan(0);
+    expect(out.timeline.parallel_efficiency).toBeGreaterThanOrEqual(1);
+    // Each task has a non-empty assigned_agent + positive estimated_days.
     for (const t of out.tasks) {
       expect(t.assigned_agent).toBeTruthy();
       expect(t.estimated_days).toBeGreaterThan(0);
+      expect(typeof t.parallel_group).toBe('number');
+      expect(t.complexity).toBeGreaterThan(0);
     }
   });
 
@@ -217,5 +221,147 @@ describe('executionPlanner.startBuild', () => {
   it('throws when there is no plan to start', async () => {
     models.__mock.mockPlans.clear();
     await expect(ep.startBuild(1)).rejects.toThrow(/no execution plan/);
+  });
+});
+
+// ---------- v6: Dynamic execution planning ----------
+
+describe('executionPlanner v6.complexityWeight', () => {
+  it('long features bump weight; simple keywords trim it', () => {
+    expect(ep.complexityWeight('Real-time machine learning integration with encryption'))
+      .toBeGreaterThan(1.4);
+    expect(ep.complexityWeight('Simple report dashboard'))
+      .toBeLessThan(1);
+    expect(ep.complexityWeight('A medium feature description'))
+      .toBe(1);
+  });
+  it('floors at 0.5', () => {
+    expect(ep.complexityWeight('view chart export simple report dashboard'))
+      .toBeGreaterThanOrEqual(0.5);
+  });
+});
+
+describe('executionPlanner v6.assignParallelGroups', () => {
+  it('two tasks with DIFFERENT agents land in the same wave (parallel)', () => {
+    const tasks = [
+      { title: 'a', assigned_agent: 'Data Engineer', estimated_days: 10 },
+      { title: 'b', assigned_agent: 'AI/ML Engineer', estimated_days: 10 },
+    ];
+    const out = ep.assignParallelGroups(tasks);
+    expect(out.tasks[0].parallel_group).toBe(0);
+    expect(out.tasks[1].parallel_group).toBe(0);
+    expect(out.criticalPathDays).toBe(10); // not 20
+  });
+
+  it('two tasks with the SAME agent land in different waves', () => {
+    const tasks = [
+      { title: 'a', assigned_agent: 'Data Engineer', estimated_days: 8 },
+      { title: 'b', assigned_agent: 'Data Engineer', estimated_days: 12 },
+    ];
+    const out = ep.assignParallelGroups(tasks);
+    expect(out.tasks[0].parallel_group).toBe(0);
+    expect(out.tasks[1].parallel_group).toBe(1);
+    expect(out.tasks[1].start_offset_days).toBe(8);
+    expect(out.criticalPathDays).toBe(20);
+  });
+
+  it('wave start_offset = sum of prior wave durations (max per wave)', () => {
+    const tasks = [
+      { title: 'a', assigned_agent: 'A', estimated_days: 5 },
+      { title: 'b', assigned_agent: 'B', estimated_days: 8 },  // wave 0, longest
+      { title: 'c', assigned_agent: 'A', estimated_days: 3 },  // wave 1
+    ];
+    const out = ep.assignParallelGroups(tasks);
+    expect(out.tasks[2].start_offset_days).toBe(8); // waits for wave 0's max
+    expect(out.criticalPathDays).toBe(11);          // 8 + 3
+  });
+});
+
+describe('executionPlanner v6.rebalanceAssignments', () => {
+  it('reassigns fallback-agent tasks to underloaded agents', () => {
+    // 4 tasks; only one is keyword-bound (Data Engineer); the rest
+    // landed on the fallback (AI Pilot Lead). Should redistribute.
+    const tasks = [
+      { title: 'data integration', assigned_agent: 'Data Engineer' },
+      { title: 'misc 1', assigned_agent: 'AI Pilot Lead' },
+      { title: 'misc 2', assigned_agent: 'AI Pilot Lead' },
+      { title: 'misc 3', assigned_agent: 'AI Pilot Lead' },
+    ];
+    ep.rebalanceAssignments(
+      tasks,
+      ['AI Pilot Lead', 'Data Engineer', 'Frontend Engineer'],
+      'AI Pilot Lead',
+    );
+    const counts = tasks.reduce((m, t) => {
+      m[t.assigned_agent] = (m[t.assigned_agent] || 0) + 1;
+      return m;
+    }, {});
+    // No agent should be hogging all the misc work after rebalance.
+    expect(counts['AI Pilot Lead']).toBeLessThanOrEqual(2);
+  });
+
+  it('does not move tasks bound to a specific role by keyword', () => {
+    // Compliance Lead is keyword-bound. Must not be reassigned.
+    const tasks = [
+      { title: 'compliance audit', assigned_agent: 'Compliance Lead' },
+      { title: 'compliance audit two', assigned_agent: 'Compliance Lead' },
+      { title: 'fallback misc', assigned_agent: 'AI Pilot Lead' },
+    ];
+    ep.rebalanceAssignments(
+      tasks,
+      ['AI Pilot Lead', 'Compliance Lead'],
+      'AI Pilot Lead',
+    );
+    expect(tasks[0].assigned_agent).toBe('Compliance Lead');
+    expect(tasks[1].assigned_agent).toBe('Compliance Lead');
+  });
+
+  it('no-op when fewer than 2 agents available', () => {
+    const tasks = [
+      { title: 'a', assigned_agent: 'Solo' },
+      { title: 'b', assigned_agent: 'Solo' },
+    ];
+    const before = tasks.map((t) => t.assigned_agent);
+    ep.rebalanceAssignments(tasks, ['Solo'], 'Solo');
+    expect(tasks.map((t) => t.assigned_agent)).toEqual(before);
+  });
+});
+
+describe('executionPlanner v6.buildPlanFromBlueprint (parallel + balanced)', () => {
+  it('SPEC: critical-path collapses below serial sum when parallel waves exist', () => {
+    const out = ep.buildPlanFromBlueprint(SAMPLE_BLUEPRINT, { now: FROZEN_NOW });
+    // Bundle #43-style: 6 features across 4 distinct agents, 12 weeks total.
+    // Parallel packing should beat the 84-day serial baseline.
+    expect(out.timeline.total_days).toBeLessThan(out.timeline.serial_total_days);
+    expect(out.timeline.parallel_efficiency).toBeGreaterThan(1);
+  });
+
+  it('per-task estimated_days varies by complexity weight', () => {
+    const blueprint = {
+      mvp_scope: 'X',
+      features: [
+        'Real-time machine learning encryption integration', // complex → larger
+        'Simple report dashboard',                            // simple  → smaller
+      ],
+      required_agents: ['AI/ML Engineer', 'Frontend Engineer'],
+      time_to_market_weeks: 12,
+    };
+    const out = ep.buildPlanFromBlueprint(blueprint, { now: FROZEN_NOW });
+    const complex = out.tasks.find((t) => /machine learning/i.test(t.title));
+    const simple  = out.tasks.find((t) => /Simple report/i.test(t.title));
+    expect(complex.estimated_days).toBeGreaterThan(simple.estimated_days);
+  });
+
+  it('parallel_efficiency >= 1 always', () => {
+    const out = ep.buildPlanFromBlueprint(SAMPLE_BLUEPRINT, { now: FROZEN_NOW });
+    expect(out.timeline.parallel_efficiency).toBeGreaterThanOrEqual(1);
+  });
+
+  it('end_date matches start_date + total_days (critical path)', () => {
+    const out = ep.buildPlanFromBlueprint(SAMPLE_BLUEPRINT, { now: FROZEN_NOW });
+    const start = new Date(out.timeline.start_date);
+    const end   = new Date(out.timeline.end_date);
+    const diffDays = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+    expect(diffDays).toBe(out.timeline.total_days);
   });
 });

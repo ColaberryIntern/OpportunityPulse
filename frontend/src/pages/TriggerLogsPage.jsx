@@ -135,6 +135,7 @@ function TriggerLogsPage() {
                   <th className="px-2 py-2">Target</th>
                   <th className="px-2 py-2">Action</th>
                   <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Confidence</th>
                   <th className="px-2 py-2">Reason</th>
                 </tr>
               </thead>
@@ -150,6 +151,9 @@ function TriggerLogsPage() {
                     </td>
                     <td className="px-2 py-2 text-xs">{row.action}</td>
                     <td className="px-2 py-2"><StatusPill status={row.status} /></td>
+                    <td className="px-2 py-2 text-xs font-mono text-gray-700 dark:text-gray-300" data-testid="trigger-log-confidence">
+                      {row.confidenceScore != null ? Number(row.confidenceScore).toFixed(2) : '—'}
+                    </td>
                     <td className="px-2 py-2 text-xs text-gray-600 dark:text-gray-400">
                       {row.reason || '—'}
                     </td>

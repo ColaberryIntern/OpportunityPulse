@@ -13,6 +13,18 @@ const revenueDashboardSvc = require('./revenueDashboard.service');
 const feedbackSvc = require('./feedback.service');
 const executionPlannerSvc = require('./executionPlanner.service');
 const billingSvc = require('./billing.service');
+const velocitySvc = require('./velocity.service');
+
+// v6: helper that maps PlanLimitExceededError → 402 Payment Required.
+// Other errors fall through to the caller's existing handler.
+function handlePlanLimit(res, e) {
+  if (e instanceof billingSvc.PlanLimitExceededError) {
+    return errorResponse(res, e.message, 402, {
+      tier: e.tier, used: e.used, limit: e.limit, metric: e.metric,
+    });
+  }
+  return null;
+}
 
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
@@ -113,6 +125,8 @@ async function generate(req, res) {
     }).catch(() => {});
     return successResponse(res, out, 'Output generated', 201);
   } catch (e) {
+    const limit = handlePlanLimit(res, e);
+    if (limit) return limit;
     logger.error('OIED generate failed', { id: opportunityId, type, error: e.message });
     return errorResponse(res, 'Generation failed: ' + e.message, 500);
   }
@@ -249,6 +263,8 @@ async function generateBundleStrategy(req, res) {
     const out = await bundler.generateBundleStrategy(bundleId, { force });
     return successResponse(res, out, out.cached ? 'Cached strategy' : 'Strategy generated');
   } catch (e) {
+    const limit = handlePlanLimit(res, e);
+    if (limit) return limit;
     logger.error('OIED bundle strategy failed', { bundleId, error: e.message });
     return errorResponse(res, 'Strategy generation failed: ' + e.message, 500);
   }
@@ -287,6 +303,8 @@ async function sendBriefing(req, res) {
     const out = await briefingSvc.deliverBriefing({ userId, to });
     return successResponse(res, out, out.sent ? 'Briefing sent' : 'Briefing skipped');
   } catch (e) {
+    const limit = handlePlanLimit(res, e);
+    if (limit) return limit;
     logger.error('OIED briefing send failed', { error: e.message });
     return errorResponse(res, 'Failed to send briefing: ' + e.message, 500);
   }
@@ -336,6 +354,8 @@ async function generateBundleBlueprint(req, res) {
     const out = await bundler.generateProductBlueprint(bundleId, { force });
     return successResponse(res, out, out.cached ? 'Cached blueprint' : 'Blueprint generated');
   } catch (e) {
+    const limit = handlePlanLimit(res, e);
+    if (limit) return limit;
     logger.error('OIED bundle blueprint failed', { bundleId, error: e.message });
     return errorResponse(res, 'Blueprint generation failed: ' + e.message, 500);
   }
@@ -497,6 +517,20 @@ async function changeBillingPlan(req, res) {
   }
 }
 
+// ----- v6 endpoints --------------------------------------------------
+
+// GET /api/v1/oied/velocity — pipeline durations (submit/response/win).
+async function getVelocity(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await velocitySvc.getVelocity({ userId });
+    return successResponse(res, data);
+  } catch (e) {
+    logger.error('OIED velocity failed', { error: e.message });
+    return errorResponse(res, 'Failed to load velocity', 500);
+  }
+}
+
 module.exports = {
   listMy,
   generate,
@@ -532,4 +566,6 @@ module.exports = {
   getBillingUsage,
   getBillingPlan,
   changeBillingPlan,
+  // v6
+  getVelocity,
 };

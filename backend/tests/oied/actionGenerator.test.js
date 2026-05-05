@@ -24,8 +24,13 @@ jest.mock('../../src/oied/profile.service', () => ({
 
 // v5: actionGenerator records usage. Mock the billing service so the
 // test doesn't try to write to the (mocked) UsageMetric model.
+// v6 adds enforceOrThrow which gates the AI call.
 jest.mock('../../src/oied/billing.service', () => ({
   recordUsage: jest.fn(async () => null),
+  enforceOrThrow: jest.fn(async () => ({
+    metric: 'proposals_generated', tier: 'enterprise',
+    used: 0, limit: -1, remaining: Infinity, exceeded: false, enforcing: false,
+  })),
 }));
 
 jest.mock('../../src/oied/pastWins.service', () => ({

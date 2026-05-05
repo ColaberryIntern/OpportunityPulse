@@ -217,7 +217,11 @@ async function deliverBriefing({
   if (!to) {
     return { sent: false, reason: 'OIED_BRIEFING_TO not configured' };
   }
-  const briefing = await buildBriefing({ organizationId, userId, now });
+  // v6: enforce plan limit BEFORE composing — saves the work on over-limit.
+  const orgId = organizationId || (await profileSvc.resolveOrgId(userId));
+  await billing.enforceOrThrow({ organizationId: orgId, metric: 'briefings_sent' });
+
+  const briefing = await buildBriefing({ organizationId: orgId, userId, now });
   const html = buildBriefingHtml(briefing);
   const result = await sendEmail({
     to,

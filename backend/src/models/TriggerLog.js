@@ -21,7 +21,8 @@ module.exports = (sequelize) => {
     },
     action: {
       type: DataTypes.STRING(40), allowNull: false,
-      validate: { isIn: [['generate_proposal', 'generate_strategy']] },
+      // v6: 'auto_submit' joins the v4 generate_* actions.
+      validate: { isIn: [['generate_proposal', 'generate_strategy', 'auto_submit']] },
     },
     status: {
       type: DataTypes.STRING(20), allowNull: false,
@@ -29,6 +30,13 @@ module.exports = (sequelize) => {
     },
     reason:   { type: DataTypes.TEXT,    allowNull: true },
     outputId: { type: DataTypes.INTEGER, allowNull: true, field: 'output_id' },
+    // v6: confidence_score is populated for the auto_submit rule.
+    // null for v4 rule rows (legacy auto_proposal / auto_strategy).
+    confidenceScore: {
+      type: DataTypes.DECIMAL(4, 3),
+      allowNull: true,
+      field: 'confidence_score',
+    },
   }, {
     tableName: 'trigger_logs',
     timestamps: true,

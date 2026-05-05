@@ -173,3 +173,9 @@ export async function changeBillingPlan(tier) {
   const res = await api.patch(`${base}/billing/plan`, { tier });
   return res.data?.data;
 }
+
+// ---- v6: Pipeline velocity -------------------------------------------------
+export async function getVelocity() {
+  const res = await api.get(`${base}/velocity`);
+  return res.data?.data || null;
+}

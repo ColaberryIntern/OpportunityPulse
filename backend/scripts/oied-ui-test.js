@@ -54,6 +54,11 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     execution_queue_loaded: false,
     revenue_dashboard_loaded: false,
     execution_plan_present: false,
+    // v6
+    velocity_panel_present: false,
+    billing_page_loaded: false,
+    confidence_column_present: false,
+    parallel_efficiency_badge: false,
     screenshots: [],
     errors: [],
   };
@@ -350,7 +355,45 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     await page.waitForTimeout(2500);
     const planCount = await page.locator('[data-testid="bundle-execution-plan"]').count();
     results.execution_plan_present = planCount > 0;
-    log(`execution plan disclosures in DOM: ${planCount}`);
+    // v6: parallel-efficiency badge appears when the plan packs into waves.
+    const peBadge = await page.locator('[data-testid="parallel-efficiency-badge"]').count();
+    results.parallel_efficiency_badge = peBadge > 0;
+    log(`execution plan disclosures in DOM: ${planCount}, parallel badges: ${peBadge}`);
+
+    // v6 surfaces.
+
+    // /admin/revenue → embedded VelocityPanel.
+    log('checking velocity panel on revenue dashboard');
+    await page.goto(`${BASE_URL}/admin/revenue`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    results.velocity_panel_present = (await page.locator('[data-testid="velocity-panel"]').count()) > 0;
+    const screenshotVelocity = path.join(OUT_DIR, 'velocity_panel.png');
+    await page.screenshot({ path: screenshotVelocity, fullPage: true });
+    results.screenshots.push('velocity_panel.png');
+    log(`velocity panel in DOM: ${results.velocity_panel_present}`);
+
+    // /admin/billing — billing page renders.
+    log('navigating to /admin/billing');
+    await page.goto(`${BASE_URL}/admin/billing`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="billing-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    results.billing_page_loaded = (await page.locator('[data-testid="billing-page"]').count()) > 0;
+    const screenshotBilling = path.join(OUT_DIR, 'billing_page.png');
+    await page.screenshot({ path: screenshotBilling, fullPage: true });
+    results.screenshots.push('billing_page.png');
+    log(`billing page in DOM: ${results.billing_page_loaded}`);
+
+    // /admin/triggers — confidence column visible.
+    log('checking confidence column on trigger logs');
+    await page.goto(`${BASE_URL}/admin/triggers`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="trigger-logs-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    const hasConfHeader = await page.locator('th:has-text("Confidence")').count();
+    results.confidence_column_present = hasConfHeader > 0;
+    const screenshotAutoExec = path.join(OUT_DIR, 'auto_execution_logs.png');
+    await page.screenshot({ path: screenshotAutoExec });
+    results.screenshots.push('auto_execution_logs.png');
+    log(`confidence column header present: ${hasConfHeader > 0}`);
   } catch (e) {
     results.errors.push('flow: ' + e.message);
     console.error(e);
@@ -371,7 +414,10 @@ function log(...a) { console.log('[oied-ui]', ...a); }
       && results.trigger_logs_loaded
       && results.trigger_dry_run_fired
       && results.execution_queue_loaded
-      && results.revenue_dashboard_loaded;
+      && results.revenue_dashboard_loaded
+      && results.velocity_panel_present
+      && results.billing_page_loaded
+      && results.confidence_column_present;
     process.exit(passed ? 0 : 1);
   }
 })().catch((e) => { console.error(e); process.exit(1); });

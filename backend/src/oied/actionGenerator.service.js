@@ -149,6 +149,19 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
   // userId defaults to generatedBy — both are the calling admin in practice.
   const effectiveUserId = userId != null ? userId : generatedBy;
   const userProfile = await profileSvc.getOrDefault(effectiveUserId);
+
+  // v6: enforce plan limit BEFORE the AI call. enforceOrThrow is a no-op
+  // when OIED_BILLING_ENFORCE=false; throws PlanLimitExceededError when
+  // enforce=true AND the org is at/over its monthly cap. proposal-only —
+  // 'offer' / 'analysis' types ride free for now.
+  if (type === 'proposal') {
+    const orgId = await profileSvc.resolveOrgId(effectiveUserId);
+    await billing.enforceOrThrow({
+      organizationId: orgId,
+      metric: 'proposals_generated',
+    });
+  }
+
   const pastWins = await pastWinsSvc.getRecentApproved({
     type, limit: 5, generatedBy: effectiveUserId,
   }).catch((e) => {
