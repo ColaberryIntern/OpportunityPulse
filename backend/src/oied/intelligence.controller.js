@@ -80,7 +80,14 @@ async function loadOppOutcomeContext(opportunityId) {
 
 // Attach `context` to one opportunity row (already enriched with
 // fitScore/priorityScore/bucket/effortEstimate/winProbability).
-async function attachContextToOpportunity(opp, { organizationId } = {}) {
+//
+// v8: optional `grounding` opt — passed by the single-row endpoint so
+// the consumer agent can read `context.grounding.agency_name` /
+// `solicitation_id` / `missing_fields[]` before deciding whether to
+// call POST /generate. List endpoints omit grounding (per-row DB hit
+// would be expensive); they expect callers to fetch /opportunities/:id
+// for detail.
+async function attachContextToOpportunity(opp, { organizationId, grounding = null } = {}) {
   const { latestDraft, outcome, submittedDaysAgo } = await loadOppOutcomeContext(opp.id);
   const enriched = submittedDaysAgo != null
     ? { ...opp, _submittedDaysAgo: submittedDaysAgo }
@@ -92,6 +99,7 @@ async function attachContextToOpportunity(opp, { organizationId } = {}) {
       organizationId,
       latestDraft,
       outcome,
+      grounding,
     }),
   };
 }
@@ -126,7 +134,20 @@ async function getOpportunityIntelligence(req, res) {
     const enriched = await myOppsSvc.enrichOpportunity({
       opportunity: opp, organizationId: orgId, userId: (req.user && req.user.id) || null,
     });
-    const wrapped = await attachContextToOpportunity(enriched, { organizationId: orgId });
+    // v8: load grounding inline for the single-row endpoint so the
+    // consumer agent can read context.grounding.{agency_name,
+    // solicitation_id, missing_fields} before calling POST /generate.
+    // eslint-disable-next-line global-require
+    const groundingSvc = require('./grounding.service');
+    let grounding = null;
+    try {
+      grounding = await groundingSvc.getOpportunityGrounding(id);
+    } catch (e) {
+      logger.warn('intelligence: grounding lookup failed', { id, error: e.message });
+    }
+    const wrapped = await attachContextToOpportunity(enriched, {
+      organizationId: orgId, grounding,
+    });
     return successResponse(res, wrapped);
   } catch (e) {
     logger.error('intelligence.getOpportunity failed', { id, error: e.message });

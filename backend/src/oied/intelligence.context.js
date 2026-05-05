@@ -156,8 +156,9 @@ function buildContextForOpportunity({
   opp,
   organizationId = null,
   latestDraft = null,
-  outcome = null,           // null | 'won' | 'lost' | 'submitted_pending'
+  outcome = null,           // null | 'won' | 'lost' | 'submitted_no_response' | 'responded_no_outcome' | 'submitted_pending' (legacy)
   winProbability = null,
+  grounding = null,         // v8: optional payload from grounding.service
 }) {
   const effort = opp.effortEstimate || estimateEffort(opp);
   const wp = Number(winProbability != null ? winProbability : opp.winProbability);
@@ -167,7 +168,7 @@ function buildContextForOpportunity({
     winProbability: finalWp,
     proposalHours: effort.proposal_hours,
   });
-  return {
+  const ctx = {
     schema_version: SCHEMA_VERSION,
     priority: Math.round(Number(opp.priorityScore) || 0),
     value: Number(opp.value) || 0,
@@ -181,6 +182,33 @@ function buildContextForOpportunity({
     organization_id: organizationId,
     generated_at: new Date().toISOString(),
   };
+  // v8: additive grounding sub-object on the single-row endpoint.
+  // List endpoints don't pass grounding (per-row DB hit × N would be
+  // expensive); the bridge consumer can fetch /opportunities/:id for
+  // detail. schema_version stays at 1 because this is purely additive.
+  if (grounding) {
+    if (grounding.status === 'ok') {
+      // Lazy require to avoid a circular import path:
+      // intelligence.context.js doesn't depend on grounding.service.js
+      // for normal context building.
+      // eslint-disable-next-line global-require
+      const groundingSvc = require('./grounding.service');
+      ctx.grounding = {
+        agency_name: grounding.agency_name,
+        solicitation_id: grounding.solicitation_id,
+        missing_fields: groundingSvc.missingGroundingFields(grounding),
+      };
+    } else if (grounding.status === 'invalid_stage') {
+      ctx.grounding = {
+        agency_name: null,
+        solicitation_id: null,
+        missing_fields: [],
+        status: 'invalid_stage',
+        blocked_by_event: grounding.event_type || null,
+      };
+    }
+  }
+  return ctx;
 }
 
 // ---- Bundle envelope ----------------------------------------------------

@@ -20,6 +20,42 @@ const profileSvc = require('./profile.service');
 const pastWinsSvc = require('./pastWins.service');
 const { profileHash } = require('./fitScoring.service');
 const billing = require('./billing.service');
+const events = require('./events.service');
+const groundingSvc = require('./grounding.service');
+const approvedAssetsSvc = require('./approvedAssets.service');
+
+// v8: thrown when proposal generation can't proceed because required
+// procurement context (agency_name / solicitation_id / scope_summary)
+// isn't derivable from the opportunity row.
+class MissingGroundingError extends Error {
+  constructor(missing_fields) {
+    super(`Cannot generate proposal — missing context: ${missing_fields.join(', ')}`);
+    this.name = 'MissingGroundingError';
+    this.statusCode = 422;
+    this.missing_fields = missing_fields;
+  }
+}
+
+// v8: hard rules appended to the proposal system prompt. Bracketed
+// {{BANNED_TERMS}} substituted at runtime.
+const HARD_RULES = `
+
+CRITICAL RULES (violation = unusable proposal):
+1. DO NOT invent product names. Use ONLY the services and tools listed
+   under "Approved Services" / "Approved Tools" in the user message.
+2. DO NOT reference unknown systems, frameworks, or products from
+   outside that approved list.
+3. DO NOT assume a "pilot → paid engagement" structure unless the
+   opportunity description explicitly references a pilot, demo, or
+   phased rollout.
+4. MUST include the exact agency name and solicitation ID in the
+   "## Executive Summary" section, by name (not a placeholder).
+5. MUST cover each item listed under "Required Sections" with its own
+   "## " heading. If no required sections were detected, default to
+   ## Executive Summary | ## Approach | ## Team & Tools | ## Timeline | ## Pricing.
+
+Banned terms (any occurrence is auto-flagged in metadata): {{BANNED_TERMS}}.
+`;
 
 const ALLOWED_TYPES = ['proposal', 'offer', 'analysis'];
 
@@ -103,11 +139,58 @@ function buildUserPrompt(opp, userProfile, pastWins) {
   return lines.join('\n');
 }
 
+// v8: grounded user prompt. Structures the input around real
+// procurement metadata + approved assets so the model has concrete
+// anchors instead of inferring everything from a free-form description.
+function buildGroundedUserPrompt(opp, userProfile, pastWins, grounding, assets) {
+  const reqs = grounding.submission_requirements || {};
+  const lines = [
+    `Agency: ${grounding.agency_name}`,
+    `Solicitation ID: ${grounding.solicitation_id}`,
+    `Opportunity Title: ${grounding.opportunity_title || opp.title || ''}`,
+    `Estimated Value (USD): ${opp.value != null ? opp.value : 'unknown'}`,
+    `Close / expires: ${opp.expiresAt ? new Date(opp.expiresAt).toISOString().slice(0, 10) : 'unknown'}`,
+    `Source: ${opp.source || ''}  (${grounding.source_url || opp.sourceUrl || 'no link'})`,
+    '',
+    'Scope (from RFP):',
+    grounding.scope_summary || '(none provided)',
+    '',
+    `Required Sections: ${(reqs.required_sections && reqs.required_sections.length)
+      ? reqs.required_sections.join(', ')
+      : '(none detected — use ## Executive Summary | ## Approach | ## Team & Tools | ## Timeline | ## Pricing)'}`,
+    `Page Limit: ${reqs.page_limit || 'unspecified'}`,
+    `Format: ${reqs.format || 'unspecified'}`,
+    '',
+    `Approved Services (use ONLY these): ${(assets.services || []).join(', ') || '(none configured)'}`,
+    `Approved Tools / Allowed Terms: ${(assets.allowed_terms || []).join(', ') || '(none)'}`,
+    `Banned Terms (DO NOT use): ${(assets.banned_terms || []).join(', ')}`,
+  ];
+  if (Array.isArray(assets.case_studies) && assets.case_studies.length > 0) {
+    lines.push('', 'Past wins to reference for credibility:');
+    for (const cs of assets.case_studies) lines.push(`  - ${cs}`);
+  }
+  if (Array.isArray(pastWins) && pastWins.length > 0) {
+    lines.push('', `Last ${pastWins.length} approved proposal(s) — match the tone, structure, and concreteness:`);
+    for (const w of pastWins) {
+      const t = (w.opportunity && w.opportunity.title) || '(untitled)';
+      const cat = (w.opportunity && w.opportunity.category) || 'n/a';
+      const snippet = String(w.content || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      lines.push(`  • [${cat}] ${t} → "${snippet}…"`);
+    }
+  }
+  return lines.join('\n');
+}
+
 // Personalization score (0-100, deterministic): how many tokens from
 // userProfile.services / industries / tools / pastWins appear in the
 // generated content. Token = lowercased word ≥4 chars. Saturating —
-// after 25 unique hits we max out.
-function scorePersonalization({ userProfile, pastWins, content }) {
+// after 25 unique hits the base score maxes out.
+//
+// v8 additions:
+//   +5 when content references the agency_name (case-insensitive)
+//   +5 when content references the solicitation_id (case-insensitive)
+//   −10 per banned term hit (capped at −30 total)
+function scorePersonalization({ userProfile, pastWins, content, grounding = null, banned = [] }) {
   if (!content) return 0;
   const corpus = String(content).toLowerCase();
   const tokenSet = new Set();
@@ -135,7 +218,25 @@ function scorePersonalization({ userProfile, pastWins, content }) {
     if (corpus.includes(tok)) hits += 1;
     if (hits >= 25) break;
   }
-  return Math.min(100, Math.round((hits / 25) * 100));
+  let score = Math.min(100, Math.round((hits / 25) * 100));
+
+  // v8 grounding bonuses: reward proposals that reference the actual
+  // agency + solicitation (the model often forgets when the prompt
+  // doesn't surface them).
+  if (grounding && grounding.agency_name
+      && corpus.includes(String(grounding.agency_name).toLowerCase())) {
+    score = Math.min(100, score + 5);
+  }
+  if (grounding && grounding.solicitation_id
+      && corpus.includes(String(grounding.solicitation_id).toLowerCase())) {
+    score = Math.min(100, score + 5);
+  }
+
+  // v8 banned-term penalty: −10 per hit, capped at −30 total.
+  if (Array.isArray(banned) && banned.length > 0) {
+    score = Math.max(0, score - Math.min(30, banned.length * 10));
+  }
+  return score;
 }
 
 // Public: generate ONE output for an opportunity. Persists as draft.
@@ -149,6 +250,31 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
   // userId defaults to generatedBy — both are the calling admin in practice.
   const effectiveUserId = userId != null ? userId : generatedBy;
   const userProfile = await profileSvc.getOrDefault(effectiveUserId);
+
+  // v8: lifecycle + grounding gates fire BEFORE the AI call (proposal only).
+  let groundingPayload = null;
+  let approvedAssets = null;
+  if (type === 'proposal') {
+    groundingPayload = await groundingSvc.getOpportunityGrounding(opportunityId);
+    if (groundingPayload.status === 'not_found') {
+      throw new Error(groundingPayload.message);
+    }
+    if (groundingPayload.status === 'invalid_stage') {
+      // Reuse v7.1 LifecycleViolationError so the controller can map to 400.
+      throw new events.LifecycleViolationError(
+        groundingPayload.message,
+        groundingPayload.event_type || 'submitted',
+      );
+    }
+    const missing = groundingSvc.missingGroundingFields(groundingPayload);
+    if (missing.length > 0) {
+      throw new MissingGroundingError(missing);
+    }
+    approvedAssets = await approvedAssetsSvc.getApprovedAssets({
+      organizationId: await profileSvc.resolveOrgId(effectiveUserId),
+      userId: effectiveUserId,
+    });
+  }
 
   // v6: enforce plan limit BEFORE the AI call. enforceOrThrow is a no-op
   // when OIED_BILLING_ENFORCE=false; throws PlanLimitExceededError when
@@ -170,26 +296,57 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
   });
 
   const aiClient = getAIClient();
-  const systemPrompt = SYSTEM_PROMPTS[type] + COLABERRY_POSITIONING;
-  const userPromptText = buildUserPrompt(opp, userProfile, pastWins);
+
+  // v8: grounded prompt path for proposals; legacy path for offer/analysis.
+  let systemPrompt;
+  let userPromptText;
+  if (type === 'proposal' && groundingPayload && approvedAssets) {
+    const bannedList = (approvedAssets.banned_terms || []).join(', ');
+    systemPrompt = SYSTEM_PROMPTS.proposal
+      + COLABERRY_POSITIONING
+      + HARD_RULES.replace('{{BANNED_TERMS}}', bannedList);
+    userPromptText = buildGroundedUserPrompt(
+      opp, userProfile, pastWins, groundingPayload, approvedAssets,
+    );
+  } else {
+    systemPrompt = SYSTEM_PROMPTS[type] + COLABERRY_POSITIONING;
+    userPromptText = buildUserPrompt(opp, userProfile, pastWins);
+  }
+
   const { content } = await aiClient.chat(
     systemPrompt,
     userPromptText,
     // responseFormat:'text' → emits markdown, not JSON.
-    { temperature: 0.4, maxTokens: 900, responseFormat: 'text' }
+    { temperature: 0.4, maxTokens: 900, responseFormat: 'text' },
   );
 
   if (!content || !content.trim()) {
     throw new Error('AI returned empty content');
   }
 
-  const personalization = scorePersonalization({ userProfile, pastWins, content });
+  // v8: post-generation banned-term scan (proposal only).
+  const bannedHits = type === 'proposal'
+    ? approvedAssetsSvc.findBannedTerms(content)
+    : [];
+
+  const personalization = scorePersonalization({
+    userProfile, pastWins, content,
+    grounding: groundingPayload, banned: bannedHits,
+  });
   const metadata = {
-    template_used: `${type}-v3`,
+    template_used: type === 'proposal' && groundingPayload ? 'proposal-v8' : `${type}-v3`,
     personalization_score: personalization,
     past_wins_used: pastWins.map((w) => w.id),
     profile_hash: userProfile ? profileHash(userProfile) : null,
     colaberry_positioning: true,
+    grounding: type === 'proposal' && groundingPayload ? {
+      agency_name: groundingPayload.agency_name,
+      solicitation_id: groundingPayload.solicitation_id,
+      required_sections: groundingPayload.submission_requirements.required_sections,
+      page_limit: groundingPayload.submission_requirements.page_limit,
+      format: groundingPayload.submission_requirements.format,
+    } : null,
+    banned_terms_detected: bannedHits,
     generated_at: new Date().toISOString(),
   };
 
@@ -267,6 +424,10 @@ module.exports = {
   updateOutputStatus,
   scorePersonalization,
   buildUserPrompt,
+  // v8
+  buildGroundedUserPrompt,
+  MissingGroundingError,
+  HARD_RULES,
   COLABERRY_POSITIONING,
   ALLOWED_TYPES,
 };

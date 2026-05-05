@@ -66,6 +66,28 @@ async function requireResponded(opportunityId) {
   }
 }
 
+// v8: returns the first terminal event_type found ('submitted' /
+// 'response_received' / 'won' / 'lost'), or false if none. Used by the
+// grounding service to gate proposal regeneration once an opp has
+// moved past the draft stage.
+async function hasAnyTerminalEvent(opportunityId) {
+  if (!opportunityId) return false;
+  try {
+    const row = await OpportunityEvent.findOne({
+      where: {
+        opportunityId,
+        eventType: { [Op.in]: ['submitted', 'response_received', 'won', 'lost'] },
+      },
+      attributes: ['id', 'eventType'],
+    });
+    return row ? row.eventType : false;
+  } catch (e) {
+    // Defensive: if the event lookup fails, fall back to allowing
+    // generation rather than blocking everything.
+    return false;
+  }
+}
+
 async function recordEvent({ opportunityId, eventType, userId = null, payload = {} }) {
   if (!opportunityId) throw new Error('opportunityId required');
   if (!VALID_TYPES.has(eventType)) throw new Error(`Invalid event_type: ${eventType}`);
@@ -177,6 +199,8 @@ module.exports = {
   requireSubmitted,
   requireResponded,
   LifecycleViolationError,
+  // v8
+  hasAnyTerminalEvent,
   VALID_TYPES,
   CONVERSION_TYPES,
 };

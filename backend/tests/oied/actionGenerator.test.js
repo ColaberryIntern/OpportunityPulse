@@ -60,11 +60,16 @@ const {
 const { Opportunity, OpportunityOutput } = require('../../src/models');
 const aiMod = require('../../src/analysis/ai.client');
 
+// v8: TEST_OPP carries enough metadata for the grounding service to
+// derive agency_name + solicitation_id + scope_summary so the generator
+// can run end-to-end. (Pre-v8 tests didn't need this — the gate didn't exist.)
 const TEST_OPP = {
-  id: 42, title: 'AI Data Analytics RFP', category: 'IT Services',
-  value: 250000, location: 'Austin, TX', source: 'sam.gov',
-  description: 'Need a data analytics platform with AI components.',
+  id: 42, title: 'AI Data Analytics RFP-2026-007', category: 'IT Services',
+  value: 250000, location: 'City of Austin', source: 'sam.gov',
+  sourceId: 'sam:RFP-2026-007',
+  description: 'Need a data analytics platform with AI components for the City of Austin. The RFP requires a statement of work, pricing schedule, and compliance section. Bidders should propose technologies that meet our integration needs.',
   aiAnalysis: { ai_category: 'IT Services', recommended_product: 'OpsBot', signals: [] },
+  sourceData: { agency: 'City of Austin', external_id: 'sam:RFP-2026-007' },
 };
 
 beforeEach(() => {
@@ -124,7 +129,8 @@ describe('actionGenerator.generateOutput (v3 metadata)', () => {
   it('persists metadata.template_used + personalization_score + colaberry_positioning', async () => {
     await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
     const created = OpportunityOutput.create.mock.calls[0][0];
-    expect(created.metadata.template_used).toBe('proposal-v3');
+    // v8: grounded proposals are tagged proposal-v8.
+    expect(created.metadata.template_used).toBe('proposal-v8');
     expect(created.metadata.colaberry_positioning).toBe(true);
     expect(typeof created.metadata.personalization_score).toBe('number');
     expect(created.metadata.personalization_score).toBeGreaterThan(0);
@@ -137,5 +143,128 @@ describe('actionGenerator.generateOutput (v3 metadata)', () => {
     await expect(
       generateOutput({ opportunityId: 42, type: 'novel', generatedBy: 1 })
     ).rejects.toThrow(/Unknown output type/);
+  });
+});
+
+// ---------- v8: Grounded proposal generation ----------
+
+const { MissingGroundingError, buildGroundedUserPrompt, HARD_RULES } = require('../../src/oied/actionGenerator.service');
+const events = require('../../src/oied/events.service');
+const groundingSvc = require('../../src/oied/grounding.service');
+
+describe('actionGenerator v8 — grounded proposal flow', () => {
+  beforeEach(() => {
+    Opportunity.findByPk.mockResolvedValue(TEST_OPP);
+    OpportunityOutput.create.mockClear();
+    aiMod.__client.chat.mockClear();
+    aiMod.__client.chat.mockResolvedValue({
+      content: 'A proposal for City of Austin RFP-2026-007 covering data-analytics scope.',
+    });
+  });
+
+  it('SPEC: valid stage + grounding ok → proposal generates with metadata.grounding', async () => {
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const created = OpportunityOutput.create.mock.calls[0][0];
+    expect(created.metadata.template_used).toBe('proposal-v8');
+    expect(created.metadata.grounding).toEqual(expect.objectContaining({
+      agency_name: 'City of Austin',
+      solicitation_id: expect.any(String),
+    }));
+    expect(created.metadata.banned_terms_detected).toEqual([]);
+  });
+
+  it('SPEC: submitted event exists → throws LifecycleViolationError', async () => {
+    // Patch grounding directly to simulate the lifecycle gate hitting.
+    const original = groundingSvc.getOpportunityGrounding;
+    groundingSvc.getOpportunityGrounding = jest.fn(async () => ({
+      status: 'invalid_stage',
+      message: 'Proposal generation not allowed at this lifecycle stage',
+      event_type: 'submitted',
+      opportunity_id: 42,
+    }));
+    let caught;
+    try {
+      await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    } catch (e) { caught = e; }
+    groundingSvc.getOpportunityGrounding = original;
+    expect(caught).toBeInstanceOf(events.LifecycleViolationError);
+    expect(caught.requires).toBe('submitted');
+  });
+
+  it('SPEC: missing agency → throws MissingGroundingError with missing_fields', async () => {
+    const original = groundingSvc.getOpportunityGrounding;
+    groundingSvc.getOpportunityGrounding = jest.fn(async () => ({
+      status: 'ok',
+      opportunity_id: 42,
+      agency_name: null, // ← missing
+      solicitation_id: 'X',
+      opportunity_title: 'X',
+      scope_summary: 'long enough scope summary describing what the buyer wants in the procurement.',
+      submission_requirements: { required_sections: [], page_limit: null, format: null },
+    }));
+    let caught;
+    try {
+      await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    } catch (e) { caught = e; }
+    groundingSvc.getOpportunityGrounding = original;
+    expect(caught).toBeInstanceOf(MissingGroundingError);
+    expect(caught.missing_fields).toContain('agency_name');
+    expect(caught.statusCode).toBe(422);
+  });
+
+  it('SPEC: generated content references agency + solicitation_id, no banned terms', async () => {
+    aiMod.__client.chat.mockResolvedValueOnce({
+      content: '## Executive Summary\nThis proposal addresses City of Austin RFP-2026-007 with our AI Systems and Data Analytics services.',
+    });
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const created = OpportunityOutput.create.mock.calls[0][0];
+    expect(created.content).toMatch(/City of Austin/);
+    expect(created.content).toMatch(/RFP-2026-007/);
+    expect(created.metadata.banned_terms_detected).toEqual([]);
+  });
+
+  it('banned term in output bumps personalization_score down + records the hit', async () => {
+    aiMod.__client.chat.mockResolvedValueOnce({
+      content: 'We propose StaffMatch for City of Austin RFP-2026-007.',
+    });
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const created = OpportunityOutput.create.mock.calls[0][0];
+    expect(created.metadata.banned_terms_detected).toContain('StaffMatch');
+    // Score is dampened by the −10 penalty per hit.
+    expect(created.metadata.personalization_score).toBeLessThan(100);
+  });
+
+  it('hard rules + banned terms list appear in the system prompt', async () => {
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const [systemPrompt] = aiMod.__client.chat.mock.calls[0];
+    expect(systemPrompt).toMatch(/CRITICAL RULES/);
+    expect(systemPrompt).toMatch(/DO NOT invent product names/);
+    expect(systemPrompt).toMatch(/Banned terms.*StaffMatch/);
+  });
+
+  it('buildGroundedUserPrompt embeds Approved Services + Banned Terms blocks', () => {
+    const prompt = buildGroundedUserPrompt(
+      TEST_OPP,
+      { services: [], industries: [], tools: [], pastWins: [] },
+      [],
+      {
+        agency_name: 'City of Austin',
+        solicitation_id: 'RFP-2026-007',
+        opportunity_title: 'Test',
+        scope_summary: 'scope',
+        submission_requirements: { required_sections: ['sow', 'pricing'], page_limit: 25, format: 'PDF' },
+      },
+      {
+        services: ['AI Systems', 'Data Analytics'],
+        case_studies: ['DHA audit'],
+        allowed_terms: ['AI Systems', 'Snowflake'],
+        banned_terms: ['StaffMatch'],
+      },
+    );
+    expect(prompt).toMatch(/Agency: City of Austin/);
+    expect(prompt).toMatch(/Solicitation ID: RFP-2026-007/);
+    expect(prompt).toMatch(/Approved Services.*AI Systems, Data Analytics/);
+    expect(prompt).toMatch(/Banned Terms.*StaffMatch/);
+    expect(prompt).toMatch(/Required Sections: sow, pricing/);
   });
 });

@@ -7,7 +7,16 @@ let mockNextId = 1;
 jest.mock('../../src/models', () => {
   const mockUsage = [];
   const mockOrgs = new Map([[1, { id: 1, planTier: 'basic' }]]);
-  const opp = { id: 100, title: 'Test bid', value: 50000, category: 'IT Services' };
+  // v8: ground-friendly opp shape so the v8 grounding gate doesn't 422
+  // before billing enforcement gets a chance to throw.
+  const opp = {
+    id: 100, title: 'RFP-2026-100 City of Austin Test Bid',
+    value: 50000, category: 'IT Services',
+    location: 'City of Austin', sourceId: 'sam:RFP-2026-100',
+    description: 'Test enforcement scope: city needs a small-scale data analytics platform with AI components. Proposal should include statement of work, pricing, and compliance overview.',
+    sourceData: { agency: 'City of Austin', external_id: 'sam:RFP-2026-100' },
+    aiAnalysis: { recommended_product: 'OpsBot' },
+  };
   return {
     sequelize: {},
     Opportunity: { findByPk: jest.fn(async (id) => (Number(id) === 100 ? opp : null)) },

@@ -303,3 +303,57 @@ describe('intelligence.context.ROUTES — central registry prevents URL rot', ()
     expect(ctx.ROUTES.bundleExecStart(7)).toMatch(/\/bundles\/7\/execution-plan\/start$/);
   });
 });
+
+// ---------- v8: grounding sub-object on the envelope ----------
+
+describe('intelligence.context — v8 grounding sub-object', () => {
+  it('omits ctx.grounding when no grounding payload is passed (list endpoints)', () => {
+    const out = ctx.buildContextForOpportunity({ opp: fakeOpp() });
+    expect(out.grounding).toBeUndefined();
+    // Schema version stays at 1 — grounding is purely additive.
+    expect(out.schema_version).toBe(1);
+  });
+
+  it('attaches agency_name + solicitation_id + empty missing_fields when grounding ok', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(),
+      grounding: {
+        status: 'ok',
+        agency_name: 'City of Austin',
+        solicitation_id: 'RFP-2026-007',
+        scope_summary: 'A reasonably long scope summary describing what the buyer needs in this procurement.',
+      },
+    });
+    expect(out.grounding).toEqual({
+      agency_name: 'City of Austin',
+      solicitation_id: 'RFP-2026-007',
+      missing_fields: [],
+    });
+  });
+
+  it('reports missing_fields when a required derivation came back null', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(),
+      grounding: {
+        status: 'ok',
+        agency_name: null,
+        solicitation_id: 'RFP-2026-007',
+        scope_summary: 'A reasonably long scope summary describing what the buyer needs in this procurement.',
+      },
+    });
+    expect(out.grounding.missing_fields).toContain('agency_name');
+  });
+
+  it('flags invalid_stage with blocked_by_event when lifecycle gate hit', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(),
+      grounding: {
+        status: 'invalid_stage',
+        event_type: 'submitted',
+        opportunity_id: 1,
+      },
+    });
+    expect(out.grounding.status).toBe('invalid_stage');
+    expect(out.grounding.blocked_by_event).toBe('submitted');
+  });
+});

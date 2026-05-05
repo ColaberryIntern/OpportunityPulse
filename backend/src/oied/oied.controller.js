@@ -137,6 +137,21 @@ async function generate(req, res) {
   } catch (e) {
     const limit = handlePlanLimit(res, e);
     if (limit) return limit;
+    // v7.1 lifecycle gate (also fires from /generate in v8 — proposal
+    // regeneration blocked once submitted/responded/won/lost exists).
+    if (e instanceof events.LifecycleViolationError) {
+      return errorResponse(res, e.message, 400, {
+        requires: e.requires,
+        status: 'invalid_stage',
+      });
+    }
+    // v8: missing grounding context (agency / solicitation / scope).
+    if (e.name === 'MissingGroundingError') {
+      return errorResponse(res, e.message, 422, {
+        status: 'needs_context',
+        missing_fields: e.missing_fields,
+      });
+    }
     logger.error('OIED generate failed', { id: opportunityId, type, error: e.message });
     return errorResponse(res, 'Generation failed: ' + e.message, 500);
   }
