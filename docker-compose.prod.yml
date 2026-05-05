@@ -94,6 +94,10 @@ services:
       OIED_DIGEST_ENABLED: ${OIED_DIGEST_ENABLED:-false}
       OIED_DIGEST_CRON: ${OIED_DIGEST_CRON:-0 8 * * *}
       OIED_DIGEST_TO: ${OIED_DIGEST_TO:-}
+      # v7: External AI Bridge — empty/unset disables the API-key path
+      # (JWT keeps working). Set to a 48-char hex value to enable.
+      OIED_INTELLIGENCE_API_KEY: ${OIED_INTELLIGENCE_API_KEY:-}
+      OIED_INTELLIGENCE_DEFAULT_ORG_ID: ${OIED_INTELLIGENCE_DEFAULT_ORG_ID:-1}
     depends_on:
       postgres:
         condition: service_healthy
