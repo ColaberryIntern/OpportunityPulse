@@ -65,4 +65,17 @@ router.post(
   c.generateBundleBlueprint,
 );
 
+// v5 — Revenue Velocity System.
+router.get('/execution-queue',           verifyToken, c.listExecutionQueue);
+router.get('/revenue/dashboard',         verifyToken, c.getRevenueDashboard);
+router.get('/feedback/pending-outcomes', verifyToken, c.getPendingOutcomes);
+router.get('/feedback/weekly-summary',   verifyToken, c.getWeeklySummary);
+router.post('/feedback/weekly-summary/send', verifyToken, checkPermissions(ROLES.ADMIN), c.sendWeeklySummary);
+router.post('/bundles/:id/execution-plan',       verifyToken, checkPermissions(ROLES.ADMIN), c.generateExecutionPlan);
+router.get('/bundles/:id/execution-plan',        verifyToken, c.getExecutionPlan);
+router.post('/bundles/:id/execution-plan/start', verifyToken, checkPermissions(ROLES.ADMIN), c.startBuild);
+router.get('/billing/usage',  verifyToken, c.getBillingUsage);
+router.get('/billing/plan',   verifyToken, c.getBillingPlan);
+router.patch('/billing/plan', verifyToken, checkPermissions(ROLES.ADMIN), c.changeBillingPlan);
+
 module.exports = router;

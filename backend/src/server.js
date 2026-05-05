@@ -352,6 +352,10 @@ async function startServer() {
       startBriefingScheduler();
       const { startTriggerEngineScheduler } = require('./oied/triggerEngine.scheduler');
       startTriggerEngineScheduler();
+
+      // OIED v5: weekly summary email (wins / losses / insights). Default OFF.
+      const { startWeeklySummaryScheduler } = require('./oied/weeklySummary.scheduler');
+      startWeeklySummaryScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

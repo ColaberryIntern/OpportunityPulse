@@ -119,3 +119,57 @@ export async function generateBundleBlueprint(bundleId, force = false) {
   const res = await api.post(`${base}/bundles/${bundleId}/blueprint`, { force });
   return res.data?.data;
 }
+
+// ---- v5: Execution queue ---------------------------------------------------
+export async function listExecutionQueue(params = {}) {
+  const res = await api.get(`${base}/execution-queue`, { params });
+  return res.data;
+}
+
+// ---- v5: Revenue dashboard -------------------------------------------------
+export async function getRevenueDashboard() {
+  const res = await api.get(`${base}/revenue/dashboard`);
+  return res.data?.data || null;
+}
+
+// ---- v5: Feedback loop -----------------------------------------------------
+export async function getPendingOutcomes() {
+  const res = await api.get(`${base}/feedback/pending-outcomes`);
+  return res.data?.data || { pending: [] };
+}
+export async function getWeeklySummary() {
+  const res = await api.get(`${base}/feedback/weekly-summary`);
+  return res.data?.data || null;
+}
+export async function sendWeeklySummary(to) {
+  const res = await api.post(`${base}/feedback/weekly-summary/send`, to ? { to } : {});
+  return res.data?.data;
+}
+
+// ---- v5: Execution planner -------------------------------------------------
+export async function generateExecutionPlan(bundleId, force = false) {
+  const res = await api.post(`${base}/bundles/${bundleId}/execution-plan`, { force });
+  return res.data?.data;
+}
+export async function getExecutionPlan(bundleId) {
+  const res = await api.get(`${base}/bundles/${bundleId}/execution-plan`);
+  return res.data?.data || null;
+}
+export async function startBuild(bundleId) {
+  const res = await api.post(`${base}/bundles/${bundleId}/execution-plan/start`);
+  return res.data?.data;
+}
+
+// ---- v5: Billing -----------------------------------------------------------
+export async function getBillingUsage() {
+  const res = await api.get(`${base}/billing/usage`);
+  return res.data?.data || null;
+}
+export async function getBillingPlan() {
+  const res = await api.get(`${base}/billing/plan`);
+  return res.data?.data || null;
+}
+export async function changeBillingPlan(tier) {
+  const res = await api.patch(`${base}/billing/plan`, { tier });
+  return res.data?.data;
+}

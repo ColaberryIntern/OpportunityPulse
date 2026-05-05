@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { listBundles, runBundler, generateBundleStrategy, generateBundleBlueprint } from '../services/oiedService';
+import {
+  listBundles, runBundler, generateBundleStrategy, generateBundleBlueprint,
+  generateExecutionPlan, getExecutionPlan, startBuild,
+} from '../services/oiedService';
+import ExecutionPlanView from '../components/oied/ExecutionPlanView';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -84,9 +88,23 @@ function StrategyView({ strategy }) {
 function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
   const [busy, setBusy] = useState(false);
   const [busyBlueprint, setBusyBlueprint] = useState(false);
+  const [busyPlan, setBusyPlan] = useState(false);
   const [localStrategy, setLocalStrategy] = useState(bundle.strategy || {});
   const [localBlueprint, setLocalBlueprint] = useState(bundle.blueprint || {});
+  const [localPlan, setLocalPlan] = useState(null);
   const [err, setErr] = useState(null);
+
+  // Lazy-load any existing execution plan for this bundle (non-blocking).
+  React.useEffect(() => {
+    let cancelled = false;
+    if (localBlueprint && localBlueprint.mvp_scope) {
+      getExecutionPlan(bundle.id)
+        .then((p) => { if (!cancelled) setLocalPlan(p); })
+        .catch(() => { /* 404 = no plan yet */ });
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundle.id]);
 
   async function handleGenerate(force = false) {
     if (!isAdmin) return;
@@ -119,8 +137,39 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
     }
   }
 
+  async function handlePlan(force = false) {
+    if (!isAdmin) return;
+    setBusyPlan(true);
+    setErr(null);
+    try {
+      const out = await generateExecutionPlan(bundle.id, force);
+      setLocalPlan(out.plan || null);
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Failed');
+    } finally {
+      setBusyPlan(false);
+    }
+  }
+
+  async function handleStartBuild() {
+    if (!isAdmin) return;
+    if (!window.confirm('Start the build? This flips status to in_progress.')) return;
+    setBusyPlan(true);
+    setErr(null);
+    try {
+      const out = await startBuild(bundle.id);
+      setLocalPlan(out.plan || null);
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Failed');
+    } finally {
+      setBusyPlan(false);
+    }
+  }
+
   const hasStrategy = !!(localStrategy && localStrategy.what_to_build);
   const hasBlueprint = !!(localBlueprint && localBlueprint.mvp_scope);
+  const hasPlan = !!(localPlan && Array.isArray(localPlan.tasks) && localPlan.tasks.length > 0);
+  const planInProgress = hasPlan && localPlan.status === 'in_progress';
 
   return (
     <article className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-3" data-testid="bundle-card">
@@ -148,6 +197,7 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
 
       <StrategyView strategy={localStrategy} />
       <BlueprintView blueprint={localBlueprint} />
+      <ExecutionPlanView plan={localPlan} />
 
       {err && (
         <div className="mt-2 p-2 rounded bg-red-50 text-sm text-red-700">{err}</div>
@@ -197,6 +247,33 @@ function BundleCard({ bundle, isAdmin, onStrategyUpdate }) {
             >
               {busyBlueprint ? 'Re-designing…' : '🔄 Re-generate Blueprint'}
             </button>
+          )}
+          {hasBlueprint && !hasPlan && (
+            <button
+              type="button"
+              disabled={busyPlan}
+              onClick={() => handlePlan(false)}
+              className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50"
+              data-testid="generate-execution-plan-btn"
+            >
+              {busyPlan ? 'Planning…' : '🚀 Generate Execution Plan'}
+            </button>
+          )}
+          {hasPlan && !planInProgress && (
+            <button
+              type="button"
+              disabled={busyPlan}
+              onClick={handleStartBuild}
+              className="px-3 py-1.5 rounded bg-emerald-700 text-white text-sm hover:bg-emerald-800 disabled:opacity-50"
+              data-testid="start-build-btn"
+            >
+              {busyPlan ? 'Starting…' : '🚀 Start Build'}
+            </button>
+          )}
+          {planInProgress && (
+            <span className="px-3 py-1.5 rounded bg-emerald-200 text-emerald-900 dark:bg-emerald-800/40 dark:text-emerald-200 text-sm font-medium" data-testid="build-in-progress">
+              ▶ In progress
+            </span>
           )}
         </div>
       )}

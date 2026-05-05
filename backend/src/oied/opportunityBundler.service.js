@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const logger = require('../logging/logger');
 const { Opportunity, Bundle } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
+const billing = require('./billing.service');
 
 const MIN_BUNDLE_SIZE = 3;
 const MAX_BUNDLE_SIZE = 50;
@@ -257,6 +258,13 @@ async function generateBundleStrategy(bundleId, { force = false } = {}) {
     revenuePotential: parsed.revenue_potential_usd,
   });
 
+  // v5: record billable usage on cache MISS only.
+  await billing.recordUsage({
+    organizationId: bundle.organizationId || null,
+    metric: 'strategies_generated',
+    metadata: { bundleId: bundle.id, members: members.length },
+  }).catch(() => null);
+
   return {
     cached: false,
     bundleId: bundle.id,
@@ -397,6 +405,13 @@ async function generateProductBlueprint(bundleId, { force = false } = {}) {
     features: parsed.features.length,
     timeToMarket: parsed.time_to_market_weeks,
   });
+
+  // v5: record billable usage on cache MISS only.
+  await billing.recordUsage({
+    organizationId: bundle.organizationId || null,
+    metric: 'blueprints_generated',
+    metadata: { bundleId: bundle.id, features: parsed.features.length },
+  }).catch(() => null);
 
   return {
     cached: false,

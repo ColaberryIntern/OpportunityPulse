@@ -73,6 +73,8 @@ const Organization = require('./Organization')(sequelize);
 const Bundle = require('./Bundle')(sequelize);
 const WinProbabilityHistory = require('./WinProbabilityHistory')(sequelize);
 const TriggerLog = require('./TriggerLog')(sequelize);
+const UsageMetric = require('./UsageMetric')(sequelize);
+const ExecutionPlan = require('./ExecutionPlan')(sequelize);
 
 const models = {
   UserRole,
@@ -126,6 +128,8 @@ const models = {
   Bundle,
   WinProbabilityHistory,
   TriggerLog,
+  UsageMetric,
+  ExecutionPlan,
 };
 
 // Set up associations

@@ -17,6 +17,7 @@ const { sendEmail } = require('../utils/email');
 const myOppsSvc = require('./myOpportunities.service');
 const recommendations = require('./recommendation.service');
 const profileSvc = require('./profile.service');
+const billing = require('./billing.service');
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -227,6 +228,16 @@ async function deliverBriefing({
   logger.info('OIED briefing: delivered', {
     to, sent: result.sent, top: briefing.top_actions.length,
   });
+
+  // v5: record billable usage only when the email actually went out.
+  if (result.sent) {
+    await billing.recordUsage({
+      organizationId: briefing.organization_id || null,
+      metric: 'briefings_sent',
+      metadata: { to, date: briefing.date, top: briefing.top_actions.length },
+    }).catch(() => null);
+  }
+
   return { sent: !!result.sent, briefing };
 }
 

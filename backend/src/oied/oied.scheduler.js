@@ -1,45 +1,19 @@
-// Cron for the OIED daily digest. Default OFF (env-gated) so the schema +
-// code can land safely without sending stray emails. Flip OIED_DIGEST_ENABLED
-// to true once OIED_DIGEST_TO is verified.
+// v1 OIED digest scheduler — REMOVED in v5. The v4 briefing service +
+// scheduler is the production surface. This file is kept as a no-op
+// shim so any legacy `require('./oied.scheduler')` still resolves.
+//
+// To enable a daily digest, use:
+//   OIED_BRIEFING_ENABLED=true
+//   OIED_BRIEFING_TO=...
+// from oied/briefing.scheduler.js.
 
-const cron = require('node-cron');
 const logger = require('../logging/logger');
-const { runDigest } = require('./digest.service');
-
-let task = null;
-
-function isEnabled() {
-  return String(process.env.OIED_DIGEST_ENABLED || '').toLowerCase() === 'true';
-}
 
 function startOiedDigestScheduler() {
-  if (!isEnabled()) {
-    logger.info('OIED digest scheduler not started (OIED_DIGEST_ENABLED is off)');
-    return null;
-  }
-  const expr = process.env.OIED_DIGEST_CRON || '0 8 * * *';
-  if (!cron.validate(expr)) {
-    logger.error('Invalid OIED digest cron', { cron: expr });
-    return null;
-  }
-  task = cron.schedule(expr, async () => {
-    if (!isEnabled()) {
-      logger.info('OIED digest cron skipped (flag flipped off)');
-      return;
-    }
-    try {
-      const out = await runDigest();
-      logger.info('OIED digest cron complete', out);
-    } catch (e) {
-      logger.error('OIED digest cron failed', { error: e.message });
-    }
-  });
-  logger.info('OIED digest scheduler started', { cron: expr });
-  return task;
+  logger.info('OIED digest scheduler is a no-op since v5 (use briefing scheduler)');
+  return null;
 }
 
-function stopOiedDigestScheduler() {
-  if (task) { task.stop(); task = null; }
-}
+function stopOiedDigestScheduler() { /* nothing to stop */ }
 
 module.exports = { startOiedDigestScheduler, stopOiedDigestScheduler };

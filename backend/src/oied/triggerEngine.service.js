@@ -20,6 +20,7 @@ const myOppsSvc = require('./myOpportunities.service');
 const profileSvc = require('./profile.service');
 const actions = require('./actionGenerator.service');
 const bundler = require('./opportunityBundler.service');
+const billing = require('./billing.service');
 
 // Rule definitions. Adding/removing rules here is the entire surface
 // for changing trigger behavior — keep them obviously-readable.
@@ -174,6 +175,12 @@ async function runTriggers({
         summary.fired += 1;
         summary.rule_counts[rule.name] = (summary.rule_counts[rule.name] || 0) + 1;
         summary.logs.push(log.toJSON());
+        // v5: record billable usage per success.
+        await billing.recordUsage({
+          organizationId: orgId,
+          metric: 'triggers_fired',
+          metadata: { rule: rule.name, target_type: rule.targets, target_id: log.targetId },
+        }).catch(() => null);
       } catch (e) {
         const log = await logTriggerResult({
           organizationId: orgId, rule, target: opp,
@@ -256,6 +263,12 @@ async function runTriggers({
         summary.fired += 1;
         summary.rule_counts[rule.name] = (summary.rule_counts[rule.name] || 0) + 1;
         summary.logs.push(log.toJSON());
+        // v5: record billable usage per success.
+        await billing.recordUsage({
+          organizationId: orgId,
+          metric: 'triggers_fired',
+          metadata: { rule: rule.name, target_type: rule.targets, target_id: log.targetId },
+        }).catch(() => null);
       } catch (e) {
         const log = await logTriggerResult({
           organizationId: orgId, rule, target: bundle,

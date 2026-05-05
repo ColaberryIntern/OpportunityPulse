@@ -50,6 +50,10 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     trigger_logs_loaded: false,
     trigger_dry_run_fired: false,
     blueprint_button_present: false,
+    // v5
+    execution_queue_loaded: false,
+    revenue_dashboard_loaded: false,
+    execution_plan_present: false,
     screenshots: [],
     errors: [],
   };
@@ -288,6 +292,65 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     ).count();
     results.blueprint_button_present = blueprintCount > 0;
     log(`blueprint controls in DOM: ${blueprintCount}`);
+
+    // v5 surfaces.
+
+    // 15. /admin/opportunities/execution — execution queue.
+    log('navigating to /admin/opportunities/execution');
+    await page.goto(`${BASE_URL}/admin/opportunities/execution`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="execution-queue-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    results.execution_queue_loaded = (await page.locator('[data-testid="execution-queue-page"]').count()) > 0;
+    const screenshotEQ = path.join(OUT_DIR, 'execution_queue.png');
+    await page.screenshot({ path: screenshotEQ, fullPage: true });
+    results.screenshots.push('execution_queue.png');
+    log(`execution-queue page in DOM: ${results.execution_queue_loaded}`);
+
+    // 16. /admin/revenue — revenue dashboard.
+    log('navigating to /admin/revenue');
+    await page.goto(`${BASE_URL}/admin/revenue`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="revenue-dashboard-page"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    const pipelineCard = await page.locator('[data-testid="rev-stat-pipeline"]').count();
+    results.revenue_dashboard_loaded = pipelineCard > 0;
+    const screenshotRev = path.join(OUT_DIR, 'revenue_dashboard.png');
+    await page.screenshot({ path: screenshotRev, fullPage: true });
+    results.screenshots.push('revenue_dashboard.png');
+    log(`revenue-dashboard page: pipeline card present=${pipelineCard > 0}`);
+
+    // 17. Generate an execution plan against bundle #43 (which has a
+    //     populated blueprint) via the API directly, then verify it
+    //     renders on the bundles page.
+    log('generating execution plan for bundle 43 (blueprint-populated)');
+    try {
+      const tokenResp = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+      });
+      const tokenJson = await tokenResp.json();
+      const token = tokenJson?.data?.accessToken;
+      if (token) {
+        await fetch(`${BASE_URL}/api/v1/oied/bundles/43/execution-plan`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ force: false }),
+        });
+      }
+    } catch (e) {
+      log('execution-plan POST failed (continuing):', e.message);
+    }
+
+    log('checking for execution plan on bundles page');
+    await page.goto(`${BASE_URL}/admin/opportunities/bundles`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="bundles-list"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2500);
+    const planCount = await page.locator('[data-testid="bundle-execution-plan"]').count();
+    results.execution_plan_present = planCount > 0;
+    log(`execution plan disclosures in DOM: ${planCount}`);
   } catch (e) {
     results.errors.push('flow: ' + e.message);
     console.error(e);
@@ -306,7 +369,9 @@ function log(...a) { console.log('[oied-ui]', ...a); }
       && results.recommendations_loaded
       && results.briefing_loaded
       && results.trigger_logs_loaded
-      && results.trigger_dry_run_fired;
+      && results.trigger_dry_run_fired
+      && results.execution_queue_loaded
+      && results.revenue_dashboard_loaded;
     process.exit(passed ? 0 : 1);
   }
 })().catch((e) => { console.error(e); process.exit(1); });

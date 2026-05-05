@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { getBriefing, sendBriefingEmail } from '../services/oiedService';
+import FeedbackPrompt from '../components/oied/FeedbackPrompt';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -181,6 +182,8 @@ function BriefingPage() {
         {err && (
           <div className="p-3 rounded bg-red-50 text-sm text-red-700 mb-3">{err}</div>
         )}
+
+        <FeedbackPrompt />
 
         {loading ? (
           <div className="p-8 text-center text-gray-500">Loading briefing…</div>

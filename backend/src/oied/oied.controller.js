@@ -8,6 +8,11 @@ const bundler = require('./opportunityBundler.service');
 const recommendations = require('./recommendation.service');
 const briefingSvc = require('./briefing.service');
 const triggerSvc = require('./triggerEngine.service');
+const executionQueueSvc = require('./executionQueue.service');
+const revenueDashboardSvc = require('./revenueDashboard.service');
+const feedbackSvc = require('./feedback.service');
+const executionPlannerSvc = require('./executionPlanner.service');
+const billingSvc = require('./billing.service');
 
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
@@ -336,6 +341,162 @@ async function generateBundleBlueprint(req, res) {
   }
 }
 
+// ----- v5 endpoints --------------------------------------------------
+
+// GET /api/v1/oied/execution-queue — drafts ranked by ROI/hour.
+async function listExecutionQueue(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await executionQueueSvc.listExecutionQueue({
+      userId,
+      limit: req.query.limit,
+      offset: req.query.offset,
+      minRoi: req.query.minRoi,
+    });
+    return paginatedResponse(res, data.rows, {
+      total: data.total,
+      limit: Number(req.query.limit) || 50,
+      offset: Number(req.query.offset) || 0,
+      organizationId: data.organization_id,
+    });
+  } catch (e) {
+    logger.error('OIED execution-queue failed', { error: e.message });
+    return errorResponse(res, 'Failed to load execution queue', 500);
+  }
+}
+
+// GET /api/v1/oied/revenue/dashboard
+async function getRevenueDashboard(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await revenueDashboardSvc.getDashboard({ userId });
+    return successResponse(res, data);
+  } catch (e) {
+    logger.error('OIED revenue dashboard failed', { error: e.message });
+    return errorResponse(res, 'Failed to load revenue dashboard', 500);
+  }
+}
+
+// GET /api/v1/oied/feedback/pending-outcomes
+async function getPendingOutcomes(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await feedbackSvc.getPendingOutcomes({ userId });
+    return successResponse(res, data);
+  } catch (e) {
+    return errorResponse(res, 'Failed to load pending outcomes', 500);
+  }
+}
+
+// GET /api/v1/oied/feedback/weekly-summary
+async function getWeeklySummary(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const data = await feedbackSvc.buildWeeklySummary({ userId });
+    return successResponse(res, data);
+  } catch (e) {
+    return errorResponse(res, 'Failed to build weekly summary', 500);
+  }
+}
+
+// POST /api/v1/oied/feedback/weekly-summary/send (admin)
+async function sendWeeklySummary(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const to = (req.body && req.body.to) || process.env.OIED_WEEKLY_SUMMARY_TO;
+    const out = await feedbackSvc.deliverWeeklySummary({ userId, to });
+    return successResponse(res, out, out.sent ? 'Weekly summary sent' : 'Skipped');
+  } catch (e) {
+    return errorResponse(res, 'Failed to send weekly summary: ' + e.message, 500);
+  }
+}
+
+// POST /api/v1/oied/bundles/:id/execution-plan (admin)
+async function generateExecutionPlan(req, res) {
+  const bundleId = Number(req.params.id);
+  if (!bundleId) return errorResponse(res, 'Invalid bundle id', 400);
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const force = req.body && req.body.force === true;
+    const out = await executionPlannerSvc.generateExecutionPlan(bundleId, { userId, force });
+    return successResponse(res, out, out.cached ? 'Cached plan' : 'Plan generated');
+  } catch (e) {
+    logger.error('OIED execution-plan generate failed', { bundleId, error: e.message });
+    return errorResponse(res, 'Plan generation failed: ' + e.message, 500);
+  }
+}
+
+// GET /api/v1/oied/bundles/:id/execution-plan
+async function getExecutionPlan(req, res) {
+  const bundleId = Number(req.params.id);
+  if (!bundleId) return errorResponse(res, 'Invalid bundle id', 400);
+  try {
+    const plan = await executionPlannerSvc.getExecutionPlan(bundleId);
+    if (!plan) return errorResponse(res, 'Not found', 404);
+    return successResponse(res, plan);
+  } catch (e) {
+    return errorResponse(res, 'Failed to fetch plan', 500);
+  }
+}
+
+// POST /api/v1/oied/bundles/:id/execution-plan/start (admin)
+async function startBuild(req, res) {
+  const bundleId = Number(req.params.id);
+  if (!bundleId) return errorResponse(res, 'Invalid bundle id', 400);
+  try {
+    const out = await executionPlannerSvc.startBuild(bundleId);
+    return successResponse(res, out, out.alreadyStarted ? 'Already in progress' : 'Build started');
+  } catch (e) {
+    logger.error('OIED start-build failed', { bundleId, error: e.message });
+    return errorResponse(res, 'Start failed: ' + e.message, 400);
+  }
+}
+
+// GET /api/v1/oied/billing/usage — current org usage this month.
+async function getBillingUsage(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const profileSvc = require('./profile.service');
+    const orgId = await profileSvc.resolveOrgId(userId);
+    const data = await billingSvc.getUsageSummary({ organizationId: orgId });
+    return successResponse(res, data);
+  } catch (e) {
+    return errorResponse(res, 'Failed to load usage', 500);
+  }
+}
+
+// GET /api/v1/oied/billing/plan
+async function getBillingPlan(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const profileSvc = require('./profile.service');
+    const orgId = await profileSvc.resolveOrgId(userId);
+    const tier = await billingSvc.getOrgTier(orgId);
+    return successResponse(res, {
+      organization_id: orgId,
+      tier,
+      limits: billingSvc.getPlanLimits(tier),
+      enforcing: billingSvc.isEnforcing(),
+    });
+  } catch (e) {
+    return errorResponse(res, 'Failed to load plan', 500);
+  }
+}
+
+// PATCH /api/v1/oied/billing/plan (admin) — body: { tier }
+async function changeBillingPlan(req, res) {
+  try {
+    const userId = (req.user && req.user.id) || null;
+    const profileSvc = require('./profile.service');
+    const orgId = await profileSvc.resolveOrgId(userId);
+    const tier = (req.body && req.body.tier);
+    const org = await billingSvc.changePlanTier({ organizationId: orgId, tier });
+    return successResponse(res, org, 'Plan updated');
+  } catch (e) {
+    return errorResponse(res, e.message, 400);
+  }
+}
+
 module.exports = {
   listMy,
   generate,
@@ -359,4 +520,16 @@ module.exports = {
   runTriggers,
   listTriggerLogs,
   generateBundleBlueprint,
+  // v5
+  listExecutionQueue,
+  getRevenueDashboard,
+  getPendingOutcomes,
+  getWeeklySummary,
+  sendWeeklySummary,
+  generateExecutionPlan,
+  getExecutionPlan,
+  startBuild,
+  getBillingUsage,
+  getBillingPlan,
+  changeBillingPlan,
 };

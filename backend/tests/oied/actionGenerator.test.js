@@ -18,6 +18,14 @@ jest.mock('../../src/oied/profile.service', () => ({
     riskTolerance: 'medium',
     preferences: {},
   })),
+  // v5: actionGenerator now calls resolveOrgId before recording usage.
+  resolveOrgId: jest.fn(async () => 1),
+}));
+
+// v5: actionGenerator records usage. Mock the billing service so the
+// test doesn't try to write to the (mocked) UsageMetric model.
+jest.mock('../../src/oied/billing.service', () => ({
+  recordUsage: jest.fn(async () => null),
 }));
 
 jest.mock('../../src/oied/pastWins.service', () => ({

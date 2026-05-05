@@ -38,6 +38,8 @@ import BundlesPage from './pages/BundlesPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import BriefingPage from './pages/BriefingPage';
 import TriggerLogsPage from './pages/TriggerLogsPage';
+import ExecutionQueuePage from './pages/ExecutionQueuePage';
+import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -350,6 +352,22 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <TriggerLogsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/opportunities/execution"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ExecutionQueuePage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/revenue"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <RevenueDashboardPage />
             </ProtectedLayout>
           }
         />

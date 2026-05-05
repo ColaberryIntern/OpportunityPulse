@@ -19,6 +19,7 @@ const { getAIClient } = require('../analysis/ai.client');
 const profileSvc = require('./profile.service');
 const pastWinsSvc = require('./pastWins.service');
 const { profileHash } = require('./fitScoring.service');
+const billing = require('./billing.service');
 
 const ALLOWED_TYPES = ['proposal', 'offer', 'analysis'];
 
@@ -197,6 +198,18 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
     personalizationScore: personalization,
     pastWinsUsed: pastWins.length,
   });
+
+  // v5: record billable usage (best-effort, never throws to caller).
+  // Resolve org from the user; fall back silently when caller didn't pass one.
+  if (type === 'proposal') {
+    const orgId = await profileSvc.resolveOrgId(effectiveUserId).catch(() => null);
+    await billing.recordUsage({
+      organizationId: orgId,
+      metric: 'proposals_generated',
+      metadata: { outputId: row.id, opportunityId, type },
+    }).catch(() => null);
+  }
+
   return row.toJSON();
 }
 
