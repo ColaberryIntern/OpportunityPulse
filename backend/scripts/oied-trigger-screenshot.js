@@ -13,7 +13,7 @@ const OUT_DIR = path.resolve(__dirname, '..', '.oied-screenshots');
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const { chromium } = require('playwright');
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 700 } });
   const page = await ctx.newPage();
   page.on('dialog', (d) => d.accept().catch(() => {}));
 
@@ -36,6 +36,15 @@ const OUT_DIR = path.resolve(__dirname, '..', '.oied-screenshots');
     const out = path.join(OUT_DIR, 'trigger_logs_viewport.png');
     await page.screenshot({ path: out });
     console.log('saved:', out);
+
+    // Also: a focused shot of just the auto_execution_logs table area
+    // for the v6 report.
+    const tableLocator = page.locator('[data-testid="trigger-logs-table"]').first();
+    if (await tableLocator.count() > 0) {
+      const out2 = path.join(OUT_DIR, 'auto_execution_logs.png');
+      await tableLocator.screenshot({ path: out2 });
+      console.log('saved:', out2);
+    }
   } finally {
     await browser.close();
   }

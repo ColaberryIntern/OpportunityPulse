@@ -112,4 +112,39 @@ async function topByFitScore({ n = 5, userId, organizationId } = {}) {
   return rows;
 }
 
-module.exports = { listMyOpportunities, topByFitScore, MIN_VALUE_USD };
+// v7: single-opportunity enrichment for the bridge's GET /opportunities/:id.
+// Runs the same profile → fit → priority/bucket → effort pipeline as
+// listMyOpportunities, but for one opp.
+async function enrichOpportunity({ opportunity, organizationId, userId = null } = {}) {
+  if (!opportunity) return null;
+  const orgId = organizationId || (await profileSvc.resolveOrgId(userId));
+  const userProfile = await profileSvc.getOrDefaultByOrg(orgId);
+  const score = await getOrCreateFitScore({
+    opportunity, userProfile, organizationId: orgId,
+  });
+  const fit = score.fitScore != null ? score.fitScore : score.fit_score;
+  const breakdown = {
+    service_match: score.serviceMatch ?? score.service_match,
+    revenue_weight: score.revenueWeight ?? score.revenue_weight,
+    automation_score: score.automationScore ?? score.automation_score,
+    repeatability_score: score.repeatabilityScore ?? score.repeatability_score,
+    ease_of_entry: score.easeOfEntry ?? score.ease_of_entry,
+    strategic_alignment: score.strategicAlignment ?? score.strategic_alignment,
+  };
+  const { priorityScore, urgency, revenueVelocity, bucket } =
+    calculatePriorityScore({ opportunity, fitScore: fit, breakdown });
+  const effort = estimateEffort(opportunity);
+  return {
+    ...(opportunity.toJSON ? opportunity.toJSON() : opportunity),
+    fitScore: fit,
+    priorityScore,
+    urgency,
+    revenueVelocity,
+    bucket,
+    effortEstimate: effort,
+    fitBreakdown: breakdown,
+    organization_id: orgId,
+  };
+}
+
+module.exports = { listMyOpportunities, topByFitScore, enrichOpportunity, MIN_VALUE_USD };

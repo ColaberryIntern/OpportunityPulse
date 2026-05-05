@@ -29,14 +29,19 @@ function handlePlanLimit(res, e) {
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
   try {
-    const { rows, total, profileWasDefault } = await myOpps.listMyOpportunities({
+    const { rows, total, profileWasDefault, organizationId } = await myOpps.listMyOpportunities({
       limit: req.query.limit,
       offset: req.query.offset,
       type: req.query.type,
       minScore: req.query.minScore,
       userId: (req.user && req.user.id) || null,
     });
-    return paginatedResponse(res, rows, {
+    // v7: attach intelligence context per row (additive — existing fields stay).
+    const intelligence = require('./intelligence.controller');
+    const rowsWithContext = await Promise.all(rows.map(
+      (r) => intelligence.attachContextToOpportunity(r, { organizationId }),
+    ));
+    return paginatedResponse(res, rowsWithContext, {
       total,
       limit: Number(req.query.limit) || 50,
       offset: Number(req.query.offset) || 0,
@@ -85,7 +90,12 @@ async function patchMyProfile(req, res) {
 async function listBundles(req, res) {
   try {
     const rows = await bundler.listBundles({ limit: req.query.limit });
-    return successResponse(res, rows);
+    // v7: attach intelligence context per bundle.
+    const intelligence = require('./intelligence.controller');
+    const rowsWithContext = await Promise.all(rows.map(
+      (b) => intelligence.attachContextToBundle(b, { organizationId: b.organizationId }),
+    ));
+    return successResponse(res, rowsWithContext);
   } catch (e) {
     return errorResponse(res, 'Failed to list bundles', 500);
   }
@@ -215,7 +225,29 @@ async function listRecommendations(req, res) {
     const userId = (req.user && req.user.id) || null;
     const limit = Math.min(Number(req.query.limit) || 3, 10);
     const data = await recommendations.getTopActions(userId, { limit });
-    return successResponse(res, data);
+    // v7: attach intelligence context per row. Recommendation rows
+    // already carry most fields; reshape into an opp-like record so the
+    // helper finds them.
+    const intelligence = require('./intelligence.controller');
+    const dataWithContext = await Promise.all((data || []).map(async (r) => {
+      const oppLike = {
+        id: r.opportunity_id,
+        title: r.title,
+        category: r.category,
+        value: r.expected_value,
+        fitScore: r.fit_score,
+        priorityScore: r.priority_score,
+        urgency: r.urgency,
+        bucket: r.bucket,
+        winProbability: r.win_probability,
+        effortEstimate: r.effort_estimate,
+      };
+      const wrapped = await intelligence.attachContextToOpportunity(oppLike, {
+        organizationId: r.organization_id,
+      });
+      return { ...r, context: wrapped.context };
+    }));
+    return successResponse(res, dataWithContext);
   } catch (e) {
     logger.error('OIED recommendations failed', { error: e.message });
     return errorResponse(res, 'Failed to compute recommendations', 500);

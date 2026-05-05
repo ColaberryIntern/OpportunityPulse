@@ -1,71 +1,79 @@
 const express = require('express');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { verifyJwtOrIntelligenceKey } = require('../middleware/intelligenceAuth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
 const { ROLES } = require('../config/constants');
 const c = require('./oied.controller');
+const intel = require('./intelligence.controller');
 
 const router = express.Router();
 
-// All OIED routes require authentication. Action generation + status updates
-// require admin (the spec calls these admin-only flows under /admin/).
-router.get('/opportunities/my', verifyToken, c.listMy);
+// v7: bridge-gated routes accept BOTH JWT (existing React app) and the
+// static OIED_INTELLIGENCE_API_KEY (companion Claude system).
+// Non-bridge routes (briefing, triggers, billing, weekly-summary, etc.)
+// stay JWT-only — their blast radius is too big to expose to a service
+// account today.
+const BRIDGE = verifyJwtOrIntelligenceKey;
 
+// ---- Bridge READ endpoints (envelope-wrapped, dual-auth) ---------------
+router.get('/recommendations',          BRIDGE, c.listRecommendations);
+router.get('/opportunities/my',         BRIDGE, c.listMy);
+router.get('/opportunities/execution',  BRIDGE, intel.listExecutionQueueIntelligence);
+router.get('/opportunities/:id',        BRIDGE, intel.getOpportunityIntelligence);
+router.get('/bundles',                  BRIDGE, c.listBundles);
+router.get('/bundles/:id/blueprint',    BRIDGE, intel.getBundleBlueprintIntelligence);
+router.get('/revenue',                  BRIDGE, intel.getRevenueAlias);
+router.get('/profile',                  BRIDGE, c.getMyProfile);
+
+// ---- Bridge ACTION endpoints (dual-auth + admin) -----------------------
 router.post(
   '/opportunities/:id/generate',
-  verifyToken,
-  checkPermissions(ROLES.ADMIN),
-  c.generate,
+  BRIDGE, checkPermissions(ROLES.ADMIN), c.generate,
 );
+router.post(
+  '/opportunities/:id/mark-result',
+  BRIDGE, c.markResult,
+);
+router.post(
+  '/bundles/:id/strategy',
+  BRIDGE, checkPermissions(ROLES.ADMIN), c.generateBundleStrategy,
+);
+router.post(
+  '/bundles/:id/blueprint',
+  BRIDGE, checkPermissions(ROLES.ADMIN), c.generateBundleBlueprint,
+);
+
+// ---- Non-bridge routes (JWT-only) --------------------------------------
 
 router.get('/opportunity-outputs', verifyToken, c.listOutputs);
 router.get('/opportunity-outputs/:id', verifyToken, c.getOutput);
 router.patch(
   '/opportunity-outputs/:id/status',
-  verifyToken,
-  checkPermissions(ROLES.ADMIN),
-  c.patchOutput,
+  verifyToken, checkPermissions(ROLES.ADMIN), c.patchOutput,
 );
 
 // Events: any authenticated user can record (UI tracking).
 router.post('/opportunity-events', verifyToken, c.postEvent);
 
-// Per-user business profile.
-router.get('/profile',    verifyToken, c.getMyProfile);
+// Per-org business profile.
 router.post('/profile',   verifyToken, c.postMyProfile);
 router.patch('/profile',  verifyToken, c.patchMyProfile);
 
-// Bundles: read open to all auth'd; rebuild + strategy are admin-only.
-router.get('/bundles',         verifyToken, c.listBundles);
-router.post('/bundles/run',    verifyToken, checkPermissions(ROLES.ADMIN), c.runBundler);
-router.post(
-  '/bundles/:id/strategy',
-  verifyToken,
-  checkPermissions(ROLES.ADMIN),
-  c.generateBundleStrategy,
-);
+// Bundles (rebuild is admin-only).
+router.post('/bundles/run', verifyToken, checkPermissions(ROLES.ADMIN), c.runBundler);
 
 // v3 — Revenue Intelligence Layer.
-router.get('/recommendations',          verifyToken, c.listRecommendations);
-router.get('/conversion-stats',         verifyToken, c.getConversionStats);
-router.post(
-  '/opportunities/:id/mark-result',
-  verifyToken,
-  c.markResult,
-);
+router.get('/conversion-stats', verifyToken, c.getConversionStats);
 
 // v4 — Autonomous Revenue Engine.
 router.get('/briefing',         verifyToken, c.getBriefing);
 router.post('/briefing/send',   verifyToken, checkPermissions(ROLES.ADMIN), c.sendBriefing);
 router.post('/triggers/run',    verifyToken, checkPermissions(ROLES.ADMIN), c.runTriggers);
 router.get('/triggers/logs',    verifyToken, checkPermissions(ROLES.ADMIN), c.listTriggerLogs);
-router.post(
-  '/bundles/:id/blueprint',
-  verifyToken,
-  checkPermissions(ROLES.ADMIN),
-  c.generateBundleBlueprint,
-);
 
 // v5 — Revenue Velocity System.
+// Note: GET /execution-queue is the legacy URL — kept for the React app.
+// The bridge-friendly alias is GET /opportunities/execution above.
 router.get('/execution-queue',           verifyToken, c.listExecutionQueue);
 router.get('/revenue/dashboard',         verifyToken, c.getRevenueDashboard);
 router.get('/feedback/pending-outcomes', verifyToken, c.getPendingOutcomes);
