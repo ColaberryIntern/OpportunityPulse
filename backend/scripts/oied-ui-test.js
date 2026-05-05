@@ -313,8 +313,8 @@ function log(...a) { console.log('[oied-ui]', ...a); }
     await page.waitForTimeout(1500);
     const pipelineCard = await page.locator('[data-testid="rev-stat-pipeline"]').count();
     results.revenue_dashboard_loaded = pipelineCard > 0;
-    const screenshotRev = path.join(OUT_DIR, 'revenue_dashboard.png');
-    await page.screenshot({ path: screenshotRev, fullPage: true });
+    const screenshotRevDash = path.join(OUT_DIR, 'revenue_dashboard.png');
+    await page.screenshot({ path: screenshotRevDash, fullPage: true });
     results.screenshots.push('revenue_dashboard.png');
     log(`revenue-dashboard page: pipeline card present=${pipelineCard > 0}`);
 
