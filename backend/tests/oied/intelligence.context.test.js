@@ -70,13 +70,15 @@ describe('intelligence.context — opportunity envelope', () => {
     expect(out.recommended_action).toBe('review_draft');
   });
 
-  it('approved draft → mark_submitted with concrete next step', () => {
+  it('approved draft → mark_submitted with /mark-submitted next step (v7.1)', () => {
     const out = ctx.buildContextForOpportunity({
       opp: fakeOpp({ bucket: 'high_value' }),
       latestDraft: { status: 'approved', id: 5 },
     });
     expect(out.recommended_action).toBe('mark_submitted');
-    expect(out.next_steps[0]).toMatch(/mark-result.*submitted/);
+    // v7.1: dedicated /mark-submitted endpoint, not mark-result.
+    expect(out.next_steps[0]).toMatch(/\/mark-submitted/);
+    expect(out.strategic_type).toBe('awaiting_review');
   });
 
   it('won outcome → archive_won', () => {
@@ -131,6 +133,75 @@ describe('intelligence.context — opportunity envelope', () => {
       opp: { ...fakeOpp(), winProbability: undefined },
     });
     expect(out.win_probability).toBeCloseTo(0.20, 2);
+  });
+
+  // ---------- v7.1 lifecycle fixes ----------
+
+  it('v7.1 SPEC: ?d ago bug fixed — _submittedDaysAgo=0 renders as "0d", not "?d"', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: { ...fakeOpp(), _submittedDaysAgo: 0 },
+      outcome: 'submitted_no_response',
+    });
+    expect(out.reason).toMatch(/submitted 0d ago/);
+    expect(out.reason).not.toMatch(/\?d ago/);
+  });
+
+  it('v7.1: undefined _submittedDaysAgo still falls back to ?', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(), // no _submittedDaysAgo
+      outcome: 'submitted_no_response',
+    });
+    expect(out.reason).toMatch(/submitted \?d ago/);
+  });
+
+  it('v7.1 NEW: latestDraft.status=draft → strategic_type=awaiting_review', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'standard' }),
+      latestDraft: { status: 'draft', id: 5 },
+    });
+    expect(out.recommended_action).toBe('review_draft');
+    expect(out.strategic_type).toBe('awaiting_review');
+    expect(out.next_steps[1]).toMatch(/\/mark-submitted/);
+  });
+
+  it('v7.1 NEW: outcome=submitted_no_response (≤14d) → await_response', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: { ...fakeOpp(), _submittedDaysAgo: 5 },
+      outcome: 'submitted_no_response',
+    });
+    expect(out.recommended_action).toBe('await_response');
+    expect(out.strategic_type).toBe('pending_outcome_opportunity');
+    expect(out.next_steps[0]).toMatch(/mark-result.*responded/);
+  });
+
+  it('v7.1 NEW: outcome=submitted_no_response stale (>14d) → mark_outcome', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: { ...fakeOpp(), _submittedDaysAgo: 21 },
+      outcome: 'submitted_no_response',
+    });
+    expect(out.recommended_action).toBe('mark_outcome');
+  });
+
+  it('v7.1 NEW: outcome=responded_no_outcome → mark_outcome with won/lost steps', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(),
+      outcome: 'responded_no_outcome',
+    });
+    expect(out.recommended_action).toBe('mark_outcome');
+    expect(out.strategic_type).toBe('pending_outcome_opportunity');
+    expect(out.reason).toMatch(/buyer responded/);
+    // Concrete next steps: won OR lost.
+    expect(out.next_steps.some((s) => /\\?"status\\?":\\?"won\\?"/.test(s) || s.includes('"status":"won"'))).toBe(true);
+  });
+
+  it('v7.1: no draft + bucket=act_now → generate_proposal (lifecycle fallback)', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      latestDraft: null,
+      outcome: null,
+    });
+    expect(out.recommended_action).toBe('generate_proposal');
+    expect(out.strategic_type).toBe('act_now_opportunity');
   });
 });
 

@@ -27,6 +27,45 @@ function normalizeResultStatus(status) {
   return RESULT_ALIASES[lower] || lower;
 }
 
+// v7.1: lifecycle ordering. Thrown by requireSubmitted / requireResponded
+// when the prerequisite event hasn't been logged. Controller maps to 400.
+class LifecycleViolationError extends Error {
+  constructor(message, requires) {
+    super(message);
+    this.name = 'LifecycleViolationError';
+    this.statusCode = 400;
+    this.requires = requires;
+  }
+}
+
+async function hasEventOfType({ opportunityId, eventType }) {
+  if (!opportunityId || !eventType) return false;
+  const row = await OpportunityEvent.findOne({
+    where: { opportunityId, eventType },
+    attributes: ['id'],
+  });
+  return !!row;
+}
+
+// Strict lifecycle ordering: responded requires submitted; won/lost
+// require responded. Pure: throws on miss; returns void on hit.
+async function requireSubmitted(opportunityId) {
+  if (!(await hasEventOfType({ opportunityId, eventType: 'submitted' }))) {
+    throw new LifecycleViolationError(
+      'Cannot mark responded before submission',
+      'submitted',
+    );
+  }
+}
+async function requireResponded(opportunityId) {
+  if (!(await hasEventOfType({ opportunityId, eventType: 'response_received' }))) {
+    throw new LifecycleViolationError(
+      'Cannot mark won/lost before responded',
+      'response_received',
+    );
+  }
+}
+
 async function recordEvent({ opportunityId, eventType, userId = null, payload = {} }) {
   if (!opportunityId) throw new Error('opportunityId required');
   if (!VALID_TYPES.has(eventType)) throw new Error(`Invalid event_type: ${eventType}`);
@@ -133,6 +172,11 @@ module.exports = {
   getConversionStats,
   topWonCategories,
   normalizeResultStatus,
+  // v7.1
+  hasEventOfType,
+  requireSubmitted,
+  requireResponded,
+  LifecycleViolationError,
   VALID_TYPES,
   CONVERSION_TYPES,
 };

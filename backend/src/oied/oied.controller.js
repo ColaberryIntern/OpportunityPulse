@@ -254,22 +254,74 @@ async function listRecommendations(req, res) {
   }
 }
 
+// POST /api/v1/oied/opportunities/:id/mark-submitted   (v7.1)
+// Records event_type='submitted'. Idempotent (each call writes a new
+// audit row). Distinct from /mark-result so the consumer agent
+// expresses lifecycle stages explicitly.
+async function markSubmitted(req, res) {
+  const opportunityId = Number(req.params.id);
+  if (!opportunityId) return errorResponse(res, 'Invalid opportunity id', 400);
+  try {
+    const ev = await events.recordEvent({
+      opportunityId,
+      eventType: 'submitted',
+      userId: (req.user && req.user.id) || null,
+      payload: {
+        notes: (req.body && req.body.notes) || null,
+        source: req.user && req.user.isApiKey ? 'bridge' : 'user',
+      },
+    });
+    return successResponse(res, {
+      success: true,
+      message: 'Submission recorded',
+      event_type: 'submitted',
+      event_id: ev.id,
+      opportunity_id: opportunityId,
+    }, 'Submission recorded', 201);
+  } catch (e) {
+    logger.error('OIED markSubmitted failed', { id: opportunityId, error: e.message });
+    return errorResponse(res, e.message, 400);
+  }
+}
+
 // POST /api/v1/oied/opportunities/:id/mark-result
-// Body: { status: 'submitted'|'won'|'lost'|'responded'|'response_received',
+// Body: { status: 'won' | 'lost' | 'responded' | 'response_received',
 //         notes?: string, dollarAmount?: number }
+//
+// v7.1 lifecycle rules (strict):
+//   - status='submitted' → 400 (use /mark-submitted)
+//   - status='responded' → requires submitted event; else 400
+//   - status='won'/'lost' → requires response_received event; else 400
 async function markResult(req, res) {
   const opportunityId = Number(req.params.id);
   if (!opportunityId) return errorResponse(res, 'Invalid opportunity id', 400);
   const raw = req.body && req.body.status;
   const eventType = events.normalizeResultStatus(raw);
-  if (!events.CONVERSION_TYPES.has(eventType)) {
+
+  // v7.1: mark-result no longer accepts 'submitted'. Submission is its
+  // own first-class endpoint.
+  if (eventType === 'submitted') {
     return errorResponse(
       res,
-      `status must be one of: submitted, response_received (alias: responded), won, lost`,
+      'Use POST /api/v1/oied/opportunities/:id/mark-submitted to record a submission',
+      400,
+    );
+  }
+  if (!events.CONVERSION_TYPES.has(eventType) || eventType === 'submitted') {
+    return errorResponse(
+      res,
+      'status must be one of: responded (alias: response_received), won, lost',
       400,
     );
   }
   try {
+    // v7.1 lifecycle ordering — fail fast before any state mutation.
+    if (eventType === 'response_received') {
+      await events.requireSubmitted(opportunityId);
+    } else if (eventType === 'won' || eventType === 'lost') {
+      await events.requireResponded(opportunityId);
+    }
+
     const ev = await events.recordEvent({
       opportunityId,
       eventType,
@@ -281,6 +333,9 @@ async function markResult(req, res) {
     });
     return successResponse(res, ev, 'Result recorded', 201);
   } catch (e) {
+    if (e instanceof events.LifecycleViolationError) {
+      return errorResponse(res, e.message, 400, { requires: e.requires });
+    }
     logger.error('OIED markResult failed', { id: opportunityId, status: raw, error: e.message });
     return errorResponse(res, e.message, 400);
   }
@@ -580,6 +635,8 @@ module.exports = {
   markResult,
   generateBundleStrategy,
   getConversionStats,
+  // v7.1
+  markSubmitted,
   // v4
   getBriefing,
   sendBriefing,

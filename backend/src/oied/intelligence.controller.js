@@ -53,13 +53,19 @@ async function loadOppOutcomeContext(opportunityId) {
       order: [['createdAt', 'DESC']],
       limit: 10,
     });
-    const won  = events.find((e) => e.eventType === 'won');
-    const lost = events.find((e) => e.eventType === 'lost');
+    // v7.1: 4-way lifecycle classification. Replaces the v7 3-way that
+    // collapsed "submitted, no response yet" with "responded, no outcome
+    // yet" under one `submitted_pending` label.
+    const won       = events.find((e) => e.eventType === 'won');
+    const lost      = events.find((e) => e.eventType === 'lost');
+    const responded = events.find((e) => e.eventType === 'response_received');
     const submitted = events.find((e) => e.eventType === 'submitted');
-    if (won)  outcome = 'won';
+    if (won)       outcome = 'won';
     else if (lost) outcome = 'lost';
-    else if (submitted) {
-      outcome = 'submitted_pending';
+    else if (responded) {
+      outcome = 'responded_no_outcome';
+    } else if (submitted) {
+      outcome = 'submitted_no_response';
       submittedDaysAgo = Math.floor(
         (Date.now() - new Date(submitted.createdAt).getTime()) / 86_400_000,
       );

@@ -23,6 +23,7 @@ const SCHEMA_VERSION = 1;
 // Route registry — central so renames don't rot next_steps.
 const ROUTES = {
   generate:          (id) => `POST /api/v1/oied/opportunities/${id}/generate`,
+  markSubmitted:     (id) => `POST /api/v1/oied/opportunities/${id}/mark-submitted`,
   markResult:        (id) => `POST /api/v1/oied/opportunities/${id}/mark-result`,
   bundleStrategy:    (id) => `POST /api/v1/oied/bundles/${id}/strategy`,
   bundleBlueprint:   (id) => `POST /api/v1/oied/bundles/${id}/blueprint`,
@@ -34,10 +35,25 @@ const ROUTES = {
 
 // ---- Opportunity envelope -----------------------------------------------
 
+// v7.1 lifecycle ordering takes precedence over bucket-driven actions.
+// State machine the consumer agent observes:
+//   no draft        → generate_proposal (bucket-aware fallback)
+//   draft  + ¬submit → review_draft   (draft sitting for admin approval)
+//   approved + ¬sub → mark_submitted  (admin approved, not yet submitted)
+//   submitted + ¬resp → await_response  (within 14d) | mark_outcome (>14d)
+//   responded + ¬win → mark_outcome
+//   won / lost      → archive_*
 function strategicTypeForOpportunity(opp, latestDraft = null, outcome = null) {
-  if (outcome === 'won')  return 'won_opportunity';
-  if (outcome === 'lost') return 'lost_opportunity';
-  if (outcome === 'submitted_pending') return 'pending_outcome_opportunity';
+  if (outcome === 'won')                   return 'won_opportunity';
+  if (outcome === 'lost')                  return 'lost_opportunity';
+  if (outcome === 'responded_no_outcome')  return 'pending_outcome_opportunity';
+  if (outcome === 'submitted_no_response') return 'pending_outcome_opportunity';
+  // Legacy alias — pre-v7.1 callers still pass 'submitted_pending'.
+  if (outcome === 'submitted_pending')     return 'pending_outcome_opportunity';
+  // v7.1 NEW: distinguish in-review drafts from no-draft act_now.
+  if (latestDraft && (latestDraft.status === 'draft' || latestDraft.status === 'approved')) {
+    return 'awaiting_review';
+  }
   if (opp.bucket === 'act_now')    return 'act_now_opportunity';
   if (opp.bucket === 'high_value') return 'high_value_opportunity';
   if (opp.bucket === 'quick_win')  return 'quick_win_opportunity';
@@ -46,22 +62,23 @@ function strategicTypeForOpportunity(opp, latestDraft = null, outcome = null) {
 }
 
 function recommendActionForOpportunity(opp, latestDraft = null, outcome = null) {
-  if (outcome === 'won')  return 'archive_won';
-  if (outcome === 'lost') return 'archive_lost';
-  if (outcome === 'submitted_pending') {
-    // Beyond 14 days without a response/outcome → nudge for outcome.
-    const daysSince = outcome === 'submitted_pending' && opp._submittedDaysAgo
-      ? opp._submittedDaysAgo
-      : 0;
+  // Terminal lifecycle states.
+  if (outcome === 'won')                   return 'archive_won';
+  if (outcome === 'lost')                  return 'archive_lost';
+
+  // Mid-lifecycle states — lifecycle takes precedence over bucket.
+  if (outcome === 'responded_no_outcome')  return 'mark_outcome';
+  if (outcome === 'submitted_no_response' || outcome === 'submitted_pending') {
+    const daysSince = opp._submittedDaysAgo ?? 0;
     return daysSince > 14 ? 'mark_outcome' : 'await_response';
   }
-  // No outcome yet.
+
+  // Pre-submission lifecycle states (driven by latestDraft).
+  if (latestDraft && latestDraft.status === 'draft')    return 'review_draft';
   if (latestDraft && latestDraft.status === 'approved') return 'mark_submitted';
-  if (opp.bucket === 'act_now') {
-    return latestDraft && latestDraft.status === 'draft'
-      ? 'review_draft'
-      : 'generate_proposal';
-  }
+
+  // No draft yet → fall through to bucket-driven actions.
+  if (opp.bucket === 'act_now') return 'generate_proposal';
   if ((opp.fitScore || 0) < 30 && opp.bucket === 'standard') return 'skip';
   return 'monitor';
 }
@@ -69,8 +86,12 @@ function recommendActionForOpportunity(opp, latestDraft = null, outcome = null) 
 function reasonForOpportunity(opp, latestDraft = null, outcome = null) {
   if (outcome === 'won')  return 'won — archive';
   if (outcome === 'lost') return 'lost — archive (signal for win-prob calibration)';
-  if (outcome === 'submitted_pending') {
-    return `submitted ${opp._submittedDaysAgo || '?'}d ago — track outcome to feed the learning loop`;
+  if (outcome === 'submitted_no_response' || outcome === 'submitted_pending') {
+    // ?? guards against 0 (same-day submission) which || would treat as falsy.
+    return `submitted ${opp._submittedDaysAgo ?? '?'}d ago — track outcome to feed the learning loop`;
+  }
+  if (outcome === 'responded_no_outcome') {
+    return 'buyer responded — mark won/lost to close the loop';
   }
   const parts = [];
   if (opp.urgency >= 90) parts.push('closes in ≤7 days');
@@ -88,28 +109,41 @@ function nextStepsForOpportunity(opp, latestDraft = null, outcome = null) {
   const id = opp.id;
   if (outcome === 'won')  return ['Archive — no further action needed.'];
   if (outcome === 'lost') return ['Archive — confirm calibration of win probability for similar opps.'];
-  if (outcome === 'submitted_pending') {
+
+  // v7.1 mid-lifecycle states.
+  if (outcome === 'responded_no_outcome') {
     return [
-      `${ROUTES.markResult(id)} body={"status":"won"|"lost"|"responded"}`,
-      'Mark the actual outcome to feed the learning engine.',
+      `${ROUTES.markResult(id)} body={"status":"won"}`,
+      `${ROUTES.markResult(id)} body={"status":"lost"}`,
+      'Buyer responded — pick the actual outcome to close the loop.',
     ];
   }
+  if (outcome === 'submitted_no_response' || outcome === 'submitted_pending') {
+    return [
+      `${ROUTES.markResult(id)} body={"status":"responded"}  (when buyer acknowledges)`,
+      'Once responded is logged, mark won/lost via the same endpoint.',
+    ];
+  }
+
+  // Pre-submission lifecycle states.
   if (latestDraft && latestDraft.status === 'approved') {
     return [
-      `${ROUTES.markResult(id)} body={"status":"submitted"}`,
-      `${ROUTES.markResult(id)} body={"status":"won"|"lost"} once buyer responds`,
+      `${ROUTES.markSubmitted(id)}`,
+      `Then ${ROUTES.markResult(id)} body={"status":"responded"} when buyer acknowledges.`,
     ];
   }
+  if (latestDraft && latestDraft.status === 'draft') {
+    return [
+      'Have an admin approve the draft in /admin/opportunities/review.',
+      `Once approved, ${ROUTES.markSubmitted(id)}`,
+    ];
+  }
+
+  // No draft yet.
   if (opp.bucket === 'act_now') {
-    if (latestDraft && latestDraft.status === 'draft') {
-      return [
-        'Have an admin approve the draft in /admin/opportunities/review.',
-        `Then ${ROUTES.markResult(id)} body={"status":"submitted"}`,
-      ];
-    }
     return [
       `${ROUTES.generate(id)} body={"type":"proposal"}`,
-      `After approval, ${ROUTES.markResult(id)} body={"status":"submitted"}`,
+      `After approval, ${ROUTES.markSubmitted(id)}`,
     ];
   }
   if ((opp.fitScore || 0) < 30 && opp.bucket === 'standard') {

@@ -31,6 +31,10 @@ router.post(
   BRIDGE, checkPermissions(ROLES.ADMIN), c.generate,
 );
 router.post(
+  '/opportunities/:id/mark-submitted',
+  BRIDGE, c.markSubmitted,
+);
+router.post(
   '/opportunities/:id/mark-result',
   BRIDGE, c.markResult,
 );
