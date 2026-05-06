@@ -357,3 +357,97 @@ describe('intelligence.context — v8 grounding sub-object', () => {
     expect(out.grounding.blocked_by_event).toBe('submitted');
   });
 });
+
+// ---------- v9: execution_mode + partner_profile + action override ----------
+
+describe('intelligence.context — v9 execution_mode', () => {
+  it('omits ctx.execution_mode when no executionMode payload passed (list rows skip-path)', () => {
+    const out = ctx.buildContextForOpportunity({ opp: fakeOpp({ bucket: 'act_now' }) });
+    expect(out.execution_mode).toBeUndefined();
+    expect(out.partner_profile).toBeUndefined();
+    expect(out.outreach_ready).toBeUndefined();
+    // recommended_action stays as the pre-v9 baseline.
+    expect(out.recommended_action).toBe('generate_proposal');
+    expect(out.schema_version).toBe(1);
+  });
+
+  it('execution_mode=direct_submit does NOT override recommended_action', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      executionMode: {
+        execution_mode: 'direct_submit',
+        partner_profile: null,
+        outreach_ready: false,
+      },
+    });
+    expect(out.execution_mode).toBe('direct_submit');
+    expect(out.partner_profile).toBeNull();
+    expect(out.recommended_action).toBe('generate_proposal');
+  });
+
+  it('execution_mode=partner_required + outreach_ready=true → recommended_action=send_outreach', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      executionMode: {
+        execution_mode: 'partner_required',
+        partner_profile: { geography: 'Utah', industry: 'waste_management' },
+        outreach_ready: true,
+      },
+    });
+    expect(out.execution_mode).toBe('partner_required');
+    expect(out.recommended_action).toBe('send_outreach');
+    expect(out.next_steps[0]).toMatch(/partner-outreach/);
+    expect(out.outreach_ready).toBe(true);
+  });
+
+  it('execution_mode=partner_required + outreach_ready=false → recommended_action=find_partner', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      executionMode: {
+        execution_mode: 'partner_required',
+        partner_profile: { geography: null, industry: 'waste_management' },
+        outreach_ready: false,
+      },
+    });
+    expect(out.recommended_action).toBe('find_partner');
+    expect(out.next_steps[0]).toMatch(/partner-search/);
+  });
+
+  it('execution_mode=ignore → recommended_action=skip', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      executionMode: {
+        execution_mode: 'ignore',
+        partner_profile: null,
+        outreach_ready: false,
+      },
+    });
+    expect(out.recommended_action).toBe('skip');
+    expect(out.next_steps[0]).toMatch(/outside.*service surface/i);
+  });
+
+  it('v9 override does NOT fire when latestDraft.status=draft (lifecycle stays in charge)', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp({ bucket: 'act_now' }),
+      latestDraft: { status: 'draft', id: 5 },
+      executionMode: {
+        execution_mode: 'partner_required',
+        partner_profile: { geography: 'Utah' },
+        outreach_ready: true,
+      },
+    });
+    // Lifecycle wins — review_draft stays.
+    expect(out.recommended_action).toBe('review_draft');
+    // execution_mode field is still attached (informational).
+    expect(out.execution_mode).toBe('partner_required');
+  });
+
+  it('v9 override does NOT fire on terminal outcomes (won/lost/responded)', () => {
+    const out = ctx.buildContextForOpportunity({
+      opp: fakeOpp(),
+      outcome: 'won',
+      executionMode: { execution_mode: 'ignore', partner_profile: null, outreach_ready: false },
+    });
+    expect(out.recommended_action).toBe('archive_won');
+  });
+});

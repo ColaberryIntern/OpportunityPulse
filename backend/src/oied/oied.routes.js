@@ -5,6 +5,7 @@ const { checkPermissions } = require('../middleware/rbac.middleware');
 const { ROLES } = require('../config/constants');
 const c = require('./oied.controller');
 const intel = require('./intelligence.controller');
+const partner = require('./partner.controller');
 
 const router = express.Router();
 
@@ -37,6 +38,15 @@ router.post(
 router.post(
   '/opportunities/:id/mark-result',
   BRIDGE, c.markResult,
+);
+// v9: partner discovery + outreach drafting (bridge-gated, admin-only).
+router.post(
+  '/opportunities/:id/partner-search',
+  BRIDGE, checkPermissions(ROLES.ADMIN), partner.partnerSearch,
+);
+router.post(
+  '/opportunities/:id/partner-outreach',
+  BRIDGE, checkPermissions(ROLES.ADMIN), partner.partnerOutreach,
 );
 router.post(
   '/bundles/:id/strategy',

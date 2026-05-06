@@ -31,6 +31,9 @@ const ROUTES = {
   bundleExecStart:   (id) => `POST /api/v1/oied/bundles/${id}/execution-plan/start`,
   getOpp:            (id) => `GET  /api/v1/oied/opportunities/${id}`,
   getBundle:         (id) => `GET  /api/v1/oied/bundles/${id}/blueprint`,
+  // v9: partner discovery + outreach drafting (bridge-gated, admin-only).
+  partnerSearch:     (id) => `POST /api/v1/oied/opportunities/${id}/partner-search`,
+  partnerOutreach:   (id) => `POST /api/v1/oied/opportunities/${id}/partner-outreach`,
 };
 
 // ---- Opportunity envelope -----------------------------------------------
@@ -152,6 +155,62 @@ function nextStepsForOpportunity(opp, latestDraft = null, outcome = null) {
   return [`Monitor; revisit when bucket flips. ${ROUTES.getOpp(id)} for current state.`];
 }
 
+// v9: when executionMode demands partner involvement (or skip), override
+// the recommended_action and next_steps for *pre-draft* opps only.
+// Mid-lifecycle states (draft, approved, submitted, responded) are not
+// touched — once a human commits to a draft, v9 stays silent.
+function applyExecutionModeOverride({
+  baseAction,
+  baseNextSteps,
+  oppId,
+  executionMode,
+  latestDraft,
+  outcome,
+}) {
+  // Only override pre-draft, no-outcome opps.
+  if (latestDraft || outcome) {
+    return { action: baseAction, next_steps: baseNextSteps };
+  }
+  if (!executionMode || !executionMode.execution_mode) {
+    return { action: baseAction, next_steps: baseNextSteps };
+  }
+  if (baseAction !== 'generate_proposal' && baseAction !== 'monitor') {
+    // Don't override skip / archive_*.
+    return { action: baseAction, next_steps: baseNextSteps };
+  }
+
+  const mode = executionMode.execution_mode;
+  if (mode === 'direct_submit') {
+    // No override — preserve the existing pre-v9 behavior.
+    return { action: baseAction, next_steps: baseNextSteps };
+  }
+  if (mode === 'ignore') {
+    return {
+      action: 'skip',
+      next_steps: ['Skip — opportunity scope is outside Colaberry\'s reachable service surface.'],
+    };
+  }
+  if (mode === 'partner_required') {
+    if (executionMode.outreach_ready) {
+      return {
+        action: 'send_outreach',
+        next_steps: [
+          `${ROUTES.partnerOutreach(oppId)} body={"prime_name":"<named prime>"}`,
+          'Compose teaming outreach to the named prime; sending stays human-gated.',
+        ],
+      };
+    }
+    return {
+      action: 'find_partner',
+      next_steps: [
+        `${ROUTES.partnerSearch(oppId)}`,
+        'Identify a teaming prime aligned to partner_profile (industry + geography + size_band).',
+      ],
+    };
+  }
+  return { action: baseAction, next_steps: baseNextSteps };
+}
+
 function buildContextForOpportunity({
   opp,
   organizationId = null,
@@ -159,6 +218,7 @@ function buildContextForOpportunity({
   outcome = null,           // null | 'won' | 'lost' | 'submitted_no_response' | 'responded_no_outcome' | 'submitted_pending' (legacy)
   winProbability = null,
   grounding = null,         // v8: optional payload from grounding.service
+  executionMode = null,     // v9: optional payload from executionMode.service
 }) {
   const effort = opp.effortEstimate || estimateEffort(opp);
   const wp = Number(winProbability != null ? winProbability : opp.winProbability);
@@ -168,6 +228,16 @@ function buildContextForOpportunity({
     winProbability: finalWp,
     proposalHours: effort.proposal_hours,
   });
+  const baseAction = recommendActionForOpportunity(opp, latestDraft, outcome);
+  const baseNextSteps = nextStepsForOpportunity(opp, latestDraft, outcome);
+  const overridden = applyExecutionModeOverride({
+    baseAction,
+    baseNextSteps,
+    oppId: opp.id,
+    executionMode,
+    latestDraft,
+    outcome,
+  });
   const ctx = {
     schema_version: SCHEMA_VERSION,
     priority: Math.round(Number(opp.priorityScore) || 0),
@@ -175,13 +245,20 @@ function buildContextForOpportunity({
     win_probability: Number(finalWp.toFixed(3)),
     effort,
     roi_per_hour: roi,
-    recommended_action: recommendActionForOpportunity(opp, latestDraft, outcome),
+    recommended_action: overridden.action,
     reason: reasonForOpportunity(opp, latestDraft, outcome),
     strategic_type: strategicTypeForOpportunity(opp, latestDraft, outcome),
-    next_steps: nextStepsForOpportunity(opp, latestDraft, outcome),
+    next_steps: overridden.next_steps,
     organization_id: organizationId,
     generated_at: new Date().toISOString(),
   };
+  // v9: additive execution_mode + partner_profile + outreach_ready.
+  // Same precedent as v8 grounding — schema_version stays at 1.
+  if (executionMode && executionMode.execution_mode) {
+    ctx.execution_mode = executionMode.execution_mode;
+    ctx.partner_profile = executionMode.partner_profile || null;
+    ctx.outreach_ready = !!executionMode.outreach_ready;
+  }
   // v8: additive grounding sub-object on the single-row endpoint.
   // List endpoints don't pass grounding (per-row DB hit × N would be
   // expensive); the bridge consumer can fetch /opportunities/:id for

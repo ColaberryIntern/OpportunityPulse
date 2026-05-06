@@ -37,9 +37,14 @@ async function listMy(req, res) {
       userId: (req.user && req.user.id) || null,
     });
     // v7: attach intelligence context per row (additive — existing fields stay).
+    // v9: load profile + approvedAssets once and share across rows so the
+    // executionMode/partner_profile fields populate without per-row DB hits.
     const intelligence = require('./intelligence.controller');
+    const v9Cache = await intelligence.loadV9Cache({
+      organizationId, userId: (req.user && req.user.id) || null,
+    });
     const rowsWithContext = await Promise.all(rows.map(
-      (r) => intelligence.attachContextToOpportunity(r, { organizationId }),
+      (r) => intelligence.attachContextToOpportunity(r, { organizationId, v9Cache }),
     ));
     return paginatedResponse(res, rowsWithContext, {
       total,
@@ -243,11 +248,22 @@ async function listRecommendations(req, res) {
     // v7: attach intelligence context per row. Recommendation rows
     // already carry most fields; reshape into an opp-like record so the
     // helper finds them.
+    // v9: also include description in the oppLike shape so executionMode
+    // can scan for blocker/support keywords. recommendation.service rows
+    // already carry it via getTopActions; if absent, executionMode falls
+    // back to title-only scanning.
     const intelligence = require('./intelligence.controller');
+    // Single shared cache across rows. Recommendations are user-scoped,
+    // so derive orgId from the first row (or fall back to the calling user).
+    const orgIdForCache = (data && data[0] && data[0].organization_id) || null;
+    const v9Cache = await intelligence.loadV9Cache({
+      organizationId: orgIdForCache, userId,
+    });
     const dataWithContext = await Promise.all((data || []).map(async (r) => {
       const oppLike = {
         id: r.opportunity_id,
         title: r.title,
+        description: r.description,
         category: r.category,
         value: r.expected_value,
         fitScore: r.fit_score,
@@ -256,9 +272,10 @@ async function listRecommendations(req, res) {
         bucket: r.bucket,
         winProbability: r.win_probability,
         effortEstimate: r.effort_estimate,
+        sourceData: r.sourceData || r.source_data,
       };
       const wrapped = await intelligence.attachContextToOpportunity(oppLike, {
-        organizationId: r.organization_id,
+        organizationId: r.organization_id, v9Cache,
       });
       return { ...r, context: wrapped.context };
     }));

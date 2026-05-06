@@ -78,6 +78,28 @@ async function loadOppOutcomeContext(opportunityId) {
   return { latestDraft, outcome, submittedDaysAgo };
 }
 
+// v9: load org profile + approvedAssets once per request and pass to
+// per-row envelope builders. These are cheap (one DB read each) but on a
+// 50-row list we'd make 100 reads if we didn't cache. Callers should
+// build this once and thread it through all attachContextToOpportunity
+// calls in the same request.
+async function loadV9Cache({ organizationId, userId } = {}) {
+  // eslint-disable-next-line global-require
+  const profileSvcLocal = require('./profile.service');
+  // eslint-disable-next-line global-require
+  const approvedAssetsSvc = require('./approvedAssets.service');
+  let profile = null;
+  let approvedAssets = null;
+  try {
+    const orgId = organizationId || (await profileSvcLocal.resolveOrgId(userId));
+    profile = await profileSvcLocal.getOrDefaultByOrg(orgId);
+    approvedAssets = await approvedAssetsSvc.getApprovedAssets({ organizationId: orgId });
+  } catch (e) {
+    logger.warn('intelligence: v9 cache load failed', { error: e.message });
+  }
+  return { profile, approvedAssets };
+}
+
 // Attach `context` to one opportunity row (already enriched with
 // fitScore/priorityScore/bucket/effortEstimate/winProbability).
 //
@@ -87,11 +109,30 @@ async function loadOppOutcomeContext(opportunityId) {
 // call POST /generate. List endpoints omit grounding (per-row DB hit
 // would be expensive); they expect callers to fetch /opportunities/:id
 // for detail.
-async function attachContextToOpportunity(opp, { organizationId, grounding = null } = {}) {
+//
+// v9: optional `v9Cache = {profile, approvedAssets}` — when supplied,
+// computes execution_mode + partner_profile + outreach_ready and embeds
+// in the envelope. Pure-function on top of already-loaded data, so no
+// per-row DB cost.
+async function attachContextToOpportunity(
+  opp,
+  { organizationId, grounding = null, v9Cache = null } = {},
+) {
   const { latestDraft, outcome, submittedDaysAgo } = await loadOppOutcomeContext(opp.id);
   const enriched = submittedDaysAgo != null
     ? { ...opp, _submittedDaysAgo: submittedDaysAgo }
     : opp;
+  let executionMode = null;
+  if (v9Cache) {
+    // eslint-disable-next-line global-require
+    const emSvc = require('./executionMode.service');
+    executionMode = emSvc.computeExecutionMode({
+      opp: enriched,
+      profile: v9Cache.profile,
+      approvedAssets: v9Cache.approvedAssets,
+      grounding,
+    });
+  }
   return {
     ...opp,
     context: ctx.buildContextForOpportunity({
@@ -100,6 +141,7 @@ async function attachContextToOpportunity(opp, { organizationId, grounding = nul
       latestDraft,
       outcome,
       grounding,
+      executionMode,
     }),
   };
 }
@@ -137,16 +179,21 @@ async function getOpportunityIntelligence(req, res) {
     // v8: load grounding inline for the single-row endpoint so the
     // consumer agent can read context.grounding.{agency_name,
     // solicitation_id, missing_fields} before calling POST /generate.
+    // v9: load profile + approvedAssets in parallel so executionMode
+    // computes inline.
     // eslint-disable-next-line global-require
     const groundingSvc = require('./grounding.service');
-    let grounding = null;
-    try {
-      grounding = await groundingSvc.getOpportunityGrounding(id);
-    } catch (e) {
-      logger.warn('intelligence: grounding lookup failed', { id, error: e.message });
-    }
+    const [groundingResult, v9CacheResult] = await Promise.all([
+      groundingSvc.getOpportunityGrounding(id).catch((e) => {
+        logger.warn('intelligence: grounding lookup failed', { id, error: e.message });
+        return null;
+      }),
+      loadV9Cache({ organizationId: orgId, userId: req.user && req.user.id }),
+    ]);
     const wrapped = await attachContextToOpportunity(enriched, {
-      organizationId: orgId, grounding,
+      organizationId: orgId,
+      grounding: groundingResult,
+      v9Cache: v9CacheResult,
     });
     return successResponse(res, wrapped);
   } catch (e) {
@@ -169,6 +216,8 @@ async function listExecutionQueueIntelligence(req, res) {
       minRoi: req.query.minRoi,
     });
     const orgId = data.organization_id;
+    // v9: load once per request, share across rows.
+    const v9Cache = await loadV9Cache({ organizationId: orgId, userId });
     const rowsWithContext = await Promise.all(
       (data.rows || []).map(async (row) => {
         // executionQueue rows are draft-output-shaped (output_id, opportunity_id,
@@ -186,7 +235,9 @@ async function listExecutionQueueIntelligence(req, res) {
           winProbability: row.win_probability,
           effortEstimate: row.effort_estimate,
         };
-        const wrapped = await attachContextToOpportunity(oppLike, { organizationId: orgId });
+        const wrapped = await attachContextToOpportunity(oppLike, {
+          organizationId: orgId, v9Cache,
+        });
         return { ...row, context: wrapped.context };
       }),
     );
@@ -256,4 +307,5 @@ module.exports = {
   attachContextToOpportunity,
   attachContextToBundle,
   loadOppOutcomeContext,
+  loadV9Cache,
 };
