@@ -40,6 +40,7 @@ import BriefingPage from './pages/BriefingPage';
 import TriggerLogsPage from './pages/TriggerLogsPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
+import OIEDDashboardPage from './pages/OIEDDashboardPage';
 import BillingPage from './pages/BillingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -342,6 +343,14 @@ function App() {
           element={
             <ProtectedLayout>
               <BonfireStrategicPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/oied"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <OIEDDashboardPage />
             </ProtectedLayout>
           }
         />

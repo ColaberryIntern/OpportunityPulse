@@ -98,6 +98,12 @@ services:
       # (JWT keeps working). Set to a 48-char hex value to enable.
       OIED_INTELLIGENCE_API_KEY: ${OIED_INTELLIGENCE_API_KEY:-}
       OIED_INTELLIGENCE_DEFAULT_ORG_ID: ${OIED_INTELLIGENCE_DEFAULT_ORG_ID:-1}
+      # v9.1 UX: daily briefing + trigger-engine cron, off by default.
+      OIED_BRIEFING_ENABLED: ${OIED_BRIEFING_ENABLED:-false}
+      OIED_BRIEFING_CRON: ${OIED_BRIEFING_CRON:-0 7 * * *}
+      OIED_BRIEFING_TO: ${OIED_BRIEFING_TO:-}
+      OIED_AUTO_TRIGGERS_ENABLED: ${OIED_AUTO_TRIGGERS_ENABLED:-false}
+      OIED_AUTO_TRIGGERS_CRON: ${OIED_AUTO_TRIGGERS_CRON:-0 6 * * *}
     depends_on:
       postgres:
         condition: service_healthy

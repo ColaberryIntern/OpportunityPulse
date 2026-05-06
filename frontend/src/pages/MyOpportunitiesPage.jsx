@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { listMyOpportunities, recordEvent } from '../services/oiedService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
+import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -23,7 +24,7 @@ function ScoreBadge({ score }) {
   );
 }
 
-function OppRow({ opp, onGenerated }) {
+function OppRow({ opp, onGenerated, onOpenDetail }) {
   useEffect(() => {
     // 'viewed' event — best-effort. Fires once per row mount.
     recordEvent(opp.id, 'viewed', { source: 'my_opportunities_list' });
@@ -44,9 +45,14 @@ function OppRow({ opp, onGenerated }) {
             )}
             <span className="text-xs text-gray-500" data-testid="opportunity-value">· {fmtUSD(opp.value)}</span>
           </div>
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-0.5">
+          <button
+            type="button"
+            onClick={() => onOpenDetail(opp.id)}
+            className="text-left font-semibold text-gray-900 dark:text-gray-100 mb-0.5 hover:text-blue-600 hover:underline cursor-pointer"
+            data-testid="opp-row-title-btn"
+          >
             {opp.title}
-          </h3>
+          </button>
           {opp.location && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{opp.location}</p>
           )}
@@ -60,7 +66,12 @@ function OppRow({ opp, onGenerated }) {
               <span>strat:{opp.fitBreakdown.strategic_alignment}/15</span>
             </div>
           )}
-          <OpportunityActionButtons opportunityId={opp.id} compact onGenerated={onGenerated} />
+          <OpportunityActionButtons
+            opportunityId={opp.id}
+            compact
+            onGenerated={onGenerated}
+            recommendedAction={opp.context && opp.context.recommended_action}
+          />
         </div>
         {opp.sourceUrl && (
           <a
@@ -80,7 +91,7 @@ function OppRow({ opp, onGenerated }) {
 // One of the priority sections at the top of the page (Act Now / High Value
 // / Quick Wins). Collapses gracefully when it has zero matching rows so the
 // admin doesn't see empty placeholders.
-function BucketSection({ title, hint, rows, tone = 'blue', testId }) {
+function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail }) {
   if (!rows || rows.length === 0) return null;
   const toneMap = {
     red: 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/40 text-red-700 dark:text-red-300',
@@ -98,7 +109,7 @@ function BucketSection({ title, hint, rows, tone = 'blue', testId }) {
         <span className="text-xs font-mono">{rows.length}</span>
       </div>
       <ul className="list-none p-0">
-        {rows.slice(0, 8).map((opp) => <OppRow key={opp.id} opp={opp} />)}
+        {rows.slice(0, 8).map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={onOpenDetail} />)}
       </ul>
     </section>
   );
@@ -113,6 +124,7 @@ function MyOpportunitiesPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [minScore, setMinScore] = useState('');
+  const [detailOppId, setDetailOppId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,6 +233,7 @@ function MyOpportunitiesPage() {
               hint="Priority ≥ 80 or close date is days away."
               rows={grouped.act_now}
               testId="bucket-act-now"
+              onOpenDetail={setDetailOppId}
             />
             <BucketSection
               title="💰 High Value"
@@ -228,6 +241,7 @@ function MyOpportunitiesPage() {
               hint="Revenue weight ≥ 16 (≥ $500k) and meaningful fit."
               rows={grouped.high_value}
               testId="bucket-high-value"
+              onOpenDetail={setDetailOppId}
             />
             <BucketSection
               title="⚡ Quick Wins"
@@ -235,15 +249,22 @@ function MyOpportunitiesPage() {
               hint="High ease + automation, closes within 30 days."
               rows={grouped.quick_win}
               testId="bucket-quick-wins"
+              onOpenDetail={setDetailOppId}
             />
 
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-8 mb-2">
               All matching ({rows.length})
             </h2>
             <ul className="list-none p-0" data-testid="my-opportunities-list">
-              {rows.map((opp) => <OppRow key={opp.id} opp={opp} />)}
+              {rows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}
             </ul>
           </>
+        )}
+        {detailOppId && (
+          <OpportunityDetailModal
+            opportunityId={detailOppId}
+            onClose={() => setDetailOppId(null)}
+          />
         )}
       </div>
     </div>

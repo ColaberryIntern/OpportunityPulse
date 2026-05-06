@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { listExecutionQueue, patchOutputStatus } from '../services/oiedService';
+import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -19,6 +20,7 @@ function ExecutionQueuePage() {
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState(null);
   const [banner, setBanner] = useState(null);
+  const [detailOppId, setDetailOppId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,7 +113,14 @@ function ExecutionQueuePage() {
                     data-testid="execution-queue-row"
                   >
                     <td className="px-2 py-2">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{row.title}</div>
+                      <button
+                        type="button"
+                        onClick={() => setDetailOppId(row.opportunity_id)}
+                        className="text-left font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 hover:underline cursor-pointer"
+                        data-testid="execution-row-title-btn"
+                      >
+                        {row.title}
+                      </button>
                       <div className="text-xs text-gray-500">
                         {row.category || '—'} · #{row.opportunity_id}
                       </div>
@@ -157,6 +166,13 @@ function ExecutionQueuePage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {detailOppId && (
+          <OpportunityDetailModal
+            opportunityId={detailOppId}
+            onClose={() => setDetailOppId(null)}
+          />
         )}
       </div>
     </div>

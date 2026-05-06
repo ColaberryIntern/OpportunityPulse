@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* OIED Review Queue: rendered draft markdown gets readable document styling. */
+.review-prose h2 { font-size: 1.125rem; font-weight: 700; color: #1f2937; margin: 1rem 0 0.4rem; }
+.review-prose h3 { font-size: 1rem;     font-weight: 600; color: #374151; margin: 0.85rem 0 0.3rem; }
+.review-prose h4 { font-size: 0.95rem;  font-weight: 600; color: #374151; margin: 0.7rem 0 0.25rem; }
+.review-prose p  { margin: 0.6rem 0; line-height: 1.55; }
+.review-prose ul, .review-prose ol { margin: 0.4rem 0 0.6rem 1.25rem; }
+.review-prose li { margin: 0.15rem 0; line-height: 1.5; }
+.review-prose ul { list-style: disc; }
+.review-prose ol { list-style: decimal; }
+.review-prose strong { font-weight: 600; }
+.review-prose em { font-style: italic; }
+.review-prose code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
+.review-prose hr { margin: 1rem 0; border: 0; border-top: 1px solid #e5e7eb; }
+.dark .review-prose h2, .dark .review-prose h3, .dark .review-prose h4 { color: #f3f4f6; }
+.dark .review-prose code { background: #374151; color: #f3f4f6; }
+.dark .review-prose hr { border-top-color: #4b5563; }
+
 :root {
   --color-primary: #1a1a2e;
   --color-secondary: #16213e;

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { getRecommendations, generateOutput, markResult } from '../services/oiedService';
+import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -75,7 +76,7 @@ function ResultMenu({ opportunityId, onResult }) {
   );
 }
 
-function RecommendationCard({ rec, onGenerated, onResult }) {
+function RecommendationCard({ rec, onGenerated, onResult, onOpenDetail }) {
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState(null);
   const bucket = bucketLabel(rec.bucket);
@@ -101,9 +102,14 @@ function RecommendationCard({ rec, onGenerated, onResult }) {
       data-testid="recommendation-card"
     >
       <div className="flex items-start justify-between gap-3 mb-2">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <button
+          type="button"
+          onClick={() => onOpenDetail && onOpenDetail(rec.opportunity_id)}
+          className="text-left text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 hover:underline cursor-pointer"
+          data-testid="rec-card-title-btn"
+        >
           {rec.title}
-        </h3>
+        </button>
         <div className="text-right shrink-0">
           <div className="text-xs text-gray-500">Score</div>
           <div className="text-lg font-bold">{Math.round(rec.recommendation_score)}</div>
@@ -165,6 +171,7 @@ function RecommendationsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [detailOppId, setDetailOppId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,10 +228,22 @@ function RecommendationsPage() {
           <div data-testid="recommendations-list">
             {items.map((r, i) => (
               <div key={r.opportunity_id} data-testid={`recommendation-rank-${i + 1}`}>
-                <RecommendationCard rec={r} onGenerated={load} onResult={load} />
+                <RecommendationCard
+                  rec={r}
+                  onGenerated={load}
+                  onResult={load}
+                  onOpenDetail={setDetailOppId}
+                />
               </div>
             ))}
           </div>
+        )}
+
+        {detailOppId && (
+          <OpportunityDetailModal
+            opportunityId={detailOppId}
+            onClose={() => setDetailOppId(null)}
+          />
         )}
       </div>
     </div>

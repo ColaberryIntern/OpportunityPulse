@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { listOutputs, patchOutputStatus } from '../services/oiedService';
+import renderSafeMarkdown from '../utils/safeMarkdown';
 
 function StatusBadge({ status }) {
   const map = {
@@ -81,12 +82,11 @@ function OutputCard({ row, onPatch }) {
           data-testid="review-edit-textarea"
         />
       ) : (
-        <pre
-          className="text-sm whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 max-h-96 overflow-y-auto"
+        <div
+          className="review-prose text-sm text-gray-800 dark:text-gray-200 max-h-[32rem] overflow-y-auto"
           data-testid="review-content"
-        >
-{row.content}
-        </pre>
+          dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(row.content) }}
+        />
       )}
 
       {row.reviewNotes && row.status === 'rejected' && (
