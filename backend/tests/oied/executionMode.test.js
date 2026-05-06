@@ -197,6 +197,34 @@ describe('executionMode.computeExecutionMode - ignore', () => {
     });
     expect(out.execution_mode).toBe('ignore');
   });
+
+  it('profile with 3+ services flips ignore->partner_required when blockers present (real-world signal: scope copy rarely uses our keywords)', () => {
+    // Same opp shape as opp 11048 in prod — purely operational copy, no
+    // scope-text support keywords, but profile has 8 service categories.
+    const out = em.computeExecutionMode({
+      opp: fakeOpp({
+        title: 'Curbside Solid Waste and Recyclable Collection Services',
+        description: 'The project involves providing curbside solid waste and recyclable collection and disposal services. Vendors would typically be waste management companies capable of handling logistics and operations for waste collection. The scope includes regular collection schedules, disposal methods, and recycling processes.',
+        sourceData: { agency: 'U3P (utah)' },
+        value: 500_000,
+      }),
+      profile: profileColaberry, // 8 services
+    });
+    expect(out.execution_mode).toBe('partner_required');
+    expect(out.partner_profile.industry).toBe('waste_management');
+    expect(out.signals.profile_baseline).toBe(2);
+  });
+
+  it('same opp with empty/narrow profile (<3 services) still hits ignore', () => {
+    const out = em.computeExecutionMode({
+      opp: fakeOpp({
+        title: 'Curbside Solid Waste Collection Services',
+        description: 'Operational waste collection scope. Vendor must operate own fleet and provide direct curbside service.',
+      }),
+      profile: { services: ['ai-systems'] }, // single-service tenant
+    });
+    expect(out.execution_mode).toBe('ignore');
+  });
 });
 
 describe('executionMode.deriveGeography', () => {

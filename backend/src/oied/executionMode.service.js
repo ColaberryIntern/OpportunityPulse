@@ -212,9 +212,21 @@ function computeExecutionMode({
   const direct   = countMatchesFlat(text, DIRECT_FIT);
   const overlap  = profileOverlapScore({ profile, opp });
 
+  // Profile-services act as a baseline support signal: a tenant with 3+
+  // approved service categories can plausibly contribute to almost any
+  // operational scope as a teaming partner. Without this, real-world RFP
+  // descriptions (which rarely use "data analytics" or "compliance" in
+  // their copy) get mis-classified as `ignore` when they should be
+  // `partner_required`. The threshold is 3 to keep test fixtures with
+  // empty/single-service profiles falling through to keyword-only logic.
+  const profileBaseline = (profile && Array.isArray(profile.services) && profile.services.length >= 3) ? 2 : 0;
+  const effectiveSupport = support.count + profileBaseline;
+
   const baseSignals = {
     blockers: blockers.total,
     support: support.count,
+    profile_baseline: profileBaseline,
+    effective_support: effectiveSupport,
     direct: direct.count,
     overlap,
   };
@@ -229,8 +241,9 @@ function computeExecutionMode({
     };
   }
 
-  // Partner required - has blockers, but Colaberry's services overlay.
-  if (blockers.total >= 1 && support.count >= 2) {
+  // Partner required - has blockers, but Colaberry's services overlay
+  // (either via scope keywords or via the org's broad approved-service stack).
+  if (blockers.total >= 1 && effectiveSupport >= 2) {
     const partnerProfile = derivePartnerProfile({
       opp,
       blockersMatched: blockers.matched,
@@ -245,8 +258,9 @@ function computeExecutionMode({
     };
   }
 
-  // Ignore - has blockers, no meaningful support overlap.
-  if (blockers.total >= 1 && support.count < 2) {
+  // Ignore - has blockers, profile too narrow / scope too far outside
+  // Colaberry's reachable service surface to even partner.
+  if (blockers.total >= 1 && effectiveSupport < 2) {
     return {
       execution_mode: 'ignore',
       partner_profile: null,
