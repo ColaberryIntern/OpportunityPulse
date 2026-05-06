@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OIED v9.1 UX Update — Walkthrough Round 2</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-light: #2b6cb0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #38a169;
+    --warn: #d69e2e;
+    --danger: #c53030;
+    --before: #fed7d7;
+    --after: #c6f6d5;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    padding: 20px 18px;
+    font-size: 13px;
+  }
+  nav.toc h2 {
+    color: var(--navy);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0 6px 0;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block;
+    color: var(--navy-light);
+    text-decoration: none;
+    padding: 4px 6px;
+    border-radius: 4px;
+    line-height: 1.35;
+  }
+  nav.toc a:hover { background: #e6effa; }
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 36px 36px 80px 36px;
+  }
+  h1 {
+    color: var(--navy);
+    font-size: 28px;
+    margin: 0 0 6px 0;
+    line-height: 1.2;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  h2 {
+    color: var(--navy);
+    font-size: 22px;
+    margin: 36px 0 12px 0;
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: var(--navy);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0 6px 0;
+  }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--navy);
+    color: #ffffff;
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.fix, section.summary, section.intro {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06);
+  }
+  section.intro { border-left-color: var(--navy); }
+  section.summary { border-left-color: var(--warn); }
+  section h2:first-child {
+    margin-top: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  img.screenshot {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-alt);
+  }
+  img.sidebar-shot {
+    max-width: 320px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 80px;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    resize: vertical;
+    background: #fffef7;
+  }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .status-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 14px;
+  }
+  .status-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-alt);
+  }
+  .status-row label:hover { background: #edf2f7; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--accent);
+    color: #ffffff;
+    margin-right: 6px;
+  }
+  .badge-fix { background: var(--accent); }
+  .badge-new { background: #6b46c1; }
+  .badge-config { background: var(--navy-light); }
+  .ali-quote {
+    font-style: italic;
+    color: var(--text);
+    background: #fffaf0;
+    border-left: 3px solid var(--warn);
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 0;
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  button.copy-btn {
+    background: var(--navy);
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  .small { font-size: 13px; color: var(--text-muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .legend {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 16px; max-width: none; }
+    section.fix, section.summary, section.intro {
+      box-shadow: none;
+      page-break-inside: avoid;
+    }
+    .actions { display: none; }
+    textarea { background: #ffffff; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Round 2</h2>
+  <a href="#intro">What changed</a>
+
+  <h2>The big ask</h2>
+  <a href="#fix-dashboard">A. Mission Control dashboard</a>
+  <a href="#fix-sidebar">A. Sidebar restructure</a>
+
+  <h2>UI consistency</h2>
+  <a href="#fix-modal">B. Drill-down modals</a>
+
+  <h2>Wrong-state UX</h2>
+  <a href="#fix-lifecycle">C. Lifecycle-aware buttons</a>
+  <a href="#fix-success-link">C. Review Queue link</a>
+
+  <h2>Output format</h2>
+  <a href="#fix-markdown">D. Rendered drafts</a>
+
+  <h2>Email + automation</h2>
+  <a href="#fix-briefing">E. Briefing recipient</a>
+  <a href="#fix-cron">F. Daily cron</a>
+
+  <h2>Reference</h2>
+  <a href="#what-didnt-change">What didn't change</a>
+  <a href="#summary">Summary + new feedback</a>
+</nav>
+
+<main>
+
+<h1>OIED v9.1 UX Update — Walkthrough Round 2</h1>
+<div class="subtitle">
+  Six themed fixes from Ali's round-1 feedback dump · prepared 2026-05-06 · all live in prod (commit <code>3f92cf0</code>)
+</div>
+
+<section class="intro" id="intro">
+  <h2>What changed</h2>
+  <p>
+    Six fixes shipped in a single bundle, addressing every "needs edit" from Ali's first walkthrough.
+    The eight items marked "good" in round 1 are unchanged.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Theme</th><th>Status</th><th>Fix</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>A. "No flow"</td><td><span class="badge badge-new">NEW</span></td><td>OIED Mission Control dashboard at <code>/admin/oied</code> + sidebar restructure</td></tr>
+      <tr><td>B. UI consistency</td><td><span class="badge badge-fix">FIXED</span></td><td>Drill-down modal on My Opportunities, Top Actions, Execution Queue</td></tr>
+      <tr><td>C. Generate Proposal error</td><td><span class="badge badge-fix">FIXED</span></td><td>Buttons hidden when lifecycle blocks; Review Queue link on success</td></tr>
+      <tr><td>D. Markdown in Review Queue</td><td><span class="badge badge-fix">FIXED</span></td><td>Drafts now rendered as HTML, not raw markdown text</td></tr>
+      <tr><td>E. Briefing recipient</td><td><span class="badge badge-config">CONFIG</span></td><td><code>OIED_BRIEFING_TO=ali@colaberry.com</code> set on prod</td></tr>
+      <tr><td>F. Trigger cron</td><td><span class="badge badge-config">CONFIG</span></td><td>Daily cron armed on prod (06:00 triggers, 07:00 briefing)</td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    Feedback boxes work the same way as round 1: notes auto-save to your browser. Click <em>Copy all feedback</em> at the bottom when done.
+  </p>
+</section>
+
+<!-- ============================ DASHBOARD ============================ -->
+
+<section class="fix" id="fix-dashboard">
+  <h2>A. OIED Mission Control — new dashboard at <code>/admin/oied</code></h2>
+
+  <div class="ali-quote">
+    "All this functionality is great, but it has no flow. Feels like a bunch of pieces. Can we clean up
+    the side bar and maybe create a start page / dashboard that can be the place of reference but then
+    one click away from navigating to the section. I need one place I can go to get the big picture and
+    then navigate from there."
+  </div>
+
+  <h3>What it does</h3>
+  <p>Single landing page that orients you and feeds you the next click. Four widgets stacked top-to-bottom:</p>
+  <ul>
+    <li><strong>Day Counters</strong> — drafts to review, partner outreach pending, outcomes to log. Each card is also a link to the relevant page.</li>
+    <li><strong>Top 3 next moves</strong> — pulled from <code>/recommendations</code>, with action label, mode badge, ROI/hr, and a one-click "Open →" button per row.</li>
+    <li><strong>Pipeline Pulse</strong> — pipeline value (your call) and median submit→response velocity (your call). Both link through to Revenue Dashboard.</li>
+    <li><strong>Quick Nav</strong> — three columns (Discover / Pursue / Operate), one click to every other OIED page.</li>
+  </ul>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/18-oied-dashboard.png" alt="OIED Mission Control dashboard">
+
+  <h3>How to get there</h3>
+  <ol>
+    <li>Sidebar → OIED → Mission Control. (Top of the new OIED block.)</li>
+    <li>Or directly: <code>http://95.216.199.47:8091/admin/oied</code>.</li>
+  </ol>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li>Day counters reflect current state (drafts in Review Queue, find_partner/send_outreach opps, submitted-without-outcome opps).</li>
+    <li>Top-3 next moves carry the v9 execution_mode badge and override action where appropriate.</li>
+    <li>Quick Nav tiles preserve their hover styling and navigate without a full reload.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="dashboard" placeholder="Notes on the new dashboard..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="dashboard">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<section class="fix" id="fix-sidebar">
+  <h2>A. Sidebar restructure — Discover / Pursue / Operate</h2>
+
+  <h3>What it does</h3>
+  <p>
+    The old flat OIED list (10 entries dropped into "Tools &amp; Actions" when Bonfire was on) is replaced
+    by a dedicated <strong>OIED</strong> block with a Mission Control link at the top, then 3 grouped subsections.
+    Bonfire keeps its own block beneath, untouched.
+  </p>
+
+  <h3>New structure</h3>
+  <ul>
+    <li><strong>OIED</strong> → Mission Control (the dashboard above)</li>
+    <li><strong>Discover</strong> → My Opportunities · Top Actions · Bundles</li>
+    <li><strong>Pursue</strong> → Review Queue · Execution Queue · Daily Briefing</li>
+    <li><strong>Operate</strong> → Revenue Dashboard · Trigger Logs · Business Profile · Billing</li>
+  </ul>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot sidebar-shot" src="oied-walkthrough-assets/19-sidebar-restructured.png" alt="Restructured sidebar">
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="sidebar" placeholder="Notes on the sidebar..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="sidebar">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<!-- ============================ DRILL-DOWN MODAL ============================ -->
+
+<section class="fix" id="fix-modal">
+  <h2>B. Drill-down modal on three pages</h2>
+
+  <div class="ali-quote">
+    "Can we add a pop up drill down to see all the details related to the opportunity / action / item?"
+  </div>
+
+  <h3>What it does</h3>
+  <p>
+    Click any opportunity title on My Opportunities, Top Actions, or Execution Queue → modal opens with
+    the full <code>/opportunities/:id</code> intelligence envelope laid out: source, fit/priority,
+    win prob, ROI/hr, grounding (agency + solicitation + missing fields), partner_profile (industry,
+    geography, capabilities, Colaberry contribution), reason, next_steps, full description, source link.
+  </p>
+  <p>
+    Closes via the <strong>×</strong> button, the Close button at the bottom, clicking the backdrop, or pressing Escape.
+  </p>
+
+  <h3>Screenshots</h3>
+  <p class="small">From My Opportunities:</p>
+  <img class="screenshot" src="oied-walkthrough-assets/20-drill-down-modal.png" alt="Drill-down modal from My Opportunities">
+  <p class="small">From Top Actions:</p>
+  <img class="screenshot" src="oied-walkthrough-assets/21-drill-down-from-top-actions.png" alt="Drill-down modal from Top Actions">
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Click the title of any row.</li>
+    <li>Read the partner_profile and grounding to decide go/no-go.</li>
+    <li>"Open full page →" jumps to the dedicated single-opp page; "Source ↗" opens the agency portal.</li>
+  </ol>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="modal" placeholder="Notes on the drill-down modal..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="modal">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<!-- ============================ LIFECYCLE-AWARE BUTTONS ============================ -->
+
+<section class="fix" id="fix-lifecycle">
+  <h2>C. Generate Proposal — hidden when lifecycle blocks</h2>
+
+  <div class="ali-quote">
+    'When I click on "Generate Proposal", I get this error "Proposal failed: Proposal generation not allowed at this lifecycle stage"'
+  </div>
+
+  <h3>What it does</h3>
+  <p>
+    The action buttons now read the row's <code>recommended_action</code> and only show
+    <strong>Generate Proposal</strong> + <strong>Generate Offer</strong> when the lifecycle gate would
+    actually allow them. For everything else (review_draft, mark_submitted, await_response, mark_outcome,
+    archive_*, find_partner, send_outreach), a small note appears explaining the current stage. The
+    Analyze Opportunity button stays available regardless (it doesn't modify lifecycle).
+  </p>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/23-lifecycle-aware-buttons.png" alt="Lifecycle-aware action buttons in My Opportunities">
+
+  <h3>What you should not see anymore</h3>
+  <ul>
+    <li>Raw "Proposal generation not allowed at this lifecycle stage" 400 errors when clicking from My Opportunities.</li>
+    <li>The <strong>Generate Proposal</strong> button on rows whose lifecycle is past pre-draft.</li>
+  </ul>
+
+  <h3>If a generation does fail</h3>
+  <p>
+    The error banner now also surfaces structured details: for 422 needs_context it lists the missing
+    fields; for 400 invalid_stage it tells you the actual blocking event so you can route to Mark Outcome
+    instead.
+  </p>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="lifecycle-buttons" placeholder="Notes on lifecycle-aware buttons..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="lifecycle-buttons">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<section class="fix" id="fix-success-link">
+  <h2>C. After Generate / Analyze — Review Queue link in the success banner</h2>
+
+  <div class="ali-quote">
+    'After clicking "Analyze Opportunity" or "Generate Offer" once the report shows up, it should give me a link to navigate to the Review Queue section.'
+  </div>
+
+  <h3>What it does</h3>
+  <p>
+    Successful generations now show a small green banner with the draft's id and a clickable
+    <strong>Review Queue →</strong> link that takes you straight to the queue.
+  </p>
+
+  <h3>Where to see it</h3>
+  <p>
+    My Opportunities → click <em>Analyze Opportunity</em> or (if pre-draft) <em>Generate Proposal</em> on
+    any row. Banner appears inline next to the button row.
+  </p>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="success-link" placeholder="Notes on the success-banner link..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="success-link">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<!-- ============================ MARKDOWN -> HTML ============================ -->
+
+<section class="fix" id="fix-markdown">
+  <h2>D. Review Queue — drafts rendered as HTML, not raw markdown</h2>
+
+  <div class="ali-quote">
+    "Format these better instead of using markdown. Format in html"
+  </div>
+
+  <h3>What it does</h3>
+  <p>
+    Draft content is now rendered as proper HTML: <code>##</code> headings, bold/italic, ordered + unordered
+    lists, paragraphs, inline code, horizontal rules. Inputs are HTML-escaped before transformation so
+    no raw markup can sneak through. No external dependencies — small custom renderer in
+    <code>src/utils/safeMarkdown.js</code>.
+  </p>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/22-review-rendered.png" alt="Review Queue with rendered draft markdown">
+
+  <h3>Editing</h3>
+  <p>
+    Clicking Edit still drops you into the raw textarea (so you can adjust markdown directly).
+    Save flips the card back to rendered view.
+  </p>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="markdown" placeholder="Notes on rendered drafts..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="markdown">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<!-- ============================ BRIEFING + CRON ============================ -->
+
+<section class="fix" id="fix-briefing">
+  <h2>E. Daily Briefing — recipient configured</h2>
+
+  <div class="ali-quote">
+    'When I click the "Email me this" button it says "Email skipped (no recipient configured)." My email is ali@colaberry.com.'
+  </div>
+
+  <h3>What changed</h3>
+  <ul>
+    <li><code>OIED_BRIEFING_TO=ali@colaberry.com</code> set in <code>/opt/opportunity-pulse/.env.prod</code>.</li>
+    <li><code>docker-compose.prod.yml</code> updated to pass the var into the backend container.</li>
+    <li>Backend container restarted; env vars confirmed inside the container.</li>
+  </ul>
+
+  <h3>What you should see now</h3>
+  <p>
+    Click <strong>Email me this</strong> on the Daily Briefing page. It should send to <code>ali@colaberry.com</code>
+    via Mandrill. Note: the request takes 30–60 seconds because the briefing composer uses the AI; if nginx
+    times out at 60s you'll see a gateway timeout in the UI but the email still goes out (delivery is async).
+  </p>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="briefing-recipient" placeholder="Notes on briefing recipient..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="briefing-recipient">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<section class="fix" id="fix-cron">
+  <h2>F. Trigger Logs — daily cron armed</h2>
+
+  <div class="ali-quote">
+    "This should run at least once per day on its own cron job."
+  </div>
+
+  <h3>What changed</h3>
+  <ul>
+    <li><code>OIED_AUTO_TRIGGERS_ENABLED=true</code> + <code>OIED_AUTO_TRIGGERS_CRON=0 6 * * *</code> in <code>.env.prod</code>.</li>
+    <li><code>OIED_BRIEFING_ENABLED=true</code> + <code>OIED_BRIEFING_CRON=0 7 * * *</code> in <code>.env.prod</code>.</li>
+    <li>Backend logs confirm both schedulers started:
+      <pre>OIED briefing scheduler started      cron="0 7 * * *"
+OIED trigger engine scheduler started cron="0 6 * * *"  dryRun=true</pre>
+    </li>
+  </ul>
+
+  <h3>What you should see</h3>
+  <ul>
+    <li>06:00 daily — trigger engine fires (currently in dry-run mode; flip <code>OIED_AUTO_TRIGGERS_DRY_RUN=false</code> later if you want it to actually take actions).</li>
+    <li>07:00 daily — composed briefing emails to ali@colaberry.com.</li>
+    <li>Trigger Logs page now accumulates one cron run per day.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="cron" placeholder="Notes on the daily cron..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="cron">
+    <label><input type="checkbox" data-status="good"><span>Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span>Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span>Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span>Missing feature</span></label>
+  </div>
+</section>
+
+<hr>
+
+<!-- ============================ NO-CHANGE ============================ -->
+
+<section class="intro" id="what-didnt-change">
+  <h2>What didn't change (round-1 "good" items)</h2>
+  <p>The eight features Ali approved in round 1 are untouched. Listed here so nothing got lost in translation:</p>
+  <ul>
+    <li>Business / Organization Profile (#8)</li>
+    <li>Bundles (#9)</li>
+    <li>Bundle Strategy (#10)</li>
+    <li>Bundle Blueprint (#11)</li>
+    <li>Bundle Execution Plan (#12)</li>
+    <li>External AI Bridge API (#13)</li>
+    <li>Lifecycle Flow (#14)</li>
+    <li>Grounded Proposal Generation (#15)</li>
+  </ul>
+  <p class="small">
+    Approved Assets / banned terms (#16), Partner Required Mode (#17), Partner Outreach Flow (#18),
+    Direct Submit Flow (#19), Mark Outcome Flow (#20) and the v8/v9 server-side guarantees they depend on
+    are also unchanged. The drill-down modal surfaces all of these visibly inside the new modal.
+  </p>
+</section>
+
+<!-- ============================ FINAL FEEDBACK ============================ -->
+
+<section class="summary" id="summary">
+  <h2>Final Feedback Summary (round 2)</h2>
+  <p>
+    Anything that didn't fit into a per-fix box. New features Ali wants for v10. Things still feeling
+    off after this round of fixes.
+  </p>
+  <textarea data-fb-id="final-r2" placeholder="Final summary feedback (round 2)..." style="min-height:200px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background:#718096">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self:center"></span>
+  </div>
+
+  <p class="small" style="margin-top:18px">
+    Feedback persists locally to your browser. Click <em>Copy all feedback</em> to dump everything as
+    markdown for sharing.
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'oied-walkthrough-feedback-v2';
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function save(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  var state = load();
+
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() {
+      state[id] = t.value;
+      save(state);
+    });
+  });
+
+  document.querySelectorAll('div[data-status-id]').forEach(function(row) {
+    var id = row.getAttribute('data-status-id');
+    var key = 'status:' + id;
+    if (state[key] && typeof state[key] === 'object') {
+      row.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) {
+        var k = c.getAttribute('data-status');
+        if (state[key][k]) c.checked = true;
+      });
+    }
+    row.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) {
+      c.addEventListener('change', function() {
+        var statusObj = state[key] || {};
+        statusObj[c.getAttribute('data-status')] = c.checked;
+        state[key] = statusObj;
+        save(state);
+      });
+    });
+  });
+
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = [];
+    lines.push('# OIED Walkthrough Round 2 — Ali Feedback Dump');
+    lines.push('Generated: ' + new Date().toISOString());
+    lines.push('');
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var statusRow = sec.querySelector('div[data-status-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      var ticked = [];
+      if (statusRow) {
+        statusRow.querySelectorAll('input[type=checkbox][data-status]:checked').forEach(function(c) {
+          ticked.push(c.getAttribute('data-status'));
+        });
+      }
+      if (fbVal || ticked.length > 0) {
+        lines.push('## ' + title);
+        if (ticked.length > 0) lines.push('Status: ' + ticked.join(', '));
+        if (fbVal) {
+          lines.push('');
+          lines.push(fbVal);
+        }
+        lines.push('');
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok');
+        btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() {
+          btn.classList.remove('ok');
+          btn.textContent = 'Copy all feedback to clipboard';
+        }, 4000);
+      }).catch(function() { fallbackCopy(text); });
+    } else {
+      fallbackCopy(text);
+    }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'Copied (legacy path)'; }
+      catch (e) { status.textContent = 'Copy failed — select all and copy manually'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback notes and status ticks in this browser?')) return;
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) { c.checked = false; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>

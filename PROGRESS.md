@@ -16,6 +16,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
   - Verification: section-count check (23 H1 headers in expected order); manual cross-section consistency check (Failure-First retries vs Stall infinite-retry-prohibited reconciled via explicit bounded backoff)
   - Notes: Created `PROGRESS.md` itself in the same session per the catch-up rule (Logging section). Prior commits (5d16d5c initial release through c3cc622 OIED v8) are not back-filled.
 
+## OIED v9.1 UX bundle - dashboard, drill-down modals, lifecycle-aware actions, rendered drafts (commit 3f92cf0)
+
+- [x] Address all 6 themed fixes from Ali's round-1 walkthrough feedback: new /admin/oied dashboard, sidebar restructure (Discover/Pursue/Operate), reusable OpportunityDetailModal wired into 3 list pages, lifecycle-aware OpportunityActionButtons (hide proposal/offer when blocked + Review Queue link on success), markdown->HTML rendering in Review Queue with sanitized custom renderer, briefing recipient + daily cron config
+  - Date: 2026-05-06
+  - What changed: 3 new frontend files (OIEDDashboardPage, OpportunityDetailModal, safeMarkdown util) + 6 modified (App.jsx route, Sidebar.jsx restructure, ActionButtons lifecycle gate, ExecutionQueue/MyOpps/Recommendations modal wiring, ReviewQueue markdown render, index.css review-prose styles). docker-compose.prod.yml passes through OIED_BRIEFING_* and OIED_AUTO_TRIGGERS_* env vars; .env.prod sets OIED_BRIEFING_TO=ali@colaberry.com and arms both crons (BRIEFING_CRON 0 7 * * *, AUTO_TRIGGERS_CRON 0 6 * * *).
+  - Verification: react-scripts build compiled clean (+27.94 KB JS, +1.65 KB CSS gzipped); container env vars confirmed via `docker exec op-backend node -e "process.env.OIED_BRIEFING_TO"`; backend logs confirmed both schedulers started ("OIED briefing scheduler started cron=0 7 * * *", "OIED trigger engine scheduler started cron=0 6 * * *"); /admin/oied dashboard route returns HTTP 200; v2 walkthrough HTML at docs/oied-feature-walkthrough-v2.html with 8 fix sections, 32 checkboxes, 0 broken anchors, 0 broken images, V2 AUDIT CLEAN.
+  - Notes: The "Email me this" briefing button takes 30-60s on prod due to AI compose; nginx times out at 60s but Mandrill delivery completes async. Trigger engine cron defaults to dryRun=true; flip OIED_AUTO_TRIGGERS_DRY_RUN=false later if real-action mode is wanted.
+
 ## OIED documentation - feature walkthrough HTML for Ali
 
 - [x] Add docs/oied-feature-walkthrough.html: self-contained HTML walkthrough documenting v1-v9 features with embedded screenshots, per-feature feedback boxes, status checkboxes, end-to-end use-case flows, External AI Bridge contract, and localStorage-backed feedback persistence with copy-to-clipboard
