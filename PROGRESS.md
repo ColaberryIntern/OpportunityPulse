@@ -16,6 +16,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
   - Verification: section-count check (23 H1 headers in expected order); manual cross-section consistency check (Failure-First retries vs Stall infinite-retry-prohibited reconciled via explicit bounded backoff)
   - Notes: Created `PROGRESS.md` itself in the same session per the catch-up rule (Logging section). Prior commits (5d16d5c initial release through c3cc622 OIED v8) are not back-filled.
 
+## OIED v9 - partner-based execution mode (commits 62d9e57, 4c6d4de)
+
+- [x] Add execution_mode classifier + partner_profile + outreach_ready to the OIED context envelope; gate proposal-generation recommendations behind capability-fit so opportunities Colaberry can't deliver as prime route to a teaming-partner path instead
+  - Date: 2026-05-06
+  - What changed: New `executionMode.service.js` (pure decision rule based on operational-blocker / support-layer / direct-fit keyword matching plus profile-service overlap), new `partner.service.js` + `partner.controller.js` (findCandidatePartners + composeOutreachDraft), two new bridge-gated routes (POST /partner-search, POST /partner-outreach), v9 fields threaded through `intelligence.context.js` envelope and both single-row + list endpoints. Two new `recommended_action` values (`find_partner`, `send_outreach`) override the baseline action for pre-draft opps only; lifecycle states (draft, approved, submitted, responded, won, lost) are not touched. v9.1 patch added a profile-services baseline support signal (>=3 services in profile = +2 baseline support) so real-world operational-copy RFPs classify as `partner_required` instead of `ignore`.
+  - Verification: 388 OIED tests passing (+40 net new for v9); 1203 backend tests across 98 suites passing; 4 prod smoke scenarios passed (opp 11048 waste -> partner_required/Utah/waste_management/outreach_ready=true, opp 11038 roofing -> partner_required/construction, recommendations endpoint surfaces v9 fields per row with `find_partner` override firing on pre-draft "Armed Security Guards" opp, direct-fit opps unchanged)
+  - Notes: schema_version stays at 1 (additive). No migration. No partner_candidates registry yet -- v1 returns empty candidates list and outreach drafting takes a human-supplied prime_name. Sending stays human-gated via accelerator-backend Mandrill.
+
 ## OIED v8 - grounded, lifecycle-aware proposal generation (commit c3cc622)
 
 - [x] Add `backend/src/oied/grounding.service.js` and `backend/src/oied/approvedAssets.service.js`; restructure `actionGenerator.service.js` to gate on grounding + lifecycle before AI call
