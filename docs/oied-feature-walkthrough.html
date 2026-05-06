@@ -1,0 +1,1584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OIED Feature Walkthrough — Opportunity Pulse (v1 → v9)</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-light: #2b6cb0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #38a169;
+    --warn: #d69e2e;
+    --danger: #c53030;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    padding: 20px 18px;
+    font-size: 13px;
+  }
+  nav.toc h2 {
+    color: var(--navy);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0 6px 0;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block;
+    color: var(--navy-light);
+    text-decoration: none;
+    padding: 4px 6px;
+    border-radius: 4px;
+    line-height: 1.35;
+  }
+  nav.toc a:hover { background: #e6effa; }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 36px 36px 80px 36px;
+  }
+  h1 {
+    color: var(--navy);
+    font-size: 28px;
+    margin: 0 0 6px 0;
+    line-height: 1.2;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  h2 {
+    color: var(--navy);
+    font-size: 22px;
+    margin: 36px 0 12px 0;
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: var(--navy);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0 6px 0;
+  }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--navy);
+    color: #ffffff;
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.feature, section.usecase, section.overview, section.api, section.summary {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--navy);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06);
+  }
+  section.usecase { border-left-color: var(--navy-light); }
+  section.api { border-left-color: var(--accent); }
+  section.summary { border-left-color: var(--warn); }
+  section h2:first-child {
+    margin-top: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  img.screenshot {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-alt);
+  }
+  textarea {
+    width: 100%;
+    min-height: 80px;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    resize: vertical;
+    background: #fffef7;
+  }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .status-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 14px;
+  }
+  .status-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-alt);
+  }
+  .status-row label:hover { background: #edf2f7; }
+  .status-row input[type=checkbox] { margin: 0; cursor: pointer; }
+  .status-row input[type=checkbox]:checked + span.label-good { color: var(--accent); font-weight: 600; }
+  .status-row input[type=checkbox]:checked + span.label-edit { color: var(--warn); font-weight: 600; }
+  .status-row input[type=checkbox]:checked + span.label-confusing { color: var(--warn); font-weight: 600; }
+  .status-row input[type=checkbox]:checked + span.label-missing { color: var(--danger); font-weight: 600; }
+  .feature-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 4px 0 0 0;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--navy);
+    color: #ffffff;
+    margin-right: 6px;
+  }
+  .badge-v8 { background: #6b46c1; }
+  .badge-v9 { background: var(--accent); }
+  .badge-v7 { background: #2c5282; }
+  .badge-v6 { background: #2b6cb0; }
+  .badge-v5 { background: #4299e1; }
+  .badge-v3 { background: #718096; }
+  .badge-v2 { background: #a0aec0; color: #1a202c; }
+  .actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 0;
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  button.copy-btn {
+    background: var(--navy);
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  .legend {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+  .small { font-size: 13px; color: var(--text-muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 16px; max-width: none; }
+    section.feature, section.usecase, section.overview, section.api, section.summary {
+      box-shadow: none;
+      page-break-inside: avoid;
+    }
+    .actions { display: none; }
+    textarea { background: #ffffff; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#executive-overview">Executive Overview</a>
+  <a href="#system-map">System Map</a>
+
+  <h2>Features</h2>
+  <a href="#f-my-opportunities">1. My Opportunities</a>
+  <a href="#f-top-actions">2. Top Actions / Recommendations</a>
+  <a href="#f-execution-queue">3. Execution Queue</a>
+  <a href="#f-review-queue">4. Review Queue</a>
+  <a href="#f-revenue-dashboard">5. Revenue Dashboard</a>
+  <a href="#f-briefing">6. Daily Briefing</a>
+  <a href="#f-triggers">7. Trigger Logs</a>
+  <a href="#f-profile">8. Business Profile</a>
+  <a href="#f-bundles">9. Bundles</a>
+  <a href="#f-bundle-strategy">10. Bundle Strategy</a>
+  <a href="#f-bundle-blueprint">11. Bundle Blueprint</a>
+  <a href="#f-bundle-execution-plan">12. Bundle Execution Plan</a>
+  <a href="#f-bridge">13. External AI Bridge API</a>
+  <a href="#f-lifecycle">14. Lifecycle Flow</a>
+  <a href="#f-grounded">15. Grounded Proposal Generation</a>
+  <a href="#f-approved-assets">16. Approved Assets / Banned Terms</a>
+  <a href="#f-partner-mode">17. Partner Required Mode</a>
+  <a href="#f-partner-outreach">18. Partner Outreach Flow</a>
+  <a href="#f-direct-submit">19. Direct Submit Flow</a>
+  <a href="#f-mark-outcome">20. Mark Outcome Flow</a>
+
+  <h2>End-to-end</h2>
+  <a href="#uc-direct">A. Direct Submit</a>
+  <a href="#uc-partner">B. Partner Required</a>
+  <a href="#uc-review">C. Review Draft</a>
+  <a href="#uc-outcome">D. Outcome Tracking</a>
+  <a href="#uc-bundle">E. Bundle Build</a>
+
+  <h2>Reference</h2>
+  <a href="#bridge-contract">Bridge / API Contract</a>
+  <a href="#final-feedback">Final Feedback Summary</a>
+</nav>
+
+<main>
+
+<h1>OIED Feature Walkthrough</h1>
+<div class="subtitle">
+  Opportunity Pulse · Opportunity Intelligence &amp; Execution Department · v1 → v9 ·
+  prepared for Ali Muwwakkil · 2026-05-06
+</div>
+
+<div class="legend">
+  <strong>How to use this doc:</strong>
+  Skim each feature section. Use the textarea under each feature to leave feedback.
+  Tick one or more status boxes (Looks good / Needs edit / Confusing / Missing feature).
+  Your notes auto-save to the browser (no server). When done, scroll to the bottom and
+  click <em>Copy all feedback</em> to copy a clean text dump to the clipboard for sharing.
+</div>
+
+<!-- ============================ OVERVIEW ============================ -->
+
+<section class="overview" id="executive-overview">
+  <h2>Executive Overview</h2>
+  <p>
+    OIED is the brain layer that turns a flat opportunity feed into a prioritized,
+    lifecycle-aware, partner-aware action queue. It runs on top of Opportunity Pulse
+    and exposes a stable contract for an external Claude-based agent to consume.
+  </p>
+  <p>The nine versions delivered:</p>
+  <table>
+    <thead><tr><th>Version</th><th>Theme</th><th>What landed</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-v2">v1-v2</span></td><td>Foundations</td><td>My Opportunities, recommendation engine, fit/priority scoring, profile.</td></tr>
+      <tr><td><span class="badge badge-v3">v3</span></td><td>Revenue Intelligence</td><td>Bundles, bundle strategy/blueprint, win-probability, briefings, COLABERRY positioning, banned-term seed.</td></tr>
+      <tr><td><span class="badge badge-v5">v4</span></td><td>Autonomous Engine</td><td>Trigger engine, execution queue, ROI/hour ranking.</td></tr>
+      <tr><td><span class="badge badge-v5">v5</span></td><td>Revenue Velocity</td><td>Velocity panel, revenue dashboard, multi-tenant org isolation.</td></tr>
+      <tr><td><span class="badge badge-v6">v6</span></td><td>Monetization</td><td>Plan-tier billing, usage metering, plan-limit enforcement.</td></tr>
+      <tr><td><span class="badge badge-v7">v7</span></td><td>External AI Bridge</td><td>Standardized intelligence context envelope (schema_version=1), API-key auth path.</td></tr>
+      <tr><td><span class="badge badge-v7">v7.1</span></td><td>Lifecycle Integrity</td><td>Strict ordering generate → mark-submitted → responded → won/lost; LifecycleViolationError on out-of-order calls.</td></tr>
+      <tr><td><span class="badge badge-v8">v8</span></td><td>Grounded Generation</td><td>grounding.service (real procurement metadata) + approvedAssets (services/banned terms); MissingGroundingError 422; banned-term scrub on generated content.</td></tr>
+      <tr><td><span class="badge badge-v9">v9</span></td><td>Partner Mode</td><td>execution_mode classifier (direct_submit / partner_required / ignore); partner_profile sketch; find_partner / send_outreach action overrides for pre-draft opps.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="overview" id="system-map">
+  <h2>System Map</h2>
+  <p>Layers of OIED (top to bottom):</p>
+  <table>
+    <thead><tr><th>Layer</th><th>Where it lives</th><th>What it owns</th></tr></thead>
+    <tbody>
+      <tr><td>Bridge / API</td><td><code>backend/src/oied/oied.routes.js</code>, <code>intelligence.controller.js</code></td><td>HTTP surface, dual auth (JWT or API key), envelope wrapping.</td></tr>
+      <tr><td>Decision services</td><td><code>recommendation.service.js</code>, <code>executionMode.service.js</code> (v9), <code>winProb.service.js</code>, <code>effortEstimator.service.js</code></td><td>What to do next; how confident; how much effort.</td></tr>
+      <tr><td>Lifecycle &amp; events</td><td><code>events.service.js</code>, <code>actionGenerator.service.js</code></td><td>State machine: generate → review → submitted → responded → won/lost. Refuses out-of-order calls.</td></tr>
+      <tr><td>Grounding &amp; assets</td><td><code>grounding.service.js</code> (v8), <code>approvedAssets.service.js</code> (v8), <code>partner.service.js</code> (v9)</td><td>Real procurement metadata; allowed/banned terms; partner outreach drafting.</td></tr>
+      <tr><td>Aggregation</td><td><code>opportunityBundler.service.js</code>, <code>executionPlanner.service.js</code></td><td>Group similar opps; turn bundles into reusable products + execution plans.</td></tr>
+      <tr><td>Monetization &amp; ops</td><td><code>billing.service.js</code>, <code>velocity.service.js</code>, <code>briefing.service.js</code>, <code>triggerEngine.service.js</code></td><td>Plan limits, revenue motion, daily summary, scheduled actions.</td></tr>
+      <tr><td>Frontend</td><td><code>frontend/src/pages/*.jsx</code></td><td>Admin UI surfaces (the screenshots below).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ FEATURES ============================ -->
+
+<!-- 1. MY OPPORTUNITIES -->
+<section class="feature" id="f-my-opportunities">
+  <h2><span class="badge badge-v2">v2</span>1. My Opportunities</h2>
+
+  <h3>What this does</h3>
+  <p>
+    The personalized list of opportunities scored against Ali's profile (services, industries, past wins).
+    Each row carries a <code>priority_score</code>, <code>fit_score</code>, urgency, value, bucket
+    (act_now / quick_win / high_value / standard), and a recommended next action.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    First filter against the firehose. Without this, Ali would have to read every raw opportunity card and
+    re-decide fit on every visit. With it, he sees only opps the system thinks are worth his time, ranked.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Open the page; scan the top of the list (highest priority_score).</li>
+    <li>Click into any row to see grounding, execution_mode, recommended_action, and lifecycle state.</li>
+    <li>Use the action buttons (Generate Proposal, Mark Submitted, Mark Outcome) inline if the lifecycle stage allows.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/04-my-opportunities.png" alt="My Opportunities list">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> at least one opportunity row, each with priority_score and fit_score.</li>
+    <li><strong>Action:</strong> clicking a row navigates to <code>/admin/opportunities/:id</code>.</li>
+    <li><strong>Should NOT:</strong> show opportunities outside Ali's organization (multi-tenant isolation, v5).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="my-opportunities" placeholder="Notes on My Opportunities..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="my-opportunities">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 2. TOP ACTIONS -->
+<section class="feature" id="f-top-actions">
+  <h2><span class="badge badge-v2">v2</span><span class="badge badge-v9">v9</span>2. Top Actions / Recommendations</h2>
+
+  <h3>What this does</h3>
+  <p>
+    The shortlist (default 3, max 10). The recommendation engine ranks by
+    <code>recommendation_score = (value × win_probability / proposal_hours) × bucket_multiplier</code>
+    and surfaces the highest-ROI next moves. v9 layered on partner-mode awareness, so a row's
+    recommended_action may be <code>find_partner</code> or <code>send_outreach</code> instead of
+    <code>generate_proposal</code> when capability mismatch is detected.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    My Opportunities answers <em>what's relevant?</em> — Top Actions answers <em>what should I do today?</em>
+    It's the single page Ali should open first.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Open this page first thing each morning.</li>
+    <li>For each row read recommended_action and execution_mode together — they tell you whether to draft, partner, review, or wait.</li>
+    <li>Click an action button to advance state; OIED will refuse out-of-order calls (v7.1).</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/03-top-actions.png" alt="Top Actions">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> rows with reason, ROI/hour, recommended_action.</li>
+    <li><strong>Action:</strong> if <code>execution_mode=partner_required</code> appears, the row's recommended_action overrides to <code>find_partner</code> (or <code>send_outreach</code> if grounding is complete).</li>
+    <li><strong>Should NOT:</strong> show <code>generate_proposal</code> on a partner_required pre-draft opp (that would defeat v9).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="top-actions" placeholder="Notes on Top Actions..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="top-actions">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 3. EXECUTION QUEUE -->
+<section class="feature" id="f-execution-queue">
+  <h2><span class="badge badge-v5">v4</span>3. Execution Queue</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Lists generated drafts (proposals + strategies) ready for human action, sorted by
+    ROI/hour. Each row lets Ali approve, reject, or send the underlying output.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Closes the loop between AI drafting and human shipping. Without an execution queue, drafts
+    pile up invisibly in the database and never reach a buyer.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Filter by minRoi if needed; lower-ROI items can wait.</li>
+    <li>Click a row to open the draft for review.</li>
+    <li>Mark the output as approved or rejected; approved drafts unblock <code>mark-submitted</code>.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/05-execution-queue.png" alt="Execution Queue">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> drafts ranked by ROI/hour with title and lifecycle status.</li>
+    <li><strong>Action:</strong> approve/reject buttons mutate output status.</li>
+    <li><strong>Should NOT:</strong> show drafts for opportunities already past the lifecycle gate (won/lost).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="execution-queue" placeholder="Notes on Execution Queue..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="execution-queue">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 4. REVIEW QUEUE -->
+<section class="feature" id="f-review-queue">
+  <h2><span class="badge badge-v3">v3</span>4. Review Queue</h2>
+
+  <h3>What this does</h3>
+  <p>
+    The human-in-the-loop checkpoint. Every AI-generated proposal lands here in <code>status=draft</code>.
+    Ali approves, edits, or rejects before anything moves forward.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Ali stays in control. AI drafts; humans ship. The lifecycle state machine refuses to advance
+    a draft that has not been approved.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Open Review Queue; scan oldest-first to clear drafts.</li>
+    <li>Read each draft. If clean, mark approved. If issues, edit the content or mark rejected.</li>
+    <li>Approved drafts unlock <code>POST /opportunities/:id/mark-submitted</code> for after Ali submits externally.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/06-review-queue.png" alt="Review Queue">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> draft cards with title, generation timestamp, personalization_score, banned_terms_detected (v8).</li>
+    <li><strong>Action:</strong> approve / reject patches the output status.</li>
+    <li><strong>Should NOT:</strong> let Ali mark a draft as submitted from this page — that step belongs to <code>/mark-submitted</code> after the actual external send.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="review-queue" placeholder="Notes on Review Queue..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="review-queue">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 5. REVENUE DASHBOARD -->
+<section class="feature" id="f-revenue-dashboard">
+  <h2><span class="badge badge-v5">v5</span>5. Revenue Dashboard</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Aggregates pipeline value, win-rate, conversion stats, and the Velocity panel (v5).
+    Shows where the revenue motion is leaking and where it is converting.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    The single metrics page. Without it, Ali has no place to see whether OIED is actually moving the needle.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Open weekly to track win-rate and submission velocity.</li>
+    <li>Compare submitted vs. responded vs. won counts to spot the bottleneck.</li>
+    <li>Use the Velocity panel to see how long opps spend in each lifecycle stage.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/07-revenue-dashboard.png" alt="Revenue Dashboard">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> total pipeline value, win-rate %, recent submissions count.</li>
+    <li><strong>Action:</strong> drill-into-bucket links to filtered My Opportunities.</li>
+    <li><strong>Should NOT:</strong> conflate other organizations' data (multi-tenant isolation, v5).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="revenue-dashboard" placeholder="Notes on Revenue Dashboard..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="revenue-dashboard">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 6. DAILY BRIEFING -->
+<section class="feature" id="f-briefing">
+  <h2><span class="badge badge-v3">v3</span>6. Daily Briefing</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Generates Ali's morning briefing: top 3-5 actions, urgent deadlines, drafts awaiting review,
+    overdue outcomes. Can be emailed to Ram + Ali directly.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Ali doesn't have to remember to log in. The briefing arrives proactively and condenses the entire
+    OIED state into a 30-second read.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Read the briefing each morning.</li>
+    <li>Use it as the day's task list; click through to specific opps for action.</li>
+    <li>Adjust trigger schedule via Trigger Logs if the briefing cadence is wrong.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/08-briefing.png" alt="Daily Briefing">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> top-3 action list, urgent deadlines, draft count.</li>
+    <li><strong>Action:</strong> "Send briefing" button emails Ram + Ali via Mandrill.</li>
+    <li><strong>Should NOT:</strong> auto-send without explicit click (sending is human-gated).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="briefing" placeholder="Notes on Daily Briefing..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="briefing">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 7. TRIGGER LOGS -->
+<section class="feature" id="f-triggers">
+  <h2><span class="badge badge-v5">v4</span>7. Trigger Logs</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Shows when scheduled triggers fired (briefing send, weekly summary, bundle build),
+    what they ran on, and what happened. Admin-only.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Operational visibility into the autonomous scheduler. If a briefing didn't arrive,
+    this is where you find out why.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Check after a missed briefing or weekly summary.</li>
+    <li>Use the manual "Run triggers" button to fire them on-demand for testing.</li>
+    <li>Review error rows to spot integration failures (Mandrill outage, missing config, etc.).</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/09-trigger-logs.png" alt="Trigger Logs">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> chronological log of trigger runs with status (success / failure) and operation name.</li>
+    <li><strong>Action:</strong> manual run button (admin-gated).</li>
+    <li><strong>Should NOT:</strong> be visible to non-admin users.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="triggers" placeholder="Notes on Trigger Logs..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="triggers">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 8. PROFILE -->
+<section class="feature" id="f-profile">
+  <h2><span class="badge badge-v2">v2</span><span class="badge badge-v8">v8</span>8. Business / Organization Profile</h2>
+
+  <h3>What this does</h3>
+  <p>
+    The source of truth for Colaberry's services, industries, tools, past wins, min deal size,
+    and risk tolerance. v8 added approved-asset display names and a banned-terms list driven
+    off this profile.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Every recommendation, every generated proposal, every partner-mode decision keys off this profile.
+    Wrong profile in → wrong everything out.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Verify the service list reflects what Colaberry actually sells today.</li>
+    <li>Add past wins as they happen — empty <code>pastWins</code> means proposal generation has nothing to cite.</li>
+    <li>Update min deal size if the floor moves; opps below the floor are de-prioritized.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/10-profile.png" alt="Profile editor">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> editable form with services, industries, tools, pastWins, minDealSize, riskTolerance.</li>
+    <li><strong>Action:</strong> Save persists to <code>organization_profiles</code>; immediately reflected in next recommendation run.</li>
+    <li><strong>Should NOT:</strong> let one tenant edit another tenant's profile.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="profile" placeholder="Notes on Profile editor..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="profile">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 9. BUNDLES -->
+<section class="feature" id="f-bundles">
+  <h2><span class="badge badge-v3">v3</span>9. Bundles</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Auto-groups similar opportunities (same category + similar scope) into a single addressable
+    market. Bundles are the unit of "should we build a reusable system for this market?"
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    A single $500k waste-collection opp is a one-shot proposal. Twenty $500k waste opps are a
+    business line. Bundles let Ali see the second pattern.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Scan the bundle list ranked by total estimated value.</li>
+    <li>Open a bundle to see member opportunities, then expand strategy / blueprint / execution-plan disclosures.</li>
+    <li>Use bundle context to decide whether to invest in a reusable product vs. one-off proposals.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/11-bundles-list.png" alt="Bundles list">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> bundle cards with theme, member count, total value, strategic_type.</li>
+    <li><strong>Action:</strong> "Run bundler" admin button rebuilds the groupings from current opportunities.</li>
+    <li><strong>Should NOT:</strong> include opportunities from other tenants.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="bundles" placeholder="Notes on Bundles..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="bundles">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 10. BUNDLE STRATEGY -->
+<section class="feature" id="f-bundle-strategy">
+  <h2><span class="badge badge-v3">v3</span>10. Bundle Strategy</h2>
+
+  <h3>What this does</h3>
+  <p>
+    AI-generated strategy document for a bundle: target audience, what to build, why now,
+    differentiation. Generated via <code>POST /bundles/:id/strategy</code>.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Forces a clear "should we build this?" answer before any blueprint or execution work begins.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Pick the highest-value bundle.</li>
+    <li>Generate strategy; read the AI's case for/against building.</li>
+    <li>If approved, advance to Blueprint. If not, archive the bundle.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/12-bundle-strategy.png" alt="Bundle strategy expanded">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> structured strategy block with what_to_build, why_now, audience, differentiation.</li>
+    <li><strong>Action:</strong> Generate strategy (admin-gated); subsequent calls update.</li>
+    <li><strong>Should NOT:</strong> generate strategy on a bundle from another organization.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="bundle-strategy" placeholder="Notes on Bundle Strategy..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="bundle-strategy">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 11. BUNDLE BLUEPRINT -->
+<section class="feature" id="f-bundle-blueprint">
+  <h2><span class="badge badge-v3">v3</span>11. Bundle Blueprint</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Concrete product blueprint: MVP scope, tech stack, integrations, pricing model, GTM.
+    Generated via <code>POST /bundles/:id/blueprint</code> after strategy exists.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Bridges between "we should build this" (strategy) and "here is the work" (execution plan).
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Generate blueprint after approving the strategy.</li>
+    <li>Review the MVP scope — is it small enough to actually ship?</li>
+    <li>If yes, generate the execution plan. If no, ask for blueprint regeneration with tighter scope.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/13-bundle-blueprint.png" alt="Bundle blueprint expanded">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> mvp_scope, tech_stack, integrations, pricing_model, GTM motion.</li>
+    <li><strong>Action:</strong> Regenerate produces a new version (history preserved).</li>
+    <li><strong>Should NOT:</strong> generate before strategy exists (will refuse with a clear error).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="bundle-blueprint" placeholder="Notes on Bundle Blueprint..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="bundle-blueprint">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 12. BUNDLE EXECUTION PLAN -->
+<section class="feature" id="f-bundle-execution-plan">
+  <h2><span class="badge badge-v3">v3</span>12. Bundle Execution Plan</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Sprint-style task list derived from blueprint. Tasks have status (todo / in_progress / done),
+    estimated hours, and dependencies. Plan can be started, which changes its status to in_progress.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Connects intelligence to delivery. Without an execution plan, the blueprint is decoration.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Generate execution plan after blueprint approval.</li>
+    <li>Click "Start build" to flip plan to in_progress.</li>
+    <li>Track tasks through completion; final task closes the plan.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/14-bundle-execution-plan.png" alt="Bundle execution plan expanded">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> ordered task list with status, estimated_hours.</li>
+    <li><strong>Action:</strong> Start, complete-task, archive transitions.</li>
+    <li><strong>Should NOT:</strong> let tasks complete before all dependencies are done.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="bundle-execution-plan" placeholder="Notes on Bundle Execution Plan..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="bundle-execution-plan">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 13. EXTERNAL AI BRIDGE -->
+<section class="feature" id="f-bridge">
+  <h2><span class="badge badge-v7">v7</span>13. External AI Bridge API</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Stable read+action API for an external Claude-based agent to consume OIED. Same routes
+    accept either JWT (for the React app) or a single static API key
+    (<code>OIED_INTELLIGENCE_API_KEY</code>) for the agent.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Lets a separate AI orchestration layer drive OIED via stable URLs without owning the data model.
+    Schema versioning (<code>schema_version=1</code>) means the consumer can detect breaking changes.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Hand the API key to the consumer agent (kept in <code>.env.prod</code>, never in code).</li>
+    <li>Consumer agent calls <code>GET /api/v1/oied/recommendations</code> first thing each cycle.</li>
+    <li>Consumer respects <code>recommended_action</code> and lifecycle gates.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <p class="small">No UI page — the bridge is API-only. See section 24 below for the contract.</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible (in API responses):</strong> <code>context</code> envelope with schema_version + 9 standardized fields + grounding (v8) + execution_mode (v9).</li>
+    <li><strong>Action:</strong> bridge auth accepts both JWT and API key seamlessly.</li>
+    <li><strong>Should NOT:</strong> expose admin-write routes to the API key (briefing send, billing patch, trigger run remain JWT-only).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="bridge" placeholder="Notes on External AI Bridge..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="bridge">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 14. LIFECYCLE FLOW -->
+<section class="feature" id="f-lifecycle">
+  <h2><span class="badge badge-v7">v7.1</span>14. Lifecycle Flow</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Strict state machine across an opportunity's lifetime:
+    <code>generate → review_draft → mark_submitted → responded → won/lost</code>.
+    Every transition writes an <code>OpportunityEvent</code>. Out-of-order calls throw
+    <code>LifecycleViolationError</code> (HTTP 400, with <code>requires</code> field).
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Without strict ordering, the system can't tell "submitted but not responded" from
+    "responded but not closed", which corrupts win-rate stats and makes the briefing wrong.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Generate draft → review → after Ali externally submits, call <code>mark-submitted</code>.</li>
+    <li>When buyer acknowledges, call <code>mark-result {status: responded}</code>.</li>
+    <li>When outcome lands, call <code>mark-result {status: won|lost}</code>.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/17-opp-detail-grounding.png" alt="Lifecycle precedence — opp 11048">
+  <p class="small">Opp 11048 — has a draft, so v9's partner_required execution_mode does NOT override the recommended_action; lifecycle stays in charge (review_draft).</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> <code>recommended_action</code> reflects current lifecycle state.</li>
+    <li><strong>Action:</strong> calling <code>/generate</code> after <code>mark-submitted</code> returns 400 invalid_stage.</li>
+    <li><strong>Should NOT:</strong> let v9 override action when a draft already exists or any outcome is recorded.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="lifecycle" placeholder="Notes on Lifecycle Flow..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="lifecycle">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 15. GROUNDED PROPOSAL GENERATION -->
+<section class="feature" id="f-grounded">
+  <h2><span class="badge badge-v8">v8</span>15. Grounded Proposal Generation</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Before any AI call, OIED loads real procurement metadata (agency_name, solicitation_id,
+    scope_summary, submission_requirements) and embeds it in the system prompt. Missing fields
+    return 422 <code>needs_context</code> instead of generating an unmoored draft.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Pre-v8 drafts hallucinated agency names and invented solicitation IDs. v8 makes this
+    impossible — no grounding, no draft.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>If <code>POST /generate</code> returns 422, fix the underlying opportunity record (add agency, solicitation_id, or scope_summary).</li>
+    <li>Re-call generate; the resulting draft cites the agency + solicitation_id verbatim.</li>
+    <li>Verify <code>metadata.template_used = "proposal-v8"</code> on the output.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/17-opp-detail-grounding.png" alt="Grounded opp detail">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible (in API):</strong> <code>context.grounding = {agency_name, solicitation_id, missing_fields}</code>.</li>
+    <li><strong>Action:</strong> generate refuses (422) when missing_fields is non-empty.</li>
+    <li><strong>Should NOT:</strong> generate a draft without grounding even if profile is rich.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="grounded" placeholder="Notes on Grounded Proposal Generation..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="grounded">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 16. APPROVED ASSETS -->
+<section class="feature" id="f-approved-assets">
+  <h2><span class="badge badge-v8">v8</span>16. Approved Assets / Banned Terms Protection</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Every generated proposal is post-scanned against a banned-terms list
+    (<code>StaffMatch</code>, <code>OpsBot</code>, <code>leverage cutting-edge AI</code>,
+    <code>unlock value</code>, <code>synergy</code>). Hits land in
+    <code>metadata.banned_terms_detected[]</code> for the reviewer.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    gpt-4o-mini sometimes invents product names. v8 catches them deterministically before they
+    reach Ali's review queue, and signals which terms to fix before submission.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>In Review Queue, glance at the banned-terms badge.</li>
+    <li>If non-empty, edit the draft to remove or replace the term.</li>
+    <li>If a banned term is actually correct (e.g., a real product name was added to the catalog), update <code>BANNED_TERMS</code> in <code>approvedAssets.service.js</code>.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <p class="small">Visible in Review Queue under each draft card; see section 4 (Review Queue) screenshot.</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> banned-terms badge on draft card; empty array means clean.</li>
+    <li><strong>Action:</strong> <code>findBannedTerms()</code> case-insensitive substring scan.</li>
+    <li><strong>Should NOT:</strong> let banned-term content silently slip into the submitted version.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="approved-assets" placeholder="Notes on Approved Assets..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="approved-assets">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 17. PARTNER REQUIRED MODE -->
+<section class="feature" id="f-partner-mode">
+  <h2><span class="badge badge-v9">v9</span>17. Partner Required Execution Mode</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Classifies each opportunity into <code>direct_submit | partner_required | ignore</code>.
+    Operational-blocker keywords (waste collection, construction, transportation, field services,
+    physical infrastructure) signal that Colaberry can't deliver as prime; the opportunity routes
+    to a teaming-partner path with a partner_profile sketch (geography, size_band, industry,
+    capabilities_needed, colaberry_contribution, avoid).
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Pre-v9, OIED happily recommended proposal generation for opps Colaberry has zero realistic
+    chance of winning as prime. v9 stops Colaberry from chasing impossible bids and surfaces
+    a real strategic option (teaming).
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>For each opp, glance at <code>execution_mode</code>.</li>
+    <li><code>direct_submit</code> → proceed with proposal generation as normal.</li>
+    <li><code>partner_required</code> → use the partner_profile to identify a teaming prime; do not generate a prime proposal.</li>
+    <li><code>ignore</code> → skip; opportunity is outside Colaberry's reachable surface entirely.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/16-opp-detail-partner-required.png" alt="Partner required opp 13283">
+  <p class="small">Opp 13283 — Juab School District general contractor RFP. <code>execution_mode=partner_required</code>, <code>industry=construction</code>, <code>geography=Utah</code>, <code>outreach_ready=true</code>; <code>recommended_action=send_outreach</code>.</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> <code>context.execution_mode</code> + <code>context.partner_profile</code> on every opportunity context envelope.</li>
+    <li><strong>Action:</strong> for pre-draft opps, recommended_action overrides to <code>find_partner</code> or <code>send_outreach</code>.</li>
+    <li><strong>Should NOT:</strong> override action for opps already in lifecycle states (draft, approved, submitted, responded, won, lost).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="partner-mode" placeholder="Notes on Partner Required Mode..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="partner-mode">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 18. PARTNER OUTREACH FLOW -->
+<section class="feature" id="f-partner-outreach">
+  <h2><span class="badge badge-v9">v9</span>18. Partner Outreach Flow</h2>
+
+  <h3>What this does</h3>
+  <p>
+    Two endpoints help Ali act on a <code>partner_required</code> opportunity:
+    <code>POST /opportunities/:id/partner-search</code> returns the partner_profile (and an empty
+    candidates list — no partner registry yet); <code>POST /opportunities/:id/partner-outreach</code>
+    composes a markdown teaming-pitch draft for a human-named prime, with the agency + solicitation
+    grounding embedded and a banned-term scrub applied. Sending stays human-gated via accelerator-backend
+    Mandrill.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Closes the loop on partner-required opps: from "we shouldn't bid as prime" to
+    "here's the outreach pitch ready to send to a regional prime."
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>Use partner_profile to identify a candidate prime (Bonfire pre-qualified bidders are a good source).</li>
+    <li>Call <code>POST /partner-outreach</code> with the prime's name; receive a markdown draft.</li>
+    <li>Review the draft; send via the accelerator-backend Mandrill flow (separate path; human-gated).</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <p class="small">No UI page yet — endpoint-only. Outreach drafts are returned as markdown strings, ready to paste into a send script.</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible (in API):</strong> draft string with agency_name + solicitation_id + Colaberry's approved-service contribution.</li>
+    <li><strong>Action:</strong> banned-term scan applied to the draft (<code>banned_terms_detected</code> in response).</li>
+    <li><strong>Should NOT:</strong> send the email itself — sending is the human's deliberate next step.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="partner-outreach" placeholder="Notes on Partner Outreach..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="partner-outreach">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 19. DIRECT SUBMIT FLOW -->
+<section class="feature" id="f-direct-submit">
+  <h2><span class="badge badge-v9">v9</span>19. Direct Submit Flow</h2>
+
+  <h3>What this does</h3>
+  <p>
+    The default path for opportunities Colaberry can pursue as prime: <code>execution_mode=direct_submit</code>,
+    <code>recommended_action=generate_proposal</code>, normal lifecycle from there.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Most AI / IT services / data-analytics opportunities sit here. v9's purpose was not to disrupt
+    this path but to fence it off from inappropriate routings.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>For any <code>direct_submit</code> opp in Top Actions, click <code>Generate Proposal</code>.</li>
+    <li>Review the draft in Review Queue.</li>
+    <li>Externally submit; call <code>mark-submitted</code>; track outcome.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <img class="screenshot" src="oied-walkthrough-assets/15-opp-detail-direct-submit.png" alt="Direct submit opp 16645">
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> <code>execution_mode=direct_submit</code>, <code>partner_profile=null</code>.</li>
+    <li><strong>Action:</strong> recommended_action stays at <code>generate_proposal</code> (or whatever the lifecycle says).</li>
+    <li><strong>Should NOT:</strong> attach a partner_profile (no partner needed).</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="direct-submit" placeholder="Notes on Direct Submit..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="direct-submit">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<!-- 20. MARK OUTCOME FLOW -->
+<section class="feature" id="f-mark-outcome">
+  <h2><span class="badge badge-v7">v7.1</span>20. Mark Outcome Flow</h2>
+
+  <h3>What this does</h3>
+  <p>
+    After submission, Ali logs the buyer's response (<code>responded</code>) and the final outcome
+    (<code>won</code>, <code>lost</code>). Each call writes an <code>OpportunityEvent</code> and
+    feeds the win-probability calibration loop.
+  </p>
+
+  <h3>Why it matters</h3>
+  <p>
+    Outcomes are the only ground truth in the system. Without faithful logging, win-rate stats
+    drift, recommendations stop improving, and Ali stops trusting OIED.
+  </p>
+
+  <h3>How Ali should use it</h3>
+  <ol>
+    <li>When a buyer acknowledges receipt, call <code>POST /mark-result {status:"responded"}</code>.</li>
+    <li>When the outcome lands, call again with <code>{status:"won"}</code> or <code>{status:"lost"}</code>.</li>
+    <li>For stale submissions (>14 days no response), the recommended_action flips to <code>mark_outcome</code> as a nudge.</li>
+  </ol>
+
+  <h3>Screenshot</h3>
+  <p class="small">Visible inline on opportunity detail pages and in My Opportunities action buttons.</p>
+
+  <h3>Expected behavior</h3>
+  <ul>
+    <li><strong>Visible:</strong> recommended_action transitions <code>await_response → mark_outcome → archive_won/archive_lost</code>.</li>
+    <li><strong>Action:</strong> 4-event sequence (submitted → responded → won/lost) all gated by lifecycle ordering.</li>
+    <li><strong>Should NOT:</strong> let <code>mark-result {won}</code> succeed without a prior <code>responded</code> event.</li>
+  </ul>
+
+  <h3>Feedback</h3>
+  <textarea data-fb-id="mark-outcome" placeholder="Notes on Mark Outcome..."></textarea>
+
+  <h3>Status</h3>
+  <div class="status-row" data-status-id="mark-outcome">
+    <label><input type="checkbox" data-status="good"><span class="label-good">Looks good</span></label>
+    <label><input type="checkbox" data-status="edit"><span class="label-edit">Needs edit</span></label>
+    <label><input type="checkbox" data-status="confusing"><span class="label-confusing">Confusing</span></label>
+    <label><input type="checkbox" data-status="missing"><span class="label-missing">Missing feature</span></label>
+  </div>
+</section>
+
+<hr>
+
+<!-- ============================ END-TO-END USE CASES ============================ -->
+
+<h2 style="font-size:24px;">End-to-End Use Cases</h2>
+
+<section class="usecase" id="uc-direct">
+  <h2>A. Direct Submit Flow</h2>
+  <ol>
+    <li>Opportunity appears in Top Actions; <code>execution_mode=direct_submit</code>, <code>recommended_action=generate_proposal</code>.</li>
+    <li>Ali clicks Generate Proposal. Grounding gate runs (v8); if missing fields, returns 422; else AI drafts.</li>
+    <li>Draft lands in Review Queue with <code>banned_terms_detected[]</code>.</li>
+    <li>Ali reviews, edits if needed, marks approved.</li>
+    <li>Ali externally submits via the agency portal.</li>
+    <li>Ali calls <code>POST /mark-submitted</code>; lifecycle state advances.</li>
+    <li>Buyer responds → Ali calls <code>mark-result {responded}</code>.</li>
+    <li>Outcome lands → Ali calls <code>mark-result {won|lost}</code>; calibration loop updates future win_probability.</li>
+  </ol>
+  <h3>Feedback</h3>
+  <textarea data-fb-id="uc-direct" placeholder="Notes on Direct Submit Flow..."></textarea>
+</section>
+
+<section class="usecase" id="uc-partner">
+  <h2>B. Partner Required Flow</h2>
+  <ol>
+    <li>Opportunity is operational (waste / construction / transportation / field-services / physical-infrastructure scope).</li>
+    <li>v9 classifier sets <code>execution_mode=partner_required</code>; partner_profile sketch attaches (geography, size_band, industry, capabilities_needed, colaberry_contribution).</li>
+    <li>If grounding is complete: <code>recommended_action=send_outreach</code>. Else: <code>find_partner</code>.</li>
+    <li>Ali identifies a candidate prime (Bonfire pre-qualified bidder list, regional industry directory).</li>
+    <li>Ali calls <code>POST /partner-outreach {prime_name:"..."}</code>; receives a grounded markdown teaming-pitch draft.</li>
+    <li>Ali reviews the pitch; sends via accelerator-backend Mandrill (separate human-gated flow).</li>
+    <li>If prime accepts, Colaberry enters as a named subcontractor on the prime's bid response.</li>
+  </ol>
+  <h3>Feedback</h3>
+  <textarea data-fb-id="uc-partner" placeholder="Notes on Partner Required Flow..."></textarea>
+</section>
+
+<section class="usecase" id="uc-review">
+  <h2>C. Review Draft Flow</h2>
+  <ol>
+    <li>Draft exists in Review Queue (<code>status=draft</code>).</li>
+    <li><code>recommended_action=review_draft</code>; v9 partner-mode override does NOT fire (lifecycle precedence).</li>
+    <li>Ali reads the draft, checks <code>banned_terms_detected</code>, edits if needed.</li>
+    <li>If clean: mark approved. If broken: mark rejected (regenerate later with adjusted profile/grounding).</li>
+    <li>No further automation runs against this opp until review is resolved.</li>
+  </ol>
+  <h3>Feedback</h3>
+  <textarea data-fb-id="uc-review" placeholder="Notes on Review Draft Flow..."></textarea>
+</section>
+
+<section class="usecase" id="uc-outcome">
+  <h2>D. Outcome Tracking Flow</h2>
+  <ol>
+    <li>Ali calls <code>mark-submitted</code> after externally submitting.</li>
+    <li>Lifecycle: <code>recommended_action=await_response</code> for the next 14 days.</li>
+    <li>If &gt;14 days no response: action flips to <code>mark_outcome</code> as a nudge.</li>
+    <li>Buyer acknowledges → <code>mark-result {responded}</code>. Buyer decides → <code>mark-result {won|lost}</code>.</li>
+    <li>Outcome event feeds win-probability calibration: future similar opps get adjusted <code>win_probability</code>.</li>
+  </ol>
+  <h3>Feedback</h3>
+  <textarea data-fb-id="uc-outcome" placeholder="Notes on Outcome Tracking..."></textarea>
+</section>
+
+<section class="usecase" id="uc-bundle">
+  <h2>E. Bundle Build Flow</h2>
+  <ol>
+    <li>Auto-bundler groups similar opportunities (same category, similar scope) into a bundle.</li>
+    <li>Ali generates strategy via <code>POST /bundles/:id/strategy</code>; reviews target market + differentiation.</li>
+    <li>If strategy is sound, generate blueprint via <code>POST /bundles/:id/blueprint</code>; reviews MVP scope + tech stack.</li>
+    <li>If MVP scope is shippable, generate execution plan via <code>POST /bundles/:id/execution-plan</code>.</li>
+    <li>Click "Start build" to flip plan in_progress; track tasks through completion.</li>
+    <li>Bundle members benefit from the reusable system on subsequent bids.</li>
+  </ol>
+  <h3>Feedback</h3>
+  <textarea data-fb-id="uc-bundle" placeholder="Notes on Bundle Build Flow..."></textarea>
+</section>
+
+<hr>
+
+<!-- ============================ API CONTRACT ============================ -->
+
+<section class="api" id="bridge-contract">
+  <h2>External AI Bridge — API Contract</h2>
+
+  <p>
+    The companion Claude-based agent consumes OIED via stable HTTP routes. Contract snapshot below.
+    <strong>API key never appears in this document.</strong> Production key is held in
+    <code>.env.prod</code> on the production VPS only.
+  </p>
+
+  <h3>Auth</h3>
+<pre><code>Authorization: Bearer &lt;OIED_INTELLIGENCE_API_KEY — set in .env.prod, never committed&gt;</code></pre>
+
+  <h3>Source-of-truth rules (consumer agent)</h3>
+  <ul>
+    <li>OIED is the source of truth. The consumer agent must <strong>respect</strong> <code>recommended_action</code> on every row.</li>
+    <li>The consumer agent must <strong>not override</strong> lifecycle state. If <code>recommended_action=review_draft</code>, do not call <code>/generate</code> again.</li>
+    <li>The consumer agent must <strong>never</strong> call <code>/mark-submitted</code> unless a human actually submitted externally. <code>/mark-submitted</code> is a logging endpoint, not an action endpoint.</li>
+    <li>The consumer agent must check <code>execution_mode</code> before calling <code>/generate</code>. If <code>partner_required</code>, route to <code>/partner-outreach</code> instead.</li>
+    <li>The consumer agent must treat unknown <code>recommended_action</code> values as no-op. Future versions may add new enum members; old consumers must not crash.</li>
+  </ul>
+
+  <h3>Status codes the consumer agent must handle</h3>
+  <table>
+    <thead><tr><th>Status</th><th>Meaning</th><th>Body shape</th><th>Consumer behavior</th></tr></thead>
+    <tbody>
+      <tr><td>200</td><td>Success</td><td>standard envelope</td><td>proceed</td></tr>
+      <tr><td>400</td><td>Lifecycle violation</td><td><code>{requires, status:"invalid_stage"}</code></td><td>do not retry; fetch <code>/opportunities/:id</code> to learn current state</td></tr>
+      <tr><td>402</td><td>Plan limit exceeded</td><td><code>{tier, used, limit, metric}</code></td><td>halt this metric for the period; surface to user</td></tr>
+      <tr><td>422</td><td>Needs context (grounding)</td><td><code>{status:"needs_context", missing_fields:[...]}</code></td><td>do not retry blindly; surface missing fields to user</td></tr>
+      <tr><td>401</td><td>Auth failure</td><td>generic</td><td>fail-fast; do not retry without cred rotation</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Envelope shape</h3>
+<pre><code>{
+  "schema_version": 1,
+  "priority": 0-100,
+  "value": &lt;number&gt;,
+  "win_probability": 0.0-1.0,
+  "effort": { "proposal_hours": &lt;n&gt;, "build_days": &lt;n&gt;, "effort_score": &lt;n&gt; },
+  "roi_per_hour": &lt;number&gt;,
+  "recommended_action": "generate_proposal" | "review_draft" | "mark_submitted"
+                      | "await_response" | "mark_outcome" | "archive_won" | "archive_lost"
+                      | "skip" | "monitor" | "find_partner" | "send_outreach",
+  "reason": &lt;string&gt;,
+  "strategic_type": &lt;string&gt;,
+  "next_steps": [&lt;string&gt;, ...],
+  "organization_id": &lt;number&gt;,
+  "generated_at": &lt;ISO timestamp&gt;,
+
+  // v8 — single-row only (list rows skip the per-row DB hit):
+  "grounding": {
+    "agency_name": &lt;string|null&gt;,
+    "solicitation_id": &lt;string|null&gt;,
+    "missing_fields": [&lt;string&gt;, ...],
+    "status": "invalid_stage"?,        // present iff a terminal event blocks regen
+    "blocked_by_event": &lt;string|null&gt;
+  },
+
+  // v9 — present on all envelopes:
+  "execution_mode": "direct_submit" | "partner_required" | "ignore",
+  "partner_profile": null | {
+    "geography": &lt;string|null&gt;,
+    "size_band": "regional_small" | "regional_mid_market" | "any",
+    "industry": &lt;string&gt;,
+    "capabilities_needed": [&lt;string&gt;, ...],
+    "colaberry_contribution": [&lt;string&gt;, ...],
+    "avoid": [&lt;string&gt;, ...]
+  },
+  "outreach_ready": &lt;boolean&gt;
+}</code></pre>
+</section>
+
+<hr>
+
+<!-- ============================ FINAL FEEDBACK ============================ -->
+
+<section class="summary" id="final-feedback">
+  <h2>Final Feedback Summary</h2>
+  <p>
+    Anything that didn't fit in a per-feature box. Big-picture observations, missing features,
+    workflow concerns, naming preferences, priorities for v10.
+  </p>
+  <textarea data-fb-id="final" placeholder="Final summary feedback for Ali..." style="min-height:200px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background:#718096">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self:center"></span>
+  </div>
+
+  <p class="small" style="margin-top:18px">
+    <strong>How saving works:</strong> all textareas and checkboxes auto-save to your browser's
+    local storage as you type. They persist across reloads. Nothing is sent to any server.
+    To share feedback with the team, click <em>Copy all feedback</em> and paste the result into
+    a Slack/email/comment.
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  // localStorage persistence keyed by data-fb-id (textareas) and data-status-id (status rows).
+  var STORAGE_KEY = 'oied-walkthrough-feedback-v1';
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function save(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  var state = load();
+
+  // Restore textareas.
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() {
+      state[id] = t.value;
+      save(state);
+    });
+  });
+
+  // Restore status checkboxes.
+  document.querySelectorAll('div[data-status-id]').forEach(function(row) {
+    var id = row.getAttribute('data-status-id');
+    var key = 'status:' + id;
+    if (state[key] && typeof state[key] === 'object') {
+      row.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) {
+        var k = c.getAttribute('data-status');
+        if (state[key][k]) c.checked = true;
+      });
+    }
+    row.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) {
+      c.addEventListener('change', function() {
+        var statusObj = state[key] || {};
+        statusObj[c.getAttribute('data-status')] = c.checked;
+        state[key] = statusObj;
+        save(state);
+      });
+    });
+  });
+
+  // Copy all feedback.
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = [];
+    lines.push('# OIED Walkthrough — Ali Feedback Dump');
+    lines.push('Generated: ' + new Date().toISOString());
+    lines.push('');
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var statusRow = sec.querySelector('div[data-status-id]');
+      var fbId = fbTextarea && fbTextarea.getAttribute('data-fb-id');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      var statusId = statusRow && statusRow.getAttribute('data-status-id');
+      var ticked = [];
+      if (statusRow) {
+        statusRow.querySelectorAll('input[type=checkbox][data-status]:checked').forEach(function(c) {
+          ticked.push(c.getAttribute('data-status'));
+        });
+      }
+      if (fbVal || ticked.length > 0) {
+        lines.push('## ' + title);
+        if (ticked.length > 0) lines.push('Status: ' + ticked.join(', '));
+        if (fbVal) {
+          lines.push('');
+          lines.push(fbVal);
+        }
+        lines.push('');
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok');
+        btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() {
+          btn.classList.remove('ok');
+          btn.textContent = 'Copy all feedback to clipboard';
+        }, 4000);
+      }).catch(function() {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'Copied (legacy path)'; }
+      catch (e) { status.textContent = 'Copy failed — select all and copy manually'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  // Clear all (this browser only).
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback notes and status ticks in this browser?')) return;
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.querySelectorAll('input[type=checkbox][data-status]').forEach(function(c) { c.checked = false; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>

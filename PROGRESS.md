@@ -16,6 +16,18 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
   - Verification: section-count check (23 H1 headers in expected order); manual cross-section consistency check (Failure-First retries vs Stall infinite-retry-prohibited reconciled via explicit bounded backoff)
   - Notes: Created `PROGRESS.md` itself in the same session per the catch-up rule (Logging section). Prior commits (5d16d5c initial release through c3cc622 OIED v8) are not back-filled.
 
+## OIED documentation - feature walkthrough HTML for Ali
+
+- [x] Add docs/oied-feature-walkthrough.html: self-contained HTML walkthrough documenting v1-v9 features with embedded screenshots, per-feature feedback boxes, status checkboxes, end-to-end use-case flows, External AI Bridge contract, and localStorage-backed feedback persistence with copy-to-clipboard
+  - Date: 2026-05-06
+  - What changed: New `docs/oied-feature-walkthrough.html` (single self-contained file, embedded CSS, no CDN, sticky TOC, executive navy/white styling). 18 PNGs in `docs/oied-walkthrough-assets/` (17 captured pages + 1 final HTML render). New `backend/scripts/capture-oied-walkthrough.js` reuses the existing oied-strategy-screenshot.js login pattern to grab 12 routes + 3 single-opp detail fixtures (16645 direct_submit, 13283 partner_required + send_outreach, 11048 grounding + lifecycle precedence) + bundle disclosures. New `backend/scripts/validate-oied-walkthrough.js` opens the HTML in headless Chromium and asserts DOM counts.
+  - Verification: validation script run output --
+      Feature sections: 20, use-case sections: 5, textareas: 26, checkboxes: 80 (= 4 per feature x 20),
+      TOC links: 29, sections with id: 29, broken anchors: 0, failed image loads: 0, network broken images: 0,
+      final screenshot: docs/oied-walkthrough-assets/walkthrough-final.png (10371.4 KB),
+      AUDIT CLEAN
+  - Notes: Read-only browsing of prod for screenshot capture (no form submits / no POSTs). No real API key in the HTML -- placeholder only. localStorage persistence is per-browser, not server-backed; "Copy all feedback" generates a markdown dump for sharing.
+
 ## OIED v9 - partner-based execution mode (commits 62d9e57, 4c6d4de)
 
 - [x] Add execution_mode classifier + partner_profile + outreach_ready to the OIED context envelope; gate proposal-generation recommendations behind capability-fit so opportunities Colaberry can't deliver as prime route to a teaming-partner path instead
