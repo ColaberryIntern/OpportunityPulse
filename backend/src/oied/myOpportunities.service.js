@@ -73,12 +73,15 @@ async function listMyOpportunities({
     if (opp.type === 'bonfire_strategic') {
       const ai = opp.aiAnalysis || {};
       fit = Number(ai.fit_score || ai.strategic_score || opp.aiScore || 70);
-      // Honor the +5 boost / cap-at-95 we already baked into ai_score
-      // (the column is set by bonfireStrategicSync.shapeStrategicForOpportunity).
-      priorityScore = Number(opp.aiScore != null ? opp.aiScore : Math.min(95, fit + 5));
-      urgency = 65; // strategic clusters don't have a single close date
+      // Hard cap at 75 — strictly below act_now (>=80). Strategic rows
+      // always surface (they default into high_value when score >= 60)
+      // but never crowd the act_now top slots, which stay reserved for
+      // time-pressured individual opps. Mirrors the cap in
+      // bonfireStrategicSync.STRATEGIC_PRIORITY_CAP.
+      priorityScore = Math.min(75, Math.max(0, Number(ai.strategic_score || ai.fit_score || opp.aiScore || 60)));
+      urgency = 60; // never trigger urgency >= 90 act_now path either
       revenueVelocity = null;
-      bucket = ai.bucket || (priorityScore >= 80 ? 'high_value' : 'standard');
+      bucket = priorityScore >= 60 ? 'high_value' : 'standard';
       breakdown = {
         service_match: 25,        // strategic = "we built this for you"
         revenue_weight: 18,

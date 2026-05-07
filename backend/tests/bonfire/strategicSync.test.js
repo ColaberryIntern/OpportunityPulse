@@ -48,7 +48,7 @@ describe('strategicSync.shapeStrategicForOpportunity', () => {
     expect(out.category).toBe('Strategic Cluster');
     expect(out.status).toBe('active');
     expect(out.value).toBe(4_500_000);
-    expect(out.aiScore).toBe(80); // 75 + 5 boost, under 95 cap
+    expect(out.aiScore).toBe(75); // capped at 75 (strictly below act_now=80)
     expect(out.aiAnalysis.fit_score).toBe(75);
     expect(out.aiAnalysis.strategic_score).toBe(75);
     expect(out.aiAnalysis.source_opportunity_count).toBe(5);
@@ -61,17 +61,19 @@ describe('strategicSync.shapeStrategicForOpportunity', () => {
     expect(shapeStrategicForOpportunity(null)).toBeNull();
   });
 
-  it('priority boost is +5, capped at 95 (no overshadowing of individual rows)', () => {
-    expect(STRATEGIC_PRIORITY_BOOST).toBe(5);
-    expect(STRATEGIC_PRIORITY_CAP).toBe(95);
-    // strategicScore 50 -> aiScore 55
-    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 50, toJSON: undefined }).aiScore).toBe(55);
-    // strategicScore 95 -> aiScore 95 (capped, not 100)
-    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 95, toJSON: undefined }).aiScore).toBe(95);
-    // strategicScore 100 -> aiScore 95 (still capped)
-    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 100, toJSON: undefined }).aiScore).toBe(95);
-    // strategicScore 0 -> aiScore 5
-    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 0, toJSON: undefined }).aiScore).toBe(5);
+  it('priority cap is 75 (strictly below act_now=80, so strategic never crowds top slots)', () => {
+    expect(STRATEGIC_PRIORITY_BOOST).toBe(0);
+    expect(STRATEGIC_PRIORITY_CAP).toBe(75);
+    // strategicScore 50 -> aiScore 50 (no boost, under cap)
+    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 50, toJSON: undefined }).aiScore).toBe(50);
+    // strategicScore 75 -> aiScore 75 (at cap)
+    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 75, toJSON: undefined }).aiScore).toBe(75);
+    // strategicScore 95 -> aiScore 75 (capped down, never reaches act_now)
+    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 95, toJSON: undefined }).aiScore).toBe(75);
+    // strategicScore 100 -> aiScore 75 (still capped)
+    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 100, toJSON: undefined }).aiScore).toBe(75);
+    // strategicScore 0 -> aiScore 0
+    expect(shapeStrategicForOpportunity({ ...baseStrategic, strategicScore: 0, toJSON: undefined }).aiScore).toBe(0);
   });
 
   it('archived rows flip status=expired so they fall out of My Opportunities', () => {
@@ -128,12 +130,13 @@ describe('strategicSync.shapeStrategicForOpportunity', () => {
 });
 
 describe('strategicSync.deriveBucket', () => {
-  it('strategic_score >= 80 -> high_value', () => {
-    expect(deriveBucket(80)).toBe('high_value');
+  it('strategic_score >= 60 -> high_value (always visible in high_value strip)', () => {
+    expect(deriveBucket(60)).toBe('high_value');
+    expect(deriveBucket(75)).toBe('high_value');
     expect(deriveBucket(95)).toBe('high_value');
   });
-  it('strategic_score < 80 -> standard (do NOT flood act_now)', () => {
-    expect(deriveBucket(70)).toBe('standard');
+  it('strategic_score < 60 -> standard (low-confidence clusters do not crowd high_value)', () => {
+    expect(deriveBucket(59)).toBe('standard');
     expect(deriveBucket(0)).toBe('standard');
   });
   it('null/undefined -> standard', () => {

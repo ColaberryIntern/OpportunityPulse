@@ -19,21 +19,23 @@ const {
 } = require('../models');
 const { Op } = require('sequelize');
 
-// Score boost: small thumb on the scale, capped at 95. Strategic rows
-// inherit their strategic_score (already 0–100, computed by the
-// strategist) for fitScore; priorityScore gets a +5 bump to reflect that
-// synthesized clusters represent multiple underlying opps. Cap prevents
-// strategic rows from forcing every individual opp off the top of the list.
-const STRATEGIC_PRIORITY_BOOST = 5;
-const STRATEGIC_PRIORITY_CAP = 95;
+// No boost, hard cap at 75 (strictly below the act_now threshold of 80
+// in priorityScoring.service.bucketFor). This keeps strategic rows
+// visible (they always surface in the high_value strip when the
+// strategist scored them well) without ever crowding the act_now top
+// slots — those stay reserved for time-pressured individual opps.
+// "Strategically integrated, not overshadowing."
+const STRATEGIC_PRIORITY_BOOST = 0;
+const STRATEGIC_PRIORITY_CAP = 75;
 
 function deriveBucket(strategicScore) {
-  // Conservative bucketing — don't auto-mark all strategic rows as
-  // act_now (that crowds the My Opportunities act_now strip). High-
-  // strategic-score rows go to high_value; the rest stay standard.
+  // Match the cap above: strategic rows never enter act_now (>=80) by
+  // construction. high_value when scored at the upper end; standard
+  // otherwise. Bucket is computed at read time too, so this is the
+  // canonical mapping the read path mirrors.
   if (strategicScore == null) return 'standard';
   const s = Number(strategicScore);
-  if (s >= 80) return 'high_value';
+  if (s >= 60) return 'high_value';
   return 'standard';
 }
 
@@ -42,7 +44,7 @@ function shapeStrategicForOpportunity(strategicOpp) {
   const data = strategicOpp.toJSON ? strategicOpp.toJSON() : strategicOpp;
   const score = Number(data.strategicScore || 0);
   const fitScore = Math.max(0, Math.min(100, score));
-  const priorityScore = Math.min(STRATEGIC_PRIORITY_CAP, fitScore + STRATEGIC_PRIORITY_BOOST);
+  const priorityScore = Math.min(STRATEGIC_PRIORITY_CAP, Math.max(0, fitScore + STRATEGIC_PRIORITY_BOOST));
 
   // Pull a USD value from the money jsonb. The strategist writes:
   //   cluster_total_usd       — total $ across all opps in the cluster
