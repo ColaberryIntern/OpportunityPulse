@@ -173,17 +173,17 @@ function MyOpportunitiesPage() {
   const [minScore, setMinScore] = useState('');
   const [detailOppId, setDetailOppId] = useState(null);
 
-  // v9.4: channel filter is enforced at the SQL level by the backend.
-  // The frontend just passes ?channel=<key> to /opportunities/my and
-  // gets back rows pre-filtered to that channel's types. The deeper
-  // candidate pool when a channel is active is also handled server-side.
-  const fetchSize = channelFromUrl ? 500 : pageSize;
-
+  // Always request ONE page at a time (pageSize rows). The backend
+  // pulls a wider candidate pool internally for channel-filtered
+  // queries, scores them, sorts, and returns only the page slice.
+  // Bumping fetchSize on the client made the controller call
+  // attachContextToOpportunity 500 times per request — 1000 parallel
+  // DB lookups, blew past nginx 60s timeout on every channel filter.
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const params = { limit: fetchSize, offset: channelFromUrl ? 0 : (page - 1) * pageSize };
+      const params = { limit: pageSize, offset: (page - 1) * pageSize };
       if (minScore) params.minScore = minScore;
       if (channelFromUrl) params.channel = channelFromUrl;
       if (sortFromUrl && sortFromUrl !== 'priority') params.sort = sortFromUrl;
@@ -195,7 +195,7 @@ function MyOpportunitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl, fetchSize]);
+  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl]);
 
   useEffect(() => { load(); }, [load]);
 

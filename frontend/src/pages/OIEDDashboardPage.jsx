@@ -6,7 +6,7 @@
 //
 // All data sources already exist; no new endpoints required.
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getRecommendations,
@@ -17,6 +17,13 @@ import {
 } from '../services/oiedService';
 import ChannelOverview from '../components/oied/ChannelOverview';
 import ChannelChip from '../components/oied/ChannelChip';
+// Round-3 merge: bring the legacy /dashboard widgets into Mission
+// Control so this is the single landing page Ali asked for.
+import OpportunityChart from '../components/dashboard/OpportunityChart';
+import TrendCard from '../components/dashboard/TrendCard';
+import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
+import ToolMomentumBoard from '../components/dashboard/ToolMomentumBoard';
+import dashboardService from '../services/dashboardService';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -136,6 +143,33 @@ export default function OIEDDashboardPage() {
   const [partnerOpps, setPartnerOpps] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  // Round-3 merge: legacy dashboard data sources.
+  const [chartData, setChartData] = useState(null);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [chartPeriod, setChartPeriod] = useState('30d');
+  const [trends, setTrends] = useState(null);
+
+  const loadChart = useCallback(async (period) => {
+    setChartLoading(true);
+    try {
+      const res = await dashboardService.getChartData({ period });
+      setChartData(res?.data?.data?.chartData || null);
+    } catch {
+      setChartData(null);
+    } finally {
+      setChartLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadChart(chartPeriod); }, [chartPeriod, loadChart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    dashboardService.getTrendSummary()
+      .then((r) => { if (!cancelled) setTrends((r?.data?.data?.trends) || null); })
+      .catch(() => { if (!cancelled) setTrends(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,6 +322,42 @@ export default function OIEDDashboardPage() {
       </h2>
       <div className="mb-8">
         <ChannelOverview />
+      </div>
+
+      {/* OPPORTUNITY TRENDS CHART */}
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        Opportunity Trends
+      </h2>
+      <div className="mb-8">
+        <OpportunityChart
+          chartData={chartData}
+          loading={chartLoading}
+          onPeriodChange={setChartPeriod}
+        />
+      </div>
+
+      {/* AI TOOLS / MOMENTUM */}
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        Trending tools &amp; momentum
+      </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <AiToolTrendingWidget />
+        <ToolMomentumBoard />
+      </div>
+
+      {/* MARKET TRENDS */}
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        Market Trends
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <TrendCard type="gov_contract" trendData={trends?.gov_contract} />
+        <TrendCard type="ai_job"       trendData={trends?.ai_job} />
+        <TrendCard type="investment"   trendData={trends?.investment} />
+        <TrendCard type="grant"        trendData={trends?.grant} />
+        <TrendCard type="ai_news"      trendData={trends?.ai_news} />
+        <TrendCard type="freelance"    trendData={trends?.freelance} />
+        <TrendCard type="bonfire"            trendData={trends?.bonfire} />
+        <TrendCard type="bonfire_strategic"  trendData={trends?.bonfire_strategic} />
       </div>
 
       {/* QUICK NAV */}

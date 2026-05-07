@@ -7,6 +7,8 @@ const TYPE_LABELS = {
   grant: '\u{1F393} Grants',
   ai_news: '\u{1F4F0} AI News',
   freelance: '\u{1F680} Freelance',
+  bonfire: '\u{1F525} Bonfire',
+  bonfire_strategic: '\u{1F3AF} Strategic Patterns',
 };
 
 function TrendCard({ type, trendData, variant = 'default' }) {

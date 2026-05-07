@@ -74,13 +74,12 @@ async function getTopActions(userId, {
 } = {}) {
   const orgId = organizationId || (await profileSvc.resolveOrgId(userId));
 
-  // Pull a deeper pool than we need so the strategic-cluster filter
-  // below doesn't starve us of actionable individual rows. Strategic
-  // rows surface high in My Opps' priority sort (capped at 75 + fit
-  // 85), so a shallow pool would consist mostly of clusters and the
-  // filter would empty it.
+  // Strategic clusters are now bucketed separately on My Opps (their
+  // own 'strategic_pattern' bucket). They no longer dominate the top
+  // priority slice, so a smaller pool is fine. 250-row pulls were
+  // hitting nginx 60s timeout on the recommendations endpoint.
   const { rows: allRows } = await myOppsSvc.listMyOpportunities({
-    userId, organizationId: orgId, limit: 250, offset: 0,
+    userId, organizationId: orgId, limit: 50, offset: 0,
   });
   // Exclude Bonfire strategic clusters from Top Actions — clusters are
   // patterns to consider, not atomic actions Ali should "do today".
