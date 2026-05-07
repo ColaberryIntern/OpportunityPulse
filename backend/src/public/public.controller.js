@@ -77,7 +77,7 @@ async function getFeed(req, res, next) {
     // Map raw types to strategic navigation groups
     const TYPE_TO_GROUP = {
       gov_contract: 'Government', grant: 'Government',
-      ai_news: 'Private Sector',
+      ai_news: 'News',
       ai_job: 'Talent',
       investment: 'Capital',
       freelance: 'Freelance',

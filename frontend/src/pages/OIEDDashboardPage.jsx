@@ -554,7 +554,7 @@ export default function OIEDDashboardPage() {
           { c: bonfireCh,   label: 'Bonfire' },
           { c: govCh,       label: 'Government' },
           { c: talentCh,    label: 'Talent' },
-          { c: psCh,        label: 'Private Sector' },
+          { c: psCh,        label: 'News' },
           { c: flCh,        label: 'Freelance' },
           { c: capCh,       label: 'Capital' },
         ].map((row, i) => (

@@ -17,7 +17,7 @@ const CHANNEL_OPTIONS = [
   { key: 'bonfire',        label: '🔥 Bonfire' },
   { key: 'government',     label: '🏛 Government' },
   { key: 'talent',         label: '👥 Talent' },
-  { key: 'private-sector', label: '🧠 Private Sector' },
+  { key: 'private-sector', label: '🧠 News' },
   { key: 'freelance',      label: '💼 Freelance' },
   { key: 'capital',        label: '💰 Capital' },
 ];

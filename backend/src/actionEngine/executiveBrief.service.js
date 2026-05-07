@@ -481,7 +481,7 @@ async function generateSectionBrief(section, userCtx = null) {
       talent: 'AI Job Market',
       freelance: 'Freelance Projects',
       capital: 'Investment & Funding',
-      'private-sector': 'Private Sector & AI News',
+      'private-sector': 'News',
       alpha: 'Alpha (High-Demand Low-Competition)',
       all: 'All Opportunities',
     }[section] || section;

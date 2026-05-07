@@ -99,7 +99,7 @@ function Sidebar({ open, onClose }) {
         { to: '/admin/opportunities/my?channel=bonfire',        label: '🔥 Bonfire',             icon: ICON.list },
         { to: '/admin/opportunities/my?channel=government',     label: '🏛 Government',          icon: ICON.list },
         { to: '/admin/opportunities/my?channel=talent',         label: '👥 Talent',              icon: ICON.list },
-        { to: '/admin/opportunities/my?channel=private-sector', label: '🧠 Private Sector',      icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=private-sector', label: '🧠 News',                icon: ICON.list },
         { to: '/admin/opportunities/my?channel=freelance',      label: '💼 Freelance',           icon: ICON.list },
         { to: '/admin/opportunities/my?channel=capital',        label: '💰 Capital',             icon: ICON.list },
       ],

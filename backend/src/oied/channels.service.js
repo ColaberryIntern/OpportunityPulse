@@ -48,7 +48,7 @@ const CHANNELS = [
   },
   {
     key: 'private-sector',
-    label: 'Private Sector',
+    label: 'News',
     icon: '🧠',
     color: 'gray',
     types: ['ai_news'],
