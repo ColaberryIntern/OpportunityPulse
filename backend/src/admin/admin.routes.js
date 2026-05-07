@@ -1,12 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('./admin.controller');
+const dataSourceHealth = require('./dataSourceHealth.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
 const { ROLES } = require('../config/constants');
 
 // All admin routes require authentication + admin role
 router.use(verifyToken, checkPermissions(ROLES.ADMIN));
+
+// v9.9: Data Source Health page — lists every ingestion source with
+// last-run + recent counts + trend + derived status (failing / stale /
+// zero_yield / healthy / disabled). Plus an on-demand "Run now" trigger.
+router.get('/data-sources/health',     dataSourceHealth.getDataSourcesHealth);
+router.post('/data-sources/:name/run', dataSourceHealth.runDataSource);
 
 /**
  * @swagger

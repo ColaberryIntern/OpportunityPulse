@@ -38,6 +38,7 @@ import BundlesPage from './pages/BundlesPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import BriefingPage from './pages/BriefingPage';
 import TriggerLogsPage from './pages/TriggerLogsPage';
+import DataSourceHealthPage from './pages/DataSourceHealthPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OIEDDashboardPage from './pages/OIEDDashboardPage';
@@ -402,6 +403,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <TriggerLogsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/data-sources"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <DataSourceHealthPage />
             </ProtectedLayout>
           }
         />

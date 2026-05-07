@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## OIED v9.9 — Data Source Health page
+
+- [x] New ops page surfacing every ingestion data source with derived status (healthy / stale / zero_yield / failing / disabled), last-run details, recent created-row totals, 14-day sparkline, and a "Run now" trigger. Solves the silent-stall blind spot that left the capital channel dead for 80 days before anyone noticed.
+  - Date: 2026-05-07
+  - What changed: New backend controller `admin/dataSourceHealth.controller.js` with two endpoints (`GET /api/v1/admin/data-sources/health`, `POST /api/v1/admin/data-sources/:name/run`). Status derivation: `disabled` (flag off), `failing` (last run failed OR 2 of last 3 runs had errors[]), `stale` (no successful run in >48h), `zero_yield` (3+ successful runs in a row with recordsCreated=0), `healthy`. Rolls up `rows_24h` / `rows_7d` / `rows_30d` from `ingestion_logs` and pads a `trend_14d` array zero-filled per day. Source → channel mapping derived live from `Opportunity` group-by on (type, source). Next-run time computed from `INGESTION_SCHEDULE` env via a small inline cron-next-fire scanner (handles `*`, lists, ranges, steps — no new dependency). New frontend page `pages/DataSourceHealthPage.jsx` with status pills, 14-day inline-SVG sparklines, expandable error details, "Run now" buttons, summary cards (failing / stale / zero_yield / healthy / disabled), and a 60-second auto-refresh. Sidebar entry **🩺 Source Health** under Operate. Mounted at `/admin/data-sources`, admin-only.
+  - Verification: 14 new unit tests in `tests/admin/dataSourceHealth.test.js` (status derivation: 8 cases; nextCronFire: 6 cases). Full backend suite 106 suites / 1320 tests pass. Backend + frontend syntax-checked. Smoke verified after deploy: page renders, identifies the just-fixed funding_news source as healthy with 26 rows in last 24h, sparkline shows the spike on 2026-05-07.
+  - Notes: Re-uses existing `IngestionLog` model — no schema migration. Re-uses `runIngestion()` for the manual trigger, gated through admin RBAC. Auto-refresh interval is 60s — light enough to leave the page open during a deploy and watch for green/red flips.
+
 ## OIED v9.8.2 — Type-aware action gating + resume generation + capital feed fix
 
 - [x] Three changes from Ali's round-3 walkthrough: (a) hide Generate Proposal / Generate Offer on rows where they make no sense (News, Capital — they're informational/research, not bidable); (b) replace those buttons with "Tailor Resume" on Talent rows so the Pursue action is to apply for the job, not bid on it; (c) capital channel had been silently stalled since 2026-02-18 because the TechCrunch `/category/fundraise/feed/` URL started returning 404 — swapped feed list and updated the prod DataSource row.
