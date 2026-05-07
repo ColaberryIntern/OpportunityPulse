@@ -156,11 +156,14 @@ function MyOpportunitiesPage() {
 
   // Group by bucket — OIED v2 surfaces "Act Now / High Value / Quick Wins"
   // sections at the top so admins triage the most important rows first.
+  // v9.2 added strategic_pattern for synthesized Bonfire clusters: they
+  // get their own strip so they don't crowd out high_value individuals.
   const grouped = {
-    act_now:    rows.filter((r) => r.bucket === 'act_now'),
-    high_value: rows.filter((r) => r.bucket === 'high_value'),
-    quick_win:  rows.filter((r) => r.bucket === 'quick_win'),
-    standard:   rows.filter((r) => !r.bucket || r.bucket === 'standard'),
+    act_now:           rows.filter((r) => r.bucket === 'act_now'),
+    high_value:        rows.filter((r) => r.bucket === 'high_value'),
+    quick_win:         rows.filter((r) => r.bucket === 'quick_win'),
+    strategic_pattern: rows.filter((r) => r.bucket === 'strategic_pattern'),
+    standard:          rows.filter((r) => !r.bucket || r.bucket === 'standard'),
   };
 
   return (
@@ -249,6 +252,14 @@ function MyOpportunitiesPage() {
               hint="High ease + automation, closes within 30 days."
               rows={grouped.quick_win}
               testId="bucket-quick-wins"
+              onOpenDetail={setDetailOppId}
+            />
+            <BucketSection
+              title="🎯 Strategic Patterns"
+              tone="blue"
+              hint="Synthesized Bonfire clusters — productize across opps, not bid as one."
+              rows={grouped.strategic_pattern}
+              testId="bucket-strategic-pattern"
               onOpenDetail={setDetailOppId}
             />
 

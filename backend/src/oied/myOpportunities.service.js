@@ -81,7 +81,11 @@ async function listMyOpportunities({
       priorityScore = Math.min(75, Math.max(0, Number(ai.strategic_score || ai.fit_score || opp.aiScore || 60)));
       urgency = 60; // never trigger urgency >= 90 act_now path either
       revenueVelocity = null;
-      bucket = priorityScore >= 60 ? 'high_value' : 'standard';
+      // Strategic clusters get their own bucket so they appear in a
+      // dedicated "Strategic Patterns" strip, not competing with
+      // individual rows for high_value's slots. Per Ali's ask:
+      // "strategically integrated, not overshadowing".
+      bucket = 'strategic_pattern';
       breakdown = {
         service_match: 25,        // strategic = "we built this for you"
         revenue_weight: 18,
