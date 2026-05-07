@@ -13,29 +13,27 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getKeywordCloud } from '../../services/oiedService';
 
-// Continuous color from a [-1, +1] sentiment score, with dramatic
-// separation between bands so weak vs strong is unmistakable at a glance.
+// v9.8: pure red→green gradient. Hue 0 (red) → 120 (green). No olive
+// midpoint. Gray for words with no sentiment-bearing source so users
+// can see at a glance which words are "uninformative" vs "neutral but
+// known." Lightness shifts with magnitude so strong opinions read
+// darker/richer than weak ones.
 //
-//   score | swatch
-//   -1.0  | bright red       hsl(  0, 95%, 46%)
-//   -0.5  | orange-red       hsl( 35, 82%, 42%)
-//    0.0  | mustard / olive  hsl( 70, 70%, 38%)
-//   +0.5  | deep green       hsl(105, 82%, 28%)
-//   +1.0  | forest green     hsl(140, 95%, 24%)
-//
-// Hue spans 0→140 (red through forest green). Lightness shifts WITH the
-// score so positives are visibly darker/richer than neutrals (and
-// neutrals are mid-tone, not blending into the page). Saturation is
-// always high so colors read crisply.
-function colorForSentiment(score) {
+//   isKnown=false  → hsl(0, 0%, 60%)   gray
+//   score = -1.0   → hsl(0, 80%, 38%)  bright red
+//   score = -0.5   → hsl(0, 70%, 46%)  red
+//   score =  0.0   → hsl(60, 65%, 42%) gold (between red and green)
+//   score = +0.5   → hsl(120, 70%, 32%) green
+//   score = +1.0   → hsl(120, 80%, 26%) deep green
+function colorForSentiment(score, isKnown = true) {
+  if (!isKnown) return 'hsl(0, 0%, 60%)';
   const s = Math.max(-1, Math.min(1, Number(score) || 0));
-  const hue = Math.round(70 + 70 * s);
-  const sat = Math.round(70 + Math.abs(s) * 25);
-  // Positives darken (24–32%); negatives lighten (38–46%) — opposite
-  // ends of the lightness scale to maximize visual separation.
-  const light = s > 0
-    ? Math.round(32 - 8 * s)
-    : Math.round(38 + 8 * Math.abs(s));
+  // Linear hue from 0 (red) at -1 through 60 (gold) at 0 to 120 (green) at +1.
+  const hue = Math.round(60 + 60 * s);
+  // Saturation grows with |s| so weak signals look softer.
+  const sat = Math.round(55 + Math.abs(s) * 30);
+  // Strong polarity = darker; near-neutral = a touch lighter.
+  const light = Math.round(46 - Math.abs(s) * 14);
   return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
@@ -114,18 +112,18 @@ export default function KeywordCloud() {
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
         Pulled from news titles, industry categories, AI tools, and titles across all 7 channels.
-        Size = how often it appears · Color = sentiment gradient (
-        <span style={{ color: colorForSentiment(-0.7) }}>strongly negative</span>
+        Size = how often it appears · Color = sentiment from news mentions: (
+        <span style={{ color: colorForSentiment(-1, true) }}>strongly negative</span>
         ,{' '}
-        <span style={{ color: colorForSentiment(-0.2) }}>negative</span>
+        <span style={{ color: colorForSentiment(-0.4, true) }}>negative</span>
         ,{' '}
-        <span style={{ color: colorForSentiment(0) }}>neutral</span>
+        <span style={{ color: colorForSentiment(0.4, true) }}>positive</span>
         ,{' '}
-        <span style={{ color: colorForSentiment(0.2) }}>positive</span>
+        <span style={{ color: colorForSentiment(1, true) }}>strongly positive</span>
         ,{' '}
-        <span style={{ color: colorForSentiment(0.7) }}>strongly positive</span>
-        ) · Tilt = age (level = today, more rotated = older) · Click any word to see every channel
-        match for it.
+        <span style={{ color: colorForSentiment(0, false) }}>no news signal</span>
+        ) · Tilt = age (level = today, more rotated = older) · Click any word to drill into every
+        channel match.
       </p>
 
       {loading ? (
@@ -139,7 +137,8 @@ export default function KeywordCloud() {
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 leading-tight">
           {words.map((w, i) => {
-            const color = colorForSentiment(w.sentiment_score);
+            const known = w.sentiment_known !== false && w.sentiment_label !== 'unknown';
+            const color = colorForSentiment(w.sentiment_score, known);
             const fontSize = countToFontSize(w.count, maxCount);
             const tilt = ageToTilt(w.avg_age_days, i);
             const channelHint = ChannelAttributionTooltip({ channels: w.channels });

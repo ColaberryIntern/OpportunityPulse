@@ -204,3 +204,10 @@ export async function getRelatedTools(q, max = 10) {
   const res = await api.get(`${base}/keywords/related-tools`, { params: { q, max } });
   return res.data?.data || { tools: [], count: 0 };
 }
+
+// ---- v9.8: Drill-down sub-cloud for a specific keyword -----------------------
+export async function getDrillDownCloud(q, max = 30) {
+  if (!q) return { words: [], article_count: 0, q: [] };
+  const res = await api.get(`${base}/keywords/drill`, { params: { q, max } });
+  return res.data?.data || { words: [], article_count: 0, q: [] };
+}

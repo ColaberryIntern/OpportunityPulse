@@ -27,6 +27,7 @@ router.get('/revenue',                  BRIDGE, intel.getRevenueAlias);
 router.get('/channels/summary',         BRIDGE, intel.getChannelsSummary);
 router.get('/news/word-cloud',          BRIDGE, intel.getNewsWordCloudHandler);
 router.get('/keywords/cloud',           BRIDGE, intel.getKeywordCloudHandler);
+router.get('/keywords/drill',           BRIDGE, intel.getDrillDownCloudHandler);
 router.get('/keywords/related-tools',   BRIDGE, intel.getRelatedToolsHandler);
 router.post(
   '/keywords/recompute',

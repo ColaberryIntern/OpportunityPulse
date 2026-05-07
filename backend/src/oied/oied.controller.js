@@ -29,7 +29,7 @@ function handlePlanLimit(res, e) {
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
   try {
-    const { rows, total, profileWasDefault, organizationId } = await myOpps.listMyOpportunities({
+    const { rows, total, profileWasDefault, organizationId, channelBuckets } = await myOpps.listMyOpportunities({
       limit: req.query.limit,
       offset: req.query.offset,
       type: req.query.type,
@@ -54,6 +54,7 @@ async function listMy(req, res) {
       limit: Number(req.query.limit) || 50,
       offset: Number(req.query.offset) || 0,
       profileWasDefault,
+      channelBuckets: channelBuckets || null,
     });
   } catch (e) {
     logger.error('OIED listMy failed', { error: e.message });

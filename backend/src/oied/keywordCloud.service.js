@@ -65,16 +65,26 @@ function labelForScore(s) {
   return 'very_positive';
 }
 
-// Aggregate state per word.
+// Aggregate state per word. v9.8: sentSum and sentCount are separate so
+// the average is taken over sentiment-BEARING samples only. Previously
+// non-news sources passed sentiment=0 placeholders that diluted the
+// score toward 0 and made every word look olive in the cloud. Now a
+// word only contributes to sentiment if its source emitted a real
+// sentiment signal (news titles, tool sentiment_score). All other
+// sources (categories, channel titles, opp titles) bump count + age
+// but do NOT touch sentiment math.
 function newEntry() {
-  return { count: 0, sentSum: 0, ageSum: 0, channelCounts: new Map() };
+  return { count: 0, sentSum: 0, sentCount: 0, ageSum: 0, channelCounts: new Map() };
 }
 
 function addOccurrence(stats, word, { sentiment, ageDays, channelKey, weight = 1 }) {
   let e = stats.get(word);
   if (!e) { e = newEntry(); stats.set(word, e); }
   e.count += weight;
-  if (sentiment != null) e.sentSum += sentiment * weight;
+  if (sentiment != null) {
+    e.sentSum += sentiment * weight;
+    e.sentCount += weight;
+  }
   if (ageDays != null) e.ageSum += ageDays * weight;
   if (channelKey) {
     e.channelCounts.set(channelKey, (e.channelCounts.get(channelKey) || 0) + weight);
@@ -132,8 +142,10 @@ async function getKeywordCloud({
       const tok = phraseToken(data.category);
       if (!tok) continue;
       const ageDays = Math.max(0, (nowMs - new Date(data.createdAt).getTime()) / 86_400_000);
+      // News categories are descriptive, not sentiment-bearing — leave
+      // sentiment unset so the source doesn't dilute the news-derived score.
       addOccurrence(stats, tok, {
-        sentiment: 0, ageDays, channelKey: 'private-sector', weight: 2,
+        sentiment: null, ageDays, channelKey: 'private-sector', weight: 2,
       });
     }
   }
@@ -163,7 +175,7 @@ async function getKeywordCloud({
       const tokens = Array.from(new Set(newsWordCloudSvc.tokenize(data.title)));
       for (const tok of tokens) {
         addOccurrence(stats, tok, {
-          sentiment: 0, ageDays, channelKey, weight: 1,
+          sentiment: null, ageDays, channelKey, weight: 1,
         });
       }
     }
@@ -184,7 +196,7 @@ async function getKeywordCloud({
       const channelKey = channelsSvc.getChannelKey(data);
       const ageDays = Math.max(0, (nowMs - new Date(data.createdAt).getTime()) / 86_400_000);
       addOccurrence(stats, tok, {
-        sentiment: 0, ageDays, channelKey, weight: 2,
+        sentiment: null, ageDays, channelKey, weight: 2,
       });
     }
   }
@@ -200,25 +212,27 @@ async function getKeywordCloud({
       });
       for (const t of tools) {
         const data = t.toJSON ? t.toJSON() : t;
-        // Tool name as a single phrase token.
+        // Tool name as a single phrase token. v9.8: only contribute
+        // sentiment when the AiTool row has a real score — no synthetic
+        // "+0.2 because tools are usually positive" fallback.
         const nameTok = phraseToken(data.name);
         if (nameTok) {
           const sent = data.sentimentScore != null
             ? Math.max(-1, Math.min(1, Number(data.sentimentScore)))
-            : 0.2; // tools are usually mentioned positively
-          // Mentions in last 7d as a proxy weight; floor at 1.
+            : null;
           const w = Math.max(1, Math.min(8, Math.round(Number(data.mentionCount7d) || 1)));
           addOccurrence(stats, nameTok, {
             sentiment: sent, ageDays: 3, channelKey: null, weight: w,
           });
         }
         // Tag tokens (phrase-level since tags are short curated phrases).
+        // Tags are descriptive labels — not sentiment-bearing.
         if (Array.isArray(data.tags)) {
           for (const tag of data.tags) {
             const tagTok = phraseToken(tag);
             if (tagTok) {
               addOccurrence(stats, tagTok, {
-                sentiment: 0.1, ageDays: 5, channelKey: null, weight: 1,
+                sentiment: null, ageDays: 5, channelKey: null, weight: 1,
               });
             }
           }
@@ -237,20 +251,39 @@ async function getKeywordCloud({
     .slice(0, max);
 
   const words = all.map(({ word, e }) => {
-    const avgSent = e.count > 0 ? e.sentSum / e.count : 0;
+    // v9.8: average sentiment over sentiment-bearing samples only.
+    // Words whose sources never emitted a real sentiment signal land at
+    // null; the persistence layer maps null → 0 so the existing column
+    // stays NOT NULL but the gradient can paint them gray (uninformative).
+    const avgSent = e.sentCount > 0 ? e.sentSum / e.sentCount : null;
     const avgAge = e.count > 0 ? e.ageSum / e.count : 0;
-    // Allow the word-list itself to override toward a strong signal.
+    // Allow strong-polarity words from the seed lists to override toward
+    // a clearer signal, but only when we already have *some* signal —
+    // otherwise leave the score null so colorless words read as gray.
     let score = avgSent;
-    if (newsWordCloudSvc.POS_WORDS.has(word) && score < 0.5) score = 0.5;
-    else if (newsWordCloudSvc.NEG_WORDS.has(word) && score > -0.5) score = -0.5;
+    if (score != null) {
+      if (newsWordCloudSvc.POS_WORDS.has(word) && score < 0.5) score = 0.5;
+      else if (newsWordCloudSvc.NEG_WORDS.has(word) && score > -0.5) score = -0.5;
+    } else if (newsWordCloudSvc.POS_WORDS.has(word)) {
+      score = 0.5;
+    } else if (newsWordCloudSvc.NEG_WORDS.has(word)) {
+      score = -0.5;
+    }
     const channels = Array.from(e.channelCounts.entries())
       .map(([key, count]) => ({ key, count }))
       .sort((a, b) => b.count - a.count);
+    // sentiment_known=false means "no sentiment-bearing source contributed"
+    // — UI paints gray. score is still emitted (as 0) for back-compat
+    // and storage, but the UI prefers sentiment_known when present.
+    const known = score != null;
+    const finalScore = known ? score : 0;
     return {
       word,
       count: e.count,
-      sentiment_score: Math.round(score * 100) / 100,
-      sentiment_label: labelForScore(score),
+      sentiment_score: Math.round(finalScore * 100) / 100,
+      sentiment_label: known ? labelForScore(finalScore) : 'unknown',
+      sentiment_known: known,
+      sentiment_sample_count: e.sentCount,
       avg_age_days: Math.round(avgAge * 10) / 10,
       channels,
     };
@@ -265,8 +298,107 @@ async function getKeywordCloud({
   };
 }
 
+// v9.8: drill-down sub-cloud. Given one or more parent keywords, find
+// every opportunity (any type, any status=active) that mentions them in
+// title or description, tokenize those titles + descriptions, and
+// aggregate per-token. The result is a focused sub-cloud — tokens that
+// frequently co-occur with the parent keyword. Used by the keyword
+// search results page to let users refine without paginating.
+//
+// Multi-token parent: if `q = ['healthcare', 'compliance']`, every
+// matched opp must contain *both* tokens (AND, same as listMyOpps).
+async function getDrillDownCloud({
+  q = [],
+  max = 30,
+  now = new Date(),
+} = {}) {
+  if (!Opportunity) return { words: [], article_count: 0, q };
+  const tokens = (Array.isArray(q) ? q : [q])
+    .map((s) => String(s || '').trim().toLowerCase())
+    .filter(Boolean);
+  if (tokens.length === 0) return { words: [], article_count: 0, q: tokens };
+
+  const andClauses = tokens.map((t) => {
+    const needle = `%${t}%`;
+    return {
+      [Op.or]: [
+        { title:       { [Op.iLike]: needle } },
+        { description: { [Op.iLike]: needle } },
+      ],
+    };
+  });
+
+  const rows = await Opportunity.findAll({
+    where: { status: 'active', [Op.and]: andClauses },
+    attributes: ['id', 'type', 'source', 'title', 'description', 'category', 'createdAt'],
+    order: [['createdAt', 'DESC']],
+    limit: 1500,
+  });
+  const articleCount = rows.length;
+  if (articleCount === 0) return { words: [], article_count: 0, q: tokens };
+
+  const stats = new Map();
+  const nowMs = now.getTime();
+  const parentSet = new Set(tokens);
+  // Treat each row's combined text. Title gets weight 2 (more discriminating);
+  // description weight 1; category weight 2 as a phrase token.
+  for (const r of rows) {
+    const data = r.toJSON ? r.toJSON() : r;
+    const channelKey = (require('./channels.service').getChannelKey(data));
+    const ageDays = Math.max(0, (nowMs - new Date(data.createdAt).getTime()) / 86_400_000);
+    // News titles get the per-article sentiment treatment; everything
+    // else contributes null sentiment so it doesn't dilute the score.
+    const isNews = data.type === 'ai_news';
+    const sent = isNews ? articleSentimentScore(data.title || '') : null;
+
+    const titleToks = Array.from(new Set(newsWordCloudSvc.tokenize(data.title || '')));
+    for (const tok of titleToks) {
+      if (parentSet.has(tok)) continue; // skip the parent keyword itself
+      addOccurrence(stats, tok, { sentiment: sent, ageDays, channelKey, weight: 2 });
+    }
+    const descToks = Array.from(new Set(newsWordCloudSvc.tokenize(data.description || '')));
+    for (const tok of descToks) {
+      if (parentSet.has(tok)) continue;
+      addOccurrence(stats, tok, { sentiment: sent, ageDays, channelKey, weight: 1 });
+    }
+    const catTok = phraseToken(data.category);
+    if (catTok && !parentSet.has(catTok)) {
+      addOccurrence(stats, catTok, { sentiment: null, ageDays, channelKey, weight: 2 });
+    }
+  }
+
+  const all = Array.from(stats.entries())
+    .map(([word, e]) => ({ word, e }))
+    .filter((x) => x.e.count >= 2)
+    .sort((a, b) => b.e.count - a.e.count)
+    .slice(0, max);
+
+  const words = all.map(({ word, e }) => {
+    const avgSent = e.sentCount > 0 ? e.sentSum / e.sentCount : null;
+    const avgAge = e.count > 0 ? e.ageSum / e.count : 0;
+    const known = avgSent != null;
+    const finalScore = known ? avgSent : 0;
+    const channels = Array.from(e.channelCounts.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+    return {
+      word,
+      display_word: word.replace(/\b\w/g, (c) => c.toUpperCase()),
+      count: e.count,
+      sentiment_score: Math.round(finalScore * 100) / 100,
+      sentiment_label: known ? labelForScore(finalScore) : 'unknown',
+      sentiment_known: known,
+      avg_age_days: Math.round(avgAge * 10) / 10,
+      channels,
+    };
+  });
+
+  return { words, article_count: articleCount, q: tokens };
+}
+
 module.exports = {
   getKeywordCloud,
+  getDrillDownCloud,
   articleSentimentScore,
   labelForScore,
   phraseToken,

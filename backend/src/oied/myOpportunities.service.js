@@ -75,20 +75,26 @@ async function listMyOpportunities({
     }
   }
 
-  // v9.5: keyword filter — title OR description ILIKE %q%. Used for
-  // word-cloud drill-through on the news channel and as a general
-  // search on My Opps. Single token; the UI doesn't tokenize multi-word
-  // queries today.
-  if (q && String(q).trim()) {
-    const needle = `%${String(q).trim()}%`;
+  // v9.5/v9.8: keyword filter. Single token does title OR description
+  // ILIKE. Comma-separated tokens (e.g. "healthcare,compliance") are
+  // ANDed — every token must appear in title or description. This is
+  // how the drill-down sub-cloud refines a parent keyword to a sub-topic
+  // without losing the parent constraint.
+  const qTokens = q && String(q).trim()
+    ? String(q).split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (qTokens.length > 0) {
     where[Op.and] = [
       ...(Array.isArray(where[Op.and]) ? where[Op.and] : []),
-      {
-        [Op.or]: [
-          { title:       { [Op.iLike]: needle } },
-          { description: { [Op.iLike]: needle } },
-        ],
-      },
+      ...qTokens.map((tok) => {
+        const needle = `%${tok}%`;
+        return {
+          [Op.or]: [
+            { title:       { [Op.iLike]: needle } },
+            { description: { [Op.iLike]: needle } },
+          ],
+        };
+      }),
     ];
   }
 
@@ -247,6 +253,36 @@ async function listMyOpportunities({
   // createdAt — when the row landed in our DB.
   scored.sort(sortConfig.rank);
 
+  // v9.8: when a keyword filter is active, also compute a per-channel
+  // bucket — top-5 from each channel — so the UI can render a
+  // "breakdown by channel" strip above the main priority-sorted list.
+  // Without this, low-priority channels (news/talent — signal channels
+  // with no commercial value) get drowned in the unified ranking and a
+  // user clicking "healthcare" never sees the news matches without
+  // paginating 18 pages.
+  let channelBuckets = null;
+  if (q && String(q).trim()) {
+    channelBuckets = {};
+    const PER_BUCKET = 5;
+    // News/talent are signal channels — most-recent matters more than
+    // priority for them. Other channels stay priority-sorted.
+    const RECENCY_FIRST = new Set(['private-sector', 'talent']);
+    for (const ch of channelsSvc.listChannels()) {
+      const matches = scored.filter((r) => channelsSvc.getChannelKey(r) === ch.key);
+      if (matches.length === 0) continue;
+      const ordered = RECENCY_FIRST.has(ch.key)
+        ? matches.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        : matches; // already priority-sorted
+      channelBuckets[ch.key] = {
+        label: ch.label,
+        icon: ch.icon,
+        color: ch.color,
+        total: matches.length,
+        rows: ordered.slice(0, PER_BUCKET),
+      };
+    }
+  }
+
   const start = Number(offset) || 0;
   const stop = start + (Math.min(Number(limit) || 50, 200));
   return {
@@ -254,6 +290,7 @@ async function listMyOpportunities({
     total: scored.length,
     profileWasDefault: !!userProfile._isDefault,
     organizationId: orgId,
+    channelBuckets,
   };
 }
 

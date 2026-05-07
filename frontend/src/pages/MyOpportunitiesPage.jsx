@@ -6,6 +6,7 @@ import OpportunityActionButtons from '../components/oied/OpportunityActionButton
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 import ChannelChip from '../components/oied/ChannelChip';
 import RelatedToolsRow from '../components/oied/RelatedToolsRow';
+import KeywordDrillCloud from '../components/oied/KeywordDrillCloud';
 
 // Mirrors backend channels.service.CHANNELS — used by the filter
 // dropdown and the page header. Order is canonical.
@@ -160,6 +161,71 @@ function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail 
   );
 }
 
+// v9.8: per-channel breakdown shown above the priority list when a
+// keyword search is active. Solves the "news matches buried 18 pages
+// down" problem — every channel that has matches gets its own card with
+// the top 5 rows so users can drill into a specific channel without
+// paginating through a unified priority-sorted blob.
+function ChannelBucketStrip({ buckets, qFromUrl, sortFromUrl, onOpenDetail }) {
+  const order = ['private-sector', 'talent', 'government', 'bonfire', 'capital', 'freelance', 'strategic'];
+  const orderedKeys = order.filter((k) => buckets && buckets[k] && buckets[k].rows && buckets[k].rows.length > 0);
+  if (orderedKeys.length === 0) return null;
+  return (
+    <div className="mb-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-2">
+        Breakdown by channel for &quot;{qFromUrl}&quot; — top {orderedKeys.length === 1 ? '5' : '5 per channel'}
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {orderedKeys.map((key) => {
+          const b = buckets[key];
+          const linkParams = new URLSearchParams();
+          linkParams.set('q', qFromUrl);
+          linkParams.set('channel', key);
+          if (sortFromUrl && sortFromUrl !== 'priority') linkParams.set('sort', sortFromUrl);
+          return (
+            <div
+              key={key}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex flex-col"
+              data-testid={`channel-bucket-${key}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">
+                  {b.label}
+                </span>
+                <span className="text-[10px] text-gray-500 ml-2 shrink-0">
+                  {b.total} match{b.total === 1 ? '' : 'es'}
+                </span>
+              </div>
+              <ul className="space-y-1 flex-1">
+                {b.rows.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetail(r.id)}
+                      className="text-left w-full text-xs text-gray-800 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline line-clamp-2 leading-snug"
+                      title={r.title}
+                    >
+                      {r.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {b.total > b.rows.length && (
+                <a
+                  href={`/admin/opportunities/my?${linkParams.toString()}`}
+                  className="mt-2 text-[11px] text-blue-700 dark:text-blue-300 hover:underline self-end"
+                >
+                  View all {b.total} →
+                </a>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MyOpportunitiesPage() {
   const { user } = useSelector((s) => s.auth);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -168,6 +234,7 @@ function MyOpportunitiesPage() {
   const qFromUrl = searchParams.get('q') || '';
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
+  const [channelBuckets, setChannelBuckets] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [page, setPage] = useState(1);
@@ -193,6 +260,7 @@ function MyOpportunitiesPage() {
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
+      setChannelBuckets(res.pagination?.channelBuckets || null);
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || 'Failed to load');
     } finally {
@@ -404,9 +472,22 @@ function MyOpportunitiesPage() {
           </div>
         ) : (
           <>
-            {/* Hide bucket strips on the keyword-search path — for a topic
-                search the user wants every channel mixed in, not bucketed
-                by act_now / high_value / etc. */}
+            {/* v9.8 drill-down: sub-cloud of sub-topics co-occurring with
+                the parent keyword. Click a sub-word → URL appends it. */}
+            {qFromUrl && <KeywordDrillCloud q={qFromUrl} />}
+            {/* Channel-bucket strip — only on keyword searches that are
+                NOT already filtered to a single channel. */}
+            {qFromUrl && !channelFromUrl && channelBuckets && (
+              <ChannelBucketStrip
+                buckets={channelBuckets}
+                qFromUrl={qFromUrl}
+                sortFromUrl={sortFromUrl}
+                onOpenDetail={setDetailOppId}
+              />
+            )}
+            {/* Hide priority-bucket strips on the keyword-search path — for
+                a topic search the user wants every channel mixed in, not
+                bucketed by act_now / high_value / etc. */}
             {sortFromUrl === 'priority' && !qFromUrl && (
               <>
             <BucketSection

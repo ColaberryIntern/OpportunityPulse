@@ -364,7 +364,8 @@ async function getKeywordCloudHandler(req, res) {
                 match_count: Number(data.matchCount) || 0,
                 tool_count: Number(data.toolCount) || 0,
                 sentiment_score: data.sentimentScore != null ? Number(data.sentimentScore) : 0,
-                sentiment_label: data.sentimentLabel || 'neutral',
+                sentiment_label: data.sentimentLabel || 'unknown',
+                sentiment_known: !!data.sentimentLabel && data.sentimentLabel !== 'unknown',
                 avg_age_days: data.avgAgeDays != null ? Number(data.avgAgeDays) : null,
                 is_industry: !!data.isIndustry,
                 channels,
@@ -400,6 +401,26 @@ async function getKeywordCloudHandler(req, res) {
   } catch (e) {
     logger.error('intelligence.keywords.cloud failed', { error: e.message });
     return errorResponse(res, 'Failed to load keyword cloud: ' + e.message, 500);
+  }
+}
+
+// GET /api/v1/oied/keywords/drill?q=<word>(,<word>...) — drill-down
+// sub-cloud computed from active opportunities that mention the parent
+// keyword(s). Used by the keyword search results page to let users
+// refine without paginating through 18 pages.
+async function getDrillDownCloudHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const svc = require('./keywordCloud.service');
+    const raw = String(req.query.q || '').trim();
+    if (!raw) return successResponse(res, { words: [], article_count: 0, q: [] });
+    const tokens = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const max = Math.min(Number(req.query.max) || 30, 60);
+    const out = await svc.getDrillDownCloud({ q: tokens, max });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.keywords.drill failed', { error: e.message });
+    return errorResponse(res, 'Failed to load drill-down cloud: ' + e.message, 500);
   }
 }
 
@@ -520,6 +541,7 @@ module.exports = {
   getNewsWordCloudHandler,
   getKeywordCloudHandler,
   getRelatedToolsHandler,
+  getDrillDownCloudHandler,
   recomputeKeywordTrendsHandler,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
