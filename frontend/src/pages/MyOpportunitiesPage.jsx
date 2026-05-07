@@ -7,6 +7,7 @@ import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 import ChannelChip from '../components/oied/ChannelChip';
 import RelatedToolsRow from '../components/oied/RelatedToolsRow';
 import KeywordDrillCloud from '../components/oied/KeywordDrillCloud';
+import { emojiForTitle } from '../components/oied/titleEmoji';
 
 // Mirrors backend channels.service.CHANNELS — used by the filter
 // dropdown and the page header. Order is canonical.
@@ -196,19 +197,25 @@ function ChannelBucketStrip({ buckets, qFromUrl, sortFromUrl, onOpenDetail }) {
                   {b.total} match{b.total === 1 ? '' : 'es'}
                 </span>
               </div>
-              <ul className="space-y-1 flex-1">
-                {b.rows.map((r) => (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetail(r.id)}
-                      className="text-left w-full text-xs text-gray-800 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline line-clamp-2 leading-snug"
-                      title={r.title}
-                    >
-                      {r.title}
-                    </button>
-                  </li>
-                ))}
+              <ul className="space-y-1 flex-1 list-none p-0 m-0">
+                {b.rows.map((r) => {
+                  const emoji = emojiForTitle(r.title, '•');
+                  return (
+                    <li key={r.id} className="flex items-start gap-1.5">
+                      <span aria-hidden="true" className="text-sm leading-snug shrink-0 mt-px">
+                        {emoji}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail(r.id)}
+                        className="text-left flex-1 text-xs text-gray-800 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline line-clamp-2 leading-snug"
+                        title={r.title}
+                      >
+                        {r.title}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
               {b.total > b.rows.length && (
                 <a

@@ -337,13 +337,45 @@ async function getKeywordCloudHandler(req, res) {
     // the live aggregator below instead of 500-ing the whole endpoint.
     if (KeywordTrend) {
       try {
-        const where = { matchCount: { [Op.gt]: 0 } };
-        if (industriesOnly) where.isIndustry = true;
-        const rows = await KeywordTrend.findAll({
-          where,
-          order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
-          limit: max,
-        });
+        let rows;
+        if (industriesOnly) {
+          rows = await KeywordTrend.findAll({
+            where: { matchCount: { [Op.gt]: 0 }, isIndustry: true },
+            order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
+            limit: max,
+          });
+        } else {
+          // v9.8.1: guarantee industries are visible at the top level.
+          // Pull (max - quota) general words by match_count, then pad
+          // with top industries (deduped). Without this the cloud was
+          // dominated by talent/freelance tokens like "engineer",
+          // "team", "senior" and zero industries showed up.
+          const industryQuota = Math.min(15, Math.max(8, Math.floor(max / 3)));
+          const generalLimit = max - industryQuota;
+          const [general, industries] = await Promise.all([
+            KeywordTrend.findAll({
+              where: { matchCount: { [Op.gt]: 0 } },
+              order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
+              limit: generalLimit,
+            }),
+            KeywordTrend.findAll({
+              where: { matchCount: { [Op.gt]: 0 }, isIndustry: true },
+              order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
+              limit: industryQuota * 2, // pull extra in case some overlap with general
+            }),
+          ]);
+          const seen = new Set(general.map((r) => r.word));
+          const merged = [...general];
+          for (const r of industries) {
+            if (merged.length >= max) break;
+            if (seen.has(r.word)) continue;
+            seen.add(r.word);
+            merged.push(r);
+          }
+          // Re-sort by matchCount so font-size still tracks frequency.
+          merged.sort((a, b) => (b.matchCount - a.matchCount) || (b.totalMentions - a.totalMentions));
+          rows = merged;
+        }
         if (rows.length > 0) {
           const newest = rows.reduce((a, r) => {
             const t = new Date(r.lastComputedAt).getTime();

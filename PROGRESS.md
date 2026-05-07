@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## OIED v9.8.1 — Industry visibility in cloud + emoji bullets in channel cards
+
+- [x] Round-3 keyword-cloud feedback: industries weren't appearing at the top level (cloud was dominated by talent/freelance fluff like "engineer", "team", "senior") and the channel-bucket cards were a bare wall of titles. Fixed the read path to guarantee an industry quota and added per-row content emoji to the bucket cards.
+  - Date: 2026-05-07
+  - What changed: `intelligence.controller.getKeywordCloudHandler` now does two queries when `industries_only=false`: top `(max - quota)` general words + top `quota` industries, deduped and merged. Quota = `max(8, max/3)`. `newsWordCloud.service.STOP_WORDS` adds a narrow set of job-listing fluff (across, including, role, senior, team, freelance, etc.) — kept narrow so legitimate hot terms like "engineer" / "developer" stay. New frontend module `components/oied/titleEmoji.js` mapping ~35 keyword regexes → content emoji (🚂 railway, 🏥 hospital/clinical/medical, 🪖 defense/military/veterans, 🏛️ government/agency/department, 💰 finance/capital, ⚡ energy, 🤖 ai/agentic, 🧠 claude/anthropic, ☁️ aws/azure/cloud, 🔒 security, etc.). `ChannelBucketStrip` now renders rows as `<ul>` with each `<li>` led by `emojiForTitle(title)`.
+  - Verification: 459 OIED tests pass (no test changes — additions are additive on the read path and the frontend). Backend + frontend syntax-checked. Prod deploy + recompute below.
+  - Notes: Industry quota only kicks in when `industries_only` is false (the default). When toggle is on, the response is still industries-only. Re-uses existing `is_industry` flag — no schema change.
+
 ## OIED v9.8 — Drill-down sub-cloud + true sentiment + channel-bucket strip
 
 - [x] Three-pronged fix for the keyword cloud: (1) red→green gradient with gray for unknown — replaces the olive-everywhere look from v9.7; (2) per-channel breakdown card-strip on keyword search results so news matches surface in row 1 instead of being buried 18 pages deep; (3) drill-down sub-cloud above search results that recomputes a focused mini-cloud from the matching opps and lets a click append the sub-word to `q` (multi-needle AND filter).

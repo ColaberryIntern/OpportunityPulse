@@ -48,6 +48,17 @@ const STOP_WORDS = new Set([
   'ai', 'llm', 'llms', 'model', 'models', 'data', 'system', 'systems',
   'code', 'tool', 'tools', 'app', 'apps', 'real', 'why', 'how-to',
   'tutorial', 'guide', 'building', 'build', 'built',
+  // v9.8.1: job-listing fluff and channel-name leakage that crowded
+  // industries out of the top-level cloud. These are semantically empty
+  // in a "what's hot" context. Kept intentionally narrow — words like
+  // "engineer" / "development" / "design" stay in because they're real
+  // hot terms in the corpus.
+  'across', 'including', 'role', 'roles', 'senior', 'junior', 'staff',
+  'team', 'teams', 'lead', 'manager', 'director', 'specialist',
+  'freelance', 'contract', 'remote', 'hybrid', 'onsite', 'fulltime',
+  'parttime', 'full-time', 'part-time',
+  'experience', 'experienced',
+  'here', 'here\'s', 'post', 'posts', 'logo', 'company', 'companies',
 ]);
 
 const POS_WORDS = new Set([
