@@ -12,11 +12,23 @@ const channelsSvc = require('./channels.service');
 
 const MIN_VALUE_USD = 1000;
 
+// Allowed sort keys + how each maps to the SQL candidate-pool ordering
+// AND the in-memory scored-array ordering. `priority` is the default
+// (highest-score-first); `newest`/`oldest` use createdAt — when the row
+// landed in our DB, which is what Ali means by "the date it got pulled,
+// configured or added to the system".
+const SORT_OPTIONS = {
+  priority: { sql: [['updatedAt', 'DESC']], rank: (a, b) => (b.priorityScore || 0) - (a.priorityScore || 0) || (b.fitScore || 0) - (a.fitScore || 0) },
+  newest:   { sql: [['createdAt', 'DESC']], rank: (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0) },
+  oldest:   { sql: [['createdAt', 'ASC']],  rank: (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0) },
+};
+
 async function listMyOpportunities({
   limit = 50,
   offset = 0,
   type,
   channel,           // v9.4: filter to one channel's types at SQL level
+  sort = 'priority', // v9.4: 'priority' (default) | 'newest' | 'oldest'
   minScore,
   userId,           // who's asking — resolved to org via profile.service
   organizationId,   // explicit org override (multi-tenant callers)
@@ -58,14 +70,15 @@ async function listMyOpportunities({
     }
   }
 
-  // When filtering by channel, pull 500 candidates from THAT channel
-  // (ordered by updatedAt DESC). Without channel filter, keep the
-  // 2000-row default pool to drive the broad scoring sweep.
+  // When filtering by channel, pull 500 candidates from THAT channel.
+  // Without channel filter, keep the 2000-row default pool to drive the
+  // broad scoring sweep.
   const candidatePool = channel ? 500 : 2000;
+  const sortConfig = SORT_OPTIONS[sort] || SORT_OPTIONS.priority;
 
   const candidates = await Opportunity.findAll({
     where,
-    order: [['updatedAt', 'DESC']],
+    order: sortConfig.sql,
     limit: candidatePool,
   });
 
@@ -173,12 +186,10 @@ async function listMyOpportunities({
       fitBreakdown: breakdown,
     });
   }
-  // Sort by priority desc, then fit desc as tiebreaker.
-  scored.sort((a, b) => {
-    const pd = (b.priorityScore || 0) - (a.priorityScore || 0);
-    if (pd !== 0) return pd;
-    return (b.fitScore || 0) - (a.fitScore || 0);
-  });
+  // Apply the requested sort. For 'priority' (default), highest-score-
+  // first with fit as tiebreaker. For 'newest' / 'oldest', sort by
+  // createdAt — when the row landed in our DB.
+  scored.sort(sortConfig.rank);
 
   const start = Number(offset) || 0;
   const stop = start + (Math.min(Number(limit) || 50, 200));

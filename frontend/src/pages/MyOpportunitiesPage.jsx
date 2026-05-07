@@ -19,6 +19,13 @@ const CHANNEL_OPTIONS = [
   { key: 'capital',        label: '💰 Capital' },
 ];
 
+// Mirrors backend SORT_OPTIONS in myOpportunities.service.
+const SORT_OPTIONS = [
+  { key: 'priority', label: 'Score (high to low)' },
+  { key: 'newest',   label: 'Newest added first' },
+  { key: 'oldest',   label: 'Oldest added first' },
+];
+
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
   const v = Number(n);
@@ -73,6 +80,14 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
               <span className="text-xs text-gray-500">· {opp.category}</span>
             )}
             <span className="text-xs text-gray-500" data-testid="opportunity-value">· {fmtUSD(opp.value)}</span>
+            {opp.createdAt && (
+              <span
+                className="text-xs text-gray-400"
+                title={`Added to OIED ${new Date(opp.createdAt).toLocaleString()}`}
+              >
+                · added {new Date(opp.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -148,6 +163,7 @@ function MyOpportunitiesPage() {
   const { user } = useSelector((s) => s.auth);
   const [searchParams, setSearchParams] = useSearchParams();
   const channelFromUrl = searchParams.get('channel') || '';
+  const sortFromUrl = searchParams.get('sort') || 'priority';
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -170,6 +186,7 @@ function MyOpportunitiesPage() {
       const params = { limit: fetchSize, offset: channelFromUrl ? 0 : (page - 1) * pageSize };
       if (minScore) params.minScore = minScore;
       if (channelFromUrl) params.channel = channelFromUrl;
+      if (sortFromUrl && sortFromUrl !== 'priority') params.sort = sortFromUrl;
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
@@ -178,7 +195,7 @@ function MyOpportunitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, minScore, channelFromUrl, fetchSize]);
+  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl, fetchSize]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -193,11 +210,17 @@ function MyOpportunitiesPage() {
   }, [rows, channelFromUrl]);
 
   function setChannel(key) {
-    if (key) {
-      setSearchParams({ channel: key });
-    } else {
-      setSearchParams({});
-    }
+    const next = {};
+    if (key) next.channel = key;
+    if (sortFromUrl && sortFromUrl !== 'priority') next.sort = sortFromUrl;
+    setSearchParams(next);
+    setPage(1);
+  }
+  function setSort(key) {
+    const next = {};
+    if (channelFromUrl) next.channel = channelFromUrl;
+    if (key && key !== 'priority') next.sort = key;
+    setSearchParams(next);
     setPage(1);
   }
 
@@ -257,6 +280,19 @@ function MyOpportunitiesPage() {
             </select>
           </label>
           <label className="flex items-center gap-1.5">
+            Sort:
+            <select
+              value={sortFromUrl}
+              onChange={(e) => setSort(e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1"
+              data-testid="sort-filter"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5">
             Min score:
             <input
               type="number"
@@ -308,6 +344,8 @@ function MyOpportunitiesPage() {
           </div>
         ) : (
           <>
+            {sortFromUrl === 'priority' && (
+              <>
             <BucketSection
               title="🔥 Act Now"
               tone="red"
@@ -340,9 +378,13 @@ function MyOpportunitiesPage() {
               testId="bucket-strategic-pattern"
               onOpenDetail={setDetailOppId}
             />
+              </>
+            )}
 
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-8 mb-2">
-              All matching ({displayRows.length})
+              {sortFromUrl === 'newest' && `Newest first (${displayRows.length})`}
+              {sortFromUrl === 'oldest' && `Oldest first (${displayRows.length})`}
+              {sortFromUrl === 'priority' && `All matching (${displayRows.length})`}
             </h2>
             <ul className="list-none p-0" data-testid="my-opportunities-list">
               {displayRows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}
