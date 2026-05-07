@@ -13,15 +13,30 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getKeywordCloud } from '../../services/oiedService';
 
-// Continuous color from a [-1, +1] sentiment score.
-// Hue:  0 (red) → 60 (yellow) → 120 (green)
-// Sat:  20% (gray, neutral) → 90% (vivid, strong sentiment)
-// Light: fixed at 35% so text reads well on a white background.
+// Continuous color from a [-1, +1] sentiment score, with dramatic
+// separation between bands so weak vs strong is unmistakable at a glance.
+//
+//   score | swatch
+//   -1.0  | bright red       hsl(  0, 95%, 46%)
+//   -0.5  | orange-red       hsl( 35, 82%, 42%)
+//    0.0  | mustard / olive  hsl( 70, 70%, 38%)
+//   +0.5  | deep green       hsl(105, 82%, 28%)
+//   +1.0  | forest green     hsl(140, 95%, 24%)
+//
+// Hue spans 0→140 (red through forest green). Lightness shifts WITH the
+// score so positives are visibly darker/richer than neutrals (and
+// neutrals are mid-tone, not blending into the page). Saturation is
+// always high so colors read crisply.
 function colorForSentiment(score) {
   const s = Math.max(-1, Math.min(1, Number(score) || 0));
-  const hue = Math.round(60 + 60 * s);
-  const sat = Math.round(20 + Math.abs(s) * 70);
-  return `hsl(${hue}, ${sat}%, 35%)`;
+  const hue = Math.round(70 + 70 * s);
+  const sat = Math.round(70 + Math.abs(s) * 25);
+  // Positives darken (24–32%); negatives lighten (38–46%) — opposite
+  // ends of the lightness scale to maximize visual separation.
+  const light = s > 0
+    ? Math.round(32 - 8 * s)
+    : Math.round(38 + 8 * Math.abs(s));
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
 // Age → rotation angle. Maxes at ±25deg for very old articles. Direction
@@ -55,16 +70,19 @@ export default function KeywordCloud() {
   const [data, setData] = useState({ words: [], article_count: 0 });
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [industriesOnly, setIndustriesOnly] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getKeywordCloud({ max: 50 })
+    const params = { max: 50 };
+    if (industriesOnly) params.industries_only = true;
+    getKeywordCloud(params)
       .then((d) => { if (!cancelled) setData(d || { words: [] }); })
       .catch((e) => { if (!cancelled) setErr(e.message || 'Failed to load keyword cloud'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [industriesOnly]);
 
   const words = data.words || [];
   const maxCount = words.reduce((m, w) => Math.max(m, w.count || 0), 0);
@@ -75,11 +93,24 @@ export default function KeywordCloud() {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           🔭 What's hot — across every channel
         </h3>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {data.article_count
-            ? `${data.article_count.toLocaleString()} articles · ${data.lookback_days || 14}d`
-            : ''}
-        </span>
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={industriesOnly}
+              onChange={(e) => setIndustriesOnly(e.target.checked)}
+              className="h-3 w-3"
+            />
+            Industries only
+          </label>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {data.source === 'keyword_trends' && data.last_computed_at
+              ? `validated · updated ${new Date(data.last_computed_at).toLocaleString()}`
+              : data.article_count
+                ? `${data.article_count.toLocaleString()} articles · ${data.lookback_days || 14}d`
+                : ''}
+          </span>
+        </div>
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
         Pulled from news titles, industry categories, AI tools, and titles across all 7 channels.
@@ -112,9 +143,14 @@ export default function KeywordCloud() {
             const fontSize = countToFontSize(w.count, maxCount);
             const tilt = ageToTilt(w.avg_age_days, i);
             const channelHint = ChannelAttributionTooltip({ channels: w.channels });
-            const tooltip = `"${w.word}" — ${w.count} mentions · age ${w.avg_age_days}d ` +
-              `· sentiment ${w.sentiment_score} (${w.sentiment_label})` +
+            const matchPart = w.match_count != null
+              ? ` · ${w.match_count} opp matches${w.tool_count ? ` + ${w.tool_count} tools` : ''}`
+              : '';
+            const tooltip = `"${w.word}" — ${w.count} mentions${matchPart}` +
+              ` · age ${w.avg_age_days}d` +
+              ` · sentiment ${w.sentiment_score} (${w.sentiment_label})` +
               (channelHint ? ` · channels: ${channelHint}` : '');
+            const label = w.display_word || w.word;
             return (
               <Link
                 key={w.word}
@@ -130,7 +166,7 @@ export default function KeywordCloud() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {w.word}
+                {label}
               </Link>
             );
           })}

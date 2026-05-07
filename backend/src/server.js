@@ -356,6 +356,12 @@ async function startServer() {
       // OIED v5: weekly summary email (wins / losses / insights). Default OFF.
       const { startWeeklySummaryScheduler } = require('./oied/weeklySummary.scheduler');
       startWeeklySummaryScheduler();
+
+      // OIED v9.7: persisted keyword trends. Twice-daily cron computes the
+      // validated keyword cloud into keyword_trends. Default OFF —
+      // enable with OIED_KEYWORD_TRENDS_ENABLED=true.
+      const { startKeywordTrendScheduler } = require('./oied/keywordTrend.scheduler');
+      startKeywordTrendScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

@@ -313,24 +313,108 @@ async function getNewsWordCloudHandler(req, res) {
   }
 }
 
-// GET /api/v1/oied/keywords/cloud — multi-source keyword cloud
-// (news titles + categories + cross-channel titles + opp categories
-// + tool names). Each word carries decimal sentiment + channel
-// attribution. Successor to /news/word-cloud.
+// GET /api/v1/oied/keywords/cloud — read path for the validated keyword
+// cloud. v9.7+: prefers the persisted keyword_trends table (twice-daily
+// cron-computed, every word verified to have at least one matching opp
+// or AI tool). Falls back to the live aggregator if the table is empty
+// or the last compute is > 36h stale.
+//
+// Query params:
+//   max=40                 cap on returned words
+//   industries_only=true   filter to is_industry rows only
+//   sources=...            (legacy live mode only)
+//   lookback=14            (legacy live mode only)
 async function getKeywordCloudHandler(req, res) {
   try {
+    const max = Math.min(Number(req.query.max) || 40, 100);
+    const industriesOnly = String(req.query.industries_only || '').toLowerCase() === 'true';
+
+    // eslint-disable-next-line global-require
+    const { KeywordTrend } = require('../models');
+
+    // Try the persisted table first. Wrapped in its own try/catch so that
+    // a missing table (pre-migration) or schema drift falls through to
+    // the live aggregator below instead of 500-ing the whole endpoint.
+    if (KeywordTrend) {
+      try {
+        const where = { matchCount: { [Op.gt]: 0 } };
+        if (industriesOnly) where.isIndustry = true;
+        const rows = await KeywordTrend.findAll({
+          where,
+          order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
+          limit: max,
+        });
+        if (rows.length > 0) {
+          const newest = rows.reduce((a, r) => {
+            const t = new Date(r.lastComputedAt).getTime();
+            return t > a ? t : a;
+          }, 0);
+          const ageHours = (Date.now() - newest) / 3_600_000;
+          if (ageHours <= 36) {
+            const words = rows.map((r) => {
+              const data = r.toJSON ? r.toJSON() : r;
+              const channelCounts = data.channelCounts || {};
+              const channels = Object.entries(channelCounts)
+                .map(([key, count]) => ({ key, count: Number(count) || 0 }))
+                .sort((a, b) => b.count - a.count);
+              return {
+                word: data.word,
+                display_word: data.displayWord || data.word,
+                count: Number(data.totalMentions) || 0,
+                match_count: Number(data.matchCount) || 0,
+                tool_count: Number(data.toolCount) || 0,
+                sentiment_score: data.sentimentScore != null ? Number(data.sentimentScore) : 0,
+                sentiment_label: data.sentimentLabel || 'neutral',
+                avg_age_days: data.avgAgeDays != null ? Number(data.avgAgeDays) : null,
+                is_industry: !!data.isIndustry,
+                channels,
+              };
+            });
+            return successResponse(res, {
+              words,
+              source: 'keyword_trends',
+              last_computed_at: new Date(newest).toISOString(),
+              industries_only: industriesOnly,
+            });
+          }
+          logger.warn('intelligence.keywords.cloud: persisted snapshot stale, falling back', {
+            ageHours: Math.round(ageHours),
+          });
+        }
+      } catch (persistedErr) {
+        logger.warn('intelligence.keywords.cloud: KeywordTrend read failed, falling back to live', {
+          error: persistedErr.message,
+        });
+      }
+    }
+
+    // Fallback: live aggregation. Logged so we can monitor reliance on it.
     // eslint-disable-next-line global-require
     const svc = require('./keywordCloud.service');
-    const max = Math.min(Number(req.query.max) || 40, 100);
     const lookbackDays = Math.min(Number(req.query.lookback) || 14, 60);
     const sources = req.query.sources
       ? String(req.query.sources).split(',').map((s) => s.trim()).filter(Boolean)
       : svc.ALL_SOURCES;
     const out = await svc.getKeywordCloud({ max, lookbackDays, sources });
-    return successResponse(res, out);
+    return successResponse(res, { ...out, source: 'live_fallback' });
   } catch (e) {
     logger.error('intelligence.keywords.cloud failed', { error: e.message });
     return errorResponse(res, 'Failed to load keyword cloud: ' + e.message, 500);
+  }
+}
+
+// POST /api/v1/oied/keywords/recompute — admin-only on-demand refresh of
+// the keyword_trends table. Mirrors the twice-daily cron job but lets
+// us refresh after content changes without waiting for the next slot.
+async function recomputeKeywordTrendsHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const svc = require('./keywordTrendCompute.service');
+    const out = await svc.runKeywordTrendCompute();
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.keywords.recompute failed', { error: e.message });
+    return errorResponse(res, 'Failed to recompute keyword trends: ' + e.message, 500);
   }
 }
 
@@ -436,6 +520,7 @@ module.exports = {
   getNewsWordCloudHandler,
   getKeywordCloudHandler,
   getRelatedToolsHandler,
+  recomputeKeywordTrendsHandler,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
   attachContextToBundle,

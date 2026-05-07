@@ -28,6 +28,10 @@ router.get('/channels/summary',         BRIDGE, intel.getChannelsSummary);
 router.get('/news/word-cloud',          BRIDGE, intel.getNewsWordCloudHandler);
 router.get('/keywords/cloud',           BRIDGE, intel.getKeywordCloudHandler);
 router.get('/keywords/related-tools',   BRIDGE, intel.getRelatedToolsHandler);
+router.post(
+  '/keywords/recompute',
+  verifyToken, checkPermissions(ROLES.ADMIN), intel.recomputeKeywordTrendsHandler,
+);
 router.get('/profile',                  BRIDGE, c.getMyProfile);
 
 // ---- Bridge ACTION endpoints (dual-auth + admin) -----------------------

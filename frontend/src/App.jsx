@@ -41,18 +41,6 @@ import TriggerLogsPage from './pages/TriggerLogsPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OIEDDashboardPage from './pages/OIEDDashboardPage';
-
-// /dashboard always redirects to /admin/oied. Mission Control is THE
-// dashboard now — brief banner + AI matches + channel overview + trends
-// + tools + KPIs. The legacy DashboardPage component is kept in the
-// codebase for now in case we need to revert, but no route points to it.
-function DashboardOrMissionControl() {
-  const role = useSelector((s) => s.auth && s.auth.user && s.auth.user.role);
-  if (role === 'admin') return <OIEDDashboardPage />;
-  // Non-admin users still land on Mission Control (it gracefully handles
-  // missing brief/profile data). One dashboard for everyone.
-  return <OIEDDashboardPage />;
-}
 import BillingPage from './pages/BillingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -138,18 +126,10 @@ function App() {
         <Route path="/browse" element={<PublicBrowsePage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
-        {/* Protected routes with shared layout */}
-        {/* Admins land on the unified OIED Mission Control; non-admins keep
-            the legacy dashboard. Mission Control now contains everything
-            the legacy dashboard had plus the OIED-specific surfaces. */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedLayout>
-              <DashboardOrMissionControl />
-            </ProtectedLayout>
-          }
-        />
+        {/* /dashboard is now a real redirect to /admin/oied — single
+            canonical URL for Mission Control. Old DashboardPage component
+            stays in the codebase for revert safety but no route renders it. */}
+        <Route path="/dashboard" element={<Navigate to="/admin/oied" replace />} />
         <Route
           path="/content"
           element={

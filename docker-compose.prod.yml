@@ -104,6 +104,9 @@ services:
       OIED_BRIEFING_TO: ${OIED_BRIEFING_TO:-}
       OIED_AUTO_TRIGGERS_ENABLED: ${OIED_AUTO_TRIGGERS_ENABLED:-false}
       OIED_AUTO_TRIGGERS_CRON: ${OIED_AUTO_TRIGGERS_CRON:-0 6 * * *}
+      # v9.7: keyword trends compute (twice daily). OFF by default.
+      OIED_KEYWORD_TRENDS_ENABLED: ${OIED_KEYWORD_TRENDS_ENABLED:-false}
+      OIED_KEYWORD_TRENDS_CRON: ${OIED_KEYWORD_TRENDS_CRON:-15 5,17 * * *}
     depends_on:
       postgres:
         condition: service_healthy

@@ -4,13 +4,18 @@ import { useSelector } from 'react-redux';
 import { STRATEGIC_VIEWS } from '../../config/strategicNavConfig';
 import { fetchBonfireFlag } from '../../services/bonfireService';
 
+// Standalone "Dashboard" link — only shown to non-admins. For admins,
+// /dashboard redirects to /admin/oied (Mission Control), and Mission
+// Control is rendered inside OIED_SECTIONS below — so showing both would
+// be a visible duplicate of the same destination.
+const DASHBOARD_NAV_ITEM = {
+  label: null,
+  items: [
+    { to: '/dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  ],
+};
+
 const NAV_SECTIONS = [
-  {
-    label: null,
-    items: [
-      { to: '/dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-    ],
-  },
   {
     label: 'Strategic Views',
     items: STRATEGIC_VIEWS.map((view) => ({
@@ -138,16 +143,17 @@ function Sidebar({ open, onClose }) {
   // Strategic-view items at the top of NAV_SECTIONS no longer apply for
   // admins (collapsed into the Channels group above). For non-admin users
   // and public marketing surfaces, the legacy Strategic Views config
-  // stays in place.
-  const [topSection, ...restSections] = NAV_SECTIONS;
-  const filteredRest = isAdmin
-    ? restSections.filter((s) => s.label !== 'Strategic Views' && s.label !== 'Tools & Actions')
-    : restSections;
+  // stays in place. The standalone "Dashboard" link is hidden for admins
+  // because /dashboard redirects to /admin/oied — Mission Control is the
+  // single canonical home.
+  const filteredNav = isAdmin
+    ? NAV_SECTIONS.filter((s) => s.label !== 'Strategic Views' && s.label !== 'Tools & Actions')
+    : NAV_SECTIONS;
   const navSections = [
-    topSection,
+    ...(isAdmin ? [] : [DASHBOARD_NAV_ITEM]),
     ...OIED_SECTIONS,
     ...BONFIRE_SECTION,
-    ...filteredRest,
+    ...filteredNav,
   ];
 
   const linkClasses = ({ isActive }) =>

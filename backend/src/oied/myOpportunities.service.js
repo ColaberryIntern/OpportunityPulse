@@ -98,11 +98,45 @@ async function listMyOpportunities({
   const candidatePool = channel ? 500 : 2000;
   const sortConfig = SORT_OPTIONS[sort] || SORT_OPTIONS.priority;
 
-  const candidates = await Opportunity.findAll({
-    where,
-    order: sortConfig.sql,
-    limit: candidatePool,
-  });
+  // v9.7: when a keyword filter is active and no channel is pinned, do
+  // ONE candidate query per channel (~80 rows each) and union them.
+  // Without this, recently-updated news/freelance dominate the global
+  // candidate window and matches in capital / talent / strategic never
+  // show up on page 1 for cross-channel keyword searches. Word-cloud
+  // click-through is the canonical caller — a click on "healthcare"
+  // must surface healthcare matches in *every* channel that has any.
+  let candidates;
+  if (q && String(q).trim() && !channel) {
+    const PER_CHANNEL = 80;
+    const channelList = channelsSvc.listChannels();
+    const byId = new Map();
+    for (const ch of channelList) {
+      if (!ch || !ch.types || ch.types.length === 0) continue;
+      const channelWhere = { ...where, type: { [Op.in]: ch.types } };
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const rows = await Opportunity.findAll({
+          where: channelWhere,
+          order: sortConfig.sql,
+          limit: PER_CHANNEL,
+        });
+        for (const r of rows) byId.set(r.id, r);
+      } catch (e) {
+        // If a single channel's query fails (e.g. type mismatch from
+        // an in-flight migration), skip it — don't poison the whole
+        // search.
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+    }
+    candidates = Array.from(byId.values());
+  } else {
+    candidates = await Opportunity.findAll({
+      where,
+      order: sortConfig.sql,
+      limit: candidatePool,
+    });
+  }
 
   const hash = profileHash(userProfile);
   // Cache scoped by (org_id, opportunity_id, profile_hash). Older rows
