@@ -56,24 +56,72 @@ async function listMyOpportunities({
 
   const scored = [];
   for (const opp of candidates) {
-    let score = cacheMap.get(opp.id);
-    if (!score) {
-      score = await getOrCreateFitScore({ opportunity: opp, userProfile, organizationId: orgId });
-    }
-    const fit = score.fitScore != null ? score.fitScore : score.fit_score;
-    if (minScore != null && fit < Number(minScore)) continue;
+    // Strategic Bonfire rows carry their own pre-computed score from
+    // the strategist's cluster analysis (aiAnalysis.fit_score = the
+    // strategic_score). Re-scoring them against the user profile would
+    // tank their fitScore (their copy describes a synthesized cluster,
+    // not a single service) and sink them to the bottom of the sort.
+    // Use the embedded score directly + a small +5 priority boost
+    // (capped at 95) so they integrate alongside individual rows.
+    let fit;
+    let breakdown;
+    let priorityScore;
+    let urgency;
+    let revenueVelocity;
+    let bucket;
 
-    // Priority + bucket are computed at read time so we don't need to
-    // re-cache rows when the bucket thresholds change.
-    const { priorityScore, urgency, revenueVelocity, bucket } =
-      calculatePriorityScore({ opportunity: opp, fitScore: fit, breakdown: {
+    if (opp.type === 'bonfire_strategic') {
+      const ai = opp.aiAnalysis || {};
+      fit = Number(ai.fit_score || ai.strategic_score || opp.aiScore || 70);
+      // Honor the +5 boost / cap-at-95 we already baked into ai_score
+      // (the column is set by bonfireStrategicSync.shapeStrategicForOpportunity).
+      priorityScore = Number(opp.aiScore != null ? opp.aiScore : Math.min(95, fit + 5));
+      urgency = 65; // strategic clusters don't have a single close date
+      revenueVelocity = null;
+      bucket = ai.bucket || (priorityScore >= 80 ? 'high_value' : 'standard');
+      breakdown = {
+        service_match: 25,        // strategic = "we built this for you"
+        revenue_weight: 18,
+        automation_score: 15,
+        repeatability_score: 14,
+        ease_of_entry: 8,
+        strategic_alignment: 15,
+      };
+    } else {
+      let score = cacheMap.get(opp.id);
+      if (!score) {
+        score = await getOrCreateFitScore({ opportunity: opp, userProfile, organizationId: orgId });
+      }
+      fit = score.fitScore != null ? score.fitScore : score.fit_score;
+      if (minScore != null && fit < Number(minScore)) continue;
+
+      const computed = calculatePriorityScore({
+        opportunity: opp,
+        fitScore: fit,
+        breakdown: {
+          service_match: score.serviceMatch ?? score.service_match,
+          revenue_weight: score.revenueWeight ?? score.revenue_weight,
+          automation_score: score.automationScore ?? score.automation_score,
+          repeatability_score: score.repeatabilityScore ?? score.repeatability_score,
+          ease_of_entry: score.easeOfEntry ?? score.ease_of_entry,
+          strategic_alignment: score.strategicAlignment ?? score.strategic_alignment,
+        },
+      });
+      priorityScore = computed.priorityScore;
+      urgency = computed.urgency;
+      revenueVelocity = computed.revenueVelocity;
+      bucket = computed.bucket;
+      breakdown = {
         service_match: score.serviceMatch ?? score.service_match,
         revenue_weight: score.revenueWeight ?? score.revenue_weight,
         automation_score: score.automationScore ?? score.automation_score,
         repeatability_score: score.repeatabilityScore ?? score.repeatability_score,
         ease_of_entry: score.easeOfEntry ?? score.ease_of_entry,
         strategic_alignment: score.strategicAlignment ?? score.strategic_alignment,
-      } });
+      };
+    }
+
+    if (minScore != null && fit < Number(minScore)) continue;
 
     // v3: attach effort estimate so the UI / recommendation engine
     // doesn't need a second pass.
@@ -87,14 +135,7 @@ async function listMyOpportunities({
       revenueVelocity,
       bucket,
       effortEstimate: effort,
-      fitBreakdown: {
-        service_match: score.serviceMatch ?? score.service_match,
-        revenue_weight: score.revenueWeight ?? score.revenue_weight,
-        automation_score: score.automationScore ?? score.automation_score,
-        repeatability_score: score.repeatabilityScore ?? score.repeatability_score,
-        ease_of_entry: score.easeOfEntry ?? score.ease_of_entry,
-        strategic_alignment: score.strategicAlignment ?? score.strategic_alignment,
-      },
+      fitBreakdown: breakdown,
     });
   }
   // Sort by priority desc, then fit desc as tiebreaker.
