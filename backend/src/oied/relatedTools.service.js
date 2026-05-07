@@ -40,7 +40,7 @@ async function getRelatedTools({ q, max = MAX } = {}) {
       attributes: [
         'id', 'name', 'slug', 'description', 'category', 'subcategory',
         'tags', 'trendingScore', 'mentionCount7d', 'sentimentScore',
-        'logoUrl', 'sourceUrl',
+        'logoUrl', 'website',
       ],
     });
 
@@ -56,7 +56,7 @@ async function getRelatedTools({ q, max = MAX } = {}) {
         limit: 200,
         attributes: ['id', 'name', 'slug', 'description', 'category', 'subcategory',
           'tags', 'trendingScore', 'mentionCount7d', 'sentimentScore',
-          'logoUrl', 'sourceUrl'],
+          'logoUrl', 'website'],
       });
       const lc = String(q).trim().toLowerCase();
       extra = wide.filter((r) => {
@@ -80,7 +80,7 @@ async function getRelatedTools({ q, max = MAX } = {}) {
         mention_count_7d: d.mentionCount7d != null ? Number(d.mentionCount7d) : 0,
         sentiment_score: d.sentimentScore != null ? Number(d.sentimentScore) : null,
         logo_url: d.logoUrl || null,
-        source_url: d.sourceUrl || null,
+        source_url: d.website || null,
       };
     });
 
