@@ -24,17 +24,25 @@ async function listMyOpportunities({
   const orgId = organizationId || await profileSvc.resolveOrgId(userId);
   const userProfile = await profileSvc.getOrDefaultByOrg(orgId);
 
-  // Strategic Bonfire rows are synthesized clusters; their $ value comes
-  // from a multi-field jsonb and is sometimes null. Carve them out of the
-  // value floor so they always surface (matching the v9.1 ask: integrate
-  // strategic clusters alongside individual opps without overshadowing).
+  // The default cross-channel view applies a $1k value floor to keep
+  // noise out (most channels have a real bid value). Strategic Bonfire
+  // rows carry their value in a multi-field jsonb that's often unset,
+  // so they get a carve-out.
+  //
+  // When a specific channel is requested, the value floor is dropped:
+  // private-sector (news) and talent (job postings) both have null
+  // value as a matter of course — they're signal channels, not bid
+  // surfaces — and Ali asked for the channel explicitly, so we should
+  // return every row in it.
   const where = {
     status: 'active',
-    [Op.or]: [
+  };
+  if (!channel) {
+    where[Op.or] = [
       { value: { [Op.gte]: MIN_VALUE_USD } },
       { type: 'bonfire_strategic' },
-    ],
-  };
+    ];
+  }
   if (type) where.type = type;
 
   // v9.4 channel filter: when supplied, restrict candidates to that
