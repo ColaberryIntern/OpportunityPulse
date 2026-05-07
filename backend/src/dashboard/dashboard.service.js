@@ -103,7 +103,13 @@ async function getChartData(type, period = '30d') {
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
+  // v9.4 unified-channels chart: bonfire (procurement) + bonfire_strategic
+  // (synthesized clusters) join the existing 6 series. Same daily count
+  // shape; just two more types in the GROUP BY result.
+  const types = [
+    'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
+    'bonfire', 'bonfire_strategic',
+  ];
 
   const results = await Opportunity.findAll({
     attributes: [
@@ -150,7 +156,10 @@ async function getChartData(type, period = '30d') {
  * Get summary of latest trends per opportunity type.
  */
 async function getTrendSummary() {
-  const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
+  const types = [
+    'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
+    'bonfire', 'bonfire_strategic',
+  ];
   const summaries = {};
 
   for (const type of types) {

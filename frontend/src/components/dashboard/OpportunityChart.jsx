@@ -13,6 +13,10 @@ const TYPE_LINES = [
   { dataKey: 'investment', name: 'Investments', color: '#10B981' },
   { dataKey: 'grant', name: 'Grants', color: '#F59E0B' },
   { dataKey: 'ai_news', name: 'AI News', color: '#06B6D4' },
+  { dataKey: 'freelance', name: 'Freelance', color: '#22C55E' },
+  // v9.4 unified-channels: Bonfire + Strategic Patterns join the chart.
+  { dataKey: 'bonfire', name: 'Bonfire', color: '#EA580C' },
+  { dataKey: 'bonfire_strategic', name: 'Strategic Patterns', color: '#A855F7' },
 ];
 
 function OpportunityChart({ chartData, loading, onPeriodChange }) {
