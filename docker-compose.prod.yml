@@ -107,6 +107,13 @@ services:
       # v9.7: keyword trends compute (twice daily). OFF by default.
       OIED_KEYWORD_TRENDS_ENABLED: ${OIED_KEYWORD_TRENDS_ENABLED:-false}
       OIED_KEYWORD_TRENDS_CRON: ${OIED_KEYWORD_TRENDS_CRON:-15 5,17 * * *}
+      # v9.10: Source Health Auto-Triage Agent. Runs daily an hour after
+      # the master ingestion cron, retries failing sources, emails the
+      # operator a summary when there's something to report.
+      OIED_SOURCE_HEALTH_AGENT_ENABLED: ${OIED_SOURCE_HEALTH_AGENT_ENABLED:-false}
+      OIED_SOURCE_HEALTH_AGENT_CRON: ${OIED_SOURCE_HEALTH_AGENT_CRON:-0 7 * * *}
+      OIED_SOURCE_HEALTH_AGENT_TO: ${OIED_SOURCE_HEALTH_AGENT_TO:-}
+      OIED_PUBLIC_URL: ${OIED_PUBLIC_URL:-http://95.216.199.47}
     depends_on:
       postgres:
         condition: service_healthy

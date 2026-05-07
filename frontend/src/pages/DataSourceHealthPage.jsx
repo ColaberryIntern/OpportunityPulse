@@ -8,7 +8,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { getDataSourceHealth, runDataSource } from '../services/dataSourceService';
+import { getDataSourceHealth, runDataSource, runSourceHealthAgent } from '../services/dataSourceService';
 
 const STATUS_META = {
   failing:    { label: 'Failing',    badge: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',         dot: 'bg-red-500',    order: 0 },
@@ -88,7 +88,60 @@ function StatusPill({ status }) {
   );
 }
 
-function SummaryHeader({ summary, ingestionCron, nextRunAt, onRefresh, refreshing }) {
+function TriageReportCard({ report, onClose }) {
+  if (!report) return null;
+  const { recovered, still_failing: stillFailing, zero_yield: zy } = report;
+  return (
+    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-5">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">🤖 Auto-Triage Report</h3>
+          <p className="text-xs text-blue-700 dark:text-blue-300">
+            Retried {report.retried.length} failing source{report.retried.length === 1 ? '' : 's'}.
+            {' '}
+            {recovered.length > 0 && <span><strong>{recovered.length} recovered</strong>. </span>}
+            {(stillFailing.length + zy.length) > 0
+              ? <span><strong>{stillFailing.length + zy.length} still need attention.</strong></span>
+              : <span>Everything else is healthy.</span>}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="text-blue-700 dark:text-blue-300 text-xs hover:underline">
+          Dismiss
+        </button>
+      </div>
+      {recovered.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs font-medium text-green-800 dark:text-green-300 mb-0.5">✅ Auto-recovered</div>
+          <div className="text-xs text-gray-700 dark:text-gray-300">{recovered.join(', ')}</div>
+        </div>
+      )}
+      {stillFailing.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs font-medium text-red-800 dark:text-red-300 mb-0.5">❌ Still failing</div>
+          <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1 ml-4 list-disc">
+            {stillFailing.map((s) => (
+              <li key={s.name}>
+                <strong>{s.name}</strong> <span className="text-gray-500">({s.category})</span> — {s.action}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {zy.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs font-medium text-yellow-800 dark:text-yellow-300 mb-0.5">⚠️ Zero yield (manual review)</div>
+          <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1 ml-4 list-disc">
+            {zy.map((s) => (
+              <li key={s.name}><strong>{s.name}</strong> — {s.action}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryHeader({ summary, ingestionCron, nextRunAt, onRefresh, refreshing, onTriage, triaging }) {
   const cells = [
     { key: 'failing',    label: 'Failing' },
     { key: 'stale',      label: 'Stale' },
@@ -110,6 +163,15 @@ function SummaryHeader({ summary, ingestionCron, nextRunAt, onRefresh, refreshin
             className="ml-3 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+          <button
+            type="button"
+            onClick={onTriage}
+            disabled={triaging}
+            className="ml-2 px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 hover:bg-blue-100 disabled:opacity-50"
+            title="Retry every failing source, classify what's still broken, and email a summary"
+          >
+            {triaging ? '🤖 Triaging…' : '🤖 Run Auto-Triage'}
           </button>
         </div>
       </div>
@@ -213,6 +275,8 @@ export default function DataSourceHealthPage() {
   const [err, setErr] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [runStates, setRunStates] = useState({}); // { sourceName: 'running' | 'done' }
+  const [triaging, setTriaging] = useState(false);
+  const [triageReport, setTriageReport] = useState(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -234,6 +298,20 @@ export default function DataSourceHealthPage() {
   useEffect(() => {
     const id = setInterval(() => { load(); }, 60_000);
     return () => clearInterval(id);
+  }, [load]);
+
+  const handleTriage = useCallback(async () => {
+    setTriaging(true);
+    setErr(null);
+    try {
+      const out = await runSourceHealthAgent({ retry: true, email: true });
+      setTriageReport(out && out.report);
+    } catch (e) {
+      setErr(`Auto-triage failed: ${e?.response?.data?.message || e.message}`);
+    } finally {
+      setTriaging(false);
+      load(); // refetch the table to reflect post-retry state
+    }
   }, [load]);
 
   const handleRunNow = useCallback(async (name) => {
@@ -269,7 +347,11 @@ export default function DataSourceHealthPage() {
           nextRunAt={data.next_run_at}
           onRefresh={load}
           refreshing={refreshing}
+          onTriage={handleTriage}
+          triaging={triaging}
         />
+
+        {triageReport && <TriageReportCard report={triageReport} onClose={() => setTriageReport(null)} />}
 
         {err && (
           <div className="p-3 rounded bg-red-50 text-sm text-red-700 mb-3">{err}</div>

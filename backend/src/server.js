@@ -362,6 +362,13 @@ async function startServer() {
       // enable with OIED_KEYWORD_TRENDS_ENABLED=true.
       const { startKeywordTrendScheduler } = require('./oied/keywordTrend.scheduler');
       startKeywordTrendScheduler();
+
+      // OIED v9.10: source health auto-triage. Runs an hour after the
+      // master ingestion cron, retries failing sources, emails Ali a
+      // summary on days where something needs attention. Default OFF —
+      // enable with OIED_SOURCE_HEALTH_AGENT_ENABLED=true.
+      const { startSourceHealthAgentScheduler } = require('./admin/sourceHealthAgent.scheduler');
+      startSourceHealthAgentScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

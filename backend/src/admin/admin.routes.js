@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('./admin.controller');
 const dataSourceHealth = require('./dataSourceHealth.controller');
+const sourceHealthAgent = require('./sourceHealthAgent.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
 const { ROLES } = require('../config/constants');
@@ -14,6 +15,10 @@ router.use(verifyToken, checkPermissions(ROLES.ADMIN));
 // zero_yield / healthy / disabled). Plus an on-demand "Run now" trigger.
 router.get('/data-sources/health',     dataSourceHealth.getDataSourcesHealth);
 router.post('/data-sources/:name/run', dataSourceHealth.runDataSource);
+
+// v9.10: on-demand auto-triage — retries failing sources, classifies
+// what's still broken, optionally emails the operator.
+router.post('/source-health-agent/run', sourceHealthAgent.runSourceHealthAgent);
 
 /**
  * @swagger

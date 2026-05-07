@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## OIED v9.10 — Source Health Auto-Triage Agent
+
+- [x] Daily cron + on-demand button that retries every failing data source once, classifies what's still broken into actionable categories, and emails the operator a summary — but only when there's something worth reading. The follow-up to v9.9 (Source Health page); now the page can ALSO act on what it surfaces.
+  - Date: 2026-05-07
+  - What changed: `backend/src/admin/sourceHealthAgent.service.js` runs the triage flow: snapshot health → retry every failing source via `runIngestion()` → re-snapshot → classify residual failures into `missing_credentials` / `schema_overflow` / `upstream_validation` / `upstream_unavailable` / `feed_url_dead` / `unknown` (regex rules over the rendered last_run_error) and `source_dried_up` for zero_yield rows. `runAndEmail` composes a focused HTML+text email and sends via the existing `utils/email.js` (nodemailer); skipped on clean days. `sourceHealthAgent.scheduler.js` adds a daily cron (default `0 7 * * *` UTC, an hour after the master ingestion cron) gated by `OIED_SOURCE_HEALTH_AGENT_ENABLED`. `sourceHealthAgent.controller.js` exposes `POST /api/v1/admin/source-health-agent/run` (admin-only) for on-demand runs from the page. Frontend: new "🤖 Run Auto-Triage" button next to "Refresh" on `DataSourceHealthPage`, plus a `TriageReportCard` that renders the inline result with recovered/still-failing/zero-yield groupings and the suggested human action per row. `docker-compose.prod.yml` passes through `OIED_SOURCE_HEALTH_AGENT_*` and `OIED_PUBLIC_URL` env vars.
+  - Verification: 17 new tests in `tests/admin/sourceHealthAgent.test.js` (11 classifier cases, 3 runAgent cases incl. retry-only-on-failing and zero_yield-no-retry, 3 email-gating cases incl. clean-day-skip, no-recipient-skip, happy-path send). Full backend suite: 107 suites / 1337 tests pass. Backend + frontend syntax-checked. Smoke pending on prod.
+  - Notes: Conservative auto-fix surface — never edits credentials, schema, feed URLs, or config. The agent's job is to TRIAGE, not to repair. Default OFF until a recipient is configured (`OIED_SOURCE_HEALTH_AGENT_TO`); falls back to `OIED_BRIEFING_TO` if set. No schema changes. Re-uses existing nodemailer transport.
+
 ## OIED v9.9 — Data Source Health page
 
 - [x] New ops page surfacing every ingestion data source with derived status (healthy / stale / zero_yield / failing / disabled), last-run details, recent created-row totals, 14-day sparkline, and a "Run now" trigger. Solves the silent-stall blind spot that left the capital channel dead for 80 days before anyone noticed.
