@@ -1,8 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import { listMyOpportunities, recordEvent } from '../services/oiedService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
+import ChannelChip from '../components/oied/ChannelChip';
+
+// Mirrors backend channels.service.CHANNELS — used by the filter
+// dropdown and the page header. Order is canonical.
+const CHANNEL_OPTIONS = [
+  { key: '',               label: 'All channels' },
+  { key: 'strategic',      label: '🎯 Strategic Patterns' },
+  { key: 'bonfire',        label: '🔥 Bonfire' },
+  { key: 'government',     label: '🏛 Government' },
+  { key: 'talent',         label: '👥 Talent' },
+  { key: 'private-sector', label: '🧠 Private Sector' },
+  { key: 'freelance',      label: '💼 Freelance' },
+  { key: 'capital',        label: '💰 Capital' },
+];
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -37,8 +52,11 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <ScoreBadge score={opp.fitScore} />
+            {opp.context && opp.context.channel && (
+              <ChannelChip channel={opp.context.channel} />
+            )}
             <span className="text-xs text-gray-500 uppercase tracking-wide">{opp.type}</span>
             {opp.category && (
               <span className="text-xs text-gray-500">· {opp.category}</span>
@@ -117,6 +135,8 @@ function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail 
 
 function MyOpportunitiesPage() {
   const { user } = useSelector((s) => s.auth);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channelFromUrl = searchParams.get('channel') || '';
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -126,11 +146,16 @@ function MyOpportunitiesPage() {
   const [minScore, setMinScore] = useState('');
   const [detailOppId, setDetailOppId] = useState(null);
 
+  // Pull a deeper pool when a channel filter is active, so client-side
+  // filtering of channels with sparse top-priority rows still has enough
+  // material to fill the strips.
+  const fetchSize = channelFromUrl ? 500 : pageSize;
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const params = { limit: pageSize, offset: (page - 1) * pageSize };
+      const params = { limit: fetchSize, offset: channelFromUrl ? 0 : (page - 1) * pageSize };
       if (minScore) params.minScore = minScore;
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
@@ -140,10 +165,30 @@ function MyOpportunitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, minScore]);
+  }, [page, pageSize, minScore, channelFromUrl, fetchSize]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Filter client-side by channel (URL param). Channel filter is purely
+  // a view-on-the-data — no server param yet, since the channel itself
+  // is derived from (type, source) on the envelope side.
+  const channelFiltered = useMemo(() => {
+    if (!channelFromUrl) return rows;
+    return rows.filter(
+      (r) => (r.context && r.context.channel && r.context.channel.key) === channelFromUrl,
+    );
+  }, [rows, channelFromUrl]);
+
+  function setChannel(key) {
+    if (key) {
+      setSearchParams({ channel: key });
+    } else {
+      setSearchParams({});
+    }
+    setPage(1);
+  }
+
+  const displayRows = channelFiltered;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   if (!user || user.role !== 'admin') {
@@ -158,12 +203,13 @@ function MyOpportunitiesPage() {
   // sections at the top so admins triage the most important rows first.
   // v9.2 added strategic_pattern for synthesized Bonfire clusters: they
   // get their own strip so they don't crowd out high_value individuals.
+  // Channel filter applies BEFORE bucket grouping.
   const grouped = {
-    act_now:           rows.filter((r) => r.bucket === 'act_now'),
-    high_value:        rows.filter((r) => r.bucket === 'high_value'),
-    quick_win:         rows.filter((r) => r.bucket === 'quick_win'),
-    strategic_pattern: rows.filter((r) => r.bucket === 'strategic_pattern'),
-    standard:          rows.filter((r) => !r.bucket || r.bucket === 'standard'),
+    act_now:           displayRows.filter((r) => r.bucket === 'act_now'),
+    high_value:        displayRows.filter((r) => r.bucket === 'high_value'),
+    quick_win:         displayRows.filter((r) => r.bucket === 'quick_win'),
+    strategic_pattern: displayRows.filter((r) => r.bucket === 'strategic_pattern'),
+    standard:          displayRows.filter((r) => !r.bucket || r.bucket === 'standard'),
   };
 
   return (
@@ -183,7 +229,20 @@ function MyOpportunitiesPage() {
           </p>
         </header>
 
-        <div className="flex items-center gap-3 mb-4 text-sm">
+        <div className="flex items-center gap-3 mb-4 text-sm flex-wrap">
+          <label className="flex items-center gap-1.5">
+            Channel:
+            <select
+              value={channelFromUrl}
+              onChange={(e) => setChannel(e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1"
+              data-testid="channel-filter"
+            >
+              {CHANNEL_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5">
             Min score:
             <input
@@ -197,7 +256,11 @@ function MyOpportunitiesPage() {
               data-testid="min-score-input"
             />
           </label>
-          <span className="text-gray-500" data-testid="total-count">{total} matching</span>
+          <span className="text-gray-500" data-testid="total-count">
+            {channelFromUrl
+              ? `${displayRows.length} in this channel`
+              : `${total} matching`}
+          </span>
           <div className="flex-1" />
           <button
             disabled={page <= 1 || loading}
@@ -224,9 +287,11 @@ function MyOpportunitiesPage() {
 
         {loading ? (
           <div className="p-8 text-center text-gray-500">Loading…</div>
-        ) : rows.length === 0 ? (
+        ) : displayRows.length === 0 ? (
           <div className="p-8 text-center text-gray-500 bg-white dark:bg-gray-800 border rounded">
-            No opportunities match the filters.
+            {channelFromUrl
+              ? 'No opportunities in this channel match the current filters.'
+              : 'No opportunities match the filters.'}
           </div>
         ) : (
           <>
@@ -264,10 +329,10 @@ function MyOpportunitiesPage() {
             />
 
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-8 mb-2">
-              All matching ({rows.length})
+              All matching ({displayRows.length})
             </h2>
             <ul className="list-none p-0" data-testid="my-opportunities-list">
-              {rows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}
+              {displayRows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}
             </ul>
           </>
         )}

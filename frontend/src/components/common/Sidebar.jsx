@@ -68,9 +68,17 @@ function Sidebar({ open, onClose }) {
     return () => { cancelled = true; };
   }, []);
 
-  // OIED admin block — three small grouped sections + an entry-point dashboard,
-  // injected only for admin users. Replaces the older flat list that lived
-  // inside "Tools & Actions". Bonfire stays where it was (its own section).
+  // OIED unified-tool sidebar (admin only). v9.3 collapses the nine
+  // legacy strategic-view items into a single "Channels" group so all
+  // sources feel like one tool, not many. Each channel link points to
+  // /admin/opportunities/my?channel=<key> — the channel filter on My
+  // Opportunities. Legacy /government, /talent, /freelance, etc. routes
+  // still work for direct URLs but no longer appear in the sidebar.
+  const ICON = {
+    star:    'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z',
+    pin:     'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+    list:    'M4 6h16M4 10h16M4 14h16M4 18h16',
+  };
   const OIED_SECTIONS = isAdmin ? [
     {
       label: 'OIED',
@@ -79,16 +87,22 @@ function Sidebar({ open, onClose }) {
       ],
     },
     {
-      label: 'Discover',
+      label: 'Channels',
       items: [
-        { to: '/admin/opportunities/my', label: '📌 My Opportunities', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-        { to: '/admin/opportunities/recommendations', label: '🎯 Top Actions', icon: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
-        { to: '/admin/opportunities/bundles', label: '🧩 Bundles', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+        { to: '/admin/opportunities/my',                        label: '📌 All Opportunities',  icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=strategic',      label: '🎯 Strategic Patterns',  icon: ICON.star },
+        { to: '/admin/opportunities/my?channel=bonfire',        label: '🔥 Bonfire',             icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=government',     label: '🏛 Government',          icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=talent',         label: '👥 Talent',              icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=private-sector', label: '🧠 Private Sector',      icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=freelance',      label: '💼 Freelance',           icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=capital',        label: '💰 Capital',             icon: ICON.list },
       ],
     },
     {
       label: 'Pursue',
       items: [
+        { to: '/admin/opportunities/recommendations', label: '🎯 Top Actions', icon: ICON.star },
         { to: '/admin/opportunities/review', label: '📋 Review Queue', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
         { to: '/admin/opportunities/execution', label: '🚀 Execution Queue', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
         { to: '/admin/briefing', label: '📨 Daily Briefing', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
@@ -98,6 +112,7 @@ function Sidebar({ open, onClose }) {
       label: 'Operate',
       items: [
         { to: '/admin/revenue', label: '💰 Revenue Dashboard', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+        { to: '/admin/opportunities/bundles', label: '🧩 Bundles', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
         { to: '/admin/triggers', label: '⚡ Trigger Logs', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
         { to: '/admin/profile', label: '🧬 Business Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
         { to: '/admin/billing', label: '💳 Billing', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
@@ -105,25 +120,33 @@ function Sidebar({ open, onClose }) {
     },
   ] : [];
 
-  // Bonfire links (unchanged behavior — only injected when the flag is on).
-  const BONFIRE_SECTION = bonfireEnabled ? [
+  // Bonfire deep-dive pages stay reachable for direct URLs. The sidebar
+  // entry is kept (admin-only, behind the flag) for analysts who want the
+  // dedicated portal-grouped view; the main Bonfire flow is via the
+  // Channels group above.
+  const BONFIRE_SECTION = (bonfireEnabled && isAdmin) ? [
     {
-      label: 'Bonfire',
+      label: 'Bonfire (deep dive)',
       items: [
-        { to: '/bonfire', label: '🔥 Bonfire', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.24 17 7.341 18.75 11.166 16.657 10.657 17.657 18.657z' },
-        { to: '/bonfire/strategic', label: '🎯 Strategic', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+        { to: '/bonfire', label: '🔥 Vendor Hub', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.24 17 7.341 18.75 11.166 16.657 10.657 17.657 18.657z' },
+        { to: '/bonfire/strategic', label: '🎯 Strategist Panel', icon: ICON.star },
       ],
     },
   ] : [];
 
-  // Compose final nav list. OIED block appears between the (always-visible)
-  // top section and Strategic Views; Bonfire goes right after.
+  // Strategic-view items at the top of NAV_SECTIONS no longer apply for
+  // admins (collapsed into the Channels group above). For non-admin users
+  // and public marketing surfaces, the legacy Strategic Views config
+  // stays in place.
   const [topSection, ...restSections] = NAV_SECTIONS;
+  const filteredRest = isAdmin
+    ? restSections.filter((s) => s.label !== 'Strategic Views' && s.label !== 'Tools & Actions')
+    : restSections;
   const navSections = [
     topSection,
     ...OIED_SECTIONS,
     ...BONFIRE_SECTION,
-    ...restSections,
+    ...filteredRest,
   ];
 
   const linkClasses = ({ isActive }) =>

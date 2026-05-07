@@ -10,6 +10,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import ChannelChip from './ChannelChip';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -88,6 +89,7 @@ export default function OpportunityDetailModal({ opportunityId, onClose }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-xs text-gray-500">Opportunity #{opportunityId}</span>
+              {ctx.channel && <ChannelChip channel={ctx.channel} linkable={false} />}
               {mb && (
                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${mb.cls}`}>
                   {mb.text}

@@ -179,3 +179,9 @@ export async function getVelocity() {
   const res = await api.get(`${base}/velocity`);
   return res.data?.data || null;
 }
+
+// ---- v9.3: Channel summary (one row per channel; powers dashboard grid) -----
+export async function getChannelsSummary() {
+  const res = await api.get(`${base}/channels/summary`);
+  return res.data?.data || [];
+}

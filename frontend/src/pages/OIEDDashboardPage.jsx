@@ -15,6 +15,8 @@ import {
   listOutputs,
   getPendingOutcomes,
 } from '../services/oiedService';
+import ChannelOverview from '../components/oied/ChannelOverview';
+import ChannelChip from '../components/oied/ChannelChip';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -99,6 +101,7 @@ function NextMoveRow({ rec }) {
           {rec.title || `Opportunity ${oid}`}
         </Link>
         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+          {ctx.channel && <ChannelChip channel={ctx.channel} />}
           <span>{actionLabel}</span>
           {badge && (
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badge.cls}`}>
@@ -277,6 +280,14 @@ export default function OIEDDashboardPage() {
             How long buyers take to acknowledge after we submit
           </div>
         </Link>
+      </div>
+
+      {/* CHANNEL OVERVIEW */}
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        Channels
+      </h2>
+      <div className="mb-8">
+        <ChannelOverview />
       </div>
 
       {/* QUICK NAV */}

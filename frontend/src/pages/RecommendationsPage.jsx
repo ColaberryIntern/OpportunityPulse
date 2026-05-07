@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { getRecommendations, generateOutput, markResult } from '../services/oiedService';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
+import ChannelChip from '../components/oied/ChannelChip';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -117,6 +118,9 @@ function RecommendationCard({ rec, onGenerated, onResult, onOpenDetail }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
+        {rec.context && rec.context.channel && (
+          <ChannelChip channel={rec.context.channel} />
+        )}
         {bucket && (
           <span className={`px-2 py-0.5 rounded ${TONE_CLASS[bucket.tone]}`}>{bucket.text}</span>
         )}

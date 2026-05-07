@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { listExecutionQueue, patchOutputStatus } from '../services/oiedService';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
+import ChannelChip from '../components/oied/ChannelChip';
 
 function fmtUSD(n) {
   if (n == null || n === 0) return '—';
@@ -121,8 +122,11 @@ function ExecutionQueuePage() {
                       >
                         {row.title}
                       </button>
-                      <div className="text-xs text-gray-500">
-                        {row.category || '—'} · #{row.opportunity_id}
+                      <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                        {row.context && row.context.channel && (
+                          <ChannelChip channel={row.context.channel} />
+                        )}
+                        <span>{row.category || '—'} · #{row.opportunity_id}</span>
                       </div>
                     </td>
                     <td className="px-2 py-2 text-right text-sm">{fmtUSD(row.value)}</td>

@@ -297,12 +297,87 @@ async function getRevenueAlias(req, res) {
   }
 }
 
+// GET /api/v1/oied/channels/summary — one card per channel: active count,
+// top opportunity (by priority_score), drafts-in-review count, total
+// estimated value. Powers the dashboard's Channel Overview grid.
+async function getChannelsSummary(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const channelsSvc = require('./channels.service');
+    const { sequelize } = require('../models');
+    const { QueryTypes } = require('sequelize');
+
+    // Aggregate by (type) since channel is purely a derivation of type/source.
+    // SQL is fastest path — one round trip vs per-channel queries.
+    const rows = await sequelize.query(
+      `SELECT type, source,
+              COUNT(*)::int               AS active_count,
+              COALESCE(SUM(value), 0)::numeric AS total_value
+       FROM opportunities
+       WHERE status = 'active'
+       GROUP BY type, source`,
+      { type: QueryTypes.SELECT },
+    );
+
+    // Roll (type, source) buckets up into channel buckets.
+    const byChannel = new Map();
+    for (const ch of channelsSvc.listChannels()) {
+      byChannel.set(ch.key, {
+        key: ch.key,
+        label: ch.label,
+        icon: ch.icon,
+        color: ch.color,
+        active_count: 0,
+        total_value: 0,
+      });
+    }
+    for (const row of rows) {
+      const ch = channelsSvc.getChannelForOpp({ type: row.type, source: row.source });
+      if (ch.key === 'unknown') continue;
+      const agg = byChannel.get(ch.key);
+      agg.active_count += Number(row.active_count) || 0;
+      agg.total_value  += Number(row.total_value)  || 0;
+    }
+
+    // Optional top-opportunity hint per channel (best title we can show).
+    // Single query: join opportunities to find the highest-priority active
+    // row per type, then map to channel.
+    const tops = await sequelize.query(
+      `SELECT DISTINCT ON (type) id, title, type, source, priority_score
+       FROM opportunities
+       WHERE status = 'active' AND priority_score IS NOT NULL
+       ORDER BY type, priority_score DESC, id DESC`,
+      { type: QueryTypes.SELECT },
+    );
+    for (const t of tops) {
+      const ch = channelsSvc.getChannelForOpp({ type: t.type, source: t.source });
+      const agg = byChannel.get(ch.key);
+      if (!agg) continue;
+      // Keep the highest-priority overall for the channel (since multiple
+      // types may roll into one channel, pick the best).
+      if (!agg.top_opp || (t.priority_score || 0) > (agg.top_opp.priority_score || 0)) {
+        agg.top_opp = {
+          id: t.id,
+          title: t.title,
+          priority_score: Number(t.priority_score) || 0,
+        };
+      }
+    }
+
+    return successResponse(res, Array.from(byChannel.values()));
+  } catch (e) {
+    logger.error('intelligence.channels.summary failed', { error: e.message });
+    return errorResponse(res, 'Failed to load channels summary: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   // New endpoints
   getOpportunityIntelligence,
   listExecutionQueueIntelligence,
   getBundleBlueprintIntelligence,
   getRevenueAlias,
+  getChannelsSummary,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
   attachContextToBundle,

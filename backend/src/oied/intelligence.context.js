@@ -17,6 +17,7 @@
 
 const { computeRoiPerHour } = require('./executionQueue.service');
 const { estimateEffort } = require('./effortEstimator.service');
+const { getChannelForOpp } = require('./channels.service');
 
 const SCHEMA_VERSION = 1;
 
@@ -238,6 +239,9 @@ function buildContextForOpportunity({
     latestDraft,
     outcome,
   });
+  // Channel: pure derivation from (type, source). Always attached so
+  // any UI surface can render a chip / group / filter without re-deriving.
+  const channel = getChannelForOpp(opp);
   const ctx = {
     schema_version: SCHEMA_VERSION,
     priority: Math.round(Number(opp.priorityScore) || 0),
@@ -249,6 +253,7 @@ function buildContextForOpportunity({
     reason: reasonForOpportunity(opp, latestDraft, outcome),
     strategic_type: strategicTypeForOpportunity(opp, latestDraft, outcome),
     next_steps: overridden.next_steps,
+    channel: { key: channel.key, label: channel.label, icon: channel.icon, color: channel.color },
     organization_id: organizationId,
     generated_at: new Date().toISOString(),
   };
