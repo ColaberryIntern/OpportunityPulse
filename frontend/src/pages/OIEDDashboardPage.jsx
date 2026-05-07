@@ -8,22 +8,27 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   getRecommendations,
   getRevenueDashboard,
   getVelocity,
   listOutputs,
   getPendingOutcomes,
+  getChannelsSummary,
 } from '../services/oiedService';
 import ChannelOverview from '../components/oied/ChannelOverview';
 import ChannelChip from '../components/oied/ChannelChip';
 // Round-3 merge: bring the legacy /dashboard widgets into Mission
 // Control so this is the single landing page Ali asked for.
+import BriefHeroBanner from '../components/dashboard/BriefHeroBanner';
+import ForYouSection from '../components/dashboard/ForYouSection';
 import OpportunityChart from '../components/dashboard/OpportunityChart';
 import TrendCard from '../components/dashboard/TrendCard';
 import AiToolTrendingWidget from '../components/aiTools/AiToolTrendingWidget';
 import ToolMomentumBoard from '../components/dashboard/ToolMomentumBoard';
 import dashboardService from '../services/dashboardService';
+import { fetchExecutiveBrief } from '../store/slices/actionEngineSlice';
 
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -66,15 +71,69 @@ function CounterCard({ count, label, helper, to, color = 'navy' }) {
   );
 }
 
-function QuickNavTile({ to, label, sub }) {
+function QuickNavTile({ to, label, sub, kpi }) {
   return (
     <Link
       to={to}
       className="block px-4 py-3 rounded-md border border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700/40 transition"
     >
-      <div className="font-semibold text-gray-900 dark:text-gray-100">{label}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-semibold text-gray-900 dark:text-gray-100">{label}</div>
+        {kpi != null && kpi !== '' && (
+          <span className="text-base font-bold text-blue-700 dark:text-blue-400 whitespace-nowrap">
+            {kpi}
+          </span>
+        )}
+      </div>
       {sub && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sub}</div>}
     </Link>
+  );
+}
+
+// Live-computed Market Trends block for Bonfire + Strategic Patterns.
+// The legacy TrendCard reads from AnalysisRun (a background trend-detection
+// cron). Bonfire/Strategic don't have that pipeline yet, so cards render
+// empty. This block uses the live channel summary instead.
+function ChannelTrendBlock({ channel }) {
+  if (!channel) return null;
+  const fmtUSD = (v) => {
+    if (v == null) return '—';
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (n >= 1_000_000_000) return '$' + (n / 1_000_000_000).toFixed(1) + 'B';
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return '$' + Math.round(n / 1_000) + 'k';
+    return '$' + n;
+  };
+  return (
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          {channel.icon} {channel.label}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-2">
+        <div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Active</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{channel.active_count}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Total value</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtUSD(channel.total_value)}</div>
+        </div>
+      </div>
+      {channel.top_opp && (
+        <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={channel.top_opp.title}>
+          Top: {channel.top_opp.title}
+        </div>
+      )}
+      <Link
+        to={`/admin/opportunities/my?channel=${encodeURIComponent(channel.key)}`}
+        className="text-xs text-blue-600 hover:underline mt-2 inline-block"
+      >
+        View {channel.label} →
+      </Link>
+    </div>
   );
 }
 
@@ -148,6 +207,25 @@ export default function OIEDDashboardPage() {
   const [chartLoading, setChartLoading] = useState(true);
   const [chartPeriod, setChartPeriod] = useState('30d');
   const [trends, setTrends] = useState(null);
+  const [channelsSummary, setChannelsSummary] = useState([]);
+
+  // Executive brief — drives the BriefHeroBanner at the top of the page.
+  const dispatch = useDispatch();
+  const executiveBrief = useSelector((s) => s.actionEngine && s.actionEngine.executiveBrief);
+  const briefLoading   = useSelector((s) => s.actionEngine && s.actionEngine.briefLoading);
+  useEffect(() => {
+    if (dispatch && fetchExecutiveBrief) dispatch(fetchExecutiveBrief());
+  }, [dispatch]);
+
+  // Channel summary — used both for the Channel Overview cards and to
+  // power the per-channel KPI numbers in Quick Navigation.
+  useEffect(() => {
+    let cancelled = false;
+    getChannelsSummary()
+      .then((data) => { if (!cancelled) setChannelsSummary(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setChannelsSummary([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   const loadChart = useCallback(async (period) => {
     setChartLoading(true);
@@ -212,6 +290,28 @@ export default function OIEDDashboardPage() {
   const top3 = (recommendations || []).slice(0, 3);
   const responseMedian = velocity && velocity.response && velocity.response.median_days;
 
+  // Resolve a channel summary entry by key (used to build per-channel KPIs).
+  const ch = (key) => (channelsSummary || []).find((c) => c.key === key) || {};
+  const bonfireCh = ch('bonfire');
+  const strategicCh = ch('strategic');
+  const govCh = ch('government');
+  const talentCh = ch('talent');
+  const psCh = ch('private-sector');
+  const flCh = ch('freelance');
+  const capCh = ch('capital');
+
+  // KPI bag for Quick Nav tiles. Falls back to '—' when data not loaded.
+  const fmt = (n) => (n == null || !Number.isFinite(Number(n)) ? '—' : Number(n).toLocaleString());
+  const fmtUSDShort = (v) => {
+    if (v == null) return '—';
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'k';
+    return '$' + n;
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-4 lg:p-6">
       <div className="mb-6">
@@ -220,6 +320,14 @@ export default function OIEDDashboardPage() {
           Today's actions, pipeline health, and one-click navigation. All data live from prod.
         </p>
       </div>
+
+      {/* TOP — Executive brief banner (from legacy /dashboard) */}
+      <BriefHeroBanner brief={executiveBrief} loading={briefLoading} />
+
+      {/* TOP — AI matches across channels (talent, gov, bonfire, strategic, etc.) */}
+      <section className="mb-8">
+        <ForYouSection />
+      </section>
 
       {err && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
@@ -356,8 +464,8 @@ export default function OIEDDashboardPage() {
         <TrendCard type="grant"        trendData={trends?.grant} />
         <TrendCard type="ai_news"      trendData={trends?.ai_news} />
         <TrendCard type="freelance"    trendData={trends?.freelance} />
-        <TrendCard type="bonfire"            trendData={trends?.bonfire} />
-        <TrendCard type="bonfire_strategic"  trendData={trends?.bonfire_strategic} />
+        <ChannelTrendBlock channel={bonfireCh.key ? bonfireCh : null} />
+        <ChannelTrendBlock channel={strategicCh.key ? strategicCh : null} />
       </div>
 
       {/* QUICK NAV */}
@@ -368,27 +476,94 @@ export default function OIEDDashboardPage() {
         <div>
           <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Discover</h3>
           <div className="space-y-2">
-            <QuickNavTile to="/admin/opportunities/my" label="My Opportunities" sub="Personalized scored list" />
-            <QuickNavTile to="/admin/opportunities/recommendations" label="Top Actions" sub="Today's highest-ROI moves" />
-            <QuickNavTile to="/admin/opportunities/bundles" label="Bundles" sub="Grouped opportunities → reusable products" />
+            <QuickNavTile
+              to="/admin/opportunities/my"
+              label="My Opportunities"
+              sub="Personalized scored list across all channels"
+              kpi={fmt((channelsSummary || []).reduce((s, c) => s + (c.active_count || 0), 0))}
+            />
+            <QuickNavTile
+              to="/admin/opportunities/recommendations"
+              label="Top Actions"
+              sub="Today's highest-ROI moves"
+              kpi={fmt(top3.length)}
+            />
+            <QuickNavTile
+              to="/admin/opportunities/bundles"
+              label="Bundles"
+              sub="Grouped opportunities → reusable products"
+            />
           </div>
         </div>
         <div>
           <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Pursue</h3>
           <div className="space-y-2">
-            <QuickNavTile to="/admin/opportunities/review" label="Review Queue" sub="Approve / edit drafts" />
-            <QuickNavTile to="/admin/opportunities/execution" label="Execution Queue" sub="Drafts ready to ship, by ROI/hr" />
-            <QuickNavTile to="/admin/briefing" label="Daily Briefing" sub="Composed summary, emailable" />
+            <QuickNavTile
+              to="/admin/opportunities/review"
+              label="Review Queue"
+              sub="Approve / edit drafts"
+              kpi={loading ? '…' : fmt(draftCount)}
+            />
+            <QuickNavTile
+              to="/admin/opportunities/execution"
+              label="Execution Queue"
+              sub="Drafts ready to ship, by ROI/hr"
+              kpi={loading ? '…' : fmt(draftCount)}
+            />
+            <QuickNavTile
+              to="/admin/briefing"
+              label="Daily Briefing"
+              sub="Composed summary, emailable"
+            />
           </div>
         </div>
         <div>
           <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Operate</h3>
           <div className="space-y-2">
-            <QuickNavTile to="/admin/revenue" label="Revenue Dashboard" sub="Pipeline value, win-rate, velocity" />
-            <QuickNavTile to="/admin/triggers" label="Trigger Logs" sub="Scheduled engine runs" />
-            <QuickNavTile to="/admin/profile" label="Business Profile" sub="Services, industries, past wins" />
+            <QuickNavTile
+              to="/admin/revenue"
+              label="Revenue Dashboard"
+              sub="Pipeline value · win-rate · velocity"
+              kpi={fmtUSDShort(revenue && revenue.pipeline_value)}
+            />
+            <QuickNavTile
+              to="/admin/triggers"
+              label="Trigger Logs"
+              sub="Scheduled engine runs"
+            />
+            <QuickNavTile
+              to="/admin/profile"
+              label="Business Profile"
+              sub="Services, industries, past wins"
+            />
           </div>
         </div>
+      </div>
+
+      {/* PER-CHANNEL KPI GRID — quick scan of how each area is doing */}
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-8 mb-3">
+        Channel KPIs at a glance
+      </h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+        {[
+          { c: strategicCh, label: 'Strategic' },
+          { c: bonfireCh,   label: 'Bonfire' },
+          { c: govCh,       label: 'Government' },
+          { c: talentCh,    label: 'Talent' },
+          { c: psCh,        label: 'Private Sector' },
+          { c: flCh,        label: 'Freelance' },
+          { c: capCh,       label: 'Capital' },
+        ].map((row, i) => (
+          <Link
+            key={i}
+            to={row.c.key ? `/admin/opportunities/my?channel=${encodeURIComponent(row.c.key)}` : '/admin/opportunities/my'}
+            className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-3 hover:border-blue-500 transition"
+          >
+            <div className="text-xs text-gray-500 dark:text-gray-400">{row.c.icon || ''} {row.label}</div>
+            <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-1">{fmt(row.c.active_count || 0)}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{fmtUSDShort(row.c.total_value || 0)}</div>
+          </Link>
+        ))}
       </div>
     </div>
   );

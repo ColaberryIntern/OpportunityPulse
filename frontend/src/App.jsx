@@ -41,6 +41,16 @@ import TriggerLogsPage from './pages/TriggerLogsPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OIEDDashboardPage from './pages/OIEDDashboardPage';
+
+// /dashboard router: admins go to OIED Mission Control (the unified
+// dashboard with brief banner + AI matches + channel overview + trends).
+// Everyone else keeps the legacy DashboardPage. Single mental model
+// for the admin without breaking the public-facing dashboard.
+function DashboardOrMissionControl() {
+  const role = useSelector((s) => s.auth && s.auth.user && s.auth.user.role);
+  if (role === 'admin') return <OIEDDashboardPage />;
+  return <DashboardPage />;
+}
 import BillingPage from './pages/BillingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -127,11 +137,14 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
         {/* Protected routes with shared layout */}
+        {/* Admins land on the unified OIED Mission Control; non-admins keep
+            the legacy dashboard. Mission Control now contains everything
+            the legacy dashboard had plus the OIED-specific surfaces. */}
         <Route
           path="/dashboard"
           element={
             <ProtectedLayout>
-              <DashboardPage />
+              <DashboardOrMissionControl />
             </ProtectedLayout>
           }
         />
