@@ -212,8 +212,27 @@ async function getDataSourcesHealth(req, res) {
     const sourceRows = sources.map((s) => {
       const dsLogs = (logsByDs.get(s.id) || []);
       const last = dsLogs[0] || null;
+      // errors[] entries can be either plain strings or structured
+      // {message, status, ...} objects depending on the adapter. Render
+      // a stable readable string for either shape.
+      const formatError = (e) => {
+        if (e == null) return null;
+        if (typeof e === 'string') return e;
+        if (typeof e === 'object') {
+          const parts = [];
+          if (e.message)   parts.push(String(e.message));
+          if (e.code)      parts.push(`(${e.code})`);
+          if (e.status && !e.message) parts.push(`status=${e.status}`);
+          if (e.url)       parts.push(`url=${e.url}`);
+          if (parts.length === 0) {
+            try { return JSON.stringify(e); } catch (_) { return String(e); }
+          }
+          return parts.join(' ');
+        }
+        return String(e);
+      };
       const lastError = last && Array.isArray(last.errors) && last.errors.length > 0
-        ? String(last.errors[0]).slice(0, 240)
+        ? formatError(last.errors[0]).slice(0, 240)
         : null;
       // Roll up created counts over 24h/7d/30d from the recent log slice.
       const sumCreated = (sinceDate) => dsLogs
