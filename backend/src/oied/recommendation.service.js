@@ -74,9 +74,14 @@ async function getTopActions(userId, {
 } = {}) {
   const orgId = organizationId || (await profileSvc.resolveOrgId(userId));
 
-  const { rows } = await myOppsSvc.listMyOpportunities({
+  const { rows: allRows } = await myOppsSvc.listMyOpportunities({
     userId, organizationId: orgId, limit: 50, offset: 0,
   });
+  // Exclude Bonfire strategic clusters from Top Actions — clusters are
+  // patterns to consider, not atomic actions Ali should "do today".
+  // They remain prominent on My Opps (high_value strip) and the OIED
+  // dashboard. Top Actions stays focused on actionable individual opps.
+  const rows = (allRows || []).filter((r) => r.type !== 'bonfire_strategic');
   if (!rows || rows.length === 0) return [];
 
   // Compute win probability per row using the learning engine. We persist
