@@ -219,15 +219,18 @@ async function getDataSourcesHealth(req, res) {
         if (e == null) return null;
         if (typeof e === 'string') return e;
         if (typeof e === 'object') {
-          const parts = [];
-          if (e.message)   parts.push(String(e.message));
-          if (e.code)      parts.push(`(${e.code})`);
-          if (e.status && !e.message) parts.push(`status=${e.status}`);
-          if (e.url)       parts.push(`url=${e.url}`);
-          if (parts.length === 0) {
-            try { return JSON.stringify(e); } catch (_) { return String(e); }
+          // Adapters in this repo store errors as {error: "..."} or
+          // {message: "...", code, status, ...}. Pick whatever's there
+          // and tack on identifying context (sourceId, status, url).
+          const primary = e.error || e.message || null;
+          if (primary) {
+            const tags = [];
+            if (e.code)     tags.push(`code=${e.code}`);
+            if (e.status)   tags.push(`status=${e.status}`);
+            if (e.sourceId) tags.push(`row=${String(e.sourceId).slice(0, 24)}`);
+            return tags.length ? `${primary} [${tags.join(', ')}]` : String(primary);
           }
-          return parts.join(' ');
+          try { return JSON.stringify(e); } catch (_) { return String(e); }
         }
         return String(e);
       };
