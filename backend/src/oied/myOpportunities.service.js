@@ -8,6 +8,7 @@ const { getOrCreateFitScore, profileHash } = require('./fitScoring.service');
 const { calculatePriorityScore } = require('./priorityScoring.service');
 const profileSvc = require('./profile.service');
 const { estimateEffort } = require('./effortEstimator.service');
+const channelsSvc = require('./channels.service');
 
 const MIN_VALUE_USD = 1000;
 
@@ -15,6 +16,7 @@ async function listMyOpportunities({
   limit = 50,
   offset = 0,
   type,
+  channel,           // v9.4: filter to one channel's types at SQL level
   minScore,
   userId,           // who's asking — resolved to org via profile.service
   organizationId,   // explicit org override (multi-tenant callers)
@@ -35,10 +37,28 @@ async function listMyOpportunities({
   };
   if (type) where.type = type;
 
+  // v9.4 channel filter: when supplied, restrict candidates to that
+  // channel's (type) set at SQL time. Without this, the candidate pool
+  // (limit 2000, ordered by updatedAt) is dominated by high-velocity
+  // sources like freelance / ai_news, and a smaller channel's rows
+  // never make it into the pool — so a client-side filter returns
+  // empty even though the channel has hundreds of rows in the DB.
+  if (channel) {
+    const ch = channelsSvc.whereForChannel(channel);
+    if (ch && ch.types.length > 0) {
+      where.type = { [Op.in]: ch.types };
+    }
+  }
+
+  // When filtering by channel, pull 500 candidates from THAT channel
+  // (ordered by updatedAt DESC). Without channel filter, keep the
+  // 2000-row default pool to drive the broad scoring sweep.
+  const candidatePool = channel ? 500 : 2000;
+
   const candidates = await Opportunity.findAll({
     where,
     order: [['updatedAt', 'DESC']],
-    limit: 2000,
+    limit: candidatePool,
   });
 
   const hash = profileHash(userProfile);

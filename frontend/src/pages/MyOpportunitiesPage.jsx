@@ -27,14 +27,25 @@ function fmtUSD(n) {
   return '$' + v;
 }
 
-function ScoreBadge({ score }) {
+// Big badge = priorityScore (the actual sort key). Smaller "fit" suffix
+// shows the profile-match score so Ali still sees both signals without
+// the visual confusion that came from showing fit alone (which doesn't
+// drive sort and made the list look unsorted).
+function ScoreBadge({ priority, fit }) {
+  const p = Number(priority) || 0;
   let bg = 'bg-gray-100 text-gray-700';
-  if (score >= 80) bg = 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-  else if (score >= 60) bg = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
-  else if (score >= 40) bg = 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+  if (p >= 80) bg = 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+  else if (p >= 60) bg = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+  else if (p >= 40) bg = 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${bg}`}>
-      {score}
+    <span
+      className={`inline-flex items-baseline gap-1 px-2 py-0.5 rounded text-xs font-semibold ${bg}`}
+      title={`priority ${p}, fit ${Number(fit) || 0}`}
+    >
+      <span>{p}</span>
+      {fit != null && Number(fit) > 0 && (
+        <span className="text-[10px] opacity-70 font-normal">/ fit {Number(fit)}</span>
+      )}
     </span>
   );
 }
@@ -53,7 +64,7 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <ScoreBadge score={opp.fitScore} />
+            <ScoreBadge priority={opp.priorityScore} fit={opp.fitScore} />
             {opp.context && opp.context.channel && (
               <ChannelChip channel={opp.context.channel} />
             )}
@@ -146,9 +157,10 @@ function MyOpportunitiesPage() {
   const [minScore, setMinScore] = useState('');
   const [detailOppId, setDetailOppId] = useState(null);
 
-  // Pull a deeper pool when a channel filter is active, so client-side
-  // filtering of channels with sparse top-priority rows still has enough
-  // material to fill the strips.
+  // v9.4: channel filter is enforced at the SQL level by the backend.
+  // The frontend just passes ?channel=<key> to /opportunities/my and
+  // gets back rows pre-filtered to that channel's types. The deeper
+  // candidate pool when a channel is active is also handled server-side.
   const fetchSize = channelFromUrl ? 500 : pageSize;
 
   const load = useCallback(async () => {
@@ -157,6 +169,7 @@ function MyOpportunitiesPage() {
     try {
       const params = { limit: fetchSize, offset: channelFromUrl ? 0 : (page - 1) * pageSize };
       if (minScore) params.minScore = minScore;
+      if (channelFromUrl) params.channel = channelFromUrl;
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
@@ -169,9 +182,9 @@ function MyOpportunitiesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Filter client-side by channel (URL param). Channel filter is purely
-  // a view-on-the-data — no server param yet, since the channel itself
-  // is derived from (type, source) on the envelope side.
+  // Server now does the channel filtering, but keep a client-side guard
+  // against any rows that might slip through (e.g. cross-channel mixing
+  // when type maps to multiple channels in some future taxonomy update).
   const channelFiltered = useMemo(() => {
     if (!channelFromUrl) return rows;
     return rows.filter(

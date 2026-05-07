@@ -33,6 +33,7 @@ async function listMy(req, res) {
       limit: req.query.limit,
       offset: req.query.offset,
       type: req.query.type,
+      channel: req.query.channel,
       minScore: req.query.minScore,
       userId: (req.user && req.user.id) || null,
     });
