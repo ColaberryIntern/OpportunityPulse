@@ -313,6 +313,45 @@ async function getNewsWordCloudHandler(req, res) {
   }
 }
 
+// GET /api/v1/oied/keywords/cloud — multi-source keyword cloud
+// (news titles + categories + cross-channel titles + opp categories
+// + tool names). Each word carries decimal sentiment + channel
+// attribution. Successor to /news/word-cloud.
+async function getKeywordCloudHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const svc = require('./keywordCloud.service');
+    const max = Math.min(Number(req.query.max) || 40, 100);
+    const lookbackDays = Math.min(Number(req.query.lookback) || 14, 60);
+    const sources = req.query.sources
+      ? String(req.query.sources).split(',').map((s) => s.trim()).filter(Boolean)
+      : svc.ALL_SOURCES;
+    const out = await svc.getKeywordCloud({ max, lookbackDays, sources });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.keywords.cloud failed', { error: e.message });
+    return errorResponse(res, 'Failed to load keyword cloud: ' + e.message, 500);
+  }
+}
+
+// GET /api/v1/oied/keywords/related-tools?q=<keyword> — AI tools that
+// match the keyword across name / description / category / tags.
+// Used by the cross-channel search UI to surface tools alongside opp
+// results without migrating tools into the opportunities table.
+async function getRelatedToolsHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const svc = require('./relatedTools.service');
+    const q = req.query.q || '';
+    const max = Math.min(Number(req.query.max) || 10, 25);
+    const out = await svc.getRelatedTools({ q, max });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.keywords.relatedTools failed', { error: e.message });
+    return errorResponse(res, 'Failed to load related tools: ' + e.message, 500);
+  }
+}
+
 // GET /api/v1/oied/channels/summary — one card per channel: active count,
 // top opportunity (by ai_score), drafts-in-review count, total
 // estimated value. Powers the dashboard's Channel Overview grid.
@@ -395,6 +434,8 @@ module.exports = {
   getRevenueAlias,
   getChannelsSummary,
   getNewsWordCloudHandler,
+  getKeywordCloudHandler,
+  getRelatedToolsHandler,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
   attachContextToBundle,

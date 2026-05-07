@@ -191,3 +191,16 @@ export async function getNewsWordCloud(params = {}) {
   const res = await api.get(`${base}/news/word-cloud`, { params });
   return res.data?.data || { words: [], article_count: 0 };
 }
+
+// ---- v9.6: Multi-source keyword cloud (news + categories + tools + cross-channel)
+export async function getKeywordCloud(params = {}) {
+  const res = await api.get(`${base}/keywords/cloud`, { params });
+  return res.data?.data || { words: [], article_count: 0 };
+}
+
+// ---- v9.6: Related AI tools for cross-channel keyword search -----------------
+export async function getRelatedTools(q, max = 10) {
+  if (!q) return { tools: [], count: 0 };
+  const res = await api.get(`${base}/keywords/related-tools`, { params: { q, max } });
+  return res.data?.data || { tools: [], count: 0 };
+}

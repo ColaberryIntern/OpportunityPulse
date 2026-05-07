@@ -5,6 +5,7 @@ import { listMyOpportunities, recordEvent } from '../services/oiedService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 import ChannelChip from '../components/oied/ChannelChip';
+import RelatedToolsRow from '../components/oied/RelatedToolsRow';
 
 // Mirrors backend channels.service.CHANNELS — used by the filter
 // dropdown and the page header. Order is canonical.
@@ -222,6 +223,15 @@ function MyOpportunitiesPage() {
     const next = {};
     if (channelFromUrl) next.channel = channelFromUrl;
     if (key && key !== 'priority') next.sort = key;
+    if (qFromUrl) next.q = qFromUrl;
+    setSearchParams(next);
+    setPage(1);
+  }
+  function submitSearch(value) {
+    const next = {};
+    if (channelFromUrl) next.channel = channelFromUrl;
+    if (sortFromUrl && sortFromUrl !== 'priority') next.sort = sortFromUrl;
+    if (value && String(value).trim()) next.q = String(value).trim();
     setSearchParams(next);
     setPage(1);
   }
@@ -266,6 +276,34 @@ function MyOpportunitiesPage() {
             full list below.
           </p>
         </header>
+
+        {/* Cross-channel keyword search box. Submitting sets ?q= and triggers
+            the search across all channels (or scoped to the active channel). */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); submitSearch(e.currentTarget.elements.q.value); }}
+          className="flex items-center gap-2 mb-3"
+          data-testid="my-opps-search-form"
+        >
+          <input
+            type="search"
+            name="q"
+            defaultValue={qFromUrl}
+            key={qFromUrl}
+            placeholder="Search across all channels (industry, tool, topic)…"
+            className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="my-opps-search-input"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            🔍 Search
+          </button>
+        </form>
+
+        {/* Related AI Tools — shows when a keyword is active. Hidden silently
+            when no tools match. */}
+        {qFromUrl && <RelatedToolsRow q={qFromUrl} />}
 
         <div className="flex items-center gap-3 mb-4 text-sm flex-wrap">
           <label className="flex items-center gap-1.5">
@@ -366,7 +404,10 @@ function MyOpportunitiesPage() {
           </div>
         ) : (
           <>
-            {sortFromUrl === 'priority' && (
+            {/* Hide bucket strips on the keyword-search path — for a topic
+                search the user wants every channel mixed in, not bucketed
+                by act_now / high_value / etc. */}
+            {sortFromUrl === 'priority' && !qFromUrl && (
               <>
             <BucketSection
               title="🔥 Act Now"
@@ -404,9 +445,13 @@ function MyOpportunitiesPage() {
             )}
 
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-8 mb-2">
-              {sortFromUrl === 'newest' && `Newest first (${displayRows.length})`}
-              {sortFromUrl === 'oldest' && `Oldest first (${displayRows.length})`}
-              {sortFromUrl === 'priority' && `All matching (${displayRows.length})`}
+              {qFromUrl
+                ? `Cross-channel results for "${qFromUrl}" (${displayRows.length})`
+                : sortFromUrl === 'newest'
+                  ? `Newest first (${displayRows.length})`
+                  : sortFromUrl === 'oldest'
+                    ? `Oldest first (${displayRows.length})`
+                    : `All matching (${displayRows.length})`}
             </h2>
             <ul className="list-none p-0" data-testid="my-opportunities-list">
               {displayRows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}

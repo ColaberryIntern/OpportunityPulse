@@ -50,7 +50,11 @@ async function listMyOpportunities({
   const where = {
     status: 'active',
   };
-  if (!channel) {
+  // Apply the $1k value floor only on the default cross-channel view.
+  // Channel-explicit and keyword-explicit views drop the floor — Ali
+  // asked for them, ai_news / talent rows have null value by nature,
+  // and excluding them defeats the point of cross-channel search.
+  if (!channel && !q) {
     where[Op.or] = [
       { value: { [Op.gte]: MIN_VALUE_USD } },
       { type: 'bonfire_strategic' },

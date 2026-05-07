@@ -26,6 +26,8 @@ router.get('/bundles/:id/blueprint',    BRIDGE, intel.getBundleBlueprintIntellig
 router.get('/revenue',                  BRIDGE, intel.getRevenueAlias);
 router.get('/channels/summary',         BRIDGE, intel.getChannelsSummary);
 router.get('/news/word-cloud',          BRIDGE, intel.getNewsWordCloudHandler);
+router.get('/keywords/cloud',           BRIDGE, intel.getKeywordCloudHandler);
+router.get('/keywords/related-tools',   BRIDGE, intel.getRelatedToolsHandler);
 router.get('/profile',                  BRIDGE, c.getMyProfile);
 
 // ---- Bridge ACTION endpoints (dual-auth + admin) -----------------------

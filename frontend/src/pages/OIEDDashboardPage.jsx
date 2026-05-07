@@ -19,7 +19,7 @@ import {
 } from '../services/oiedService';
 import ChannelOverview from '../components/oied/ChannelOverview';
 import ChannelChip from '../components/oied/ChannelChip';
-import NewsWordCloud from '../components/oied/NewsWordCloud';
+import KeywordCloud from '../components/oied/KeywordCloud';
 // Round-3 merge: bring the legacy /dashboard widgets into Mission
 // Control so this is the single landing page Ali asked for.
 import BriefHeroBanner from '../components/dashboard/BriefHeroBanner';
@@ -322,8 +322,8 @@ export default function OIEDDashboardPage() {
         </p>
       </div>
 
-      {/* TOP — News word cloud (per Ali: see what's hot in news at a glance) */}
-      <NewsWordCloud />
+      {/* TOP — Multi-source keyword cloud (news + categories + tools + cross-channel titles) */}
+      <KeywordCloud />
 
       {/* TOP — Executive brief banner (from legacy /dashboard) */}
       <BriefHeroBanner brief={executiveBrief} loading={briefLoading} />
