@@ -16,6 +16,7 @@ const logger = require('../logging/logger');
 const {
   BonfireOpportunity,
   BonfireStrategicOpportunity,
+  Opportunity,
 } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
 
@@ -135,12 +136,114 @@ function sumValue(opps) {
 }
 
 // -----------------------------------------------------------------------
+// Cross-channel trend signals.
+//
+// Bonfire is the bid surface (the "where do I bid?" data), but a good
+// strategic recommendation also reads the broader market: what's getting
+// funded, what's being hired for, what news cycles are active. These
+// signals don't generate strategic opportunities on their own — they
+// JUSTIFY direction. The AI prompt embeds them as "market context" and
+// is instructed to cite specific signals when they support a cluster.
+// -----------------------------------------------------------------------
+
+const TREND_LOOKBACK_DAYS = 30;
+const TREND_PER_CHANNEL = 8; // top-N most recent per channel; small enough to keep prompt cheap
+
+async function loadTrendSignals({ now = new Date() } = {}) {
+  if (!Opportunity) {
+    return { news: [], talent: [], capital: [], gov: [], dateRange: null };
+  }
+  const since = new Date(now);
+  since.setDate(since.getDate() - TREND_LOOKBACK_DAYS);
+  const dateRange = `${since.toISOString().slice(0, 10)}..${now.toISOString().slice(0, 10)}`;
+
+  // One query per channel, ordered by recency + ai_score so the highest-
+  // signal rows win the limited prompt budget.
+  async function pull(typeFilter, limit) {
+    const rows = await Opportunity.findAll({
+      where: {
+        status: 'active',
+        type: { [Op.in]: typeFilter },
+        updatedAt: { [Op.gte]: since },
+      },
+      order: [['aiScore', 'DESC NULLS LAST'], ['updatedAt', 'DESC']],
+      limit,
+      attributes: ['id', 'type', 'source', 'title', 'category', 'aiScore', 'value', 'updatedAt'],
+    }).catch((e) => {
+      logger.warn('Strategist: trend pull failed', { types: typeFilter, error: e.message });
+      return [];
+    });
+    return rows.map((r) => (r.toJSON ? r.toJSON() : r));
+  }
+
+  const [news, talent, capital, gov] = await Promise.all([
+    pull(['ai_news'],     TREND_PER_CHANNEL),
+    pull(['ai_job'],      TREND_PER_CHANNEL),
+    pull(['investment'],  TREND_PER_CHANNEL),
+    pull(['gov_contract', 'grant'], TREND_PER_CHANNEL),
+  ]);
+
+  return { news, talent, capital, gov, dateRange };
+}
+
+// Pure: render the trend signals as a compact prompt block. Empty
+// channels are dropped so the prompt stays tight when a channel has no
+// recent activity.
+function formatTrendSignals(signals) {
+  if (!signals) return '';
+  const lines = [];
+  function block(label, rows) {
+    if (!rows || rows.length === 0) return;
+    lines.push(`\n### ${label} (last ${TREND_LOOKBACK_DAYS}d, top ${rows.length})`);
+    rows.forEach((r, i) => {
+      const t = (r.title || '').slice(0, 110);
+      const score = r.aiScore != null ? ` [${Math.round(Number(r.aiScore))}]` : '';
+      const cat = r.category ? ` — ${String(r.category).slice(0, 40)}` : '';
+      lines.push(`${i + 1}. ${t}${score}${cat}`);
+    });
+  }
+  block('🧠 PRIVATE-SECTOR / NEWS signals', signals.news);
+  block('👥 TALENT-DEMAND signals',          signals.talent);
+  block('💰 CAPITAL / FUNDING signals',      signals.capital);
+  block('🏛 FEDERAL PROCUREMENT signals',    signals.gov);
+  if (lines.length === 0) return '';
+  return [
+    '\n---',
+    `MARKET CONTEXT (${signals.dateRange}) — use these as supporting evidence`,
+    'when they ALIGN with the cluster you are evaluating. Cite specific items',
+    'in business_viability.gtm_strategy or summary when relevant. Do not invent;',
+    'only cite signals listed below.',
+    ...lines,
+    '---\n',
+  ].join('\n');
+}
+
+// -----------------------------------------------------------------------
 // AI synthesis
 // -----------------------------------------------------------------------
 function buildSystemPrompt() {
   return [
     'You are a strategic-opportunity curator for an AI-systems consultancy.',
-    'You read government-procurement RFPs and decide which ones admit a productizable AI system.',
+    'Your input combines two streams:',
+    '  1) BONFIRE BIDS — the procurement opportunities (your primary "where to bid" surface).',
+    '  2) MARKET CONTEXT — recent signals from other channels (private-sector news,',
+    '     talent demand, capital/funding, federal procurement) that show market direction.',
+    '',
+    'You produce strategic opportunities that are:',
+    '  - cream-of-the-crop (heavy bias toward Bonfire bids that are best-in-class fits)',
+    '  - cross-validated (supported by the market context where alignment exists)',
+    '  - productizable (admit a single AI system that addresses the cluster)',
+    '  - viable (have a real downstream market beyond the original procurement)',
+    '',
+    'Rules of evidence:',
+    '  - The Bonfire bids are the bid surface. Strategic_score reflects HOW',
+    '    confident you are that this is a real, fundable, repeatable direction.',
+    '  - The market context items below are EVIDENCE. Cite specific items by',
+    '    name (e.g., "Anthropic Series E funding signals enterprise-AI demand")',
+    '    in business_viability.gtm_strategy or summary when they support the',
+    '    cluster. Do NOT cite items that are not relevant. Do NOT invent items.',
+    '  - When the market context is empty, you may still produce strategic',
+    '    opportunities — the bid evidence stands on its own.',
     '',
     'Hard contract: every output MUST have ALL of:',
     '  money:  { initial_bid_value_usd, cluster_total_usd, addressable_market_usd, confidence }',
@@ -168,11 +271,13 @@ function buildSystemPrompt() {
     '',
     'Tone: direct, concrete, no buzzwords. Avoid generic phrasing like',
     '"leverage AI to streamline operations". Be specific: name capabilities,',
-    'real buyer titles, real pricing models.',
+    'real buyer titles, real pricing models. When citing market context,',
+    'be specific about which signal supports which claim.',
   ].join('\n');
 }
 
-function buildStandaloneUserPrompt(opp) {
+function buildStandaloneUserPrompt(opp, trendSignals = null) {
+  const trendBlock = formatTrendSignals(trendSignals);
   return [
     'STANDALONE OPPORTUNITY — analyze this single high-value bid:',
     '',
@@ -189,15 +294,17 @@ function buildStandaloneUserPrompt(opp) {
     'For business_viability, name SPECIFIC secondary buyers (e.g.,',
     '"other Texas housing authorities", "school districts in the Sunbelt",',
     '"municipal HR departments in cities >100k population"). Be concrete.',
+    trendBlock,
   ].join('\n');
 }
 
-function buildClusterUserPrompt(cluster) {
+function buildClusterUserPrompt(cluster, trendSignals = null) {
   const sample = cluster.opps.slice(0, 8);
   const list = sample.map((o, i) => {
     return `${i + 1}. [${o.agency}] ${o.title} — $${(Number(o.estimatedValue) || 0) / 100} (priority ${o.priorityScore})`;
   }).join('\n');
   const totalUsd = Math.round(sumValue(cluster.opps) / 100);
+  const trendBlock = formatTrendSignals(trendSignals);
   return [
     'CLUSTER — analyze this group of similar bids and propose a single AI',
     'system that would address all of them as a productized offering:',
@@ -215,7 +322,13 @@ function buildClusterUserPrompt(cluster) {
     '- money.cluster_total_usd: include all bids in the cluster.',
     '- money.addressable_market_usd: estimate the broader market beyond just',
     '  these specific agencies (think: how many other agencies/orgs nationally',
-    `  also need this kind of system?). Be specific in business_viability.secondary_markets.`,
+    '  also need this kind of system?). Be specific in business_viability.secondary_markets.',
+    '- IF the market context below contains items that align with this cluster,',
+    '  cite them by name in business_viability.gtm_strategy or summary as',
+    '  supporting evidence (e.g. "talent demand for ML engineers up 40% in 2026 RFP",',
+    '  "Anthropic Series E shows enterprise-AI spend"). Use them to JUSTIFY direction,',
+    '  not to invent product features.',
+    trendBlock,
   ].join('\n');
 }
 
@@ -232,10 +345,10 @@ function isValidStrategicShape(obj) {
   return true;
 }
 
-async function synthesizeStrategic(targetType, target, { aiClient, runId, generatedForDate }) {
+async function synthesizeStrategic(targetType, target, { aiClient, runId, generatedForDate, trendSignals = null }) {
   const userPrompt = targetType === 'standalone'
-    ? buildStandaloneUserPrompt(target)
-    : buildClusterUserPrompt(target);
+    ? buildStandaloneUserPrompt(target, trendSignals)
+    : buildClusterUserPrompt(target, trendSignals);
 
   let raw;
   try {
@@ -354,6 +467,26 @@ async function runStrategist({ now = new Date(), force = false } = {}) {
     clusters: clusters.length,
   });
 
+  // Load cross-channel trend signals ONCE per run; reuse across all
+  // standalone + cluster syntheses. This is the v9.4 enrichment that
+  // makes Strategic Patterns the cream of the crop — Bonfire bids stay
+  // primary, but the AI gets news/talent/capital/gov context to justify
+  // direction. Best-effort: a load failure leaves trendSignals null and
+  // the prompt falls back to bid-only mode.
+  let trendSignals = null;
+  try {
+    trendSignals = await loadTrendSignals({ now });
+    logger.info('Strategist: cross-channel trend signals loaded', {
+      news: (trendSignals.news || []).length,
+      talent: (trendSignals.talent || []).length,
+      capital: (trendSignals.capital || []).length,
+      gov: (trendSignals.gov || []).length,
+      dateRange: trendSignals.dateRange,
+    });
+  } catch (e) {
+    logger.warn('Strategist: trend signal load failed, continuing without context', { error: e.message });
+  }
+
   const aiClient = getAIClient();
   const generated = [];
   let rejected = 0;
@@ -385,7 +518,7 @@ async function runStrategist({ now = new Date(), force = false } = {}) {
     }
 
     const out = await synthesizeStrategic(t.type, t.payload, {
-      aiClient, runId, generatedForDate,
+      aiClient, runId, generatedForDate, trendSignals,
     });
     if (out) generated.push(out);
     else rejected += 1;
@@ -460,6 +593,14 @@ module.exports = {
   listStrategic,
   getStrategic,
   updateStrategicStatus,
+  // v9.4: cross-channel context helpers (exported for tests + future use).
+  loadTrendSignals,
+  formatTrendSignals,
+  buildSystemPrompt,
+  buildClusterUserPrompt,
+  buildStandaloneUserPrompt,
+  TREND_LOOKBACK_DAYS,
+  TREND_PER_CHANNEL,
   CANDIDATE_FILTERS,
   STANDALONE_THRESHOLDS,
   CLUSTER_MIN_SIZE,
