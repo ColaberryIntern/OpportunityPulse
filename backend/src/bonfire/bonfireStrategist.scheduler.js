@@ -8,6 +8,7 @@
 const cron = require('node-cron');
 const logger = require('../logging/logger');
 const { runStrategist } = require('./bonfireStrategist.service');
+const { syncStrategicBonfireToOpportunities } = require('./bonfireStrategicSync.service');
 
 let task = null;
 
@@ -37,6 +38,17 @@ function startBonfireStrategistScheduler() {
       logger.info('Strategist cron firing');
       const out = await runStrategist();
       logger.info('Strategist cron complete', out);
+      // Mirror freshly-generated strategic rows into the unified
+      // Opportunity table so they appear in My Opportunities, the
+      // OIED dashboard, and recommendations alongside individual
+      // Bonfire opps. Best-effort: a sync failure does not roll back
+      // the strategist run.
+      try {
+        const syncOut = await syncStrategicBonfireToOpportunities();
+        logger.info('Strategic Bonfire → Opportunity sync complete', syncOut);
+      } catch (se) {
+        logger.error('Strategic Bonfire sync threw', { error: se.message });
+      }
     } catch (e) {
       logger.error('Strategist cron threw', { error: e.message });
     }
