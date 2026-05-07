@@ -144,6 +144,15 @@ describe('actionGenerator.generateOutput (v3 metadata)', () => {
       generateOutput({ opportunityId: 42, type: 'novel', generatedBy: 1 })
     ).rejects.toThrow(/Unknown output type/);
   });
+
+  it('accepts the v9.8.2 resume type and uses the resume system prompt', async () => {
+    await generateOutput({ opportunityId: 42, type: 'resume', generatedBy: 1 });
+    const client = aiMod.__client;
+    const [sys] = client.chat.mock.calls[client.chat.mock.calls.length - 1];
+    expect(sys).toMatch(/tailored resumes/i);
+    const created = OpportunityOutput.create.mock.calls[OpportunityOutput.create.mock.calls.length - 1][0];
+    expect(created.type).toBe('resume');
+  });
 });
 
 // ---------- v8: Grounded proposal generation ----------

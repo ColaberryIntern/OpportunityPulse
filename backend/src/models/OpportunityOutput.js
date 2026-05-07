@@ -11,7 +11,7 @@ module.exports = (sequelize) => {
     type: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      validate: { isIn: [['proposal', 'offer', 'analysis']] },
+      validate: { isIn: [['proposal', 'offer', 'analysis', 'resume']] },
     },
     content: { type: DataTypes.TEXT, allowNull: false },
     status: {

@@ -57,7 +57,7 @@ CRITICAL RULES (violation = unusable proposal):
 Banned terms (any occurrence is auto-flagged in metadata): {{BANNED_TERMS}}.
 `;
 
-const ALLOWED_TYPES = ['proposal', 'offer', 'analysis'];
+const ALLOWED_TYPES = ['proposal', 'offer', 'analysis', 'resume'];
 
 const COLABERRY_POSITIONING =
   '\n\nYou represent Colaberry — an AI training, workforce, and analytics '
@@ -86,6 +86,17 @@ const SYSTEM_PROMPTS = {
     'You write structured opportunity analyses for an internal review. '
     + 'Output 4 sections: ## Fit | ## Risks | ## What to build | ## Go/No-go. '
     + 'Be brutally honest about no-go signals. Plain markdown, under 500 words.',
+  resume:
+    'You write tailored resumes for AI/data/engineering job postings. The '
+    + 'job description is the input. Output a resume in plain markdown that '
+    + 'maximizes signal for THIS role: ## Summary (3 sentences, mirror the '
+    + 'job title and 2-3 must-have skills) | ## Skills (bulleted, prioritized '
+    + 'by job relevance) | ## Experience (3-5 bullets per role, action+metric '
+    + 'verbs, lead with the most-relevant role) | ## Education / Certifications. '
+    + 'Use the Our Profile section for the candidate\'s services, tools, and past '
+    + 'wins as the source of skills and experience. Never invent credentials. '
+    + 'If the profile is sparse, return what you can and flag gaps in a final '
+    + '## Gaps to Address section. Under 500 words.',
 };
 
 function buildUserPrompt(opp, userProfile, pastWins) {

@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## OIED v9.8.2 — Type-aware action gating + resume generation + capital feed fix
+
+- [x] Three changes from Ali's round-3 walkthrough: (a) hide Generate Proposal / Generate Offer on rows where they make no sense (News, Capital — they're informational/research, not bidable); (b) replace those buttons with "Tailor Resume" on Talent rows so the Pursue action is to apply for the job, not bid on it; (c) capital channel had been silently stalled since 2026-02-18 because the TechCrunch `/category/fundraise/feed/` URL started returning 404 — swapped feed list and updated the prod DataSource row.
+  - Date: 2026-05-07
+  - What changed: `OpportunityOutput.type` validate enum extended with `'resume'`; `actionGenerator.ALLOWED_TYPES` + `SYSTEM_PROMPTS` now include resume (prompt: "## Summary | ## Skills | ## Experience | ## Education / Certifications" tailored to job description, sourced from user profile services/tools/past wins, flagging gaps if profile is sparse). `OpportunityActionButtons` now takes an `oppType` prop and gates: `ai_news` + `investment` → analyze only; `ai_job` → analyze + tailor resume; everything else → legacy proposal+offer+analyze. `MyOpportunitiesPage` passes `oppType={opp.type}`. `fundingNews.adapter.DEFAULT_FEEDS` swapped from broken `techcrunch.com/category/fundraise/feed/` to working `techcrunch.com/category/venture/feed/` + `news.crunchbase.com/feed/` + (kept) `venturebeat.com/category/ai/feed/`. Existing prod `data_sources` row updated in-place during deploy.
+  - Verification: 460 OIED tests pass (+1 resume test). Backend + frontend syntax-checked. Smoke probe of the new feeds returned items dated 2026-05-07. After deploy, the funding_news ingest run produced fresh capital rows (vs. zero on prior runs since Feb).
+  - Notes: Resume type rides free in billing (no proposals_generated meter). No schema migration — `OpportunityOutput.type` is a STRING(20) with a validate-isIn array, no DB enum to alter. Backwards compatible: existing 'proposal' / 'offer' / 'analysis' calls untouched.
+
 ## OIED v9.8.1 — Industry visibility in cloud + emoji bullets in channel cards
 
 - [x] Round-3 keyword-cloud feedback: industries weren't appearing at the top level (cloud was dominated by talent/freelance fluff like "engineer", "team", "senior") and the channel-bucket cards were a bare wall of titles. Fixed the read path to guarantee an industry quota and added per-row content emoji to the bucket cards.

@@ -115,6 +115,7 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
           )}
           <OpportunityActionButtons
             opportunityId={opp.id}
+            oppType={opp.type}
             compact
             onGenerated={onGenerated}
             recommendedAction={opp.context && opp.context.recommended_action}

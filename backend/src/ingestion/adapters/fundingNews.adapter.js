@@ -4,8 +4,15 @@ const logger = require('../../logging/logger');
 const Parser = require('rss-parser');
 const { extractFundingAmount } = require('../../utils/monetaryParser');
 
+// v9.8.2: TechCrunch's `/category/fundraise/feed/` started returning 404
+// in early 2026 — that was the only fresh source on the list, so the
+// capital channel went stale (last new row 2026-02-18). Swap to the
+// venture/startups feed and add Crunchbase News as a second source so
+// we're not single-sourced again. VentureBeat AI feed kept for AI-funding
+// mentions (low-volume but topical).
 const DEFAULT_FEEDS = [
-  'https://techcrunch.com/category/fundraise/feed/',
+  'https://techcrunch.com/category/venture/feed/',
+  'https://news.crunchbase.com/feed/',
   'https://venturebeat.com/category/ai/feed/',
 ];
 
