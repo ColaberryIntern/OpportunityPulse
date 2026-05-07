@@ -29,6 +29,7 @@ async function listMyOpportunities({
   type,
   channel,           // v9.4: filter to one channel's types at SQL level
   sort = 'priority', // v9.4: 'priority' (default) | 'newest' | 'oldest'
+  q,                 // v9.5: keyword filter (title/description ILIKE)
   minScore,
   userId,           // who's asking — resolved to org via profile.service
   organizationId,   // explicit org override (multi-tenant callers)
@@ -68,6 +69,23 @@ async function listMyOpportunities({
     if (ch && ch.types.length > 0) {
       where.type = { [Op.in]: ch.types };
     }
+  }
+
+  // v9.5: keyword filter — title OR description ILIKE %q%. Used for
+  // word-cloud drill-through on the news channel and as a general
+  // search on My Opps. Single token; the UI doesn't tokenize multi-word
+  // queries today.
+  if (q && String(q).trim()) {
+    const needle = `%${String(q).trim()}%`;
+    where[Op.and] = [
+      ...(Array.isArray(where[Op.and]) ? where[Op.and] : []),
+      {
+        [Op.or]: [
+          { title:       { [Op.iLike]: needle } },
+          { description: { [Op.iLike]: needle } },
+        ],
+      },
+    ];
   }
 
   // When filtering by channel, pull 500 candidates from THAT channel.

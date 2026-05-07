@@ -297,6 +297,22 @@ async function getRevenueAlias(req, res) {
   }
 }
 
+// GET /api/v1/oied/news/word-cloud — per-word frequency + sentiment + age
+// over recent ai_news rows. Powers the word-cloud at the top of Mission
+// Control. Each entry: { word, count, avg_age_days, sentiment }.
+async function getNewsWordCloudHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const newsSvc = require('./newsWordCloud.service');
+    const max = Math.min(Number(req.query.max) || 40, 100);
+    const out = await newsSvc.getNewsWordCloud({ max });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.news.wordCloud failed', { error: e.message });
+    return errorResponse(res, 'Failed to load news word cloud: ' + e.message, 500);
+  }
+}
+
 // GET /api/v1/oied/channels/summary — one card per channel: active count,
 // top opportunity (by ai_score), drafts-in-review count, total
 // estimated value. Powers the dashboard's Channel Overview grid.
@@ -378,6 +394,7 @@ module.exports = {
   getBundleBlueprintIntelligence,
   getRevenueAlias,
   getChannelsSummary,
+  getNewsWordCloudHandler,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
   attachContextToBundle,

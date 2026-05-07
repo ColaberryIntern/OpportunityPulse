@@ -19,6 +19,7 @@ import {
 } from '../services/oiedService';
 import ChannelOverview from '../components/oied/ChannelOverview';
 import ChannelChip from '../components/oied/ChannelChip';
+import NewsWordCloud from '../components/oied/NewsWordCloud';
 // Round-3 merge: bring the legacy /dashboard widgets into Mission
 // Control so this is the single landing page Ali asked for.
 import BriefHeroBanner from '../components/dashboard/BriefHeroBanner';
@@ -320,6 +321,9 @@ export default function OIEDDashboardPage() {
           Today's actions, pipeline health, and one-click navigation. All data live from prod.
         </p>
       </div>
+
+      {/* TOP — News word cloud (per Ali: see what's hot in news at a glance) */}
+      <NewsWordCloud />
 
       {/* TOP — Executive brief banner (from legacy /dashboard) */}
       <BriefHeroBanner brief={executiveBrief} loading={briefLoading} />

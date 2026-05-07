@@ -28,7 +28,10 @@ function startActionEngineScheduler() {
     logger.info('Scheduled: Trend detection starting');
     try {
       const { detectTrends } = require('../analysis/analysis.service');
-      const types = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance'];
+      const types = [
+        'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
+        'bonfire', 'bonfire_strategic',
+      ];
       for (const type of types) {
         try {
           const result = await detectTrends(type);

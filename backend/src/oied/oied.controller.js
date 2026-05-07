@@ -35,6 +35,7 @@ async function listMy(req, res) {
       type: req.query.type,
       channel: req.query.channel,
       sort: req.query.sort,
+      q: req.query.q,
       minScore: req.query.minScore,
       userId: (req.user && req.user.id) || null,
     });

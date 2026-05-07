@@ -185,3 +185,9 @@ export async function getChannelsSummary() {
   const res = await api.get(`${base}/channels/summary`);
   return res.data?.data || [];
 }
+
+// ---- v9.5: News word cloud (size=count, color=sentiment, tilt=age) ----------
+export async function getNewsWordCloud(params = {}) {
+  const res = await api.get(`${base}/news/word-cloud`, { params });
+  return res.data?.data || { words: [], article_count: 0 };
+}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const TYPE_LABELS = {
   gov_contract: '\u{1F3DB}\uFE0F Gov Contracts',
@@ -11,13 +12,36 @@ const TYPE_LABELS = {
   bonfire_strategic: '\u{1F3AF} Strategic Patterns',
 };
 
+// Map opportunity type \u2192 channel key so clicking a TrendCard drills
+// into the same channel-filtered My Opps view as the dashboard cards.
+const TYPE_TO_CHANNEL = {
+  gov_contract: 'government',
+  grant: 'government',
+  ai_job: 'talent',
+  investment: 'capital',
+  ai_news: 'private-sector',
+  freelance: 'freelance',
+  bonfire: 'bonfire',
+  bonfire_strategic: 'strategic',
+};
+
 function TrendCard({ type, trendData, variant = 'default' }) {
   const cardClass = variant === 'compact'
     ? 'bg-white/60 dark:bg-gray-700/50 rounded-lg p-4'
     : 'bg-white dark:bg-gray-800 shadow rounded-lg p-5';
 
+  const channelKey = TYPE_TO_CHANNEL[type];
+  const Wrapper = channelKey ? Link : 'div';
+  const wrapperProps = channelKey
+    ? {
+      to: `/admin/opportunities/my?channel=${encodeURIComponent(channelKey)}`,
+      className: `${cardClass} block hover:shadow-md transition cursor-pointer`,
+      'aria-label': `View ${TYPE_LABELS[type] || type} opportunities`,
+    }
+    : { className: cardClass };
+
   return (
-    <div className={cardClass}>
+    <Wrapper {...wrapperProps}>
       <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
         {TYPE_LABELS[type] || type}
       </h4>
@@ -45,7 +69,7 @@ function TrendCard({ type, trendData, variant = 'default' }) {
           )}
         </>
       )}
-    </div>
+    </Wrapper>
   );
 }
 

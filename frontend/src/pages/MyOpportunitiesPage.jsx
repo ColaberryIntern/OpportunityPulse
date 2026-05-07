@@ -164,6 +164,7 @@ function MyOpportunitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const channelFromUrl = searchParams.get('channel') || '';
   const sortFromUrl = searchParams.get('sort') || 'priority';
+  const qFromUrl = searchParams.get('q') || '';
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -187,6 +188,7 @@ function MyOpportunitiesPage() {
       if (minScore) params.minScore = minScore;
       if (channelFromUrl) params.channel = channelFromUrl;
       if (sortFromUrl && sortFromUrl !== 'priority') params.sort = sortFromUrl;
+      if (qFromUrl) params.q = qFromUrl;
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
@@ -195,7 +197,7 @@ function MyOpportunitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl]);
+  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl, qFromUrl]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -310,6 +312,26 @@ function MyOpportunitiesPage() {
               ? `${displayRows.length} in this channel`
               : `${total} matching`}
           </span>
+          {qFromUrl && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 text-xs">
+              keyword: <strong>{qFromUrl}</strong>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = {};
+                  if (channelFromUrl) next.channel = channelFromUrl;
+                  if (sortFromUrl && sortFromUrl !== 'priority') next.sort = sortFromUrl;
+                  setSearchParams(next);
+                  setPage(1);
+                }}
+                className="ml-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded px-1"
+                title="Clear keyword filter"
+                aria-label="Clear keyword filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
           <div className="flex-1" />
           <button
             disabled={page <= 1 || loading}
