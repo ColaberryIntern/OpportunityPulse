@@ -84,6 +84,24 @@ describe('strategicSync.shapeStrategicForOpportunity', () => {
     expect(shapeStrategicForOpportunity(withCents).value).toBe(1_000_000);
   });
 
+  it('reads cluster_total_usd (the actual prod field) preferentially', () => {
+    const prodShape = {
+      ...baseStrategic,
+      money: { cluster_total_usd: 2_650_000, initial_bid_value_usd: 300_000, addressable_market_usd: 1_500_000_000 },
+      toJSON: undefined,
+    };
+    expect(shapeStrategicForOpportunity(prodShape).value).toBe(2_650_000);
+  });
+
+  it('falls back to initial_bid_value_usd when cluster_total_usd is missing', () => {
+    const partial = {
+      ...baseStrategic,
+      money: { initial_bid_value_usd: 500_000, addressable_market_usd: 1_000_000_000 },
+      toJSON: undefined,
+    };
+    expect(shapeStrategicForOpportunity(partial).value).toBe(500_000);
+  });
+
   it('value=null when money has no recognizable amount', () => {
     const broken = { ...baseStrategic, money: { junk: true }, toJSON: undefined };
     expect(shapeStrategicForOpportunity(broken).value).toBeNull();

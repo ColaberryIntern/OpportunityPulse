@@ -44,22 +44,37 @@ function shapeStrategicForOpportunity(strategicOpp) {
   const fitScore = Math.max(0, Math.min(100, score));
   const priorityScore = Math.min(STRATEGIC_PRIORITY_CAP, fitScore + STRATEGIC_PRIORITY_BOOST);
 
-  // Pull a USD value from the money jsonb. Strategist writes total
-  // estimated value at money.total_estimated_value (cents); fall back
-  // to money.estimated_value or null if unset.
+  // Pull a USD value from the money jsonb. The strategist writes:
+  //   cluster_total_usd       — total $ across all opps in the cluster
+  //   initial_bid_value_usd   — the bid we'd actually submit first
+  //   addressable_market_usd  — TAM (too aspirational for ranking)
+  // Prefer cluster_total_usd as the headline number. Fall back through
+  // the other historical field names so older strategist runs still map.
   const money = data.money || {};
   let valueUsd = null;
-  const rawCents = money.total_estimated_value_cents
-    ?? money.totalEstimatedValueCents
-    ?? null;
-  const rawDollars = money.total_estimated_value
-    ?? money.totalEstimatedValue
-    ?? money.estimated_value
-    ?? null;
-  if (rawCents != null && Number.isFinite(Number(rawCents))) {
-    valueUsd = Number(rawCents) / 100;
-  } else if (rawDollars != null && Number.isFinite(Number(rawDollars))) {
-    valueUsd = Number(rawDollars);
+  const candidates = [
+    money.cluster_total_usd,
+    money.clusterTotalUsd,
+    money.initial_bid_value_usd,
+    money.initialBidValueUsd,
+    money.total_estimated_value,
+    money.totalEstimatedValue,
+    money.estimated_value,
+  ];
+  for (const c of candidates) {
+    if (c != null && Number.isFinite(Number(c))) {
+      valueUsd = Number(c);
+      break;
+    }
+  }
+  // Last resort: cents-encoded fields.
+  if (valueUsd == null) {
+    const rawCents = money.total_estimated_value_cents
+      ?? money.totalEstimatedValueCents
+      ?? null;
+    if (rawCents != null && Number.isFinite(Number(rawCents))) {
+      valueUsd = Number(rawCents) / 100;
+    }
   }
 
   // Category: pattern_type drives this (e.g. 'cluster', 'theme').

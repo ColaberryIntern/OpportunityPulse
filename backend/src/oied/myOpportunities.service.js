@@ -22,9 +22,16 @@ async function listMyOpportunities({
   const orgId = organizationId || await profileSvc.resolveOrgId(userId);
   const userProfile = await profileSvc.getOrDefaultByOrg(orgId);
 
+  // Strategic Bonfire rows are synthesized clusters; their $ value comes
+  // from a multi-field jsonb and is sometimes null. Carve them out of the
+  // value floor so they always surface (matching the v9.1 ask: integrate
+  // strategic clusters alongside individual opps without overshadowing).
   const where = {
     status: 'active',
-    value: { [Op.gte]: MIN_VALUE_USD },
+    [Op.or]: [
+      { value: { [Op.gte]: MIN_VALUE_USD } },
+      { type: 'bonfire_strategic' },
+    ],
   };
   if (type) where.type = type;
 
