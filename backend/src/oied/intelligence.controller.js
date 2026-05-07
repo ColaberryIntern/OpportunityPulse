@@ -298,7 +298,7 @@ async function getRevenueAlias(req, res) {
 }
 
 // GET /api/v1/oied/channels/summary — one card per channel: active count,
-// top opportunity (by priority_score), drafts-in-review count, total
+// top opportunity (by ai_score), drafts-in-review count, total
 // estimated value. Powers the dashboard's Channel Overview grid.
 async function getChannelsSummary(req, res) {
   try {
@@ -343,10 +343,10 @@ async function getChannelsSummary(req, res) {
     // Single query: join opportunities to find the highest-priority active
     // row per type, then map to channel.
     const tops = await sequelize.query(
-      `SELECT DISTINCT ON (type) id, title, type, source, priority_score
+      `SELECT DISTINCT ON (type) id, title, type, source, ai_score
        FROM opportunities
-       WHERE status = 'active' AND priority_score IS NOT NULL
-       ORDER BY type, priority_score DESC, id DESC`,
+       WHERE status = 'active' AND ai_score IS NOT NULL
+       ORDER BY type, ai_score DESC, id DESC`,
       { type: QueryTypes.SELECT },
     );
     for (const t of tops) {
@@ -355,11 +355,11 @@ async function getChannelsSummary(req, res) {
       if (!agg) continue;
       // Keep the highest-priority overall for the channel (since multiple
       // types may roll into one channel, pick the best).
-      if (!agg.top_opp || (t.priority_score || 0) > (agg.top_opp.priority_score || 0)) {
+      if (!agg.top_opp || (t.ai_score || 0) > (agg.top_opp.ai_score || 0)) {
         agg.top_opp = {
           id: t.id,
           title: t.title,
-          priority_score: Number(t.priority_score) || 0,
+          ai_score: Number(t.ai_score) || 0,
         };
       }
     }
