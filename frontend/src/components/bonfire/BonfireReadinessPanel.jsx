@@ -4,7 +4,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getBonfireReadiness, tailorBonfireRequirements, generateDocument } from '../../services/documentService';
+import {
+  getBonfireReadiness, tailorBonfireRequirements, generateDocument, downloadDocumentToFile,
+} from '../../services/documentService';
 
 const STATUS_META = {
   satisfied: { label: '✓ On file',   cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
@@ -195,7 +197,15 @@ export default function BonfireReadinessPanel({ opportunityId }) {
                   )}
                   {item.document && (
                     <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
-                      <span>{item.document.name} · v{item.document.version}</span>
+                      <button
+                        type="button"
+                        onClick={() => downloadDocumentToFile(item.document.id, item.document.name)
+                          .catch((e) => setErr('Download failed: ' + (e?.response?.data?.message || e.message)))}
+                        className="text-blue-700 dark:text-blue-300 hover:underline font-medium inline-flex items-center gap-1"
+                        title="Download this document"
+                      >
+                        ⬇ {item.document.name} · v{item.document.version}
+                      </button>
                       {item.document.scope === 'bid' && (
                         <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 font-medium" title="Local to this bid only">
                           📌 this bid

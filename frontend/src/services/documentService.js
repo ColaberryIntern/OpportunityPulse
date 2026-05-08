@@ -39,6 +39,21 @@ export function downloadDocumentUrl(id) {
   return `${base}/${encodeURIComponent(id)}/download`;
 }
 
+// Trigger a file download for a Document. Uses the api client so the
+// JWT goes with the request, then saves the response as an attachment.
+// Returns nothing; caller can await for completion.
+export async function downloadDocumentToFile(id, name) {
+  const res = await api.get(downloadDocumentUrl(id), { responseType: 'blob' });
+  const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name || 'document';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}
+
 // Bonfire readiness — both single-bid + bulk-summaries.
 export async function getBonfireReadiness(opportunityId) {
   const res = await api.get(`/bonfire/opportunities/${encodeURIComponent(opportunityId)}/readiness`);

@@ -6,9 +6,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import api from '../services/api';
 import {
-  listDocumentTypes, listDocuments, uploadDocument, deleteDocument, downloadDocumentUrl,
+  listDocumentTypes, listDocuments, uploadDocument, deleteDocument, downloadDocumentToFile,
 } from '../services/documentService';
 
 function fmtBytes(n) {
@@ -94,17 +93,6 @@ function UploadModal({ types, onClose, onUploaded }) {
       </form>
     </div>
   );
-}
-
-async function streamDownload(id, name) {
-  // Use api client so the JWT goes with the request, then trigger a save.
-  const res = await api.get(downloadDocumentUrl(id), { responseType: 'blob' });
-  const blob = new Blob([res.data], { type: res.headers['content-type'] });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name || 'document';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
 
 export default function DocumentVaultPage() {
@@ -297,7 +285,7 @@ export default function DocumentVaultPage() {
                             <td className="py-2 px-3 text-right whitespace-nowrap">
                               <button
                                 type="button"
-                                onClick={() => streamDownload(d.id, d.name).catch((e) => alert('Download failed: ' + e.message))}
+                                onClick={() => downloadDocumentToFile(d.id, d.name).catch((e) => alert('Download failed: ' + e.message))}
                                 className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 mr-1"
                               >Download</button>
                               <button
