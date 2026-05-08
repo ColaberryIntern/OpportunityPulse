@@ -23,6 +23,21 @@ const billing = require('./billing.service');
 const events = require('./events.service');
 const groundingSvc = require('./grounding.service');
 const approvedAssetsSvc = require('./approvedAssets.service');
+const documentService = require('../documents/document.service');
+
+// v0.6 Phase 6: when the proposal generator runs, pull the org's vault
+// docs of these types and inject excerpts into the prompt under an
+// "Approved Source Material" block. Caps fit a typical context window
+// (~10 KB of vault content, 2 KB per doc).
+const VAULT_TYPES_FOR_PROPOSAL = [
+  'capability_statement',
+  'past_performance',
+  'references',
+];
+const VAULT_TYPES_FOR_OFFER = ['capability_statement', 'references'];
+const VAULT_TYPES_FOR_RESUME = ['capability_statement', 'past_performance'];
+const VAULT_CAP_PER_DOC = 2000;
+const VAULT_CAP_TOTAL = 10000;
 
 // v8: thrown when proposal generation can't proceed because required
 // procurement context (agency_name / solicitation_id / scope_summary)
@@ -99,7 +114,17 @@ const SYSTEM_PROMPTS = {
     + '## Gaps to Address section. Under 500 words.',
 };
 
-function buildUserPrompt(opp, userProfile, pastWins) {
+// v0.6: append vault doc excerpts to a prompt. Mutates by appending.
+function appendVaultBlock(lines, vaultExcerpts) {
+  if (!Array.isArray(vaultExcerpts) || vaultExcerpts.length === 0) return;
+  lines.push('', '=== Approved Source Material (verbatim from your vault — cite, don\'t paraphrase) ===');
+  for (const ex of vaultExcerpts) {
+    lines.push('', `--- ${ex.type === 'capability_statement' ? 'Capability Statement' : ex.type === 'past_performance' ? 'Past Performance' : 'References'} (${ex.scope === 'bid' ? 'this bid' : 'global vault'}: ${ex.name}) ---`);
+    lines.push(ex.text);
+  }
+}
+
+function buildUserPrompt(opp, userProfile, pastWins, { vaultExcerpts = [] } = {}) {
   const ai = opp.aiAnalysis || {};
   const lines = [
     `Title: ${opp.title || ''}`,
@@ -147,13 +172,15 @@ function buildUserPrompt(opp, userProfile, pastWins) {
     }
   }
 
+  appendVaultBlock(lines, vaultExcerpts);
+
   return lines.join('\n');
 }
 
 // v8: grounded user prompt. Structures the input around real
 // procurement metadata + approved assets so the model has concrete
 // anchors instead of inferring everything from a free-form description.
-function buildGroundedUserPrompt(opp, userProfile, pastWins, grounding, assets) {
+function buildGroundedUserPrompt(opp, userProfile, pastWins, grounding, assets, { vaultExcerpts = [] } = {}) {
   const reqs = grounding.submission_requirements || {};
   const lines = [
     `Agency: ${grounding.agency_name}`,
@@ -189,6 +216,7 @@ function buildGroundedUserPrompt(opp, userProfile, pastWins, grounding, assets) 
       lines.push(`  • [${cat}] ${t} → "${snippet}…"`);
     }
   }
+  appendVaultBlock(lines, vaultExcerpts);
   return lines.join('\n');
 }
 
@@ -306,6 +334,29 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
     return [];
   });
 
+  // v0.6 Phase 6: pull vault excerpts (capability statement / past
+  // performance / references) so the model has real org material to cite.
+  const vaultTypeMap = {
+    proposal: VAULT_TYPES_FOR_PROPOSAL,
+    offer:    VAULT_TYPES_FOR_OFFER,
+    resume:   VAULT_TYPES_FOR_RESUME,
+    analysis: [],
+  };
+  const vaultTypes = vaultTypeMap[type] || [];
+  let vaultExcerpts = [];
+  if (vaultTypes.length > 0) {
+    const orgId = await profileSvc.resolveOrgId(effectiveUserId);
+    vaultExcerpts = await documentService.loadVaultExcerpts({
+      organizationId: orgId,
+      types: vaultTypes,
+      capPerDoc: VAULT_CAP_PER_DOC,
+      capTotal: VAULT_CAP_TOTAL,
+    }).catch((e) => {
+      logger.warn('OIED: vault excerpt load failed (continuing without)', { error: e.message });
+      return [];
+    });
+  }
+
   const aiClient = getAIClient();
 
   // v8: grounded prompt path for proposals; legacy path for offer/analysis.
@@ -318,10 +369,11 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
       + HARD_RULES.replace('{{BANNED_TERMS}}', bannedList);
     userPromptText = buildGroundedUserPrompt(
       opp, userProfile, pastWins, groundingPayload, approvedAssets,
+      { vaultExcerpts },
     );
   } else {
     systemPrompt = SYSTEM_PROMPTS[type] + COLABERRY_POSITIONING;
-    userPromptText = buildUserPrompt(opp, userProfile, pastWins);
+    userPromptText = buildUserPrompt(opp, userProfile, pastWins, { vaultExcerpts });
   }
 
   const { content } = await aiClient.chat(
@@ -358,6 +410,10 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
       format: groundingPayload.submission_requirements.format,
     } : null,
     banned_terms_detected: bannedHits,
+    // v0.6 Phase 6: which vault docs informed this generation. Audit trail.
+    evergreen_docs_used: vaultExcerpts.map((ex) => ({
+      id: ex.id, type: ex.type, name: ex.name, scope: ex.scope, chars: ex.text.length,
+    })),
     generated_at: new Date().toISOString(),
   };
 

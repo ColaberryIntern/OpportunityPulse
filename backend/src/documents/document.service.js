@@ -133,6 +133,101 @@ async function streamFor({ organizationId, id }) {
   return { row, stream };
 }
 
+// v0.6 Phase 6: lazy text extraction + cache. When the proposal generator
+// (or any caller) needs the parsed text of a vault doc, read it on first
+// access via pdf-parse / mammoth / utf8 and stash the result on
+// metadata.extracted_text. Subsequent calls hit the cache. Returns null
+// on failure so callers can skip uncovered types gracefully.
+async function getOrExtractText(doc) {
+  if (!doc) return null;
+  const md = doc.metadata || {};
+  if (md.extracted_text && md.extracted_at) return String(md.extracted_text);
+  let text = null;
+  try {
+    const abs = storage.absolutePathFor(doc.filePath);
+    const fs = require('fs');
+    if (!fs.existsSync(abs)) return null;
+    const mime = String(doc.mime || '').toLowerCase();
+    if (mime === 'application/pdf' || /\.pdf$/i.test(doc.filePath)) {
+      // eslint-disable-next-line global-require
+      const pdfParse = require('pdf-parse');
+      const buf = fs.readFileSync(abs);
+      const out = await pdfParse(buf);
+      text = String(out.text || '').replace(/\s+\n/g, '\n').trim();
+    } else if (/wordprocessingml|msword/.test(mime) || /\.docx?$/i.test(doc.filePath)) {
+      // eslint-disable-next-line global-require
+      const mammoth = require('mammoth');
+      const out = await mammoth.extractRawText({ path: abs });
+      text = String(out.value || '').trim();
+    } else if (mime === 'text/markdown' || mime === 'text/plain' || /\.(md|txt)$/i.test(doc.filePath)) {
+      text = fs.readFileSync(abs, 'utf8').slice(0, 200_000);
+    }
+  } catch (e) {
+    logger.warn('document.getOrExtractText failed', { id: doc.id, error: e.message });
+    return null;
+  }
+  if (!text) return null;
+  // Cache on the row.
+  doc.metadata = Object.assign({}, doc.metadata || {}, {
+    extracted_text: text.slice(0, 200_000),
+    extracted_at: new Date().toISOString(),
+  });
+  // Sequelize JSONB needs an explicit changed() flag.
+  if (typeof doc.changed === 'function') doc.changed('metadata', true);
+  await doc.save().catch((e) => logger.warn('document: cache extraction skipped', { error: e.message }));
+  return text;
+}
+
+// Returns up to N excerpts from active vault docs of the requested types,
+// capped per-doc and total to fit a prompt window. Local-to-bid takes
+// precedence over global on dedupe by type.
+async function loadVaultExcerpts({
+  organizationId, types: typeList = [], bonfireOpportunityId = null,
+  capPerDoc = 2000, capTotal = 10000,
+}) {
+  if (!Array.isArray(typeList) || typeList.length === 0) return [];
+  const where = {
+    organizationId,
+    isActive: true,
+    type: { [Op.in]: typeList },
+    [Op.or]: bonfireOpportunityId
+      ? [{ scope: 'global' }, { scope: 'bid', scopeId: String(bonfireOpportunityId) }]
+      : [{ scope: 'global' }],
+  };
+  const rows = await Document.findAll({
+    where,
+    order: [
+      [require('sequelize').literal(`CASE WHEN scope = 'bid' THEN 0 ELSE 1 END`), 'ASC'],
+      ['type', 'ASC'],
+      ['version', 'DESC'],
+    ],
+  });
+  // Dedupe per type — bid scope wins.
+  const seen = new Set();
+  const picks = [];
+  for (const r of rows) {
+    if (seen.has(r.type)) continue;
+    seen.add(r.type);
+    picks.push(r);
+  }
+
+  const out = [];
+  let totalChars = 0;
+  for (const doc of picks) {
+    const remaining = capTotal - totalChars;
+    if (remaining <= 200) break;
+    // eslint-disable-next-line no-await-in-loop
+    const text = await getOrExtractText(doc);
+    if (!text) continue;
+    const slice = text.slice(0, Math.min(capPerDoc, remaining));
+    totalChars += slice.length;
+    out.push({
+      id: doc.id, type: doc.type, name: doc.name, scope: doc.scope, text: slice,
+    });
+  }
+  return out;
+}
+
 module.exports = {
   createDocument,
   listDocuments,
@@ -140,4 +235,6 @@ module.exports = {
   softDeleteDocument,
   activeTypeMap,
   streamFor,
+  getOrExtractText,
+  loadVaultExcerpts,
 };

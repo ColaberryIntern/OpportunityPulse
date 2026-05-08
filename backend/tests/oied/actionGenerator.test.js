@@ -33,6 +33,13 @@ jest.mock('../../src/oied/billing.service', () => ({
   })),
 }));
 
+// v0.6 Phase 6: actionGenerator now pulls vault excerpts. Mock returns
+// nothing by default so existing tests stay at zero injected docs;
+// dedicated v0.6 tests below override the mock.
+jest.mock('../../src/documents/document.service', () => ({
+  loadVaultExcerpts: jest.fn(async () => []),
+}));
+
 jest.mock('../../src/oied/pastWins.service', () => ({
   getRecentApproved: jest.fn(async () => [
     {
@@ -152,6 +159,58 @@ describe('actionGenerator.generateOutput (v3 metadata)', () => {
     expect(sys).toMatch(/tailored resumes/i);
     const created = OpportunityOutput.create.mock.calls[OpportunityOutput.create.mock.calls.length - 1][0];
     expect(created.type).toBe('resume');
+  });
+
+  // v0.6 Phase 6 — vault excerpt injection
+  it('appends vault excerpts to the proposal user prompt', async () => {
+    const docSvc = require('../../src/documents/document.service');
+    docSvc.loadVaultExcerpts.mockResolvedValueOnce([
+      { id: 'd1', type: 'capability_statement', name: 'CapStmt 2026', scope: 'global', text: 'WE BUILD AI PILOTS THAT WIN.' },
+      { id: 'd2', type: 'past_performance', name: 'DHA Win', scope: 'global', text: 'Delivered $250k DHA contract on time.' },
+    ]);
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const client = aiMod.__client;
+    const [, userPrompt] = client.chat.mock.calls[client.chat.mock.calls.length - 1];
+    expect(userPrompt).toMatch(/Approved Source Material/i);
+    expect(userPrompt).toMatch(/Capability Statement.*global vault.*CapStmt 2026/i);
+    expect(userPrompt).toMatch(/WE BUILD AI PILOTS THAT WIN/);
+    expect(userPrompt).toMatch(/Past Performance/);
+    expect(userPrompt).toMatch(/Delivered \$250k DHA contract/);
+  });
+
+  it('persists vault excerpt audit on metadata.evergreen_docs_used', async () => {
+    const docSvc = require('../../src/documents/document.service');
+    docSvc.loadVaultExcerpts.mockResolvedValueOnce([
+      { id: 'doc-uuid-1', type: 'capability_statement', name: 'Cap', scope: 'bid', text: 'X'.repeat(800) },
+    ]);
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const created = OpportunityOutput.create.mock.calls[OpportunityOutput.create.mock.calls.length - 1][0];
+    expect(Array.isArray(created.metadata.evergreen_docs_used)).toBe(true);
+    expect(created.metadata.evergreen_docs_used).toHaveLength(1);
+    expect(created.metadata.evergreen_docs_used[0]).toMatchObject({
+      id: 'doc-uuid-1',
+      type: 'capability_statement',
+      scope: 'bid',
+      chars: 800,
+    });
+  });
+
+  it('does not call loadVaultExcerpts for the analysis type', async () => {
+    const docSvc = require('../../src/documents/document.service');
+    docSvc.loadVaultExcerpts.mockClear();
+    await generateOutput({ opportunityId: 42, type: 'analysis', generatedBy: 1 });
+    expect(docSvc.loadVaultExcerpts).not.toHaveBeenCalled();
+  });
+
+  it('still works when vault is empty (no excerpts injected)', async () => {
+    const docSvc = require('../../src/documents/document.service');
+    docSvc.loadVaultExcerpts.mockResolvedValueOnce([]);
+    await generateOutput({ opportunityId: 42, type: 'proposal', generatedBy: 1 });
+    const created = OpportunityOutput.create.mock.calls[OpportunityOutput.create.mock.calls.length - 1][0];
+    expect(created.metadata.evergreen_docs_used).toEqual([]);
+    const client = aiMod.__client;
+    const [, userPrompt] = client.chat.mock.calls[client.chat.mock.calls.length - 1];
+    expect(userPrompt).not.toMatch(/Approved Source Material/);
   });
 });
 
