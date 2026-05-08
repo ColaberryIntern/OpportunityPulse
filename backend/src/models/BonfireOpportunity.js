@@ -120,6 +120,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'submission_requirements',
     },
+    attachmentsFetchedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'attachments_fetched_at',
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,
