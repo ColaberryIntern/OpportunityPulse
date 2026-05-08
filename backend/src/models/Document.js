@@ -70,6 +70,32 @@ module.exports = (sequelize) => {
       defaultValue: true,
       field: 'is_active',
     },
+    // v0.3: local vs global scope. 'global' = traditional vault doc;
+    // 'bid' = local to one Bonfire opportunity (scope_id holds the UUID).
+    scope: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'global',
+    },
+    scopeId: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'scope_id',
+    },
+    // v0.3: links a local bid-scoped row to its global version-history twin
+    // when AI generates a doc. Both rows share the same lineage_id so we
+    // can analyze + improve generation quality across the org.
+    lineageId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'lineage_id',
+    },
+    source: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'manual',
+      // 'manual' | 'ai_generated' | 'ai_promoted'
+    },
   }, {
     tableName: 'documents',
     timestamps: true,

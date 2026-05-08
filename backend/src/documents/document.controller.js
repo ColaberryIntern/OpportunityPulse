@@ -21,6 +21,7 @@ function shape(row) {
     organization_id: data.organizationId || data.organization_id,
     type: data.type,
     type_label: types.labelFor(data.type),
+    type_generatable: types.isGeneratable(data.type),
     name: data.name,
     mime: data.mime,
     size_bytes: data.sizeBytes ?? data.size_bytes,
@@ -29,6 +30,10 @@ function shape(row) {
     expires_at: data.expiresAt || data.expires_at,
     uploaded_by: data.uploadedBy ?? data.uploaded_by,
     is_active: data.isActive ?? data.is_active,
+    scope: data.scope || 'global',
+    scope_id: data.scopeId ?? data.scope_id ?? null,
+    lineage_id: data.lineageId ?? data.lineage_id ?? null,
+    source: data.source || 'manual',
     created_at: data.createdAt || data.created_at,
     updated_at: data.updatedAt || data.updated_at,
   };
@@ -36,6 +41,15 @@ function shape(row) {
 
 async function listTypes(req, res) {
   return successResponse(res, { types: types.TYPES });
+}
+
+// v0.3 — list which document types are AI-generatable (vs must-be-obtained).
+// Used by the Generate button gating on the readiness panel.
+async function listGeneratableTypes(req, res) {
+  return successResponse(res, {
+    generatable_keys: types.getGeneratableKeys(),
+    types: types.TYPES.filter((t) => t.generatable),
+  });
 }
 
 async function uploadDocument(req, res) {
@@ -56,6 +70,14 @@ async function uploadDocument(req, res) {
       catch (_) { metadata = {}; }
     }
     const expiresAt = req.body.expires_at ? new Date(req.body.expires_at) : null;
+    const scope = String(req.body.scope || 'global').trim();
+    const scopeId = req.body.scope_id ? String(req.body.scope_id).trim() : null;
+    if (!['global', 'bid'].includes(scope)) {
+      return errorResponse(res, "scope must be 'global' or 'bid'", 400);
+    }
+    if (scope === 'bid' && !scopeId) {
+      return errorResponse(res, 'scope_id is required when scope=bid', 400);
+    }
     const row = await docSvc.createDocument({
       organizationId: orgId,
       type,
@@ -66,6 +88,9 @@ async function uploadDocument(req, res) {
       expiresAt,
       uploadedBy: userId,
       originalName: req.file.originalname,
+      scope,
+      scopeId,
+      source: 'manual',
     });
     return successResponse(res, shape(row), 'Document uploaded', 201);
   } catch (e) {
@@ -84,6 +109,9 @@ async function listDocuments(req, res) {
     const rows = await docSvc.listDocuments({
       organizationId: orgId,
       type: req.query.type || undefined,
+      scope: req.query.scope || undefined,
+      scopeId: req.query.scope_id || undefined,
+      source: req.query.source || undefined,
       expiringWithinDays: req.query.expiring_within ? Number(req.query.expiring_within) : undefined,
       includeInactive: String(req.query.include_inactive || '').toLowerCase() === 'true',
     });
@@ -91,6 +119,43 @@ async function listDocuments(req, res) {
   } catch (e) {
     logger.error('documents.list failed', { error: e.message });
     return errorResponse(res, 'Failed to load documents: ' + e.message, 500);
+  }
+}
+
+// v0.3: AI-driven generation. Body: { type, bonfire_opportunity_id }.
+// Creates TWO Document rows (local + global) sharing a lineage_id.
+async function generateDocumentHandler(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    const orgId = req.user && req.user.organizationId
+      ? req.user.organizationId
+      : await profileSvc.resolveOrgId(userId);
+    const type = String(req.body.type || '').trim();
+    const bonfireOpportunityId = req.body.bonfire_opportunity_id
+      ? String(req.body.bonfire_opportunity_id).trim()
+      : null;
+    if (!type) return errorResponse(res, 'type is required', 400);
+
+    // eslint-disable-next-line global-require
+    const generator = require('./documentGenerator.service');
+    const out = await generator.generateDocument({
+      type, organizationId: orgId, bonfireOpportunityId, userId,
+    });
+    return successResponse(res, {
+      type: out.type,
+      lineage_id: out.lineage_id,
+      bonfire_opportunity_id: out.bonfire_opportunity_id,
+      local: shape(out.local),
+      global: shape(out.global),
+      model_used: out.model_used,
+      chars: out.chars,
+    }, 'Document generated', 201);
+  } catch (e) {
+    if (e.code === 'NOT_GENERATABLE') return errorResponse(res, e.message, 400);
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'AI_FAILED') return errorResponse(res, e.message, 502);
+    logger.error('documents.generate failed', { error: e.message, stack: e.stack });
+    return errorResponse(res, 'Generation failed: ' + e.message, 500);
   }
 }
 
@@ -127,5 +192,12 @@ async function deleteDocument(req, res) {
 }
 
 module.exports = {
-  listTypes, uploadDocument, listDocuments, downloadDocument, deleteDocument, shape,
+  listTypes,
+  listGeneratableTypes,
+  uploadDocument,
+  listDocuments,
+  downloadDocument,
+  deleteDocument,
+  generateDocumentHandler,
+  shape,
 };

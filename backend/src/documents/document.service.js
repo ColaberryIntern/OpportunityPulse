@@ -11,6 +11,7 @@ const logger = require('../logging/logger');
 
 async function createDocument({
   organizationId, type, name, mime, buffer, metadata, expiresAt, uploadedBy, originalName,
+  scope = 'global', scopeId = null, source = 'manual', lineageId = null,
 }) {
   if (!types.isValidType(type)) {
     const err = new Error(`Unknown document type: ${type}`);
@@ -20,9 +21,9 @@ async function createDocument({
   const written = await storage.writeBuffer({
     organizationId, type, originalName: originalName || name, buffer,
   });
-  // Auto-bump version: latest version for the same (org, type, name) + 1
+  // Auto-bump version: latest version for the same (org, type, name, scope) + 1
   const latest = await Document.findOne({
-    where: { organizationId, type, name },
+    where: { organizationId, type, name, scope, ...(scopeId ? { scopeId } : {}) },
     order: [['version', 'DESC']],
     attributes: ['version'],
   });
@@ -39,16 +40,24 @@ async function createDocument({
     expiresAt: expiresAt || null,
     uploadedBy: uploadedBy || null,
     isActive: true,
+    scope,
+    scopeId: scope === 'bid' ? scopeId : null,
+    lineageId,
+    source,
   });
   return row;
 }
 
 async function listDocuments({
   organizationId, type, includeInactive = false, expiringWithinDays,
+  scope, scopeId, source,
 } = {}) {
   const where = { organizationId };
   if (!includeInactive) where.isActive = true;
   if (type) where.type = type;
+  if (scope) where.scope = scope;
+  if (scopeId) where.scopeId = scopeId;
+  if (source) where.source = source;
   if (expiringWithinDays) {
     const cutoff = new Date(Date.now() + Number(expiringWithinDays) * 86_400_000);
     where.expiresAt = { [Op.lte]: cutoff, [Op.ne]: null };
@@ -72,13 +81,30 @@ async function softDeleteDocument({ organizationId, id }) {
   return row;
 }
 
-// Counts of the most-recent active doc per (type) for an org. Used by
-// the readiness service to decide which document types are "on file."
-async function activeTypeMap({ organizationId }) {
+// Most-recent active doc per type for an org. v0.3 scope-aware: when a
+// `bonfireOpportunityId` is provided, local docs (scope='bid' AND
+// scopeId=that opp) take precedence over global docs of the same type.
+// Returned entry carries `scope` so the UI can label "📌 this bid" vs
+// "🌐 vault."
+async function activeTypeMap({ organizationId, bonfireOpportunityId = null } = {}) {
+  // Pull local-for-this-bid AND globals in one query.
+  const where = {
+    organizationId,
+    isActive: true,
+    [Op.or]: bonfireOpportunityId
+      ? [{ scope: 'global' }, { scope: 'bid', scopeId: String(bonfireOpportunityId) }]
+      : [{ scope: 'global' }],
+  };
   const rows = await Document.findAll({
-    where: { organizationId, isActive: true },
-    attributes: ['type', 'id', 'name', 'expiresAt', 'version', 'updatedAt'],
-    order: [['type', 'ASC'], ['version', 'DESC']],
+    where,
+    attributes: ['type', 'id', 'name', 'expiresAt', 'version', 'updatedAt', 'scope', 'scopeId', 'source', 'lineageId'],
+    // Order: bid-scope first so the dedupe loop picks bid before global.
+    // Then by version DESC inside each scope.
+    order: [
+      [require('sequelize').literal(`CASE WHEN scope = 'bid' THEN 0 ELSE 1 END`), 'ASC'],
+      ['type', 'ASC'],
+      ['version', 'DESC'],
+    ],
   });
   const map = new Map();
   for (const r of rows) {
@@ -90,6 +116,10 @@ async function activeTypeMap({ organizationId }) {
         expires_at: r.expiresAt,
         version: r.version,
         updated_at: r.updatedAt,
+        scope: r.scope,
+        scope_id: r.scopeId,
+        source: r.source,
+        lineage_id: r.lineageId,
       });
     }
   }

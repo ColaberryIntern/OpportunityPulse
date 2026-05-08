@@ -61,6 +61,7 @@ function buildChecklistItem(typeKey, { vaultDocByType, reason, source = 'baselin
   return {
     type: typeKey,
     type_label: typeKey === 'other' ? (nameIfOther || 'Additional requirement') : types.labelFor(typeKey),
+    type_generatable: typeKey === 'other' ? false : types.isGeneratable(typeKey),
     required: true,
     status,
     source,                 // 'baseline' | 'ai' | 'conditional'
@@ -73,6 +74,8 @@ function buildChecklistItem(typeKey, { vaultDocByType, reason, source = 'baselin
       version: vaultDoc.version,
       expires_at: vaultDoc.expires_at || null,
       expires_in_days: expiresInDays,
+      scope: vaultDoc.scope || 'global',
+      doc_source: vaultDoc.source || 'manual',
     } : null,
   };
 }
@@ -86,7 +89,11 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
     throw err;
   }
 
-  const vaultDocByType = await docSvc.activeTypeMap({ organizationId: orgId });
+  // v0.3: scope-aware — local-for-this-bid docs take precedence over globals.
+  const vaultDocByType = await docSvc.activeTypeMap({
+    organizationId: orgId,
+    bonfireOpportunityId: opp.id,
+  });
 
   // Baseline 6 types (always required for any Bonfire bid).
   const baseline = ALWAYS_REQUIRED.map((t) => ({ type: t, source: 'baseline', reason: null }));
@@ -166,6 +173,9 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
 // bar without 50 sub-objects per row.
 async function computeReadinessSummaries({ opportunityIds, organizationId, userId }) {
   const orgId = organizationId || await profileSvc.resolveOrgId(userId);
+  // v0.3 — for the bulk path we still pass globals only; local-for-bid
+  // docs are bid-specific so we'd have to query per-bid which negates
+  // the bulk speed-up. Per-bid readiness GET picks up local docs.
   const vaultDocByType = await docSvc.activeTypeMap({ organizationId: orgId });
   const opps = await BonfireOpportunity.findAll({
     where: { id: opportunityIds },

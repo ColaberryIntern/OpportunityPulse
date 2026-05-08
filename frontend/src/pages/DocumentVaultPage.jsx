@@ -115,11 +115,17 @@ export default function DocumentVaultPage() {
   const [err, setErr] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [filterType, setFilterType] = useState('');
+  const [filterScope, setFilterScope] = useState(''); // '' | 'global' | 'bid'
+  const [filterSource, setFilterSource] = useState(''); // '' | 'manual' | 'ai_generated'
 
   const reload = useCallback(async () => {
     setLoading(true); setErr(null);
     try {
-      const [t, d] = await Promise.all([listDocumentTypes(), listDocuments(filterType ? { type: filterType } : {})]);
+      const params = {};
+      if (filterType)   params.type = filterType;
+      if (filterScope)  params.scope = filterScope;
+      if (filterSource) params.source = filterSource;
+      const [t, d] = await Promise.all([listDocumentTypes(), listDocuments(params)]);
       setTypes(t);
       setDocs(d.documents || []);
     } catch (e) {
@@ -127,7 +133,7 @@ export default function DocumentVaultPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterType]);
+  }, [filterType, filterScope, filterSource]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -204,11 +210,27 @@ export default function DocumentVaultPage() {
         </div>
 
         <div className="mb-3 flex items-center gap-2 text-sm flex-wrap">
-          <label>Filter by type:
+          <label>Type:
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
               className="ml-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1">
               <option value="">All</option>
               {types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </label>
+          <label>Scope:
+            <select value={filterScope} onChange={(e) => setFilterScope(e.target.value)}
+              className="ml-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1">
+              <option value="">All</option>
+              <option value="global">🌐 Global vault</option>
+              <option value="bid">📌 Local to a bid</option>
+            </select>
+          </label>
+          <label>Source:
+            <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)}
+              className="ml-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded px-2 py-1">
+              <option value="">All</option>
+              <option value="manual">Uploaded</option>
+              <option value="ai_generated">🤖 AI-generated</option>
             </select>
           </label>
           <span className="text-gray-500">{docs.length} document{docs.length === 1 ? '' : 's'}</span>
@@ -249,7 +271,21 @@ export default function DocumentVaultPage() {
                         const exp = expiryStatus(d.expires_at);
                         return (
                           <tr key={d.id} className="border-t border-gray-100 dark:border-gray-800">
-                            <td className="py-2 px-3 text-gray-900 dark:text-gray-100">{d.name}</td>
+                            <td className="py-2 px-3 text-gray-900 dark:text-gray-100">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{d.name}</span>
+                                {d.scope === 'bid' && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200" title={`Local to bid ${d.scope_id}`}>
+                                    📌 bid
+                                  </span>
+                                )}
+                                {d.source === 'ai_generated' && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300" title="AI-generated">
+                                    🤖 AI
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-2 px-3 text-gray-600 dark:text-gray-400">v{d.version}</td>
                             <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{fmtBytes(d.size_bytes)}</td>
                             <td className="py-2 px-3">

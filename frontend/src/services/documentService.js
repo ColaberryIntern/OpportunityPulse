@@ -62,3 +62,18 @@ export async function tailorBonfireRequirements(opportunityId, { force = false }
   );
   return res.data?.data || null;
 }
+
+// v0.3 — AI-driven document generation. Creates TWO Document rows
+// (local + global) sharing a lineage_id. Returns both on the response.
+export async function generateDocument({ type, bonfireOpportunityId = null }) {
+  const res = await api.post('/documents/generate', {
+    type,
+    bonfire_opportunity_id: bonfireOpportunityId,
+  });
+  return res.data?.data || null;
+}
+
+export async function listGeneratableTypes() {
+  const res = await api.get('/documents/types/generatable');
+  return res.data?.data || { generatable_keys: [], types: [] };
+}

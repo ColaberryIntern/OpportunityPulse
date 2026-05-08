@@ -30,10 +30,12 @@ const upload = multer({
 
 router.use(verifyToken, checkPermissions(ROLES.ADMIN));
 
-router.get('/types',          controller.listTypes);
-router.get('/',               controller.listDocuments);
-router.post('/',              upload.single('file'), controller.uploadDocument);
-router.get('/:id/download',   controller.downloadDocument);
-router.delete('/:id',         controller.deleteDocument);
+router.get('/types',                  controller.listTypes);
+router.get('/types/generatable',      controller.listGeneratableTypes);
+router.get('/',                       controller.listDocuments);
+router.post('/',                      upload.single('file'), controller.uploadDocument);
+router.post('/generate',              express.json({ limit: '8kb' }), controller.generateDocumentHandler);
+router.get('/:id/download',           controller.downloadDocument);
+router.delete('/:id',                 controller.deleteDocument);
 
 module.exports = router;

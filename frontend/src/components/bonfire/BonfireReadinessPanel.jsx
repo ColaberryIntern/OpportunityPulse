@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getBonfireReadiness, tailorBonfireRequirements } from '../../services/documentService';
+import { getBonfireReadiness, tailorBonfireRequirements, generateDocument } from '../../services/documentService';
 
 const STATUS_META = {
   satisfied: { label: '✓ On file',   cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
@@ -25,6 +25,7 @@ export default function BonfireReadinessPanel({ opportunityId }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [tailoring, setTailoring] = useState(false);
+  const [generating, setGenerating] = useState({}); // { typeKey: true } while AI is generating that doc
 
   const reload = React.useCallback(async () => {
     if (!opportunityId) return;
@@ -59,6 +60,23 @@ export default function BonfireReadinessPanel({ opportunityId }) {
       setErr(e?.response?.data?.message || e.message);
     } finally {
       setTailoring(false);
+    }
+  }
+
+  async function handleGenerate(typeKey) {
+    setGenerating((s) => ({ ...s, [typeKey]: true }));
+    setErr(null);
+    try {
+      await generateDocument({ type: typeKey, bonfireOpportunityId: opportunityId });
+      await reload();
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Generation failed');
+    } finally {
+      setGenerating((s) => {
+        const next = { ...s };
+        delete next[typeKey];
+        return next;
+      });
     }
   }
 
@@ -176,8 +194,23 @@ export default function BonfireReadinessPanel({ opportunityId }) {
                     </div>
                   )}
                   {item.document && (
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                      {item.document.name} · v{item.document.version}
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
+                      <span>{item.document.name} · v{item.document.version}</span>
+                      {item.document.scope === 'bid' && (
+                        <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 font-medium" title="Local to this bid only">
+                          📌 this bid
+                        </span>
+                      )}
+                      {item.document.scope === 'global' && (
+                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200" title="From the global vault — reused across bids">
+                          🌐 vault
+                        </span>
+                      )}
+                      {item.document.doc_source === 'ai_generated' && (
+                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300" title="Created by the AI generator">
+                          🤖 AI
+                        </span>
+                      )}
                       {item.document.expires_in_days != null && (
                         <span> · {item.document.expires_in_days < 0
                           ? `expired ${-item.document.expires_in_days}d ago`
@@ -186,15 +219,28 @@ export default function BonfireReadinessPanel({ opportunityId }) {
                     </div>
                   )}
                 </div>
-                {(item.status === 'gap' || item.status === 'expired') && (
-                  <Link
-                    to="/admin/documents"
-                    className="text-[11px] text-blue-700 dark:text-blue-300 hover:underline shrink-0"
-                    title="Open the Document Vault to upload"
-                  >
-                    Upload →
-                  </Link>
-                )}
+                <div className="flex flex-col gap-1 items-end shrink-0">
+                  {item.type_generatable && (item.status === 'gap' || item.status === 'expired') && (
+                    <button
+                      type="button"
+                      disabled={!!generating[item.type]}
+                      onClick={() => handleGenerate(item.type)}
+                      className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap"
+                      title="Generate this document with AI — saved locally for this bid + globally as a versioned reference"
+                    >
+                      {generating[item.type] ? '🤖 Generating…' : '🤖 Generate'}
+                    </button>
+                  )}
+                  {(item.status === 'gap' || item.status === 'expired') && (
+                    <Link
+                      to="/admin/documents"
+                      className="text-[11px] text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap"
+                      title="Open the Document Vault to upload"
+                    >
+                      Upload →
+                    </Link>
+                  )}
+                </div>
               </li>
             );
           })}
