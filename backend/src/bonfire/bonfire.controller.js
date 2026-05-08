@@ -2,6 +2,7 @@ const { successResponse, errorResponse, paginatedResponse } = require('../utils/
 const logger = require('../logging/logger');
 const service = require('./bonfire.service');
 const readinessSvc = require('./bonfireReadiness.service');
+const aiReqSvc = require('./bonfireAIRequirements.service');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
 const { isBonfireEnabled } = require('./bonfire.middleware');
 
@@ -158,6 +159,24 @@ async function getReadinessSummaries(req, res) {
   }
 }
 
+// v0.2 AI tailoring — runs Claude over the opp text to flag additional
+// required documents beyond the v0.1 baseline. Cached on the row;
+// pass { force: true } to regenerate.
+async function tailorRequirements(req, res) {
+  try {
+    const force = !!(req.body && req.body.force === true);
+    const out = await aiReqSvc.tailorRequirements({
+      opportunityId: req.params.id,
+      force,
+    });
+    return successResponse(res, out, force ? 'AI requirements regenerated' : 'AI requirements ready');
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, 'Bonfire opportunity not found', 404);
+    logger.error('Bonfire AI tailor failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Failed to tailor requirements: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   getFlag,
   listOpportunities,
@@ -169,4 +188,5 @@ module.exports = {
   generateStrategy,
   getReadiness,
   getReadinessSummaries,
+  tailorRequirements,
 };

@@ -41,6 +41,15 @@ router.get('/opportunities/:id', verifyToken, controller.getOpportunity);
 router.get('/opportunities/:id/readiness', verifyToken, controller.getReadiness);
 router.post('/opportunities/readiness-summaries', verifyToken, express.json({ limit: '64kb' }), controller.getReadinessSummaries);
 
+// v0.2 AI tailoring — admin-only, runs Claude on the opp text. Body { force: true } regenerates.
+router.post(
+  '/opportunities/:id/tailor-requirements',
+  verifyToken,
+  checkPermissions(ROLES.ADMIN),
+  express.json({ limit: '8kb' }),
+  controller.tailorRequirements,
+);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',

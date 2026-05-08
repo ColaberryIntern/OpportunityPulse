@@ -28,6 +28,19 @@ const TYPES = [
   { key: 'technical_response_template',     label: 'Technical Response Template',   category: 'bonfire', platforms: ['bonfire'] },
   { key: 'pricing_response_template',       label: 'Pricing Response Template',     category: 'bonfire', platforms: ['bonfire'] },
 
+  // ---- v0.2 — additional types AI commonly detects in Bonfire / SAM RFPs ----
+  { key: 'cert_bid_bond',          label: 'Bid Bond',                         category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'cert_payment_bond',      label: 'Payment Bond',                     category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'cert_performance_bond',  label: 'Performance Bond',                 category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'cert_prevailing_wage',   label: 'Davis-Bacon / Prevailing Wage Cert', category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'eeo_statement',          label: 'EEO / Non-Discrimination Statement', category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'proof_of_licensure',     label: 'Proof of Professional Licensure',  category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'safety_program',         label: 'Safety Program / OSHA Record',     category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'cybersecurity_assessment', label: 'Cybersecurity Assessment / SOC 2', category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+  { key: 'site_visit_acknowledgment', label: 'Site Visit Acknowledgment',     category: 'bonfire',   platforms: ['bonfire'] },
+  { key: 'addendum_acknowledgment',   label: 'Addendum / Q&A Acknowledgment', category: 'bonfire',   platforms: ['bonfire'] },
+  { key: 'no_collusion_affidavit', label: 'Non-Collusion Affidavit',          category: 'evergreen', platforms: ['sam_gov', 'bonfire'] },
+
   // ---- Catch-all for anything we haven't categorized ----
   { key: 'other',                    label: 'Other',                           category: 'evergreen', platforms: [] },
 ];

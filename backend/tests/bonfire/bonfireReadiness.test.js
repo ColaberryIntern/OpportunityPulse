@@ -120,6 +120,61 @@ describe('bonfireReadiness.computeReadiness', () => {
   });
 });
 
+describe('bonfireReadiness.computeReadiness — v0.2 AI merge', () => {
+  it('merges AI additional_required into the checklist with source=ai', async () => {
+    const opp = makeOpp({
+      submissionRequirements: {
+        generated_at: new Date().toISOString(),
+        model_used: 'gpt-4o-mini',
+        baseline_types: ['cover_letter_template'],
+        additional_required: [
+          { type: 'cert_bid_bond', confidence: 0.9, reason: 'Bid bond ≥ 5%', source_quote: 'Bid bond of 5% required.' },
+          { type: 'eeo_statement', confidence: 0.4, reason: 'Maybe', source_quote: 'EEO mentioned' },
+        ],
+        summary: 'Construction RFP — bonding required.',
+      },
+    });
+    BonfireOpportunity.findByPk.mockResolvedValue(opp);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    // 6 baseline + 1 AI (eeo dropped under 0.5 threshold)
+    expect(out.counts.total).toBe(7);
+    const bidBond = out.checklist.find((c) => c.type === 'cert_bid_bond');
+    expect(bidBond).toBeTruthy();
+    expect(bidBond.source).toBe('ai');
+    expect(bidBond.source_quote).toBe('Bid bond of 5% required.');
+    expect(out.ai).toBeTruthy();
+    expect(out.ai.summary).toMatch(/Construction RFP/);
+  });
+
+  it('returns ai=null when no submission_requirements have been generated', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp());
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.ai).toBeNull();
+    expect(out.counts.total).toBe(6); // baseline only
+  });
+
+  it('does not double-count when AI flags a type the regex-conditional already added', async () => {
+    const opp = makeOpp({
+      description: 'MWBE preference applies',
+      submissionRequirements: {
+        generated_at: new Date().toISOString(),
+        additional_required: [
+          { type: 'cert_mwbe_dbe', confidence: 0.9, reason: 'MWBE preference', source_quote: 'MWBE-certified vendors preferred' },
+        ],
+      },
+    });
+    BonfireOpportunity.findByPk.mockResolvedValue(opp);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    // 6 baseline + 1 MWBE (from AI, takes precedence over regex)
+    expect(out.counts.total).toBe(7);
+    const mwbe = out.checklist.find((c) => c.type === 'cert_mwbe_dbe');
+    expect(mwbe.source).toBe('ai');
+  });
+});
+
 describe('bonfireReadiness.computeReadinessSummaries', () => {
   it('returns one summary per opp keyed by id', async () => {
     BonfireOpportunity.findAll.mockResolvedValue([

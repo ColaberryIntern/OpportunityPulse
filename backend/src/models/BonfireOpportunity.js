@@ -115,6 +115,11 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    submissionRequirements: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      field: 'submission_requirements',
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,

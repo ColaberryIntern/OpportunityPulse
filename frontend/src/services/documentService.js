@@ -50,3 +50,15 @@ export async function getBonfireReadinessSummaries(ids) {
   const res = await api.post('/bonfire/opportunities/readiness-summaries', { ids });
   return res.data?.data || {};
 }
+
+// v0.2 — admin-only. Triggers Claude to read THIS opp's text and flag
+// additional required documents beyond the baseline. Result is cached
+// on the opp row; readiness then auto-merges. Pass { force: true } to
+// regenerate even when a cached result exists.
+export async function tailorBonfireRequirements(opportunityId, { force = false } = {}) {
+  const res = await api.post(
+    `/bonfire/opportunities/${encodeURIComponent(opportunityId)}/tailor-requirements`,
+    { force },
+  );
+  return res.data?.data || null;
+}
