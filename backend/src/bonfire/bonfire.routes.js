@@ -61,6 +61,13 @@ router.post(
 router.get('/opportunities/:id/attachments', verifyToken, controller.listAttachments);
 router.get('/opportunities/:id/attachments/:attachmentId/download', verifyToken, controller.downloadAttachment);
 
+// v0.5 (Phase 4) — one-click submission package ZIP.
+router.get(
+  '/opportunities/:id/submission-package',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  controller.downloadSubmissionPackage,
+);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',

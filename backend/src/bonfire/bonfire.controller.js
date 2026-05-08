@@ -4,6 +4,7 @@ const service = require('./bonfire.service');
 const readinessSvc = require('./bonfireReadiness.service');
 const aiReqSvc = require('./bonfireAIRequirements.service');
 const attachmentFetcher = require('./attachmentFetcher.service');
+const submissionPackage = require('./submissionPackage.service');
 const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
 const { isBonfireEnabled } = require('./bonfire.middleware');
@@ -235,6 +236,28 @@ async function downloadAttachment(req, res) {
   }
 }
 
+// v0.5 (Phase 4): one-click submission package — ZIP of vault docs +
+// fetched RFP attachments + README + manifest. Streams directly.
+async function downloadSubmissionPackage(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    await submissionPackage.streamPackage({
+      bonfireOpportunityId: req.params.id,
+      organizationId: req.user && req.user.organizationId,
+      userId,
+      res,
+    });
+    // streamPackage pipes via archiver.finalize; no extra send needed.
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    logger.error('Bonfire submission-package failed', { id: req.params.id, error: e.message });
+    if (!res.headersSent) {
+      return errorResponse(res, 'Package failed: ' + e.message, 500);
+    }
+    return null;
+  }
+}
+
 module.exports = {
   getFlag,
   listOpportunities,
@@ -250,4 +273,5 @@ module.exports = {
   fetchAttachments,
   listAttachments,
   downloadAttachment,
+  downloadSubmissionPackage,
 };

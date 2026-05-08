@@ -29,3 +29,28 @@ export async function downloadAttachment(bonfireOpportunityId, attachmentId, nam
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
+
+// v0.5 (Phase 4) — download the assembled submission ZIP. Streams directly
+// from the server. Caller passes a hint for the filename; backend sends
+// a Content-Disposition that the browser respects.
+export async function downloadSubmissionPackage(bonfireOpportunityId, hintName) {
+  const res = await api.get(
+    `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/submission-package`,
+    { responseType: 'blob' },
+  );
+  const blob = new Blob([res.data], { type: 'application/zip' });
+  // Try to honor server-provided filename; otherwise fall back.
+  let filename = `submission-package_${hintName || bonfireOpportunityId}.zip`;
+  const cd = res.headers['content-disposition'];
+  if (cd) {
+    const m = cd.match(/filename="([^"]+)"/);
+    if (m) filename = decodeURIComponent(m[1]);
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}

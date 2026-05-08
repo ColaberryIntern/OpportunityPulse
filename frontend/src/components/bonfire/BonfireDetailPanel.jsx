@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import BonfireSignalBadges from './BonfireSignalBadges';
 import BonfireReadinessPanel from './BonfireReadinessPanel';
 import BonfireAttachmentsPanel from './BonfireAttachmentsPanel';
+import { downloadSubmissionPackage } from '../../services/bonfireAttachmentsService';
 
 function fmtUSD(cents) {
   if (cents == null) return '—';
@@ -10,7 +11,21 @@ function fmtUSD(cents) {
 }
 
 function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy }) {
+  const [packaging, setPackaging] = useState(false);
+  const [packageErr, setPackageErr] = useState(null);
   if (!row) return null;
+
+  async function handleGeneratePackage() {
+    setPackaging(true); setPackageErr(null);
+    try {
+      const hint = (row.title || '').slice(0, 40).replace(/\s+/g, '-');
+      await downloadSubmissionPackage(row.id, hint);
+    } catch (e) {
+      setPackageErr(e?.response?.data?.message || e.message || 'Package failed');
+    } finally {
+      setPackaging(false);
+    }
+  }
   return (
     <div
       className="fixed inset-0 z-50 flex"
@@ -62,6 +77,34 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
 
         {/* v0.4 RFP Attachments: scraper-fed file locker per opp */}
         <BonfireAttachmentsPanel opportunityId={row.id} isAdmin={isAdmin} />
+
+        {/* v0.5 (Phase 4) — Submission Package: one-click ZIP of vault + attachments + manifest */}
+        {isAdmin && (
+          <div className="mb-4 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-blue-900 dark:text-blue-200 font-semibold">📦 Submission Package</div>
+                <div className="text-[12px] text-blue-800 dark:text-blue-200 mt-0.5">
+                  ZIP of every vault doc (global + bid-local), AI-generated drafts rendered to PDF, every fetched RFP attachment, plus a README + manifest.json.
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={packaging}
+                onClick={handleGeneratePackage}
+                className="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50 whitespace-nowrap"
+                title="Build a single ZIP for upload to the Bonfire portal"
+              >
+                {packaging ? '⏳ Assembling…' : '📦 Generate Package'}
+              </button>
+            </div>
+            {packageErr && (
+              <div className="mt-2 px-2 py-1 rounded bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-900/40 text-[11px] text-red-900 dark:text-red-200">
+                {packageErr}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
           <Stat label="Priority" value={row.priorityScore ?? '—'} />
