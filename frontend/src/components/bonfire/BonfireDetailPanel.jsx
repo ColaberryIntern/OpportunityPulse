@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import BonfireSignalBadges from './BonfireSignalBadges';
 import BonfireReadinessPanel from './BonfireReadinessPanel';
 import BonfireAttachmentsPanel from './BonfireAttachmentsPanel';
@@ -56,6 +57,15 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
                 View Original RFP on Bonfire
                 <span aria-hidden="true">↗</span>
               </a>
+            )}
+            {isAdmin && (
+              <Link
+                to={`/admin/bonfire/${row.id}/submission-readiness`}
+                className="inline-flex items-center gap-1.5 mt-2 ml-2 px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 text-sm font-medium"
+                title="Open this opportunity in a dedicated full-page Submission Readiness view"
+              >
+                📑 Open full readiness page
+              </Link>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none">×</button>

@@ -14,6 +14,12 @@ jest.mock('../../src/admin/dataSourceHealth.controller', () => ({
     res.status(200).json({ status: 'success', data: global.__healthSnapshot });
   },
 }));
+// v0.7 expiry alerts — keep the mock returning [] by default so existing
+// tests stay focused on retry/classify/email behavior. Dedicated tests
+// override.
+jest.mock('../../src/documents/document.service', () => ({
+  listDocuments: jest.fn(async () => []),
+}));
 
 const ingestion = require('../../src/ingestion/ingestion.service');
 const email = require('../../src/utils/email');
@@ -93,6 +99,82 @@ describe('sourceHealthAgent.runAgent', () => {
     expect(r.zero_yield).toHaveLength(1);
     expect(r.zero_yield[0].category).toBe('source_dried_up');
     expect(r.should_email).toBe(true);
+  });
+});
+
+describe('sourceHealthAgent.runAgent — vault doc expiry alerts (v0.7)', () => {
+  beforeEach(() => {
+    ingestion.runIngestion.mockReset();
+    email.sendEmail.mockClear();
+    const docSvc = require('../../src/documents/document.service');
+    docSvc.listDocuments.mockReset().mockResolvedValue([]);
+  });
+
+  function snapshot() {
+    return {
+      summary: { healthy: 1, stale: 0, zero_yield: 0, failing: 0, disabled: 0 },
+      sources: [{ status: 'healthy', name: 'devto', channel: { label: 'X', key: 'x' } }],
+    };
+  }
+
+  it('flags expired docs in the report and triggers email', async () => {
+    global.__healthSnapshot = snapshot();
+    const docSvc = require('../../src/documents/document.service');
+    const expired = new Date(Date.now() - 5 * 86_400_000); // 5 days ago
+    docSvc.listDocuments.mockResolvedValue([
+      { id: 'd1', type: 'coi', name: 'COI 2025', version: 1, scope: 'global', expiresAt: expired },
+    ]);
+    const r = await agent.runAgent({ retry: false });
+    expect(r.expired_docs).toHaveLength(1);
+    expect(r.expired_docs[0].days_until_expiry).toBeLessThan(0);
+    expect(r.expiring_docs).toEqual([]);
+    expect(r.should_email).toBe(true);
+  });
+
+  it('flags expiring-soon docs (within 30d) separately from already-expired', async () => {
+    global.__healthSnapshot = snapshot();
+    const docSvc = require('../../src/documents/document.service');
+    const soon = new Date(Date.now() + 12 * 86_400_000); // 12d
+    docSvc.listDocuments.mockResolvedValue([
+      { id: 'd2', type: 'cert_8a', name: '8(a) Cert', version: 2, scope: 'global', expiresAt: soon },
+    ]);
+    const r = await agent.runAgent({ retry: false });
+    expect(r.expiring_docs).toHaveLength(1);
+    expect(r.expiring_docs[0].days_until_expiry).toBeGreaterThanOrEqual(11);
+    expect(r.expired_docs).toEqual([]);
+    expect(r.should_email).toBe(true);
+  });
+
+  it('keeps should_email=false when nothing is expired/expiring + nothing else changed', async () => {
+    global.__healthSnapshot = snapshot();
+    const r = await agent.runAgent({ retry: false });
+    expect(r.expired_docs).toEqual([]);
+    expect(r.expiring_docs).toEqual([]);
+    expect(r.should_email).toBe(false);
+  });
+
+  it('email body includes the Expired and Expiring sections when present', async () => {
+    process.env.OIED_SOURCE_HEALTH_AGENT_TO = 'ali@example.com';
+    const out = await agent.emailReport({
+      should_email: true,
+      recovered: [], still_failing: [], zero_yield: [],
+      expired_docs: [
+        { id: 'd1', type: 'coi', type_label: 'Certificate of Insurance (COI)',
+          name: 'COI 2025', version: 1, scope: 'global', days_until_expiry: -5 },
+      ],
+      expiring_docs: [
+        { id: 'd2', type: 'cert_8a', type_label: '8(a) Certification',
+          name: '8(a) Cert', version: 2, scope: 'global', days_until_expiry: 12 },
+      ],
+      summary_after: { healthy: 1, failing: 0, zero_yield: 0, disabled: 0, stale: 0 },
+    });
+    expect(out.sent).toBe(true);
+    const call = email.sendEmail.mock.calls[email.sendEmail.mock.calls.length - 1][0];
+    expect(call.html).toMatch(/Expired vault documents/);
+    expect(call.html).toMatch(/COI 2025/);
+    expect(call.html).toMatch(/expiring soon/i);
+    expect(call.text).toMatch(/EXPIRED vault docs/);
+    expect(call.text).toMatch(/expires in 12d/);
   });
 });
 

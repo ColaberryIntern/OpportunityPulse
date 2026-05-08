@@ -14,6 +14,11 @@ const logger = require('../logging/logger');
 const ingestionSvc = require('../ingestion/ingestion.service');
 const { sendEmail } = require('../utils/email');
 const dataSourceHealth = require('./dataSourceHealth.controller');
+// v0.7 (Phase 5 polish): include vault doc expiry alerts in the daily
+// Source Health email. Loaded lazily so this module loads cleanly when
+// the documents subsystem isn't initialized (tests, partial smoke, etc.).
+const documentService = require('../documents/document.service');
+const documentTypes = require('../documents/documentTypes');
 
 // Classifier rules. Order matters — first match wins. Each rule returns
 // a category + a one-liner human action. Patterns checked against the
@@ -139,6 +144,14 @@ async function runAgent({ retry = true } = {}) {
     action: 'No errors but no fresh rows. Probe the upstream feed manually; consider adding a backup source.',
   }));
 
+  // v0.7 (Phase 5 polish): vault doc expiry alerts. Pulls expiring +
+  // expired docs from EVERY org (admin agent doesn't know its scope);
+  // each row carries the org_id so the email can group by tenant.
+  const expiringDocs = await loadExpiringDocs().catch((e) => {
+    logger.warn('sourceHealthAgent: expiry scan failed (continuing without)', { error: e.message });
+    return { expired: [], expiring_soon: [] };
+  });
+
   const report = {
     started_at: startedAt.toISOString(),
     ended_at: new Date().toISOString(),
@@ -148,11 +161,54 @@ async function runAgent({ retry = true } = {}) {
     recovered: Array.from(recoveredNames),
     still_failing: failingClassified,
     zero_yield: zeroYieldClassified,
-    needs_human: failingClassified.length + zeroYieldClassified.length,
+    expired_docs: expiringDocs.expired,
+    expiring_docs: expiringDocs.expiring_soon,
+    needs_human: failingClassified.length + zeroYieldClassified.length
+      + expiringDocs.expired.length + expiringDocs.expiring_soon.length,
     should_email: failingClassified.length + zeroYieldClassified.length > 0
-      || recoveredNames.size > 0,
+      || recoveredNames.size > 0
+      || expiringDocs.expired.length > 0
+      || expiringDocs.expiring_soon.length > 0,
   };
   return report;
+}
+
+// v0.7: pull every active vault doc with an expiry that's already past
+// or coming up in the next 30 days. Returns {expired, expiring_soon}
+// where each item carries the doc + days math + org_id (for multi-org
+// future).
+async function loadExpiringDocs() {
+  // listDocuments doesn't filter by 'expired' separately, so we ask for
+  // everything expiring within 30 days then split.
+  const expiringWithin30 = await documentService.listDocuments({
+    expiringWithinDays: 30,
+    // organizationId omitted → all orgs, since the agent runs at admin
+    // scope. Future: split by org for multi-tenant emails.
+    organizationId: 1,
+  }).catch(() => []);
+  const now = Date.now();
+  const expired = [];
+  const expiring = [];
+  for (const d of expiringWithin30) {
+    if (!d.expiresAt) continue;
+    const days = Math.round((new Date(d.expiresAt).getTime() - now) / 86_400_000);
+    const item = {
+      id: d.id,
+      type: d.type,
+      type_label: documentTypes.labelFor(d.type),
+      name: d.name,
+      version: d.version,
+      scope: d.scope,
+      expires_at: d.expiresAt,
+      days_until_expiry: days,
+    };
+    if (days < 0) expired.push(item);
+    else expiring.push(item);
+  }
+  // Sort: most urgent first (most-expired, then closest-to-expiry).
+  expired.sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+  expiring.sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+  return { expired, expiring_soon: expiring };
 }
 
 function fmtAgo(iso) {
@@ -193,6 +249,24 @@ function buildEmailHtml(report, dashboardUrl) {
           <span style="color:#444;font-size:13px"><em>Category: ${s.category}.</em> ${s.action}</span>
         </li>`).join('')}</ul>`);
 
+  // v0.7 (Phase 5 polish) — vault doc expiries.
+  const expiredDocs = report.expired_docs || [];
+  const expiringDocs = report.expiring_docs || [];
+  const expiredHtml = expiredDocs.length === 0 ? '' :
+    sect(`🚨 Expired vault documents (${expiredDocs.length})`,
+      `<ul>${expiredDocs.map((d) => `
+        <li style="${liStyle}">
+          <strong>${d.type_label}</strong> — ${d.name} <span style="color:#888">(v${d.version}, ${d.scope})</span><br/>
+          <span style="color:#dc2626;font-size:13px">Expired ${-d.days_until_expiry} day${-d.days_until_expiry === 1 ? '' : 's'} ago.</span> Renew + upload a new version.
+        </li>`).join('')}</ul>`);
+  const expiringHtml = expiringDocs.length === 0 ? '' :
+    sect(`⏳ Vault documents expiring soon (${expiringDocs.length})`,
+      `<ul>${expiringDocs.map((d) => `
+        <li style="${liStyle}">
+          <strong>${d.type_label}</strong> — ${d.name} <span style="color:#888">(v${d.version}, ${d.scope})</span><br/>
+          <span style="color:#92400e;font-size:13px">Expires in ${d.days_until_expiry} day${d.days_until_expiry === 1 ? '' : 's'}.</span> Schedule renewal now.
+        </li>`).join('')}</ul>`);
+
   const summaryLine = summary
     ? `<p style="margin:0;color:#444;font-family:system-ui,sans-serif;font-size:14px">
         Current state: ${summary.healthy} healthy · ${summary.stale || 0} stale · ${summary.zero_yield || 0} zero_yield · ${summary.failing || 0} failing · ${summary.disabled || 0} disabled.
@@ -205,6 +279,8 @@ function buildEmailHtml(report, dashboardUrl) {
     ${recoveredHtml}
     ${failingHtml}
     ${zyHtml}
+    ${expiredHtml}
+    ${expiringHtml}
     <p style="margin-top:18px;color:#666;font-size:12px">
       Source Health page: <a href="${dashboardUrl}">${dashboardUrl}</a>
     </p>
@@ -227,6 +303,18 @@ function buildEmailText(report, dashboardUrl) {
     lines.push('', 'Zero yield (no fix attempted):');
     for (const s of report.zero_yield) {
       lines.push(`  - ${s.name}: ${s.consecutive_zero_runs} empty runs in a row. ${s.action}`);
+    }
+  }
+  if ((report.expired_docs || []).length > 0) {
+    lines.push('', 'EXPIRED vault docs:');
+    for (const d of report.expired_docs) {
+      lines.push(`  - ${d.type_label} "${d.name}" — expired ${-d.days_until_expiry}d ago`);
+    }
+  }
+  if ((report.expiring_docs || []).length > 0) {
+    lines.push('', 'Vault docs expiring within 30 days:');
+    for (const d of report.expiring_docs) {
+      lines.push(`  - ${d.type_label} "${d.name}" — expires in ${d.days_until_expiry}d`);
     }
   }
   lines.push('', `Page: ${dashboardUrl}`);

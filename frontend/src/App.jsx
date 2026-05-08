@@ -40,6 +40,7 @@ import BriefingPage from './pages/BriefingPage';
 import TriggerLogsPage from './pages/TriggerLogsPage';
 import DataSourceHealthPage from './pages/DataSourceHealthPage';
 import DocumentVaultPage from './pages/DocumentVaultPage';
+import BonfireSubmissionReadinessPage from './pages/BonfireSubmissionReadinessPage';
 import ExecutionQueuePage from './pages/ExecutionQueuePage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OIEDDashboardPage from './pages/OIEDDashboardPage';
@@ -420,6 +421,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <DocumentVaultPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/bonfire/:id/submission-readiness"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <BonfireSubmissionReadinessPage />
             </ProtectedLayout>
           }
         />

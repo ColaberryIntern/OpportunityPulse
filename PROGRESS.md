@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Submission Readiness Engine v0.7 — Phase 5 polish (expiry alerts + dedicated readiness page)
+
+- [x] Two complementary additions: (a) the daily Source Health Agent email now includes vault doc expiry alerts (🚨 Expired + ⏳ Expiring within 30 days sections), so renewals are surfaced before they bite a submission; (b) a dedicated `/admin/bonfire/:id/submission-readiness` page that gives one bid a full-screen view with linkable URL — handy for sharing a single bid's status with a teammate without screenshotting the drawer.
+  - Date: 2026-05-08
+  - What changed: `admin/sourceHealthAgent.service`: new `loadExpiringDocs()` helper pulls docs expiring within 30 days via `documentService.listDocuments({expiringWithinDays: 30})`, splits into `expired` (days < 0) and `expiring_soon` (days 0–30), sorts most-urgent first. Report now carries `expired_docs` + `expiring_docs` arrays. `should_email` flips true when either is non-empty. HTML email body adds 🚨 Expired (red) + ⏳ Expiring (amber) sections per doc with type label + name + version + scope + days math; text body mirrors. New page `frontend/src/pages/BonfireSubmissionReadinessPage.jsx` mounted at `/admin/bonfire/:id/submission-readiness`: header card with title/agency/close-date + Generate Package button + priority/value badges + linked Bonfire RFP, two-column layout (readiness + attachments left, quick-links sidebar right), reuses the existing `BonfireReadinessPanel` and `BonfireAttachmentsPanel` components verbatim. Deep-link button "📑 Open full readiness page" added to the Bonfire detail drawer header.
+  - Verification: 4 new tests in `tests/admin/sourceHealthAgent.test.js` (expired-only triggers email, expiring-only triggers email, clean state stays should_email=false, email body includes both sections with correct content). Full backend suite: 115 suites / 1409 tests pass. Frontend syntax-checked.
+  - Notes: Expiry scan runs scoped to `organizationId: 1` for now (single-org prod). Multi-org rollout would group by org_id and emit one email per recipient. The dedicated readiness page is purely additive — the inline drawer panel still works exactly the same; admins choose by context. Sidebar quick-links + Tip help with first-time orientation.
+
 ## Submission Readiness Engine v0.6 — Auto-fill from evergreen vault (Phase 6)
 
 - [x] When the actionGenerator runs (proposal / offer / resume), it now reads relevant vault docs (capability statement, past performance, references) and injects excerpts into the AI prompt under an "Approved Source Material" block. Generated proposals cite real org artifacts instead of inferring everything from the JSON profile fields. Lazy text extraction layer means PDF + DOCX vault docs become readable too — first read extracts via pdf-parse / mammoth and caches on `documents.metadata.extracted_text` for next time.
