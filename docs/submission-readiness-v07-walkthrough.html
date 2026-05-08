@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.7 — Dedicated Page + Expiry Alerts · Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --info-soft: #bee3f8; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .annotated { margin: 14px 0; padding: 10px 14px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 13.5px; }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .shot { display: block; max-width: 100%; height: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; box-shadow: 0 2px 6px rgba(26, 54, 93, 0.08); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.85); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .mock-email { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; border: 1px solid var(--border); border-radius: 6px; max-width: 640px; margin: 12px 0; background: #fff; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.08); overflow: hidden; }
+  .mock-email .hdr { background: var(--bg-alt); padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .mock-email .hdr .from { color: var(--text-muted); }
+  .mock-email .hdr .subj { color: var(--navy); font-weight: 600; font-size: 14px; margin-top: 2px; }
+  .mock-email .body { padding: 14px 18px; font-size: 14px; }
+  .mock-email h3 { font-size: 14.5px; margin: 14px 0 4px 0; color: var(--navy); border: none; text-transform: none; letter-spacing: 0; padding: 0; }
+  .mock-email ul { padding-left: 18px; margin: 4px 0; }
+  .mock-email li { margin: 3px 0; font-size: 13.5px; }
+  .err-text { color: var(--danger); font-size: 12.5px; }
+  .warn-text { color: #92400e; font-size: 12.5px; }
+  .grey-text { color: var(--text-muted); font-size: 12.5px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#what">What changed</a>
+
+  <h2>Feature 1 · Page</h2>
+  <a href="#page">Dedicated readiness page</a>
+  <a href="#layout">Layout + sidebar</a>
+  <a href="#linking">Linking from drawer</a>
+
+  <h2>Feature 2 · Alerts</h2>
+  <a href="#alerts">Vault expiry alerts</a>
+  <a href="#email-html">Email — HTML version</a>
+  <a href="#email-text">Email — plain text</a>
+  <a href="#gating">Email gating</a>
+
+  <h2>Details</h2>
+  <a href="#files">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.7 (Phase 5 polish)</h1>
+  <p class="subtitle">Dedicated readiness page + vault doc expiry alerts · Walkthrough · 2026-05-08 · commit <code>81aca1b</code></p>
+  <p>
+    Two operationalization upgrades to round out the engine:
+  </p>
+  <ul>
+    <li>
+      <strong>Dedicated submission-readiness page</strong> at <code>/admin/bonfire/:id/submission-readiness</code> — a linkable
+      full-width view per opportunity. More breathing room than the inline drawer; canonical surface
+      for "what's left before I hit Submit?"
+    </li>
+    <li>
+      <strong>Vault doc expiry alerts</strong> wired into the daily Source Health Agent email. COI expired? 8(a) cert
+      expiring in 12 days? It now shows up red/amber in the same email that already reports source
+      health — instead of failing silently the morning of submission.
+    </li>
+  </ul>
+  <p>
+    No new schema, no new cron — both features piggyback on infrastructure already shipped
+    (the readiness panel from v0.1, the agent email from v9.10). Operational glue, not a new system.
+  </p>
+</section>
+
+<!-- ========================================================== WHAT -->
+<section class="block context" id="what">
+  <h2>What changed at a glance</h2>
+  <table>
+    <thead><tr><th>Surface</th><th>Before v0.7</th><th>After v0.7</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Where readiness lives</td>
+        <td>Inside the right-side drawer on the Bonfire list. Cramped, can't be linked, scrolls inside a 36rem panel.</td>
+        <td>Dedicated full-width page. Linkable URL. Two-column layout with quick-links sidebar.</td>
+      </tr>
+      <tr>
+        <td>How to reach the page</td>
+        <td>Open list → click row → drawer opens → scroll down → readiness panel.</td>
+        <td>From the drawer: <strong>📑 Open full readiness page</strong> button. Or paste the URL directly.</td>
+      </tr>
+      <tr>
+        <td>Vault doc expiry visibility</td>
+        <td>Only visible if you happened to open the vault page and scan the badges.</td>
+        <td>Surfaced in the daily Source Health email — same morning email that already covers data feeds.</td>
+      </tr>
+      <tr>
+        <td>Email gating</td>
+        <td>Source Health email triggered by failing/zero-yield sources only.</td>
+        <td>Also triggers when any vault doc is expired or expiring within 30d.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========================================================== PAGE -->
+<section class="block feature" id="page">
+  <h2>1 · Dedicated submission-readiness page</h2>
+  <p>
+    Live screenshot of <code>/admin/bonfire/&lt;id&gt;/submission-readiness</code> for the
+    "Records Management System" opportunity (Texas Department of Criminal Justice, $250,000, closes Aug 1 2026):
+  </p>
+  <img class="shot" src="submission-readiness-v07-walkthrough-assets/01-dedicated-readiness-page.png" alt="Dedicated submission-readiness page showing 50% complete checklist, RFP attachments panel, and Quick Links sidebar." />
+  <div class="annotated">
+    <h4>What's on the page</h4>
+    <ul>
+      <li><strong>Header card</strong> — opp title, agency, close date, "View Original RFP on Bonfire" CTA, Priority + Value badges, and the headline <strong>📦 Generate Package</strong> button (carried over from v0.5).</li>
+      <li><strong>"What this is"</strong> blue panel — the AI-generated overview, same content as the drawer.</li>
+      <li><strong>Submission Readiness</strong> card — full v0.1+v0.3 panel: 50% complete (3 of 6 required docs found), per-row status with click-to-download for on-file docs, 🤖 Generate buttons for AI-generatable types still missing.</li>
+      <li><strong>RFP Attachments</strong> panel — v0.4 component embedded inline. "Fetch from Bonfire" CTA when none present yet.</li>
+      <li><strong>Quick Links sidebar</strong> (right column) — Document Vault, Source Health, all Bonfire opps, original RFP. Sticky, so it stays visible as you scroll the long checklist.</li>
+      <li><strong>Tip box</strong> — explains what's in the Generate Package ZIP (vault docs, AI drafts as PDF, fetched RFP attachments, README, manifest.json).</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Page composition feedback — anything missing? Anything that should move to a tab vs. inline?</div>
+    <textarea data-fb-id="page"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LAYOUT -->
+<section class="block context" id="layout">
+  <h2>2 · Two-column layout — main work + persistent sidebar</h2>
+  <p>
+    Below the lg breakpoint (~1024px) it stacks; above it splits 2/3 + 1/3:
+  </p>
+<pre>┌─── header card ──────────────────────────────────────────┐
+│  Title / agency / close · [📦 Generate Package]          │
+│  [View Original RFP on Bonfire ↗]            Priority: 7 │
+└──────────────────────────────────────────────────────────┘
+
+┌── BonfireReadinessPanel ─────────────┐  ┌─ Quick Links ─┐
+│                                       │  │ 📁 Vault      │
+│  50% complete · 3 of 6 required       │  │ 🩺 Source     │
+│  ✓ Cover Letter Template              │  │ 🔥 All opps   │
+│  ✓ Capability Statement               │  │ ↗ Original    │
+│  ✓ References List                    │  │               │
+│  ✗ Certificate of Insurance           │  │ Tip:          │
+│  ✗ Technical Response  [🤖 Generate]  │  │ Click 📦…     │
+│  ✗ Pricing Response    [🤖 Generate]  │  │               │
+│                                       │  │ (sticky as    │
+├── BonfireAttachmentsPanel ───────────┤  │  you scroll)  │
+│  No RFP attachments fetched yet…      │  │               │
+│  [Fetch from Bonfire]                 │  │               │
+└───────────────────────────────────────┘  └───────────────┘</pre>
+  <ul>
+    <li>The sidebar uses <code>sticky top-4</code> so quick-links remain in view during a long scroll through the readiness checklist.</li>
+    <li>The header's <strong>📦 Generate Package</strong> button is the same handler as the drawer — clicking either streams the same ZIP.</li>
+    <li>Page-level error banner sits inline under the header so download/package failures show in context.</li>
+  </ul>
+</section>
+
+<!-- ========================================================== LINKING -->
+<section class="block context" id="linking">
+  <h2>3 · How you get to the page</h2>
+  <p>Two paths, neither destructive:</p>
+  <ol>
+    <li>
+      <strong>From the drawer</strong> — when you click any row on the <code>/bonfire</code> list, the existing right-side drawer
+      now contains a small grey button beside the original-RFP CTA: <strong>📑 Open full readiness page</strong>.
+      Admin only. Opens in the same tab; the drawer closes naturally on navigation.
+    </li>
+    <li>
+      <strong>Direct URL</strong> — paste <code>/admin/bonfire/&lt;opportunity-id&gt;/submission-readiness</code>.
+      Useful for emailing teammates a link to a specific bid's status, or linking from a Slack message.
+    </li>
+  </ol>
+  <p class="small">
+    The route is admin-gated server-side and client-side. Non-admins get an "Admin access required."
+    notice instead of the page contents. Same gating story as v0.1 vault.
+  </p>
+</section>
+
+<!-- ========================================================== ALERTS -->
+<section class="block feature" id="alerts">
+  <h2>4 · Vault doc expiry alerts in the daily email</h2>
+  <p>
+    The Source Health Auto-Triage Agent (shipped v9.10) already runs daily after ingest, retries failing
+    sources, classifies remaining failures, and emails the operator <em>only when there's something worth reading</em>.
+    v0.7 extends what counts as "worth reading" to include vault doc expiries:
+  </p>
+  <ul>
+    <li><strong>🚨 Expired (red)</strong> — any vault doc whose <code>expires_at</code> is in the past. Listed first; sorted most-expired first.</li>
+    <li><strong>⏳ Expiring soon (amber)</strong> — within 30 days. Sorted closest-to-expiry first.</li>
+    <li><strong>Nothing else</strong> — if no docs in either bucket and no source issues, no email. Clean days stay quiet.</li>
+  </ul>
+  <p>
+    The agent loads from <code>documentService.listDocuments({ expiringWithinDays: 30 })</code>, splits by
+    <code>days &lt; 0</code>, and decorates each item with <code>type_label</code> from
+    <code>documentTypes.labelFor()</code> for human-readable subject lines (e.g. <em>Certificate of Insurance (COI)</em>
+    instead of <code>coi</code>).
+  </p>
+</section>
+
+<!-- ========================================================== EMAIL HTML -->
+<section class="block feature" id="email-html">
+  <h2>5 · Email — HTML version</h2>
+  <p>What the operator sees in their inbox on a day with one expired and one expiring-soon doc:</p>
+  <div class="mock-email">
+    <div class="hdr">
+      <div class="from">From: Opportunity Pulse · noreply@colaberry.com</div>
+      <div class="from">To: ali@colaberry.com</div>
+      <div class="subj">[Opportunity Pulse] 0 sources need attention — 1 auto-recovered</div>
+    </div>
+    <div class="body">
+      <p style="margin: 0 0 8px 0;">Daily Source Health Auto-Triage report:</p>
+
+      <h3>✅ Auto-recovered after retry (1)</h3>
+      <ul><li>jobicy</li></ul>
+
+      <h3>🚨 Expired vault documents (1)</h3>
+      <ul>
+        <li>
+          <strong>Certificate of Insurance (COI)</strong> — COI 2025
+          <span class="grey-text">(v1, global)</span><br/>
+          <span class="err-text">Expired 5 days ago.</span> Renew + upload a new version.
+        </li>
+      </ul>
+
+      <h3>⏳ Vault documents expiring soon (1)</h3>
+      <ul>
+        <li>
+          <strong>8(a) Certification</strong> — 8(a) Cert
+          <span class="grey-text">(v2, global)</span><br/>
+          <span class="warn-text">Expires in 12 days.</span> Schedule renewal now.
+        </li>
+      </ul>
+
+      <p style="margin-top: 16px; font-size: 13px;">
+        <a href="#" style="color: var(--navy-light);">→ Open Source Health page</a>
+      </p>
+    </div>
+  </div>
+  <div class="annotated">
+    <h4>Color coding</h4>
+    <ul>
+      <li><strong>Red <code>#dc2626</code></strong> — already-expired. Action is mandatory before next submission.</li>
+      <li><strong>Amber <code>#92400e</code></strong> — expiring within 30d. Action is "schedule renewal," not "block."</li>
+      <li><strong>Grey</strong> — version + scope qualifier (e.g. <em>v2, global</em>) so you can find the exact row in the vault.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">HTML email feedback — clear at a glance? Want a "remind me in 7 days" link per row?</div>
+    <textarea data-fb-id="email-html"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== EMAIL TEXT -->
+<section class="block context" id="email-text">
+  <h2>6 · Email — plain text version</h2>
+  <p>For text-only mail clients and Slack-paste, the same content renders as:</p>
+<pre>Daily Source Health Auto-Triage report:
+
+Auto-recovered after retry:
+  - jobicy
+
+EXPIRED vault docs:
+  - Certificate of Insurance (COI) "COI 2025" — expired 5d ago
+
+Vault docs expiring within 30 days:
+  - 8(a) Certification "8(a) Cert" — expires in 12d
+
+Page: http://95.216.199.47/admin/data-sources</pre>
+  <p class="small">Same data, no styling. Tested directly via <code>emailReport()</code> with shaped fixtures — see <code>tests/admin/sourceHealthAgent.test.js</code>.</p>
+</section>
+
+<!-- ========================================================== GATING -->
+<section class="block context" id="gating">
+  <h2>7 · Email gating logic</h2>
+  <p>The agent only sends if at least one of these is true:</p>
+  <table>
+    <thead><tr><th>Condition</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>≥1 source still failing after retry</td><td>v9.10</td></tr>
+      <tr><td>≥1 zero-yield source needing manual review</td><td>v9.10</td></tr>
+      <tr><td>≥1 source auto-recovered (success deserves a mention)</td><td>v9.10</td></tr>
+      <tr><td><strong>≥1 vault doc already expired</strong></td><td>v0.7</td></tr>
+      <tr><td><strong>≥1 vault doc expiring within 30 days</strong></td><td>v0.7</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Otherwise <code>should_email = false</code> and the agent returns silently. Clean days do not page you.
+    See <code>sourceHealthAgent.test.js</code> &gt; <em>"keeps should_email=false when nothing is expired/expiring + nothing else changed"</em>.
+  </p>
+  <div class="annotated">
+    <h4>Important non-behaviors</h4>
+    <ul>
+      <li>The agent <strong>never auto-deletes</strong> an expired doc. Expiry is informational; you might still need the file as a historical reference.</li>
+      <li>The agent <strong>never auto-renews</strong> certifications. Renewal is a human + counterparty workflow (insurance broker, SBA, etc.).</li>
+      <li>The agent <strong>never blocks</strong> submissions. A bid with an expired COI still generates a package; the package's <code>manifest.json</code> records what was included verbatim.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block context" id="files">
+  <h2>Files changed</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>frontend/src/pages/BonfireSubmissionReadinessPage.jsx</code></td><td>NEW · dedicated <code>/admin/bonfire/:id/submission-readiness</code> page (header + two-column layout + quick-links sidebar)</td></tr>
+      <tr><td><code>frontend/src/App.jsx</code></td><td>Wire the new route under the admin tree</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireDetailPanel.jsx</code></td><td>Add <strong>📑 Open full readiness page</strong> link beside the "View Original RFP on Bonfire" CTA</td></tr>
+      <tr><td><code>backend/src/admin/sourceHealthAgent.service.js</code></td><td>+ <code>loadExpiringDocs()</code>; merge into report; <code>should_email</code> includes expiries; HTML + text sections; type-labels via <code>documentTypes.labelFor()</code></td></tr>
+      <tr><td><code>backend/tests/admin/sourceHealthAgent.test.js</code></td><td>+4 tests (expired flagged, expiring-soon flagged separately, gating stays false on clean day, email body includes both sections)</td></tr>
+      <tr><td><code>backend/scripts/capture-submission-readiness-v07-walkthrough.js</code></td><td>NEW · Playwright capture for the screenshot above</td></tr>
+      <tr><td><code>docs/submission-readiness-v07-walkthrough.html</code></td><td>This file</td></tr>
+      <tr><td><code>docs/submission-readiness-v07-walkthrough-assets/01-dedicated-readiness-page.png</code></td><td>Screenshot</td></tr>
+      <tr><td><code>PROGRESS.md</code></td><td>v0.7 entry under Submission Readiness Engine</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Backend test suite: <strong>115 suites / 1409 tests pass</strong>. No migrations, no new dependencies.</p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    <strong>Engine state:</strong> with v0.7 shipped, the master plan's Phase 5 is fully operationalized.
+    Recap of what's live end-to-end on Bonfire:
+  </p>
+  <ul>
+    <li><strong>v0.1</strong> — Document Vault (30 types, expiry-aware, scope = global | bid)</li>
+    <li><strong>v0.2</strong> — AI requirement tailoring per opportunity</li>
+    <li><strong>v0.3</strong> — AI-generated docs, dual-write to bid + global with shared lineage</li>
+    <li><strong>v0.4</strong> — RFP attachment locker (Bonfire detail-page scrape, Cloudflare-aware)</li>
+    <li><strong>v0.5</strong> — One-click submission package ZIP (vault docs + AI drafts as PDF + RFP attachments + README + manifest)</li>
+    <li><strong>v0.6</strong> — Auto-fill from vault excerpts in proposal/offer/resume generation, with audit trail</li>
+    <li><strong>v0.7</strong> — Dedicated readiness page + vault expiry alerts in daily email</li>
+  </ul>
+  <p>
+    <strong>What's left from the original master plan:</strong>
+  </p>
+  <ul>
+    <li>SAM.gov + grants.gov per-opportunity attachment fetchers (~14h). Same shape as the v0.4 Bonfire fetcher, but the platform-specific scrapers don't exist yet — SAM.gov has a paid API tier with attachment URLs and a free tier that requires HTML scraping; grants.gov has a public synopsis API.</li>
+  </ul>
+  <p>
+    <strong>Anything not captured anywhere above:</strong>
+  </p>
+  <textarea data-fb-id="final" placeholder="Open feedback..." style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'submission-readiness-v07-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# v0.7 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
