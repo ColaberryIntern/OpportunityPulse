@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.1 + v0.2 — Visual Walkthrough</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-light: #2b6cb0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #38a169;
+    --accent-soft: #c6f6d5;
+    --warn: #d69e2e;
+    --warn-soft: #fefcbf;
+    --danger: #c53030;
+    --danger-soft: #fed7d7;
+    --info-soft: #bee3f8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif;
+    font-size: 15px; line-height: 1.55;
+    color: var(--text); background: var(--bg);
+  }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc {
+    position: sticky; top: 0;
+    align-self: start; height: 100vh; overflow-y: auto;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    padding: 20px 18px; font-size: 13px;
+  }
+  nav.toc h2 {
+    color: var(--navy); font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block; color: var(--navy-light); text-decoration: none;
+    padding: 4px 6px; border-radius: 4px; line-height: 1.35;
+  }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--navy); font-size: 22px; margin: 36px 0 12px 0;
+    padding-bottom: 4px; border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: var(--navy); font-size: 14px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+  }
+  section.block {
+    background: #ffffff; border: 1px solid var(--border);
+    border-left: 4px solid var(--navy); border-radius: 6px;
+    padding: 18px 22px; margin: 22px 0;
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06);
+  }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.feature.ai { border-left-color: var(--navy-light); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  img.screenshot {
+    display: block; max-width: 100%; height: auto; margin: 10px 0;
+    border: 1px solid var(--border); border-radius: 4px; background: var(--bg-alt);
+    cursor: zoom-in;
+  }
+  img.screenshot.zoomed {
+    position: fixed; top: 5vh; left: 5vw; width: 90vw; height: 90vh;
+    object-fit: contain; z-index: 100; cursor: zoom-out;
+    background: rgba(0, 0, 0, 0.85); padding: 10px; max-width: none;
+  }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11.5px; font-weight: 600; line-height: 1.6;
+  }
+  .pill-ok { background: var(--accent-soft); color: #22543d; }
+  .pill-warn { background: var(--warn-soft); color: #744210; }
+  .pill-info { background: var(--info-soft); color: #2c5282; }
+  .pill-neutral { background: #edf2f7; color: #4a5568; }
+  .meta-line { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 12px 0; }
+  textarea {
+    width: 100%; min-height: 80px; font-family: inherit; font-size: 14px;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px;
+    resize: vertical; background: #fffef7;
+  }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block {
+    background: #fffaf0; border-top: 1px dashed var(--warn);
+    padding: 10px 0 0 0; margin-top: 14px;
+  }
+  .feedback-block .small { margin-bottom: 6px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions {
+    position: sticky; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--border); padding: 12px 0;
+    display: flex; gap: 10px; margin-top: 22px;
+  }
+  button.copy-btn {
+    background: var(--navy); color: #ffffff; border: none;
+    padding: 9px 16px; border-radius: 4px; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .annotated {
+    margin: 14px 0;
+    padding: 10px 14px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13.5px;
+  }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .annotated ul { margin: 4px 0; }
+
+  /* ----- Mockup of populated readiness panel (since prod data is sparse) ----- */
+  .mock-panel {
+    background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;
+    margin: 16px 0; max-width: 720px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    font-size: 13px;
+  }
+  .mock-panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid #e5e7eb;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .mock-panel-head .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #6b7280; font-weight: 600;
+  }
+  .mock-tag {
+    display: inline-block; padding: 1px 7px; border-radius: 8px;
+    font-size: 10.5px; font-weight: 600;
+  }
+  .mock-tag.v02 { background: #dbeafe; color: #1e40af; margin-left: 6px; }
+  .mock-tag.gap { background: #f3f4f6; color: #374151; }
+  .mock-tag.ok  { background: #d1fae5; color: #065f46; }
+  .mock-tag.exp { background: #fef3c7; color: #78350f; }
+  .mock-tag.gone { background: #fee2e2; color: #7f1d1d; }
+  .mock-tag.ai { background: #f3f4f6; color: #374151; font-size: 10px; }
+  .mock-btn {
+    font-size: 11.5px; padding: 4px 10px; border-radius: 4px;
+    border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af;
+    font-weight: 600;
+  }
+  .mock-panel-body { padding: 12px 14px; }
+  .mock-panel-body .summary {
+    font-size: 11.5px; padding: 6px 10px; background: #eff6ff;
+    border: 1px solid #dbeafe; border-radius: 4px; color: #1e3a8a;
+    margin-bottom: 10px;
+  }
+  .mock-pct {
+    font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 8px;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .mock-pct .of { font-size: 12px; color: #6b7280; font-weight: 400; }
+  .mock-pct .gaps { margin-left: auto; }
+  .mock-bar { height: 8px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+  .mock-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #16a34a); }
+  .mock-list { list-style: none; padding: 0; margin: 0; }
+  .mock-list li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px dashed #f3f4f6; font-size: 12.5px; }
+  .mock-list li:first-child { border-top: none; }
+  .mock-list .col-status { flex-shrink: 0; width: 88px; }
+  .mock-list .col-name { flex: 1; }
+  .mock-list .col-name strong { color: #111827; font-weight: 600; }
+  .mock-list .col-name .meta { color: #6b7280; font-size: 11px; margin-top: 2px; }
+  .mock-list .col-name .quote { font-size: 11px; color: #4b5563; padding-left: 8px; border-left: 2px solid #93c5fd; margin-top: 3px; }
+  .mock-list .col-name .quote span { color: #6b7280; }
+  .mock-list a { color: #1e40af; font-weight: 600; font-size: 11px; text-decoration: none; flex-shrink: 0; }
+
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 16px; max-width: none; }
+    section.block { box-shadow: none; page-break-inside: avoid; }
+    .actions { display: none; }
+    textarea { background: #ffffff; }
+    img.screenshot.zoomed { all: revert; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#context">Context — why this exists</a>
+
+  <h2>v0.1 — Document Vault</h2>
+  <a href="#s-sidebar">Sidebar entry</a>
+  <a href="#s-vault-empty">Vault — empty state</a>
+  <a href="#s-vault-upload">Vault — upload modal</a>
+
+  <h2>v0.1 — Bonfire readiness</h2>
+  <a href="#s-bonfire-table">Table — Readiness column</a>
+  <a href="#s-bonfire-detail">Detail panel — baseline</a>
+
+  <h2>v0.2 — AI tailoring</h2>
+  <a href="#s-bonfire-ai">After clicking Tailor with AI</a>
+  <a href="#s-mock-populated">Mockup — what AI flags look like with real data</a>
+
+  <h2>Wrap</h2>
+  <a href="#wrap">Final notes &amp; feedback</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.1 + v0.2</h1>
+  <p class="subtitle">Visual walkthrough · captured against prod 95.216.199.47 · 2026-05-08</p>
+  <p>
+    The screenshots below are full-page captures from prod taken just after the v0.2 deploy
+    (commits <code>e1bace3</code> + <code>38119a0</code>). Click any screenshot to zoom. Each
+    section has a feedback box; click <em>Copy all feedback</em> at the bottom and paste back
+    when you've worked through the doc.
+  </p>
+  <p>
+    <strong>Heads up on visual fidelity:</strong> prod's Document Vault is empty (no docs uploaded yet)
+    and the existing Bonfire scraper only captures titles, not RFP narrative — so AI runs against
+    sparse description text and correctly returns 0 additional flags. The screens below show the
+    real, current state. The last section adds a CSS mockup of what the panel looks like
+    <em>with</em> AI flags + uploaded vault docs so you can critique that layout too.
+  </p>
+</section>
+
+<!-- ========================================================== CONTEXT -->
+<section class="block context" id="context">
+  <h2>Context — what changed visually</h2>
+  <p>
+    The two ships introduce <strong>five new visual surfaces</strong>:
+  </p>
+  <ol>
+    <li><strong>Sidebar:</strong> new <em>📁 Document Vault</em> link under Operate.</li>
+    <li><strong>Document Vault page</strong> at <code>/admin/documents</code>: summary cards, type-grouped table, upload modal.</li>
+    <li><strong>Bonfire table</strong>: new <em>Readiness</em> column with inline progress bar per row.</li>
+    <li><strong>Bonfire detail panel</strong>: <em>Submission Readiness</em> card with completion %, status pills, vault deep-links.</li>
+    <li><strong>Bonfire detail panel — AI section</strong>: 🤖 Tailor with AI button, AI summary banner, source pills (🤖 AI / ⚡ rule), inline RFP-quote blocks.</li>
+  </ol>
+  <p>
+    Plus: 11 new document-type entries in the upload modal's type picker (bid bond / payment bond /
+    performance bond / Davis-Bacon / EEO / professional licensure / safety program / cybersecurity /
+    site visit ack / addendum ack / non-collusion affidavit).
+  </p>
+</section>
+
+<!-- ========================================================== 1 SIDEBAR -->
+<section class="block feature" id="s-sidebar">
+  <h2>1 · Sidebar — 📁 Document Vault link</h2>
+  <div class="meta-line">
+    Path: <code>/admin/...</code> (any page) · sidebar group: <em>Operate</em>
+  </div>
+  <p>
+    Source Health is now the first item under Operate (per your earlier feedback); 📁 Document Vault
+    is right below it as the foundation for the readiness flow.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/01-sidebar-document-vault.png"
+       alt="Sidebar showing 📁 Document Vault under Operate" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>📁 Document Vault sits under Operate, between 🩺 Source Health and 💰 Revenue Dashboard.</li>
+      <li>Icon (clipboard / document) chosen to read at small sizes.</li>
+      <li>Label intentionally short so it doesn't wrap on narrow viewports.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Sidebar feedback — placement, label, icon, ordering?</div>
+    <textarea data-fb-id="sidebar"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 2 VAULT EMPTY -->
+<section class="block feature" id="s-vault-empty">
+  <h2>2 · Document Vault — empty state</h2>
+  <div class="meta-line">
+    Path: <code>/admin/documents</code> · admin-only
+  </div>
+  <p>
+    First load. Four summary cards at the top (Active / With expiry tracked / Expiring ≤30d / Expired)
+    plus the empty-state copy nudging you to upload your first evergreen file.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/02-document-vault-empty.png"
+       alt="Document Vault empty state with 4 summary cards" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Header: <em>"📁 Document Vault"</em> + a small <em>v0.1</em> pill.</li>
+      <li>Subtitle calls out the Bonfire link explicitly so you know <em>why</em> uploading helps.</li>
+      <li>4-card summary stays even when empty — easier to read once docs land.</li>
+      <li>Type-filter dropdown above the (empty) table.</li>
+      <li>Upload button (top right) is the call-to-action.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Empty-state feedback — copy, layout, hierarchy, missing affordances?</div>
+    <textarea data-fb-id="vault-empty"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 3 VAULT UPLOAD MODAL -->
+<section class="block feature" id="s-vault-upload">
+  <h2>3 · Document Vault — upload modal</h2>
+  <div class="meta-line">
+    Triggered by clicking <em>+ Upload document</em>
+  </div>
+  <p>
+    The type picker is the most-decision-laden control on this screen — it carries 18 canonical types
+    (W-9, Capability Statement, COI, Past Performance, Key Staff Resume, NAICS List, References,
+    8(a) / HUBZone / WOSB / SDVOSB / MWBE certs, SAM Registration, Banking, plus 11 v0.2 additions
+    like bid bond, prevailing wage, EEO, etc.). The expiry date is optional but tracked for renewal
+    reminders.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/03-document-vault-upload-modal.png"
+       alt="Document Vault upload modal with type picker, file input, name, and expiry date" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Type picker pre-populated with the canonical 18 types.</li>
+      <li>File picker accepts PDF, DOCX, DOC, PNG, JPG, TXT (≤25 MB).</li>
+      <li>Display name auto-fills from filename if left blank.</li>
+      <li>Expiry date as a native HTML date picker (renews remembered for COIs etc.).</li>
+      <li>Cancel + Upload buttons aligned right.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Upload modal feedback — types missing, fields missing, copy?</div>
+    <textarea data-fb-id="vault-upload"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 4 BONFIRE TABLE -->
+<section class="block feature" id="s-bonfire-table">
+  <h2>4 · Bonfire table — Readiness column</h2>
+  <div class="meta-line">
+    Path: <code>/bonfire</code>
+  </div>
+  <p>
+    A new <strong>Readiness</strong> column sits between Close date and Signals. Each row shows a
+    completion % and a sliver progress bar — driven by a single bulk endpoint that returns
+    <code>{ id → { completion_pct, satisfied, total, gaps } }</code> for the visible page only.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/04-bonfire-table-with-readiness-column.png"
+       alt="Bonfire opportunities table with new Readiness column showing 17% per row" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Every row is at <strong>17%</strong> — that's "1 of 6 baseline docs satisfied" against the empty vault. (References is the one that's already accounted for via existing data.)</li>
+      <li>Bar color follows priority ramp: ≥80% green · ≥60% yellow · ≥30% orange · &lt;30% red.</li>
+      <li>Hover tooltip: <code>1/6 required docs on file · 5 gaps</code>.</li>
+      <li>The column is admin-only — non-admin viewers don't see it (the bulk endpoint is gated on auth + role).</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Table feedback — column placement, bar styling, color choices?</div>
+    <textarea data-fb-id="bonfire-table"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 5 BONFIRE DETAIL BASELINE -->
+<section class="block feature" id="s-bonfire-detail">
+  <h2>5 · Bonfire detail panel — baseline (before AI)</h2>
+  <div class="meta-line">
+    Triggered by clicking any row title in the Bonfire table
+  </div>
+  <p>
+    The detail drawer slides in from the right. The <strong>Submission Readiness</strong> card is
+    the first thing under "What this is" — completion % at the top, gap counter as a red pill,
+    progress bar, then the 6-item baseline checklist with status pills + Upload deep-link for any
+    gaps.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/05-bonfire-detail-readiness-baseline.png"
+       alt="Bonfire detail panel showing Submission Readiness card at 17% with 6 baseline checklist items, 5 gaps" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Card header: <em>"Submission Readiness"</em> + version pill (here: <em>v0.1 · baseline</em>) + count "1 of 6 required docs ready" + the 🤖 Tailor with AI button.</li>
+      <li>Big <strong>17%</strong> + <em>complete</em> + 5 gaps badge.</li>
+      <li>Six checklist items: ✓ On file (References), ✗ Missing (the rest).</li>
+      <li>Each missing item has a blue <em>Upload →</em> link that jumps to the vault.</li>
+      <li>Footer line at the bottom: <em>"Click 'Tailor with AI' to detect bid-specific requirements"</em> + <em>Manage documents →</em>.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Baseline panel feedback — copy, status pills, layout density, anything missing?</div>
+    <textarea data-fb-id="bonfire-detail-baseline"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 6 BONFIRE DETAIL AI -->
+<section class="block feature ai" id="s-bonfire-ai">
+  <h2>6 · Bonfire detail panel — after clicking 🤖 Tailor with AI</h2>
+  <div class="meta-line">
+    Same panel after the AI call completes (~2–3s)
+  </div>
+  <p>
+    Clicking 🤖 Tailor with AI fires Claude on the opp text. On THIS prod row the description is
+    empty (Bonfire scraper currently only captures titles), so AI correctly returns 0 additional
+    flags with the summary <em>"This RFP does not specify any additional document requirements
+    beyond the standard baseline."</em> The visible diff is small but real: header pill flips to
+    <em>v0.2 · AI-tailored</em>, the AI summary banner appears, and the button label switches to
+    <em>🤖 Refresh AI</em>.
+  </p>
+  <img class="screenshot" src="submission-readiness-walkthrough-assets/06-bonfire-detail-readiness-ai-tailored.png"
+       alt="Bonfire detail panel after Tailor with AI fires; AI summary banner shown, version pill flips to v0.2" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Header pill flips from <em>v0.1 · baseline</em> → <em>v0.2 · AI-tailored</em>.</li>
+      <li>Button label: <em>🤖 Refresh AI</em> (was <em>🤖 Tailor with AI</em>) — clicking re-runs even with cache.</li>
+      <li>Footer line shows <em>AI run: &lt;timestamp&gt; · 0 additional flagged</em>.</li>
+      <li>Result is cached on the row — next visit skips the AI call.</li>
+    </ul>
+  </div>
+  <p class="small">
+    Because prod's Bonfire scraper only captures titles, you don't see the AI's real value here —
+    the flagged-requirement layout. The next section is a CSS mockup of that exact same panel
+    populated with realistic AI-flagged items so you can critique the layout that lands once real
+    RFP text is in scope (Phase 2 of the master plan).
+  </p>
+  <div class="feedback-block">
+    <div class="small">AI-tailored panel feedback — visible diff after AI runs, button states, summary banner?</div>
+    <textarea data-fb-id="bonfire-detail-ai"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== 7 MOCKUP -->
+<section class="block feature ai" id="s-mock-populated">
+  <h2>7 · Mockup — what the panel looks like with real RFP data</h2>
+  <p>
+    This is a <strong>CSS mockup</strong> (not a live screenshot) of the same Submission Readiness
+    panel rendered against a hypothetical bond-and-MWBE construction RFP, with three vault docs
+    uploaded. It uses the exact same component classes as the live page so the rendering is
+    representative — only the data is hypothetical.
+  </p>
+
+  <div class="mock-panel" aria-label="Mockup of populated readiness panel">
+    <div class="mock-panel-head">
+      <div>
+        <span class="label">Submission Readiness</span>
+        <span class="mock-tag v02">v0.2 · AI-tailored</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 12.5px; color: #6b7280;">3 of 8 required docs ready</span>
+        <button class="mock-btn">🤖 Refresh AI</button>
+      </div>
+    </div>
+    <div class="mock-panel-body">
+      <div class="summary">
+        <strong>🤖 AI summary:</strong> Construction RFP — bid bond required at 5%, prevailing-wage
+        certification (Davis-Bacon), and MWBE preference noted. Site visit acknowledgment also
+        required.
+      </div>
+      <div class="mock-pct">
+        <span>38%</span>
+        <span class="of">complete</span>
+        <span class="gaps"><span class="mock-tag gone">5 gaps</span></span>
+      </div>
+      <div class="mock-bar"><span style="width: 38%; background: linear-gradient(90deg, #f97316, #ea580c);"></span></div>
+
+      <ul class="mock-list">
+        <li>
+          <span class="col-status"><span class="mock-tag ok">✓ On file</span></span>
+          <div class="col-name">
+            <strong>Capability Statement</strong>
+            <div class="meta">Colaberry CapStmt 2026 Q2 · v3</div>
+          </div>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag exp">⚠ Expiring</span></span>
+          <div class="col-name">
+            <strong>Certificate of Insurance (COI)</strong>
+            <div class="meta">CNA Liability COI · v1 · expires in 18d</div>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag ok">✓ On file</span></span>
+          <div class="col-name">
+            <strong>References List</strong>
+            <div class="meta">2026 References · v2</div>
+          </div>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Cover Letter Template</strong>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Technical Response Template</strong>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Pricing Response Template</strong>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Bid Bond <span class="mock-tag ai">🤖 AI</span></strong>
+            <div class="meta" style="font-style: italic;">RFP § 4.2: bidder must provide a bid bond of 5% of total contract value.</div>
+            <div class="quote"><span>RFP says:</span> &ldquo;Each proposal shall be accompanied by a bid bond in the amount of 5% of the total bid price.&rdquo;</div>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Davis-Bacon / Prevailing Wage Cert <span class="mock-tag ai">🤖 AI</span></strong>
+            <div class="meta" style="font-style: italic;">Davis-Bacon prevailing wage requirements apply to this project.</div>
+            <div class="quote"><span>RFP says:</span> &ldquo;Contractor shall comply with the Davis-Bacon Act and pay no less than the prevailing wage rates determined by DOL.&rdquo;</div>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>MWBE / DBE Certification <span class="mock-tag ai">🤖 AI</span></strong>
+            <div class="meta" style="font-style: italic;">MWBE preference cited in evaluation criteria.</div>
+            <div class="quote"><span>RFP says:</span> &ldquo;Submissions from certified MWBE/DBE vendors will receive a 10% scoring preference.&rdquo;</div>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+        <li>
+          <span class="col-status"><span class="mock-tag gap">✗ Missing</span></span>
+          <div class="col-name">
+            <strong>Site Visit Acknowledgment <span class="mock-tag ai">🤖 AI</span></strong>
+            <div class="meta" style="font-style: italic;">Mandatory pre-bid site visit on May 22 at 10:00 AM.</div>
+            <div class="quote"><span>RFP says:</span> &ldquo;A mandatory pre-bid site visit will be held on May 22, 2026 at 10:00 AM. Attendance is required for proposal eligibility.&rdquo;</div>
+          </div>
+          <a href="#">Upload →</a>
+        </li>
+      </ul>
+
+      <div style="margin-top: 12px; font-size: 11.5px; color: #6b7280; display: flex; justify-content: space-between;">
+        <span>AI run: 2026-05-08 12:14 · 4 additional flagged</span>
+        <a href="#" style="color: #1e40af; text-decoration: none; font-weight: 600;">Manage documents →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="annotated">
+    <h4>What this mockup shows</h4>
+    <ul>
+      <li><strong>Source pill</strong> on each AI-flagged row: small "🤖 AI" tag next to the type label so you can tell baseline (no pill) vs AI-detected.</li>
+      <li><strong>RFP-quote block</strong>: small italic reason on top + a <em>"RFP says: '…'"</em> quote underneath, blue left-border. The quote is mandatory at the validation layer — items without it are dropped before they hit the panel.</li>
+      <li><strong>Mixed states</strong>: ✓ On file, ⚠ Expiring (with days-until counter), ✗ Missing — all in one list so you can scan compliance at a glance.</li>
+      <li><strong>AI summary banner</strong> at top is the human-readable version of what the AI thinks this RFP needs. Helps users sanity-check whether AI understood the RFP correctly.</li>
+      <li><strong>Footer</strong>: AI run timestamp + count of additional-flagged so you know cache freshness.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Mockup feedback — does this layout work for the populated case? RFP-quote block useful or noisy? Anything missing from the AI-flagged rows?</div>
+    <textarea data-fb-id="mockup"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes &amp; feedback</h2>
+  <p>
+    All visuals above are live in prod right now (or the mockup represents what the same component
+    renders with rich data). To unlock the full v0.2 visual experience on real bids, two things need
+    to happen:
+  </p>
+  <ol>
+    <li><strong>Upload evergreen docs</strong> at <code>/admin/documents</code> — capability statement, COI, references at minimum. The %s on every Bonfire row will jump.</li>
+    <li><strong>Land Phase 2 of the master plan</strong> (per-opp Bonfire detail-page scraping with attachment download). Once Bonfire opps carry real RFP text, AI will start flagging bonds, prevailing-wage clauses, MWBE preferences, etc. — with quoted evidence — and the panel will look like the mockup in section 7.</li>
+  </ol>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback, structural concerns, priorities..." style="min-height: 180px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+  <p class="small" style="margin-top: 14px;">
+    Notes auto-save to localStorage (this browser only). <em>Copy all feedback</em> dumps a markdown summary for sharing.
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  // ----- Click any screenshot to zoom -----
+  document.querySelectorAll('img.screenshot').forEach(function(img) {
+    img.addEventListener('click', function() {
+      img.classList.toggle('zoomed');
+    });
+  });
+
+  // ----- Feedback persistence + copy-to-clipboard -----
+  var STORAGE_KEY = 'submission-readiness-v01-v02-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = [];
+    lines.push('# Submission Readiness v0.1 + v0.2 — Walkthrough Feedback');
+    lines.push('Generated: ' + new Date().toISOString());
+    lines.push('');
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) {
+        lines.push('## ' + title);
+        lines.push('');
+        lines.push(fbVal);
+        lines.push('');
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) {
+      status.textContent = 'No feedback to copy yet — fill in some textareas first.';
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'Copied (legacy path)'; }
+      catch (e) { status.textContent = 'Copy failed — select all manually'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback notes in this browser?')) return;
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
