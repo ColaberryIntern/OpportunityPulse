@@ -5,6 +5,7 @@ const readinessSvc = require('./bonfireReadiness.service');
 const aiReqSvc = require('./bonfireAIRequirements.service');
 const attachmentFetcher = require('./attachmentFetcher.service');
 const submissionPackage = require('./submissionPackage.service');
+const { BonfireOpportunity } = require('../models');
 const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
 const { isBonfireEnabled } = require('./bonfire.middleware');
@@ -200,9 +201,17 @@ async function listAttachments(req, res) {
     const rows = await attachmentFetcher.listAttachments({
       bonfireOpportunityId: req.params.id,
     });
+    // Pull the last-fetch summary so the panel can render an honest "blocked"
+    // state on reload (Cloudflare blocks ~80% of Bonfire portals).
+    const opp = await BonfireOpportunity.findByPk(req.params.id, {
+      attributes: ['attachmentsFetchedAt', 'submissionRequirements'],
+    });
+    const sr = opp?.submissionRequirements || {};
     return successResponse(res, {
       bonfire_opportunity_id: req.params.id,
       count: rows.length,
+      attachments_fetched_at: opp?.attachmentsFetchedAt || null,
+      last_attachment_fetch: sr.last_attachment_fetch || null,
       attachments: rows.map((r) => ({
         id: r.id,
         name: r.name,

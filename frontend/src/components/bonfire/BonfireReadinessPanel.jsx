@@ -156,6 +156,23 @@ export default function BonfireReadinessPanel({ opportunityId }) {
           <div className={`h-full ${progressColor(pct)} transition-all`} style={{ width: pct + '%' }} />
         </div>
 
+        {/* Be honest about what we read to compute this. The 6-doc baseline applies
+            to any government bid; the bid-specific stuff (bonds, prevailing wage,
+            EEO, MWBE thresholds) only surfaces when AI reads the actual RFP PDFs. */}
+        <div className="mb-3 text-[11px] text-gray-600 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
+          {data.ai && data.ai.generated_at ? (
+            <>
+              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 font-medium">🤖 AI-tailored</span>
+              <span>checklist reflects this RFP's specific requirements{data.ai.attachments_used ? ' (read from fetched documents)' : ' (inferred from title + description)'}.</span>
+            </>
+          ) : (
+            <>
+              <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 font-medium">📋 Baseline</span>
+              <span>generic checklist for any government bid. Click <strong>🤖 Tailor with AI</strong> to surface bid-specific requirements (bonds, prevailing wage, EEO, etc.).</span>
+            </>
+          )}
+        </div>
+
         {data.ai && data.ai.summary && (
           <div className="mb-2 px-2 py-1.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-100">
             <span className="font-semibold">🤖 AI summary:</span> {data.ai.summary}

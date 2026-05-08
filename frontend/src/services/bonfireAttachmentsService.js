@@ -4,7 +4,9 @@ import api from './api';
 
 export async function listAttachments(bonfireOpportunityId) {
   const res = await api.get(`/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/attachments`);
-  return res.data?.data || { attachments: [], count: 0 };
+  return res.data?.data || {
+    attachments: [], count: 0, attachments_fetched_at: null, last_attachment_fetch: null,
+  };
 }
 
 // Admin-only. Triggers Playwright on the backend; ~5–30s per opp.

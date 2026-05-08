@@ -31,7 +31,9 @@ function fmtRel(iso) {
 }
 
 export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
-  const [data, setData] = useState({ attachments: [], count: 0 });
+  const [data, setData] = useState({
+    attachments: [], count: 0, attachments_fetched_at: null, last_attachment_fetch: null,
+  });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [err, setErr] = useState(null);
@@ -97,20 +99,37 @@ export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
             {err}
           </div>
         )}
-        {lastFetchResult && (
-          <div className="mb-2 px-2 py-1.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200">
-            <strong>Last fetch:</strong> {lastFetchResult.attachments_saved} saved, {lastFetchResult.attachments_failed} failed of {lastFetchResult.attachments_found} found
-            {lastFetchResult.blocked && <span> · ⚠ Cloudflare blocked the page</span>}
+        {/* Persistent status banner: shows even on reload, not just right after click. */}
+        {data.last_attachment_fetch?.status === 'blocked' && (
+          <div className="mb-2 px-2 py-2 rounded bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-[12px] text-amber-900 dark:text-amber-100">
+            <div><strong>⚠ Cloudflare blocked this portal</strong> on the last attempt ({fmtRel(data.last_attachment_fetch.at)}).</div>
+            <div className="mt-1">
+              The Submission Readiness checklist above is a <strong>best-effort baseline</strong> from the RFP title + description only — it can't read the actual solicitation PDFs. Open the portal manually + verify nothing's missing before submitting.
+            </div>
+          </div>
+        )}
+        {data.last_attachment_fetch?.status === 'no_links' && data.count === 0 && (
+          <div className="mb-2 px-2 py-2 rounded bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] text-gray-700 dark:text-gray-300">
+            <strong>ℹ No documents listed</strong> on the Bonfire detail page (last checked {fmtRel(data.last_attachment_fetch.at)}). The agency may post attachments later, or this opp is metadata-only.
+          </div>
+        )}
+        {lastFetchResult && lastFetchResult.attachments_saved > 0 && (
+          <div className="mb-2 px-2 py-1.5 rounded bg-green-50 dark:bg-green-900/30 border border-green-100 dark:border-green-900/40 text-[11px] text-green-900 dark:text-green-100">
+            <strong>Last fetch:</strong> {lastFetchResult.attachments_saved} saved of {lastFetchResult.attachments_found} found. Click <strong>🤖 Refresh AI</strong> on the readiness panel to re-tailor against this content.
           </div>
         )}
         {loading && data.count === 0 ? (
           <div className="text-xs text-gray-500 py-1">Loading…</div>
         ) : data.attachments.length === 0 ? (
           <div className="text-xs text-gray-500 py-1">
-            No RFP attachments fetched yet.
-            {isAdmin
-              ? <> Click <strong>⏬ Fetch from Bonfire</strong> to scrape the Documents tab.</>
-              : <> Ask an admin to fetch them.</>}
+            {!data.last_attachment_fetch && (
+              <>
+                No RFP attachments fetched yet.
+                {isAdmin
+                  ? <> Click <strong>⏬ Fetch from Bonfire</strong> to try downloading the Documents tab. <span className="text-gray-400">(Cloudflare blocks ~80% of agency portals — don't be surprised if it returns 0.)</span></>
+                  : <> Ask an admin to fetch them.</>}
+              </>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-700 text-sm">

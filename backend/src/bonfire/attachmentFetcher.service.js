@@ -121,6 +121,27 @@ async function upsertAttachment({
   return { row, action: 'created' };
 }
 
+// Persist the outcome of an attachment-fetch attempt on the opp row so the
+// UI can show a truthful status on reload (without this, blocked-by-Cloudflare
+// looks identical to "no attempt yet" once the toast disappears).
+async function stampLastFetch(opp, { status, result }) {
+  opp.attachmentsFetchedAt = new Date();
+  const sr = opp.submissionRequirements && typeof opp.submissionRequirements === 'object'
+    ? { ...opp.submissionRequirements }
+    : {};
+  sr.last_attachment_fetch = {
+    status,                                // ok | blocked | no_links | failed
+    at: new Date().toISOString(),
+    found: result.attachments_found,
+    saved: result.attachments_saved,
+    failed: result.attachments_failed,
+    blocked: !!result.blocked,
+  };
+  opp.submissionRequirements = sr;
+  opp.changed('submissionRequirements', true);
+  await opp.save();
+}
+
 async function fetchOneBonfireOpp({ bonfireOpportunityId, headless = true } = {}) {
   const opp = await BonfireOpportunity.findByPk(bonfireOpportunityId);
   if (!opp) {
@@ -168,6 +189,9 @@ async function fetchOneBonfireOpp({ bonfireOpportunityId, headless = true } = {}
       if (await isChallengePage(page)) {
         result.blocked = true;
         result.errors.push({ stage: 'detail_nav', error: 'cloudflare' });
+        // Stamp the row so the UI can show this on reload — without this,
+        // the user sees "0 files" forever with no idea why.
+        await stampLastFetch(opp, { status: 'blocked', result });
         return result;
       }
       const html = await page.content();
@@ -180,8 +204,7 @@ async function fetchOneBonfireOpp({ bonfireOpportunityId, headless = true } = {}
     if (links.length === 0) {
       logger.info('attachmentFetcher: no links found', { bonfireOpportunityId, detailUrl });
       // Still stamp fetched_at so we don't keep retrying empty pages.
-      opp.attachmentsFetchedAt = new Date();
-      await opp.save();
+      await stampLastFetch(opp, { status: 'no_links', result });
       return result;
     }
 
@@ -231,8 +254,10 @@ async function fetchOneBonfireOpp({ bonfireOpportunityId, headless = true } = {}
       }
     }
 
-    opp.attachmentsFetchedAt = new Date();
-    await opp.save();
+    await stampLastFetch(opp, {
+      status: result.attachments_saved > 0 ? 'ok' : 'failed',
+      result,
+    });
     logger.info('attachmentFetcher: complete', {
       bonfireOpportunityId,
       found: result.attachments_found,

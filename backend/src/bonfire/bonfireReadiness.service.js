@@ -162,6 +162,10 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
       summary: opp.submissionRequirements.summary || null,
       additional_count: (opp.submissionRequirements.additional_required || []).length,
       error: opp.submissionRequirements.error || null,
+      // Tells the UI whether AI read the actual RFP PDFs or only the metadata
+      // (title + description). Used to color the "AI-tailored" framing on the panel.
+      attachments_used: (opp.submissionRequirements.attachment_count || 0) > 0,
+      attachment_count: opp.submissionRequirements.attachment_count || 0,
     } : null,
     generated_at: new Date().toISOString(),
     version: 'v0.2-ai-tailored',

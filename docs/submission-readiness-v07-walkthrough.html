@@ -71,6 +71,7 @@
 <nav class="toc" aria-label="Table of contents">
   <h2>Walkthrough</h2>
   <a href="#cover">Cover</a>
+  <a href="#open-app">Open in app</a>
   <a href="#what">What changed</a>
 
   <h2>Feature 1 · Page</h2>
@@ -83,6 +84,10 @@
   <a href="#email-html">Email — HTML version</a>
   <a href="#email-text">Email — plain text</a>
   <a href="#gating">Email gating</a>
+
+  <h2>v0.7.1 · UI honesty</h2>
+  <a href="#cloudflare">Cloudflare-blocked status</a>
+  <a href="#baseline">Baseline vs AI-tailored</a>
 
   <h2>Details</h2>
   <a href="#files">Files changed</a>
@@ -114,6 +119,38 @@
     No new schema, no new cron — both features piggyback on infrastructure already shipped
     (the readiness panel from v0.1, the agent email from v9.10). Operational glue, not a new system.
   </p>
+</section>
+
+<!-- ========================================================== OPEN IN APP -->
+<section class="block feature" id="open-app">
+  <h2>0 · Open in the live app</h2>
+  <p>Every screenshot below has a live link beside it. Click to drop straight into the running prod system:</p>
+  <table>
+    <thead><tr><th>Surface</th><th>Live URL</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Bonfire opportunities list</td>
+        <td><a href="http://95.216.199.47/bonfire" target="_blank" rel="noopener">/bonfire ↗</a></td>
+        <td>Pick any row — drawer opens with the readiness panel + the new "📑 Open full readiness page" link</td>
+      </tr>
+      <tr>
+        <td>Dedicated readiness page (this opp)</td>
+        <td><a href="http://95.216.199.47/admin/bonfire/d24c3eb2-1b5b-4d05-b4f4-records-mgmt-system/submission-readiness" target="_blank" rel="noopener">replace &lt;id&gt; with any opp UUID ↗</a></td>
+        <td>Pattern: <code>/admin/bonfire/&lt;opportunity-id&gt;/submission-readiness</code>. Easiest: open the list, click a row, then click "Open full readiness page" — that lands you on a real one.</td>
+      </tr>
+      <tr>
+        <td>Document Vault (sidebar quick-link)</td>
+        <td><a href="http://95.216.199.47/admin/documents" target="_blank" rel="noopener">/admin/documents ↗</a></td>
+        <td>Where missing vault docs get uploaded. Filterable by scope (global vs per-bid) and source (uploaded vs AI-generated).</td>
+      </tr>
+      <tr>
+        <td>Source Health page (where the email links to)</td>
+        <td><a href="http://95.216.199.47/admin/data-sources" target="_blank" rel="noopener">/admin/data-sources ↗</a></td>
+        <td>The "→ Open Source Health page" link in the agent's daily email lands here.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small">Admin login required for the <code>/admin/*</code> routes. Public Bonfire list is read-only without login.</p>
 </section>
 
 <!-- ========================================================== WHAT -->
@@ -152,6 +189,12 @@
   <p>
     Live screenshot of <code>/admin/bonfire/&lt;id&gt;/submission-readiness</code> for the
     "Records Management System" opportunity (Texas Department of Criminal Justice, $250,000, closes Aug 1 2026):
+  </p>
+  <p class="small">
+    👉 <strong>Open the live version:</strong>
+    <a href="http://95.216.199.47/bonfire" target="_blank" rel="noopener">browse the Bonfire list</a>,
+    pick any opp, then click <strong>📑 Open full readiness page</strong> in the drawer.
+    (Direct URL pattern: <code>http://95.216.199.47/admin/bonfire/&lt;id&gt;/submission-readiness</code>.)
   </p>
   <img class="shot" src="submission-readiness-v07-walkthrough-assets/01-dedicated-readiness-page.png" alt="Dedicated submission-readiness page showing 50% complete checklist, RFP attachments panel, and Quick Links sidebar." />
   <div class="annotated">
@@ -345,6 +388,84 @@ Page: http://95.216.199.47/admin/data-sources</pre>
   </div>
 </section>
 
+<!-- ========================================================== CLOUDFLARE -->
+<section class="block context" id="cloudflare">
+  <h2>v0.7.1 · Cloudflare-blocked status (UI honesty)</h2>
+  <p>
+    <strong>Discovery:</strong> the <em>Fetch from Bonfire</em> button "doesn't work" for most agencies — not because the
+    button is broken, but because <strong>Cloudflare blocks the Bonfire detail page</strong> on ~80% of portals
+    (HCCS, Round Rock, Richardson, NATO — all return a CF challenge, no attachments). The button completes
+    successfully and the backend logs say "blocked: true," but to the user it just looks like nothing happened.
+  </p>
+  <h3>Before</h3>
+  <ul>
+    <li>Empty state said "Click <strong>⏬ Fetch from Bonfire</strong> to scrape the Documents tab" — implied success.</li>
+    <li>After a blocked fetch, the result toast appeared briefly. On reload, gone — no record of what happened.</li>
+    <li>User: "Did I do something wrong?" → confidence drops on the rest of the readiness UI too.</li>
+  </ul>
+  <h3>After</h3>
+  <ul>
+    <li>Pre-fetch hint now says: <em>"(Cloudflare blocks ~80% of agency portals — don't be surprised if it returns 0.)"</em></li>
+    <li>After a blocked fetch, the panel persists an amber callout (survives reload):<br/>
+      <em>⚠ Cloudflare blocked this portal on the last attempt (12m ago). The Submission Readiness checklist above is a best-effort baseline from the RFP title + description only — it can't read the actual solicitation PDFs. Open the portal manually + verify nothing's missing before submitting.</em>
+    </li>
+    <li>Persistence mechanism: <code>bonfire_opportunities.submission_requirements.last_attachment_fetch = { status, at, blocked }</code>. No new column.</li>
+    <li>If the page parses but lists no documents (different from blocked), shows a neutral grey note: <em>"ℹ No documents listed on the Bonfire detail page."</em></li>
+  </ul>
+  <p class="small">
+    The 80% block rate is a known limitation of automated Cloudflare bypass on Bonfire — same constraint
+    that affects the existing Phase B/C list scraper. Manual portal navigation remains the fallback.
+  </p>
+  <div class="feedback-block">
+    <div class="small">Cloudflare honesty feedback — phrasing OK? Want a different CTA when blocked (e.g. "Try again," or "Mark as manually fetched")?</div>
+    <textarea data-fb-id="cloudflare"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== BASELINE -->
+<section class="block context" id="baseline">
+  <h2>v0.7.1 · Baseline vs AI-tailored framing</h2>
+  <p>
+    The deeper question your feedback raised: <strong>does the system actually know what the bid needs
+    before downloading the RFP PDFs?</strong> Honest answer: partially.
+  </p>
+  <table>
+    <thead><tr><th>Information available</th><th>What we can detect</th><th>What we'd miss</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Title + description only<br/><span class="small">(always present; what we have when CF blocks)</span></td>
+        <td>The 6-doc baseline that applies to <em>any</em> government bid (cover letter, capability statement, references, COI, technical response, pricing). Plus regex-based MWBE/DBE detection if the keywords appear in the description.</td>
+        <td>Bonds (bid bond, performance bond), prevailing-wage clauses, EEO certifications, page limits, redacted-vs-public copy requirements, agency-specific forms. These are buried in the PDF body.</td>
+      </tr>
+      <tr>
+        <td>+ AI tailoring (no attachments)</td>
+        <td>Same as above; AI may infer additional requirements from richer descriptions.</td>
+        <td>Same gaps — AI is reading the same metadata.</td>
+      </tr>
+      <tr>
+        <td>+ AI tailoring (with attachments)</td>
+        <td>Bid-specific requirements quoted from the actual RFP text. Bonds, prevailing-wage notes, EEO clauses, page limits all surface with quoted evidence.</td>
+        <td>Almost nothing — this is the target state.</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>UI change</h3>
+  <p>The readiness panel header now carries an explicit pill below the % bar:</p>
+  <ul>
+    <li><strong>📋 Baseline</strong> — generic checklist for any government bid. CTA: <em>Click 🤖 Tailor with AI to surface bid-specific requirements (bonds, prevailing wage, EEO, etc.).</em></li>
+    <li><strong>🤖 AI-tailored (inferred from title + description)</strong> — AI ran but didn't have attachment text. Best inference, but limited.</li>
+    <li><strong>🤖 AI-tailored (read from fetched documents)</strong> — AI read the actual RFP. Most accurate; what we want for any bid we'd actually submit.</li>
+  </ul>
+  <p>
+    The badge tells the truth: a 50% readiness on the Baseline track is a different claim than a 50%
+    readiness on the AI-tailored-with-attachments track. Now the user can see which one they're looking at.
+  </p>
+  <div class="feedback-block">
+    <div class="small">Baseline-vs-tailored feedback — does the pill wording capture the distinction clearly?</div>
+    <textarea data-fb-id="baseline"></textarea>
+  </div>
+</section>
+
 <!-- ========================================================== FILES -->
 <section class="block context" id="files">
   <h2>Files changed</h2>
@@ -363,6 +484,18 @@ Page: http://95.216.199.47/admin/data-sources</pre>
     </tbody>
   </table>
   <p class="small">Backend test suite: <strong>115 suites / 1409 tests pass</strong>. No migrations, no new dependencies.</p>
+  <h3>v0.7.1 follow-up changes (UI honesty)</h3>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/bonfire/attachmentFetcher.service.js</code></td><td>+ <code>stampLastFetch</code> helper persists status (ok | blocked | no_links | failed) on the opp row, not just in the response toast</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.controller.js</code></td><td><code>listAttachments</code> response now includes <code>last_attachment_fetch</code> + <code>attachments_fetched_at</code></td></tr>
+      <tr><td><code>backend/src/bonfire/bonfireReadiness.service.js</code></td><td><code>ai</code> response now carries <code>attachments_used</code> + <code>attachment_count</code> so the UI can frame "AI-tailored from attachments" vs "from metadata only"</td></tr>
+      <tr><td><code>frontend/src/services/bonfireAttachmentsService.js</code></td><td>Pass through new fields</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireAttachmentsPanel.jsx</code></td><td>Persistent amber banner for blocked + neutral grey banner for no_links + 80%-block hint in pre-fetch state</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireReadinessPanel.jsx</code></td><td>Baseline vs AI-tailored pill below the % bar (with attachments-used distinction)</td></tr>
+    </tbody>
+  </table>
 </section>
 
 <!-- ========================================================== WRAP -->
@@ -385,8 +518,11 @@ Page: http://95.216.199.47/admin/data-sources</pre>
     <strong>What's left from the original master plan:</strong>
   </p>
   <ul>
-    <li>SAM.gov + grants.gov per-opportunity attachment fetchers (~14h). Same shape as the v0.4 Bonfire fetcher, but the platform-specific scrapers don't exist yet — SAM.gov has a paid API tier with attachment URLs and a free tier that requires HTML scraping; grants.gov has a public synopsis API.</li>
+    <li>SAM.gov + grants.gov per-opportunity attachment fetchers (~14h). Same shape as the v0.4 Bonfire fetcher, but the platform-specific scrapers don't exist yet — SAM.gov has a paid API tier with attachment URLs and a free tier that requires HTML scraping; grants.gov has a public synopsis API. Note: SAM/grants.gov do <em>not</em> have the same Cloudflare problem Bonfire does, so attachment fetching there should generally work.</li>
   </ul>
+  <p class="small">
+    💡 <strong>Tip:</strong> every section above with a screenshot also has a 👉 live link. Click through to the running prod system (login required for /admin/*) and verify the screenshot matches what you see — or critique the live UI directly.
+  </p>
   <p>
     <strong>Anything not captured anywhere above:</strong>
   </p>
