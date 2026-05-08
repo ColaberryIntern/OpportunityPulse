@@ -1,6 +1,7 @@
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/apiResponse');
 const logger = require('../logging/logger');
 const service = require('./bonfire.service');
+const readinessSvc = require('./bonfireReadiness.service');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
 const { isBonfireEnabled } = require('./bonfire.middleware');
 
@@ -121,6 +122,42 @@ async function generateStrategy(req, res) {
   }
 }
 
+// v0.1 Submission Readiness — per-bid checklist + completion %.
+async function getReadiness(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    const out = await readinessSvc.computeReadiness({
+      opportunityId: req.params.id,
+      organizationId: req.user && req.user.organizationId,
+      userId,
+    });
+    return successResponse(res, out);
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, 'Bonfire opportunity not found', 404);
+    logger.error('Bonfire readiness failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Failed to compute readiness: ' + e.message, 500);
+  }
+}
+
+// Bulk-summary endpoint for the listing page progress bars.
+// POST body { ids: [uuid, ...] } → { id: { completion_pct, satisfied, total, gaps } }
+async function getReadinessSummaries(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    if (ids.length === 0) return successResponse(res, {});
+    const out = await readinessSvc.computeReadinessSummaries({
+      opportunityIds: ids,
+      organizationId: req.user && req.user.organizationId,
+      userId,
+    });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('Bonfire readiness summaries failed', { error: e.message });
+    return errorResponse(res, 'Failed to compute summaries: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   getFlag,
   listOpportunities,
@@ -130,4 +167,6 @@ module.exports = {
   enrichOne,
   enrichAll,
   generateStrategy,
+  getReadiness,
+  getReadinessSummaries,
 };

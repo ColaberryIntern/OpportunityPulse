@@ -1,5 +1,6 @@
 import React from 'react';
 import BonfireSignalBadges from './BonfireSignalBadges';
+import BonfireReadinessPanel from './BonfireReadinessPanel';
 
 function fmtUSD(cents) {
   if (cents == null) return '—';
@@ -54,6 +55,9 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
             </p>
           </div>
         )}
+
+        {/* v0.1 Submission Readiness: completion % + checklist + jump-to-vault links */}
+        {isAdmin && <BonfireReadinessPanel opportunityId={row.id} />}
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
           <Stat label="Priority" value={row.priorityScore ?? '—'} />

@@ -17,7 +17,29 @@ function fmtDate(iso) {
   } catch { return '—'; }
 }
 
-function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy }) {
+// v0.1 — small inline progress bar for the Readiness column. Color follows
+// the same priority ramp (green ≥80, yellow ≥60, gray below) so the
+// "ready to bid" eye-test matches the rest of the table.
+function ReadinessCell({ summary }) {
+  if (!summary) {
+    return <span className="text-xs text-gray-400">—</span>;
+  }
+  const pct = Number(summary.completion_pct) || 0;
+  const barColor = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : pct >= 30 ? 'bg-orange-500' : 'bg-red-500';
+  return (
+    <div className="min-w-[110px]" title={`${summary.satisfied}/${summary.total} required docs on file · ${summary.gaps} gap${summary.gaps === 1 ? '' : 's'}`}>
+      <div className="flex items-baseline justify-between text-[11px] mb-0.5">
+        <span className="font-semibold text-gray-700 dark:text-gray-200">{pct}%</span>
+        <span className="text-gray-500">{summary.satisfied}/{summary.total}</span>
+      </div>
+      <div className="h-1.5 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden">
+        <div className={`h-full ${barColor}`} style={{ width: pct + '%' }} />
+      </div>
+    </div>
+  );
+}
+
+function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy, readinessSummaries }) {
   if (!rows || rows.length === 0) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
@@ -38,6 +60,7 @@ function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy }) {
             <Th>Auto %</Th>
             <Th>Value</Th>
             <Th>Close</Th>
+            <Th>Readiness</Th>
             <Th>Signals</Th>
             <Th>Actions</Th>
           </tr>
@@ -64,6 +87,7 @@ function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy }) {
               <Td>{r.automationPotential != null ? r.automationPotential + '%' : '—'}</Td>
               <Td>{fmtUSD(r.estimatedValue)}</Td>
               <Td>{fmtDate(r.closeDate)}</Td>
+              <Td><ReadinessCell summary={readinessSummaries && readinessSummaries[r.id]} /></Td>
               <Td><BonfireSignalBadges signals={r.signals} /></Td>
               <Td>
                 <div className="flex items-center gap-1.5 text-xs">

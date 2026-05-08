@@ -263,6 +263,9 @@ app.use('/api/v1/bonfire', require('./bonfire/bonfire.routes'));
 // (My Opportunities, action generator, review queue, events)
 app.use('/api/v1/oied', require('./oied/oied.routes'));
 
+// v0.1 Submission Readiness — evergreen document vault (admin-only).
+app.use('/api/v1/documents', require('./documents/document.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({

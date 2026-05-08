@@ -114,6 +114,11 @@ services:
       OIED_SOURCE_HEALTH_AGENT_CRON: ${OIED_SOURCE_HEALTH_AGENT_CRON:-0 7 * * *}
       OIED_SOURCE_HEALTH_AGENT_TO: ${OIED_SOURCE_HEALTH_AGENT_TO:-}
       OIED_PUBLIC_URL: ${OIED_PUBLIC_URL:-http://95.216.199.47}
+      # v0.1 Submission Readiness — evergreen document vault. Files
+      # persist via the named volume mounted at /app/uploads below.
+      DOCUMENT_STORAGE_ROOT: ${DOCUMENT_STORAGE_ROOT:-/app/uploads/documents}
+    volumes:
+      - op-uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -223,6 +228,7 @@ volumes:
   prometheus-data:
   grafana-data:
   backups:
+  op-uploads:    # v0.1 Submission Readiness — evergreen document vault
 
 networks:
   internal:

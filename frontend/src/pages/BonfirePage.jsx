@@ -11,6 +11,7 @@ import BonfireFilters from '../components/bonfire/BonfireFilters';
 import BonfireTable from '../components/bonfire/BonfireTable';
 import BonfireDetailPanel from '../components/bonfire/BonfireDetailPanel';
 import BonfireUploadDropzone from '../components/bonfire/BonfireUploadDropzone';
+import { getBonfireReadinessSummaries } from '../services/documentService';
 
 function BonfirePage() {
   const { user } = useSelector((state) => state.auth);
@@ -24,6 +25,7 @@ function BonfirePage() {
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState(null);
+  const [readinessSummaries, setReadinessSummaries] = useState({});
   // Pagination + sort. Default order matches the backend default (priority_desc)
   // so refreshing without changing anything yields the same view as before.
   const [page, setPage] = useState(1);
@@ -61,6 +63,20 @@ function BonfirePage() {
   }, [params]);
 
   useEffect(() => { load(); }, [load]);
+
+  // v0.1: bulk-fetch the readiness summary for the visible page only.
+  // Cheap (single DB query joined against vault types) and the result
+  // is keyed by id so adding/removing rows doesn't refetch the world.
+  useEffect(() => {
+    if (!isAdmin) { setReadinessSummaries({}); return; }
+    const ids = (rows || []).map((r) => r.id).filter(Boolean);
+    if (ids.length === 0) { setReadinessSummaries({}); return; }
+    let cancelled = false;
+    getBonfireReadinessSummaries(ids)
+      .then((m) => { if (!cancelled) setReadinessSummaries(m || {}); })
+      .catch(() => { if (!cancelled) setReadinessSummaries({}); });
+    return () => { cancelled = true; };
+  }, [rows, isAdmin]);
 
   // --- refresh one row in place after enrich/strategy
   async function refreshSelected(id) {
@@ -229,6 +245,7 @@ function BonfirePage() {
           onSelect={setSelected}
           onEnrich={handleEnrich}
           onStrategy={handleStrategy}
+          readinessSummaries={readinessSummaries}
         />
       )}
 

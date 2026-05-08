@@ -37,6 +37,10 @@ const bulkJsonParser = express.json({ limit: '5mb' });
 router.get('/opportunities', verifyToken, controller.listOpportunities);
 router.get('/opportunities/:id', verifyToken, controller.getOpportunity);
 
+// v0.1 Submission Readiness — per-bid checklist + bulk summaries for list pages.
+router.get('/opportunities/:id/readiness', verifyToken, controller.getReadiness);
+router.post('/opportunities/readiness-summaries', verifyToken, express.json({ limit: '64kb' }), controller.getReadinessSummaries);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',

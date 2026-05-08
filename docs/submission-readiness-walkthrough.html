@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness Engine — Walkthrough &amp; Plan</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-light: #2b6cb0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #38a169;
+    --accent-soft: #c6f6d5;
+    --warn: #d69e2e;
+    --warn-soft: #fefcbf;
+    --danger: #c53030;
+    --danger-soft: #fed7d7;
+    --info-soft: #bee3f8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky; top: 0;
+    align-self: start; height: 100vh; overflow-y: auto;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    padding: 20px 18px; font-size: 13px;
+  }
+  nav.toc h2 {
+    color: var(--navy); font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block; color: var(--navy-light); text-decoration: none;
+    padding: 4px 6px; border-radius: 4px; line-height: 1.35;
+  }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--navy); font-size: 22px; margin: 36px 0 12px 0;
+    padding-bottom: 4px; border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: var(--navy); font-size: 14px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px;
+  }
+  pre {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 5px; padding: 12px 14px; overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px;
+    line-height: 1.45;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block {
+    background: #ffffff; border: 1px solid var(--border);
+    border-left: 4px solid var(--navy); border-radius: 6px;
+    padding: 20px 24px; margin: 24px 0;
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06);
+  }
+  section.block.problem  { border-left-color: var(--danger); }
+  section.block.vision   { border-left-color: var(--navy-light); }
+  section.block.usecase  { border-left-color: var(--warn); }
+  section.block.docs     { border-left-color: var(--accent); }
+  section.block.split    { border-left-color: var(--navy); }
+  section.block.phases   { border-left-color: var(--accent); }
+  section.block.savings  { border-left-color: var(--accent); }
+  section.block.risks    { border-left-color: var(--danger); }
+  section.block.glossary { border-left-color: var(--text-muted); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea {
+    width: 100%; min-height: 80px; font-family: inherit; font-size: 14px;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px;
+    resize: vertical; background: #fffef7;
+  }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; background: var(--accent); color: #ffffff;
+    margin-right: 6px;
+  }
+  .badge-phase   { background: var(--navy-light); }
+  .badge-hours   { background: var(--warn); }
+  .badge-auto    { background: var(--accent); }
+  .badge-manual  { background: var(--text-muted); }
+  .ali-quote {
+    font-style: italic; color: var(--text); background: #fffaf0;
+    border-left: 3px solid var(--warn); padding: 10px 14px;
+    margin: 12px 0; border-radius: 0 4px 4px 0;
+  }
+  .actions {
+    position: sticky; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--border); padding: 12px 0;
+    display: flex; gap: 10px; margin-top: 24px;
+  }
+  button.copy-btn {
+    background: var(--navy); color: #ffffff; border: none;
+    padding: 10px 18px; border-radius: 4px; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  .small { font-size: 13px; color: var(--text-muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; line-height: 1.6;
+  }
+  .pill-ok      { background: var(--accent-soft); color: #22543d; }
+  .pill-warn    { background: var(--warn-soft);   color: #744210; }
+  .pill-danger  { background: var(--danger-soft); color: #742a2a; }
+  .pill-info    { background: var(--info-soft);   color: #2c5282; }
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin: 14px 0;
+  }
+  .stat-card {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px;
+  }
+  .stat-num { font-size: 24px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pipeline {
+    display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap;
+    margin: 18px 0; font-size: 13px;
+  }
+  .pipeline-step {
+    flex: 1 1 170px; min-width: 170px;
+    background: #ffffff; border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px;
+    position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .pipeline-step h4 { margin: 0 0 4px 0; font-size: 14px; color: var(--navy); }
+  .pipeline-arrow {
+    align-self: center; color: var(--text-muted); font-weight: 700;
+    padding: 0 4px;
+  }
+  .timeline {
+    margin: 14px 0; padding-left: 0; list-style: none;
+    border-left: 3px solid var(--border);
+  }
+  .timeline li {
+    padding: 6px 12px; margin: 6px 0; position: relative;
+    font-size: 14px;
+  }
+  .timeline li::before {
+    content: ''; position: absolute; left: -7.5px; top: 14px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); border: 2px solid #fff;
+  }
+  .timeline-manual li::before { background: var(--text-muted); }
+  .timeline-engine li::before { background: var(--navy-light); }
+  .grid-2col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin: 14px 0;
+  }
+  .col-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+  .col-card h4 { margin-top: 0; }
+  .col-card.auto { border-left: 4px solid var(--accent); }
+  .col-card.human { border-left: 4px solid var(--warn); }
+  .calc {
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 18px; margin: 14px 0;
+  }
+  .calc-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+  .calc input[type=number] {
+    width: 64px; padding: 4px 6px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--border); border-radius: 4px; text-align: right;
+  }
+  .calc-output { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .phase-bar {
+    display: flex; align-items: stretch; margin: 6px 0; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .phase-bar .ph-name {
+    width: 220px; padding: 8px 10px; background: var(--bg-alt);
+    border-right: 1px solid var(--border); font-weight: 600;
+  }
+  .phase-bar .ph-fill {
+    flex: 1; padding: 8px 10px; background: linear-gradient(90deg, #e6f4ea 0%, #c6f6d5 100%);
+    color: #22543d;
+  }
+  .phase-bar .ph-hours {
+    width: 110px; padding: 8px 10px; background: #fff;
+    border-left: 1px solid var(--border); text-align: right;
+    color: var(--navy); font-weight: 600;
+  }
+  details {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px 12px; margin: 8px 0;
+  }
+  details summary { cursor: pointer; color: var(--navy); font-weight: 600; }
+  details[open] { background: #ffffff; }
+  .feedback-block {
+    background: #fffaf0; border-top: 1px dashed var(--warn);
+    padding: 12px 0 0 0; margin-top: 16px;
+  }
+  .feedback-block .small { margin-bottom: 6px; }
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 16px; max-width: none; }
+    section.block { box-shadow: none; page-break-inside: avoid; }
+    .actions { display: none; }
+    textarea { background: #ffffff; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+    .grid-2col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Executive summary</a>
+  <a href="#problem">The problem today</a>
+  <a href="#vision">The vision</a>
+
+  <h2>Use cases</h2>
+  <a href="#uc-sam">SAM.gov federal contract</a>
+  <a href="#uc-grants">Grants.gov application</a>
+  <a href="#uc-bonfire">Bonfire municipal RFP</a>
+
+  <h2>Spec</h2>
+  <a href="#docs">Documents you need</a>
+  <a href="#split">Automate vs. human</a>
+  <a href="#phases">The phases</a>
+  <a href="#savings">Hours saved</a>
+
+  <h2>Reference</h2>
+  <a href="#risks">Risks &amp; open questions</a>
+  <a href="#glossary">Glossary</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block" id="cover">
+  <h1>Submission Readiness Engine</h1>
+  <p class="subtitle">Walkthrough &amp; build plan · v1.0 · 2026-05-08</p>
+  <p>
+    Opportunity Pulse can already <em>find</em> federal contracts, grants, and Bonfire municipal RFPs and
+    draft a proposal in markdown. It cannot yet take Colaberry from "shortlisted opportunity" to
+    "ready to upload a complete bid package." This document tells the story of what that gap looks like
+    today, what the engine that closes it would do, and what it would take to build.
+  </p>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">8&ndash;40h</div>
+      <div class="stat-label">Per submission today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">~50%</div>
+      <div class="stat-label">Of that is automatable</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">96&ndash;136h</div>
+      <div class="stat-label">Engine build effort</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">~60h/mo</div>
+      <div class="stat-label">Saved at 10 bids/month</div>
+    </div>
+  </div>
+  <p>
+    The engine does <strong>not</strong> click Submit on your behalf — final certification stays with a
+    legally authorized signatory. Everything up to that click is fair game.
+  </p>
+</section>
+
+<!-- ========================================================== PROBLEM -->
+<section class="block problem" id="problem">
+  <h2>The problem today</h2>
+  <p>
+    Picture a typical Wednesday. A SAM.gov notice lands in your dashboard — a $250k healthcare data
+    analytics RFP from the Defense Health Agency. The shortlist looks great. Now what?
+  </p>
+  <h3>What the human does today</h3>
+  <ol>
+    <li>Open <code>sam.gov/opp/{noticeId}/view</code> in a browser, scroll to the Resources tab,
+      download the SOW PDF + Q&amp;A + amendment 1, save them to a folder named <em>"DHA RFP — final.zip
+      v3 ACTUAL"</em>.</li>
+    <li>Open OneDrive, search for "capability statement," find three versions, pick the most recent
+      one, copy it locally. Repeat for COI, W-9, past performance docs, key staff resumes.</li>
+    <li>Read the SOW. Build a compliance matrix in Excel by hand: section 4.2.1 wants past performance
+      with X / 4.2.3 wants Y / 4.3 wants pricing in Z format. Cross-reference against what's on
+      hand. Note the gaps.</li>
+    <li>Realize the COI expired six weeks ago. Email the broker. Wait two days for the renewal.</li>
+    <li>Open Word. Draft the technical proposal. Paste in past-performance bullets from old
+      proposals. Tweak. Tweak again. Have a colleague red-team. Tweak again.</li>
+    <li>Convert to PDF. Combine all attachments into a single ZIP per the RFP submission instructions.
+      Upload to SAM.gov. Click Submit.</li>
+  </ol>
+  <p>
+    Industry sources put a small-vendor federal bid at <strong>8&ndash;23 hours</strong>. A
+    grants.gov application at <strong>20&ndash;40 hours</strong>. A Bonfire RFP at
+    <strong>4&ndash;8 hours</strong>. The bulk of that time is in steps 1, 2, 3, and 6 — document
+    hunting, compliance checking, format conversion, package assembly. Steps 4 and 5 are where
+    real strategic value gets created.
+  </p>
+  <h3>Where time goes (typical SAM.gov bid, 18 hours)</h3>
+  <table>
+    <thead><tr><th>Activity</th><th>Hours</th><th>Automatable?</th></tr></thead>
+    <tbody>
+      <tr><td>Locate &amp; download RFP attachments, amendments, Q&amp;A</td><td>1.5</td><td><span class="pill pill-ok">Yes</span></td></tr>
+      <tr><td>Hunt for evergreen docs (W-9, COI, capability, certs, past perf)</td><td>2.0</td><td><span class="pill pill-ok">Yes</span></td></tr>
+      <tr><td>Build compliance matrix from RFP requirements</td><td>2.0</td><td><span class="pill pill-ok">Yes</span></td></tr>
+      <tr><td>Identify gaps (expired COI? missing cert? stale resume?)</td><td>0.5</td><td><span class="pill pill-ok">Yes</span></td></tr>
+      <tr><td>Draft technical proposal</td><td>4.0</td><td><span class="pill pill-info">Partial</span></td></tr>
+      <tr><td>Pricing / labor rate modeling</td><td>2.5</td><td><span class="pill pill-warn">Human</span></td></tr>
+      <tr><td>Past-performance narrative tailoring</td><td>2.0</td><td><span class="pill pill-info">Partial</span></td></tr>
+      <tr><td>Quality / red-team review</td><td>1.5</td><td><span class="pill pill-warn">Human</span></td></tr>
+      <tr><td>Format conversion (markdown → PDF), assembly, ZIP</td><td>1.0</td><td><span class="pill pill-ok">Yes</span></td></tr>
+      <tr><td>Submit &amp; certify</td><td>1.0</td><td><span class="pill pill-warn">Human</span></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Of 18 hours, <strong>~9 are mechanical</strong> (the green rows). Another ~6 are human strategy
+    augmented by AI assist. ~3 are non-negotiable human attention (pricing, red-team, signature).
+  </p>
+  <div class="feedback-block">
+    <div class="small">Feedback on this problem framing — anything missing, anything overstated?</div>
+    <textarea data-fb-id="problem" placeholder="e.g. 'You're underestimating step 3, that takes me 4h.'"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== VISION -->
+<section class="block vision" id="vision">
+  <h2>The vision</h2>
+  <p>
+    A five-stage pipeline behind every shortlisted opportunity. The first three stages run autonomously
+    overnight; the last two are one-click humans.
+  </p>
+
+  <div class="pipeline">
+    <div class="pipeline-step">
+      <h4>1 · Ingest</h4>
+      <p class="small">Already done. Opp Pulse pulls from SAM.gov, grants.gov, Bonfire scraper, plus 19 other sources daily.</p>
+      <span class="pill pill-ok">Live</span>
+    </div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step">
+      <h4>2 · Vault</h4>
+      <p class="small">Org-wide evergreen document store: W-9, COI, capability statement, past performance, certs, resumes. Versioned, expiry-aware.</p>
+      <span class="pill pill-info">Phase 1</span>
+    </div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step">
+      <h4>3 · Locker</h4>
+      <p class="small">Per-opportunity attachment locker: auto-downloads SOW, Q&amp;A, amendments, agency forms.</p>
+      <span class="pill pill-info">Phase 2</span>
+    </div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step">
+      <h4>4 · Matrix</h4>
+      <p class="small">AI-generated compliance matrix: every RFP requirement → satisfied or gap.</p>
+      <span class="pill pill-info">Phase 3</span>
+    </div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step">
+      <h4>5 · Package</h4>
+      <p class="small">One-click ZIP: drafted proposal + cover letter + budget + every required evergreen attachment, ready to upload.</p>
+      <span class="pill pill-info">Phase 4</span>
+    </div>
+  </div>
+
+  <p>
+    A sixth phase wraps it all in a human-friendly Submission Readiness page (gaps, expiries,
+    one-click "fix this," mark-submitted with confirmation receipt upload). A seventh phase
+    plugs the evergreen vault back into proposal generation so drafts cite real artifacts
+    rather than inferring from the org profile.
+  </p>
+
+  <h3>What lives where, by the numbers</h3>
+  <ul>
+    <li><strong>Documents (vault):</strong> ~10&ndash;15 evergreen artifacts per org, refreshed annually or on change.</li>
+    <li><strong>Attachments (locker):</strong> ~3&ndash;15 files per opp; large ones in the SAM.gov / grants.gov set.</li>
+    <li><strong>Compliance matrix:</strong> 10&ndash;40 rows per opp, regenerated whenever attachments change.</li>
+    <li><strong>Submission packages:</strong> generated on demand; not persisted as binary, regenerated from constituent parts.</li>
+  </ul>
+  <div class="feedback-block">
+    <div class="small">Vision feedback — does the 5-stage pipeline match your mental model?</div>
+    <textarea data-fb-id="vision"></textarea>
+  </div>
+</section>
+
+<!-- ============================================ USE CASE 1: SAM.GOV -->
+<section class="block usecase" id="uc-sam">
+  <h2>Use case 1 · SAM.gov federal contract</h2>
+  <p>
+    <strong>Scenario:</strong> CQuvator (Colaberry's federal vehicle) responds to a Defense Health
+    Agency RFP for a $250k <em>"AI-Assisted Healthcare Data Analytics Platform"</em>. NAICS 541512.
+    Set-aside: small business. Response deadline: 14 days.
+  </p>
+
+  <div class="grid-2col">
+    <div class="col-card human">
+      <h4><span class="badge badge-manual">Today &mdash; 18 hours</span></h4>
+      <ul class="timeline timeline-manual">
+        <li><strong>Day 1 (3h)</strong> — Open sam.gov, hunt the Resources tab, download SOW + 2
+          amendments + Q&amp;A. Skim. Build folder structure manually.</li>
+        <li><strong>Day 1 (2h)</strong> — Search OneDrive for capability statement, COI, W-9, past
+          performance docs, NAICS list. Pick latest versions. Realize COI expired 6 weeks ago.
+          Email broker.</li>
+        <li><strong>Day 2 (2h)</strong> — Read the SOW carefully. Build compliance matrix in Excel.
+          Cross-check against profile + on-hand docs.</li>
+        <li><strong>Day 2&ndash;3 (4h)</strong> — Draft tech proposal. Paste/adapt past-performance bullets.</li>
+        <li><strong>Day 3 (2.5h)</strong> — Pricing model. Labor categories, rates, profit.</li>
+        <li><strong>Day 3 (2h)</strong> — Tailor 3 past-performance narratives to this RFP's evaluation criteria.</li>
+        <li><strong>Day 4 (1.5h)</strong> — Red-team review with a colleague.</li>
+        <li><strong>Day 4 (1h)</strong> — Convert to PDF, combine attachments, upload, submit.</li>
+      </ul>
+    </div>
+    <div class="col-card auto">
+      <h4><span class="badge badge-auto">With engine &mdash; 8 hours</span></h4>
+      <ul class="timeline timeline-engine">
+        <li><strong>Overnight (0h)</strong> — Engine auto-downloads SOW + amendments + Q&amp;A into the
+          opportunity locker. Generates compliance matrix. Flags 2 gaps: <em>expired COI</em>,
+          <em>missing FCSI cert</em>.</li>
+        <li><strong>Day 1 (0.5h)</strong> — Open Submission Readiness page. See readiness score 76%.
+          Email broker for COI renewal in one click (template pre-filled).</li>
+        <li><strong>Day 1 (3h)</strong> — Click "Generate proposal" — engine drafts using vault's
+          capability statement excerpts and tailored past-performance bullets. You edit for tone
+          and add the win-strategy paragraphs.</li>
+        <li><strong>Day 2 (2h)</strong> — Pricing model. <em>Still human.</em></li>
+        <li><strong>Day 3 (1.5h)</strong> — Red-team review. <em>Still human.</em></li>
+        <li><strong>Day 3 (0.5h)</strong> — COI uploaded by broker, vault auto-tags expiry. Compliance
+          matrix flips green. Click "Generate Package" → ZIP downloads. Upload to SAM.gov.</li>
+        <li><strong>Day 3 (0.5h)</strong> — Authorized signatory reviews + clicks Submit on SAM.gov.
+          Engine prompts for confirmation #; stores against the opportunity.</li>
+      </ul>
+    </div>
+  </div>
+
+  <details>
+    <summary>Engine actions in detail (click to expand)</summary>
+    <ul>
+      <li><strong>Attachment locker</strong>: GET <code>api.sam.gov/.../v3/{noticeId}</code> →
+        downloads <code>SOW.pdf</code>, <code>Amendment-1.pdf</code>, <code>QA-Round1.pdf</code>.
+        pdf-parse extracts text, cached on the row.</li>
+      <li><strong>Compliance matrix</strong>: Claude reads parsed text + vault inventory. Returns
+        JSON: <code>[{requirement: "Past performance — 3 federal contracts within 5 years",
+        required: true, evidence_id: doc-7, status: "satisfied"}, {requirement: "Active SAM
+        registration", evidence_id: doc-12, status: "satisfied"}, {requirement: "FCSI certification",
+        status: "gap"}, ...]</code>. Persisted as a row in <code>opportunity_compliance</code>.</li>
+      <li><strong>Submission package</strong>: assembles from approved OpportunityOutputs +
+        evergreen docs flagged in the matrix. Markdown → PDF via documentRenderer. Streams a single
+        ZIP back.</li>
+      <li><strong>Mark-submitted</strong>: human uploads the agency confirmation; stored as an
+        <code>opportunity_attachments</code> row with source=manual.</li>
+    </ul>
+  </details>
+  <div class="feedback-block">
+    <div class="small">SAM.gov use-case feedback — does this match your real workflow?</div>
+    <textarea data-fb-id="uc-sam"></textarea>
+  </div>
+</section>
+
+<!-- ============================================ USE CASE 2: GRANTS -->
+<section class="block usecase" id="uc-grants">
+  <h2>Use case 2 · Grants.gov application</h2>
+  <p>
+    <strong>Scenario:</strong> Federal AI workforce-training grant (NOFO from Department of Labor).
+    Total budget $750k over 2 years. Application via Grants.gov Workspace. Deadline 30 days.
+    Includes SF-424, SF-424A budget, project narrative, key personnel CVs, letters of support.
+  </p>
+
+  <div class="grid-2col">
+    <div class="col-card human">
+      <h4><span class="badge badge-manual">Today &mdash; 32 hours</span></h4>
+      <ul class="timeline timeline-manual">
+        <li><strong>Week 1 (5h)</strong> — Read full NOFO. Decide go/no-go. Identify the SF-424 family forms required.</li>
+        <li><strong>Week 1 (2h)</strong> — Locate evergreen docs. Build compliance matrix.</li>
+        <li><strong>Week 2 (10h)</strong> — Project narrative draft. Page-limited (typically 25 pages).</li>
+        <li><strong>Week 2 (4h)</strong> — Budget Excel + budget narrative. Itemized.</li>
+        <li><strong>Week 3 (3h)</strong> — CVs of key personnel updated for this grant.</li>
+        <li><strong>Week 3 (3h)</strong> — Letters of support — chase 4 partner orgs.</li>
+        <li><strong>Week 3 (2h)</strong> — Internal compliance review (institutional sign-off).</li>
+        <li><strong>Week 4 (2h)</strong> — Workspace upload, validation, submit.</li>
+        <li><strong>Week 4 (1h)</strong> — Track confirmation, document submission.</li>
+      </ul>
+    </div>
+    <div class="col-card auto">
+      <h4><span class="badge badge-auto">With engine &mdash; 16 hours</span></h4>
+      <ul class="timeline timeline-engine">
+        <li><strong>Overnight (0h)</strong> — Engine downloads NOFO + SF-424 family templates into the
+          locker. Compliance matrix names every required form by SF number.</li>
+        <li><strong>Day 1 (1h)</strong> — Review readiness page. 4 of 5 evergreen docs satisfied;
+          1 gap (DOL-specific organizational chart needed).</li>
+        <li><strong>Day 1&ndash;2 (6h)</strong> — Click "Generate project narrative" — engine drafts
+          from NOFO requirements + capability statement + past-performance vault. You edit
+          extensively (this is the strategic core).</li>
+        <li><strong>Day 3 (3h)</strong> — Click "Generate budget narrative" — engine produces
+          first-pass budget table from labor categories in profile + scope. You adjust rates and
+          itemize. <em>Pricing decisions still human.</em></li>
+        <li><strong>Day 3 (1h)</strong> — Engine pre-fills SF-424 form fields from vault. Human
+          reviews and corrects.</li>
+        <li><strong>Day 4 (3h)</strong> — Letters of support — engine drafts personalized request
+          emails to partner orgs from your past performance log. You send. <em>Partners still
+          have to write the letters.</em></li>
+        <li><strong>Day 5 (1.5h)</strong> — Red-team review.</li>
+        <li><strong>Day 5 (0.5h)</strong> — Generate package, validate in Workspace, submit.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    <em>Why grants save fewer hours percentage-wise than SAM bids:</em> grants are dominated by the
+    project narrative, which is irreducibly strategic. The engine accelerates everything around it —
+    forms, budget, evergreen attachments, compliance matrix — but the narrative itself still
+    requires deep human thinking.
+  </p>
+  <div class="feedback-block">
+    <div class="small">Grants.gov use-case feedback?</div>
+    <textarea data-fb-id="uc-grants"></textarea>
+  </div>
+</section>
+
+<!-- ============================================ USE CASE 3: BONFIRE -->
+<section class="block usecase" id="uc-bonfire">
+  <h2>Use case 3 · Bonfire municipal RFP</h2>
+  <p>
+    <strong>Scenario:</strong> DHA Texas (Dallas Housing Authority) posts an RFP via Bonfire for a
+    workforce assessment + AI training pilot. $80k. Standard Bonfire submission package: cover
+    letter, vendor profile, intent to bid, BidTable pricing, COI, technical response, MWBE/DBE
+    cert if applicable. 7-day response window.
+  </p>
+
+  <div class="grid-2col">
+    <div class="col-card human">
+      <h4><span class="badge badge-manual">Today &mdash; 6 hours</span></h4>
+      <ul class="timeline timeline-manual">
+        <li><strong>Day 1 (1h)</strong> — Log into <code>dhantx.bonfirehub.com</code>, navigate to opp,
+          download attachments. Read RFP carefully.</li>
+        <li><strong>Day 1 (0.75h)</strong> — Find evergreen docs (capability, COI, MWBE cert, references).</li>
+        <li><strong>Day 2 (0.5h)</strong> — Compliance check against RFP requirements list.</li>
+        <li><strong>Day 2 (1h)</strong> — Cover letter on letterhead. Tailor to DHA.</li>
+        <li><strong>Day 3 (1.5h)</strong> — Technical response: capability + relevant past performance.</li>
+        <li><strong>Day 3 (1h)</strong> — Pricing: BidTable template, line items, totals.</li>
+        <li><strong>Day 4 (0.25h)</strong> — Upload everything to Bonfire, click Submit &amp; Finalize.</li>
+      </ul>
+    </div>
+    <div class="col-card auto">
+      <h4><span class="badge badge-auto">With engine &mdash; 2.5 hours</span></h4>
+      <ul class="timeline timeline-engine">
+        <li><strong>Overnight (0h)</strong> — Bonfire scraper logs in, follows the opportunity to its
+          detail page, downloads every Documents-tab attachment into the locker. Compliance matrix
+          generated.</li>
+        <li><strong>Day 1 (0.25h)</strong> — Readiness page: 100% green. All evergreen on file. No
+          gaps.</li>
+        <li><strong>Day 1 (0.5h)</strong> — Click "Generate cover letter" — pre-filled with DHA
+          contacts from the RFP and capability excerpts from the vault. You sign off in 5 min.</li>
+        <li><strong>Day 1 (1h)</strong> — Click "Generate technical response" — engine drafts using
+          past performance + capability. You polish.</li>
+        <li><strong>Day 2 (0.5h)</strong> — Pricing. <em>Still human.</em></li>
+        <li><strong>Day 2 (0.25h)</strong> — Generate package. ZIP downloads with cover letter PDF +
+          tech response PDF + COI + MWBE cert. Upload to Bonfire. Click Submit &amp; Finalize.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    Bonfire is the highest-leverage platform for this engine because (a) the documents are
+    standardized across Bonfire portals and (b) the time savings compound — Colaberry has 82
+    active Bonfire agencies in the network list.
+  </p>
+  <div class="feedback-block">
+    <div class="small">Bonfire use-case feedback?</div>
+    <textarea data-fb-id="uc-bonfire"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== DOCS -->
+<section class="block docs" id="docs">
+  <h2>Documents you need (the engine works from this list)</h2>
+
+  <h3>Evergreen vendor file (cross-platform — used in every submission)</h3>
+  <p>These are the documents that recur across SAM.gov, grants.gov, and Bonfire. Maintained centrally,
+  versioned, with expiry tracking.</p>
+  <table>
+    <thead>
+      <tr><th>Document</th><th>What it is</th><th>Refresh cadence</th><th>Why it matters</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>W-9</td>
+        <td>IRS tax form, signed</td>
+        <td>Annual or on change</td>
+        <td>Required for any federal payment routing</td>
+      </tr>
+      <tr>
+        <td>Capability Statement</td>
+        <td>1&ndash;2 page company overview: services, NAICS, certifications, contact</td>
+        <td>Quarterly</td>
+        <td>Re-used in every bid; first impression for evaluators</td>
+      </tr>
+      <tr>
+        <td>Certificate of Insurance (COI)</td>
+        <td>General liability + named coverage from broker</td>
+        <td>Annual + expiry tracked</td>
+        <td>Agencies require named-insured + minimum limits before submission</td>
+      </tr>
+      <tr>
+        <td>Past Performance Summary</td>
+        <td>3&ndash;5 reference contracts: client, value, duration, outcome</td>
+        <td>Per win</td>
+        <td>Core data reusable; narrative tailored per RFP</td>
+      </tr>
+      <tr>
+        <td>Key Staff Resumes / CVs</td>
+        <td>1&ndash;2 pages each: education, clearances, relevant experience</td>
+        <td>Annual</td>
+        <td>Required by most grants; common in tech-heavy SAM RFPs</td>
+      </tr>
+      <tr>
+        <td>NAICS Code List</td>
+        <td>Codes + size standards per service</td>
+        <td>On service expansion</td>
+        <td>Drives federal eligibility + Bonfire vendor profile</td>
+      </tr>
+      <tr>
+        <td>References List</td>
+        <td>Standing list: name, title, contact, project scope</td>
+        <td>Quarterly check-in</td>
+        <td>Many RFPs require 3+ references separate from past performance</td>
+      </tr>
+      <tr>
+        <td>Small Business / Diversity Certifications</td>
+        <td>8(a), HUBZone, SDVOSB, WOSB, MWBE/DBE — scanned PDF + expiry</td>
+        <td>On certification cycle</td>
+        <td>Set-aside qualification; often required to even respond</td>
+      </tr>
+      <tr>
+        <td>SAM.gov Entity Registration</td>
+        <td>UEI / CAGE codes, active status, registration screenshot</td>
+        <td>Annual renewal</td>
+        <td>Without active SAM, federal contracting is impossible</td>
+      </tr>
+      <tr>
+        <td>Banking / ACH Info</td>
+        <td>Routing + account, signed authorization</td>
+        <td>On change</td>
+        <td>Payment routing for grants and contracts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Per-platform additional (per submission)</h3>
+  <table>
+    <thead>
+      <tr><th>Platform</th><th>Additional artifacts</th><th>Generated by engine</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>SAM.gov</td>
+        <td>Technical proposal · Cost / price proposal · Past-performance narratives (3&ndash;5) · Set-aside-specific cert · Solicitation appendices</td>
+        <td>Tech proposal, past-perf narratives, format conversion. Pricing stays human.</td>
+      </tr>
+      <tr>
+        <td>Grants.gov</td>
+        <td>SF-424 family · Project narrative · Budget Excel + narrative · Key personnel CVs · Letters of support · Assurances + certifications</td>
+        <td>SF-424 prefill, narrative draft, budget narrative starter, CV roll-up. Strategy + budget judgment human.</td>
+      </tr>
+      <tr>
+        <td>Bonfire</td>
+        <td>Cover letter (signed) · Vendor profile (on platform) · Intent to bid · BidTable pricing · Technical response · COI + cert files</td>
+        <td>Cover letter, technical response, package assembly. Vendor profile + Submit click are on Bonfire.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="feedback-block">
+    <div class="small">What's missing from these lists? What do you actually keep on hand that I haven't named?</div>
+    <textarea data-fb-id="docs"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SPLIT -->
+<section class="block split" id="split">
+  <h2>What we automate vs. what stays human</h2>
+  <div class="grid-2col">
+    <div class="col-card auto">
+      <h4>🤖 Engine handles</h4>
+      <ul>
+        <li><strong>RFP attachment download</strong> — overnight, every active opp, every platform.</li>
+        <li><strong>Document text extraction</strong> — pdf-parse + mammoth cache parsed text per attachment.</li>
+        <li><strong>Compliance matrix generation</strong> — Claude reads RFP + vault + profile, returns JSON requirements list with evidence links.</li>
+        <li><strong>Gap detection</strong> — what's missing, what's expiring, what to renew.</li>
+        <li><strong>Drafting</strong> — proposals, cover letters, budget narratives, capability statements, resumes (already shipped) — grounded on real evergreen docs.</li>
+        <li><strong>Format rendering</strong> — markdown to PDF and DOCX, agency-ready.</li>
+        <li><strong>Package assembly</strong> — single ZIP with everything required for the upload.</li>
+        <li><strong>Expiry alerts</strong> — daily email when a doc expires in &lt;30 days. Reuses the v9.10 Source Health Agent email.</li>
+        <li><strong>Mark-submitted bookkeeping</strong> — store the agency confirmation # against the opp.</li>
+      </ul>
+    </div>
+    <div class="col-card human">
+      <h4>👤 Human still owns</h4>
+      <ul>
+        <li><strong>Win-theme strategy</strong> — what makes Colaberry the right pick for THIS RFP.</li>
+        <li><strong>Pricing &amp; labor rates</strong> — margin calls, competitive positioning, profit.</li>
+        <li><strong>Solution design</strong> — what we'll actually build, who's on the team, what the approach is.</li>
+        <li><strong>Red-team review</strong> — accuracy, tone, compliance, win probability.</li>
+        <li><strong>Tailoring narratives to agency priorities</strong> — DHA cares about X, City of Houston cares about Y. Engine generates a base; humans adapt.</li>
+        <li><strong>Letters of support, partner outreach</strong> — relationship work.</li>
+        <li><strong>Authorized signatory's certification</strong> — the legal "I attest" at submit. Cannot be automated, by law.</li>
+        <li><strong>The Submit &amp; Finalize click</strong> — on SAM.gov, grants.gov Workspace, or Bonfire portal. ToS + accountability stay with a human.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Disagree with anything in either column? Move items?</div>
+    <textarea data-fb-id="split"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASES -->
+<section class="block phases" id="phases">
+  <h2>The phases</h2>
+  <p>
+    Seven phases, ~96&ndash;136 dev hours total. Each ships independently, behind a feature flag, so any
+    one can be paused or rolled back without affecting the others.
+  </p>
+
+  <div class="phase-bar"><div class="ph-name">Phase 1 · Vault</div><div class="ph-fill">Persistent, versioned, expiry-aware document store. Upload UI, download routes, soft-delete, versioning.</div><div class="ph-hours">16&ndash;24h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 2 · Locker</div><div class="ph-fill">Per-opp attachment download from SAM.gov, grants.gov, Bonfire detail pages. Text extraction.</div><div class="ph-hours">24&ndash;32h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 3 · Matrix</div><div class="ph-fill">Compliance matrix service. Claude reads RFP + vault → JSON requirements with evidence + gaps.</div><div class="ph-hours">16&ndash;24h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 4 · Package</div><div class="ph-fill">Submission package assembler. Markdown→PDF/DOCX. ZIP endpoint. New output types.</div><div class="ph-hours">16&ndash;24h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 5 · Readiness page</div><div class="ph-fill">Per-opp page: score + gaps + actions. Daily expiry alerts via Source Health Agent email.</div><div class="ph-hours">12&ndash;16h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 6 · Auto-fill</div><div class="ph-fill">Inject evergreen excerpts into proposal generation prompts. Quality multiplier.</div><div class="ph-hours">12&ndash;16h</div></div>
+  <div class="phase-bar"><div class="ph-name">Phase 7 · Walkthrough</div><div class="ph-fill">This document. Ships parallel to Phase 1; re-captured after Phases 5/6.</div><div class="ph-hours">6&ndash;10h</div></div>
+
+  <h3>Recommended rollout order</h3>
+  <ol>
+    <li><strong>Phase 1 + Phase 7</strong> in parallel — vault is foundational; this walkthrough is the
+      stakeholder artifact.</li>
+    <li><strong>Phase 2</strong> — attachment locker. Unblocks Phase 3.</li>
+    <li><strong>Phase 3</strong> — compliance matrix. Now the page can show real readiness scores.</li>
+    <li><strong>Phase 4</strong> — package assembler. End-to-end "ready package" flow live.</li>
+    <li><strong>Phase 5</strong> — readiness page + expiry alerts. Operationalizes everything.</li>
+    <li><strong>Phase 6</strong> — auto-fill from vault. Quality lift on top of working pipeline.</li>
+  </ol>
+
+  <h3>Per-phase exit criteria</h3>
+  <details>
+    <summary>Phase 1 — Vault</summary>
+    <ul>
+      <li>Migration runs clean; <code>documents</code> table has all enum values.</li>
+      <li>POST upload with PDF persists file to <code>./uploads/documents/&lt;org&gt;/&lt;type&gt;/&lt;uuid&gt;.pdf</code> and creates a row.</li>
+      <li>GET expiring-within=30d returns rows with <code>expires_at &le; now+30d</code>.</li>
+      <li>Re-upload bumps version 1→2, old version retained.</li>
+      <li><code>/admin/documents</code> renders, expiry badges visible.</li>
+    </ul>
+  </details>
+  <details>
+    <summary>Phase 2 — Locker</summary>
+    <ul>
+      <li>For an existing SAM.gov opp, fetcher creates <code>opportunity_attachments</code> rows with on-disk files + non-empty <code>parsed_text</code>.</li>
+      <li>Same for a grants.gov opp.</li>
+      <li>For a known-clean Bonfire agency, detail-page fetcher produces ≥1 attachment.</li>
+      <li>Source Health page shows attachment-fetch stats per source.</li>
+    </ul>
+  </details>
+  <details>
+    <summary>Phase 3 — Matrix</summary>
+    <ul>
+      <li>For a known SAM.gov opp with a SOW PDF, <code>complianceMatrix.runFor(opp)</code> returns ≥10 rows.</li>
+      <li>Each row has <code>requirement</code>, <code>required</code> bool, <code>status</code>, <code>evidence_id</code>.</li>
+      <li>Re-running with no changes is idempotent (matrix stable; <code>generated_at</code> updates).</li>
+    </ul>
+  </details>
+  <details>
+    <summary>Phase 4 — Package</summary>
+    <ul>
+      <li>GET submission-package returns a ZIP with proposal PDF + linked evergreen + manifest.json.</li>
+      <li>Markdown proposal renders to a readable PDF (correct fonts, headings, line breaks).</li>
+    </ul>
+  </details>
+  <details>
+    <summary>Phase 5 — Readiness page + alerts</summary>
+    <ul>
+      <li>Per-opp readiness page renders with score + gaps.</li>
+      <li>Doc with <code>expires_at = now+15d</code> appears in next-day Source Health email under "Documents expiring soon."</li>
+    </ul>
+  </details>
+  <details>
+    <summary>Phase 6 — Auto-fill</summary>
+    <ul>
+      <li>Re-generated proposal contains specific phrases from uploaded capability statement (string-match against <code>documents.parsed_text</code>).</li>
+      <li>Output's <code>metadata.evergreen_docs_used</code> array contains the IDs that were injected.</li>
+    </ul>
+  </details>
+  <div class="feedback-block">
+    <div class="small">Phase ordering / scope feedback?</div>
+    <textarea data-fb-id="phases"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SAVINGS CALC -->
+<section class="block savings" id="savings">
+  <h2>Hours saved (with calculator)</h2>
+  <p>Every submission has a manual baseline and an engine-assisted target. The savings are real but
+  vary heavily by submission type. Adjust the inputs to model Colaberry's actual mix.</p>
+
+  <div class="calc">
+    <div class="calc-row">
+      <label>SAM.gov bids per month: <input type="number" id="cnt-sam" min="0" max="100" value="3"></label>
+      <span class="small">avg manual 18h → engine 8h = <strong>10h saved/bid</strong></span>
+    </div>
+    <div class="calc-row">
+      <label>Grants.gov apps per month: <input type="number" id="cnt-grants" min="0" max="100" value="1"></label>
+      <span class="small">avg manual 32h → engine 16h = <strong>16h saved/app</strong></span>
+    </div>
+    <div class="calc-row">
+      <label>Bonfire bids per month: <input type="number" id="cnt-bonfire" min="0" max="100" value="6"></label>
+      <span class="small">avg manual 6h → engine 2.5h = <strong>3.5h saved/bid</strong></span>
+    </div>
+    <hr>
+    <div class="calc-row">
+      <span class="stat-label">Estimated hours saved per month:</span>
+      <span class="calc-output" id="calc-result">— h/mo</span>
+    </div>
+    <div class="calc-row">
+      <span class="small">At a $150/h fully-loaded rate, that's <strong id="calc-dollars">—</strong>/mo back into the business.</span>
+    </div>
+  </div>
+
+  <h3>Caveats</h3>
+  <ul>
+    <li>Numbers assume you've already built up the evergreen vault. The first month is a wash because
+      you spend Phase 1 collecting + uploading the first round of docs (~4&ndash;6h one-time).</li>
+    <li>Bonfire savings compound across the 82 agencies in your network — once the per-opp detail
+      crawler is live, every Bonfire opp lands ready for triage.</li>
+    <li>Grants are the lowest savings %-wise but the highest absolute hours saved per submission, so
+      even one grant per quarter pays back significant time.</li>
+  </ul>
+  <div class="feedback-block">
+    <div class="small">Adjust the per-bid hours? You know your real numbers better than industry averages.</div>
+    <textarea data-fb-id="savings"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== RISKS -->
+<section class="block risks" id="risks">
+  <h2>Risks &amp; open questions</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>Mitigation</th><th>Owner</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>SAM.gov API tier</strong> — free tier is metadata-only; attachment URLs need paid tier or HTML scraping.</td>
+        <td>Phase 2 implements both: try API first, fall back to HTML scrape of public detail page. Brittle but documented.</td>
+        <td>Engine</td>
+      </tr>
+      <tr>
+        <td><strong>Bonfire detail pages + Cloudflare</strong> — ~50% of agency portals throw a CF challenge.</td>
+        <td>Same pattern as existing Phase B/C ingest: log blocks, never retry, accept partial coverage. Run twice/day.</td>
+        <td>Engine</td>
+      </tr>
+      <tr>
+        <td><strong>ToS exposure on auto-submit</strong> — clicking Submit in someone else's portal violates most ToS.</td>
+        <td>Engine stops at "ready package." Human always clicks Submit. Hard product constraint.</td>
+        <td>Product</td>
+      </tr>
+      <tr>
+        <td><strong>Compliance matrix accuracy</strong> — Claude is good but not perfect on procurement parsing.</td>
+        <td>Banner: "AI-generated; verify before submitting." Persist model + prompt version for audit.</td>
+        <td>Human review</td>
+      </tr>
+      <tr>
+        <td><strong>File storage durability</strong> — local disk in a Docker volume is fine for v1, not for compliance archives long-term.</td>
+        <td>Plan S3 swap once we hit ~5GB or need redundancy. Storage adapter abstracts the swap.</td>
+        <td>Future</td>
+      </tr>
+      <tr>
+        <td><strong>Expired-doc false alarms</strong> — COIs and certs sometimes have rolling renewal past their printed date.</td>
+        <td>Show the date, never auto-disable. Human always confirms.</td>
+        <td>Human review</td>
+      </tr>
+      <tr>
+        <td><strong>Authorized signatory</strong> — final certification at submit must be a legally authorized human.</td>
+        <td>Hard constraint. Engine cannot impersonate. Document on every output.</td>
+        <td>Legal</td>
+      </tr>
+      <tr>
+        <td><strong>Scanned-image PDFs</strong> — pdf-parse misses image-only PDFs (older agency forms).</td>
+        <td>v1 deferred. v2: add Tesseract OCR or AWS Textract if we hit them in real RFPs.</td>
+        <td>Future</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Open questions for Ali</h3>
+  <ol>
+    <li>Does Colaberry have an active SAM.gov registration today (UEI/CAGE)? If not, that's a 2&ndash;4 week prerequisite before any federal bid.</li>
+    <li>Are there specific certifications (8(a), HUBZone, MWBE/DBE) Colaberry holds or is pursuing? Shapes set-aside eligibility logic in the matrix.</li>
+    <li>Should the engine support multiple legal entities (CQuvator + Colaberry + Design House LLC)? Or single org for v1?</li>
+    <li>Storage budget: local disk volume is free; once we go S3 we're paying ~$0.023/GB/mo. Likely &lt;$5/mo for a year. Acceptable?</li>
+    <li>Confirmation receipt storage — when human marks-submitted, do we want a required upload of the agency confirmation, or optional?</li>
+  </ol>
+  <div class="feedback-block">
+    <div class="small">Answers / additional risks?</div>
+    <textarea data-fb-id="risks"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== GLOSSARY -->
+<section class="block glossary" id="glossary">
+  <h2>Glossary</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>UEI</strong></td><td>Unique Entity Identifier; replaced DUNS in 2022. Required for SAM.gov registration.</td></tr>
+      <tr><td><strong>CAGE</strong></td><td>Commercial and Government Entity code; assigned by DLA, used for federal contracting.</td></tr>
+      <tr><td><strong>NAICS</strong></td><td>North American Industry Classification System; codes that classify your services. Drives federal eligibility.</td></tr>
+      <tr><td><strong>NOFO</strong></td><td>Notice of Funding Opportunity; the grant equivalent of an RFP.</td></tr>
+      <tr><td><strong>SF-424</strong></td><td>Standard Form 424 family — federal grant application forms (multiple flavors per program).</td></tr>
+      <tr><td><strong>Set-aside</strong></td><td>Procurement reserved for a specific business class (8(a), HUBZone, SDVOSB, WOSB, small business).</td></tr>
+      <tr><td><strong>SOW</strong></td><td>Statement of Work; the technical scope inside an RFP.</td></tr>
+      <tr><td><strong>MWBE / DBE</strong></td><td>Minority/Women Business Enterprise / Disadvantaged Business Enterprise; state &amp; local diversity certifications.</td></tr>
+      <tr><td><strong>COI</strong></td><td>Certificate of Insurance; proof of liability coverage. Required by most agencies.</td></tr>
+      <tr><td><strong>8(a)</strong></td><td>SBA 8(a) Business Development program for socially/economically disadvantaged small businesses.</td></tr>
+      <tr><td><strong>HUBZone</strong></td><td>Historically Underutilized Business Zone; small business set-aside in distressed areas.</td></tr>
+      <tr><td><strong>SDVOSB</strong></td><td>Service-Disabled Veteran-Owned Small Business.</td></tr>
+      <tr><td><strong>WOSB</strong></td><td>Women-Owned Small Business.</td></tr>
+      <tr><td><strong>Bonfire</strong></td><td>State/local procurement platform (vendor.bonfirehub.com); ~82 agencies in Colaberry's network.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    The plan file at <code>C:\Users\ali_m\.claude\plans\staged-spinning-parasol.md</code> has the
+    implementation detail (file paths, schemas, exact endpoints, test verifications). This walkthrough
+    is the story. Both should travel together when you share with stakeholders.
+  </p>
+  <p><strong>What I'd suggest doing next:</strong></p>
+  <ol>
+    <li>Review this walkthrough end-to-end. Add feedback in any of the textareas above.</li>
+    <li>Click <em>Copy all feedback to clipboard</em> at the bottom — paste into Slack/email or back to me to incorporate.</li>
+    <li>If the vision lands well, greenlight Phase 1 (Vault) — it's standalone-useful even if we
+      stop after one phase, and it unblocks every later phase.</li>
+    <li>While Phase 1 is being built, start collecting Colaberry's evergreen docs into a folder.
+      The first upload session (~4&ndash;6h of one-time setup) is what makes everything else
+      possible.</li>
+  </ol>
+  <p><strong>Anything else not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback, structural concerns, priorities, what to drop..." style="min-height:200px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background:#718096">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self:center"></span>
+  </div>
+  <p class="small" style="margin-top:18px">
+    Notes auto-save to localStorage (this browser only). <em>Copy all feedback</em> dumps a markdown summary for sharing.
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'submission-readiness-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+
+  // Hours-saved calculator
+  function updateCalc() {
+    var sam     = Number(document.getElementById('cnt-sam').value) || 0;
+    var grants  = Number(document.getElementById('cnt-grants').value) || 0;
+    var bonfire = Number(document.getElementById('cnt-bonfire').value) || 0;
+    var hrs = sam * 10 + grants * 16 + bonfire * 3.5;
+    document.getElementById('calc-result').textContent = hrs.toFixed(1) + ' h/mo';
+    document.getElementById('calc-dollars').textContent = '$' + Math.round(hrs * 150).toLocaleString();
+  }
+  ['cnt-sam', 'cnt-grants', 'cnt-bonfire'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', updateCalc);
+  });
+  updateCalc();
+
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = [];
+    lines.push('# Submission Readiness Engine — Walkthrough Feedback');
+    lines.push('Generated: ' + new Date().toISOString());
+    lines.push('');
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) {
+        lines.push('## ' + title);
+        lines.push('');
+        lines.push(fbVal);
+        lines.push('');
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) {
+      status.textContent = 'No feedback to copy yet — fill in some textareas first.';
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'Copied (legacy path)'; }
+      catch (e) { status.textContent = 'Copy failed — select all manually'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback notes in this browser?')) return;
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
