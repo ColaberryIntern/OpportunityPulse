@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.6 — Auto-fill from Vault · Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --info-soft: #bee3f8; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .annotated { margin: 14px 0; padding: 10px 14px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 13.5px; }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  .compare-col { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; background: var(--bg-alt); font-size: 13px; }
+  .compare-col h4 { margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .compare-col.before h4 { color: #944e1c; }
+  .compare-col.after  h4 { color: #22543d; }
+  .compare-col pre { background: #fff; font-size: 11.5px; line-height: 1.45; margin: 0; padding: 8px 10px; border: 1px solid #e5e7eb; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .compare { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#what">What changed</a>
+
+  <h2>Mechanics</h2>
+  <a href="#flow">End-to-end flow</a>
+  <a href="#prompt">Prompt before/after</a>
+  <a href="#audit">Audit trail</a>
+
+  <h2>Details</h2>
+  <a href="#types">Vault types per output</a>
+  <a href="#extraction">Lazy extraction</a>
+  <a href="#caps">Caps + budget</a>
+  <a href="#files">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.6 (Phase 6)</h1>
+  <p class="subtitle">Auto-fill from Evergreen Vault · Walkthrough · 2026-05-08 · commit <code>5d0ab88</code></p>
+  <p>
+    The proposal generator now reads the actual content of your vault docs (capability
+    statement, past performance summaries, references) and feeds excerpts into the
+    AI prompt. Generated proposals cite real org artifacts instead of inferring everything
+    from JSON profile fields like <code>services: ["ai-systems", "data-analytics"]</code>.
+  </p>
+  <p>
+    <strong>Lazy text extraction</strong> closes the gap for non-markdown vault docs:
+    PDF + DOCX get extracted on first read via <code>pdf-parse</code> / <code>mammoth</code>, cached on
+    <code>documents.metadata.extracted_text</code> for next time. Pure backend
+    upgrade — no UI change. Quality multiplier on every proposal / offer / resume going forward.
+  </p>
+  <p>
+    <strong>Smoke verified on prod:</strong> for the existing capability statement in the vault,
+    1,500 chars of real markdown content (<em>"## Core Competencies — Expertise in developing and
+    implementing advanced Records Management Systems..."</em>) loaded ready for prompt injection.
+  </p>
+</section>
+
+<!-- ========================================================== WHAT -->
+<section class="block context" id="what">
+  <h2>What changed</h2>
+  <p>
+    Pure backend. No UI, no migration, no schema. Three additions to <code>document.service</code>
+    plus a wiring change in <code>actionGenerator</code>:
+  </p>
+  <ul>
+    <li><code>getOrExtractText(doc)</code> — reads vault file from disk, extracts via mime-appropriate parser, caches result on <code>metadata.extracted_text</code>.</li>
+    <li><code>loadVaultExcerpts({org, types, bonfireOpportunityId, caps})</code> — pulls vault docs of requested types, dedupes by type (bid scope &gt; global), returns capped excerpts.</li>
+    <li><code>actionGenerator.generateOutput</code> — calls <code>loadVaultExcerpts</code> per output type, injects via new <code>appendVaultBlock</code> helper into the prompt, persists audit on <code>metadata.evergreen_docs_used</code>.</li>
+  </ul>
+  <p>Effect: every proposal / offer / resume generation now reads the org's actual material.</p>
+</section>
+
+<!-- ========================================================== FLOW -->
+<section class="block feature" id="flow">
+  <h2>1 · End-to-end flow</h2>
+  <p>What happens when you click <strong>✍️ Generate Proposal</strong> on an opportunity row:</p>
+  <ol>
+    <li>Existing v8 lifecycle + grounding gates run as before.</li>
+    <li>Past wins (last 5 approved proposals) load from <code>pastWins.service</code>.</li>
+    <li><strong>v0.6: vault excerpts load.</strong> For type=proposal, <code>loadVaultExcerpts</code> pulls capability statement + past performance + references docs. Local-to-bid takes priority over global on dedupe by type.</li>
+    <li><strong>v0.6: lazy extraction.</strong> Each picked doc's <code>parsed_text</code> comes from cache if present, otherwise pdf-parse / mammoth runs once + caches.</li>
+    <li>System prompt + user prompt assembled. Vault excerpts appear under a new <code>=== Approved Source Material ===</code> block at the bottom of the user prompt.</li>
+    <li>AI call (gpt-4o-mini, ~900 tokens). Generated content lands in <code>OpportunityOutput</code> as draft.</li>
+    <li><strong>v0.6: audit trail.</strong> <code>metadata.evergreen_docs_used</code> array records which vault docs informed this draft (id + type + scope + chars).</li>
+  </ol>
+  <div class="feedback-block">
+    <div class="small">Flow feedback — anything missing in the order? Anywhere you'd want a circuit-breaker?</div>
+    <textarea data-fb-id="flow"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PROMPT -->
+<section class="block feature" id="prompt">
+  <h2>2 · Prompt before vs. after</h2>
+  <p>
+    Same opportunity, same profile, same past wins — only the v0.6 vault block is new:
+  </p>
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Before v0.6 (profile JSON only)</h4>
+<pre>Title: Records Management System
+Buyer: Texas Department of Criminal Justice
+...
+
+Our company profile (use to keep voice consistent):
+  services: ai-systems, data-analytics
+  industries we serve: IT Services
+  tools/stack: python, snowflake
+  named past wins: DHA compliance audit
+
+Last 3 approved proposal(s) — match tone:
+  • [IT] Old win → "We delivered..."</pre>
+      <div class="small" style="margin-top: 6px;">AI inferred everything else. Result: generic.</div>
+    </div>
+    <div class="compare-col after">
+      <h4>After v0.6 (vault content cited)</h4>
+<pre>... (same prompt prefix) ...
+
+=== Approved Source Material ===
+
+--- Capability Statement (global vault: Capability
+   Statement — AI-generated v1) ---
+## Core Competencies
+- Expertise in developing and implementing advanced
+  Records Management Systems tailored to meet
+  organizational needs.
+- Proficient in IT services, including software
+  development, data analytics, and cloud computing.
+- Strong background in compliance audit, document
+  workflow, and version-controlled record retention.
+
+## Differentiators
+...
+
+--- Past Performance (global vault: DHA Win) ---
+Delivered a $250k DHA contract on schedule with...
+
+--- References (global vault: Advisory) ---
+1. Smith County · IT modernization · 2025...</pre>
+      <div class="small" style="margin-top: 6px;">AI now cites real Colaberry copy verbatim.</div>
+    </div>
+  </div>
+  <div class="annotated">
+    <h4>Why this matters</h4>
+    <ul>
+      <li>Generated drafts now contain the actual phrasing from your capability statement — not paraphrased, not invented.</li>
+      <li>Past performance narratives reference real metrics and contract values from your vault, not generic "we delivered value" filler.</li>
+      <li>References list pulls from a current vault doc instead of being fabricated — so reviewers won't see ghost contacts.</li>
+      <li>The "approved" copy is the source of truth; the AI is now an assembler/tailor, not an inventor.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Prompt comparison feedback — does the cited-content approach do what you wanted?</div>
+    <textarea data-fb-id="prompt"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== AUDIT -->
+<section class="block feature" id="audit">
+  <h2>3 · Audit trail on each generated output</h2>
+  <p>
+    Every <code>OpportunityOutput</code> row created by v0.6 includes an
+    <code>evergreen_docs_used</code> array on its metadata. Auditable forever.
+  </p>
+<pre>{
+  "template_used": "proposal-v8",
+  "personalization_score": 78,
+  "colaberry_positioning": true,
+  "past_wins_used": [12, 45, 67],
+  "profile_hash": "a93f...c714",
+  "grounding": { "agency_name": "TDCJ", "solicitation_id": "RFP-2026-007", ... },
+  "banned_terms_detected": [],
+  "evergreen_docs_used": [
+    { "id": "fcc848...", "type": "capability_statement", "scope": "global", "name": "...", "chars": 1500 },
+    { "id": "a72b91...", "type": "past_performance",     "scope": "bid",    "name": "...", "chars": 1024 },
+    { "id": "9f10e2...", "type": "references",           "scope": "global", "name": "...", "chars": 856 }
+  ],
+  "generated_at": "2026-05-08T18:00:00Z"
+}</pre>
+  <div class="annotated">
+    <h4>Use cases</h4>
+    <ul>
+      <li>Reviewer can trace "where did this paragraph come from?" back to the exact vault doc.</li>
+      <li>Quality analysis: are AI proposals citing the latest capability statement, or a stale version?</li>
+      <li>Compliance trail for procurement audits: prove every claim came from an approved source artifact.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Audit shape feedback — any fields you'd want surfaced in the Review Queue UI?</div>
+    <textarea data-fb-id="audit"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== TYPES -->
+<section class="block context" id="types">
+  <h2>4 · Vault types per output type</h2>
+  <table>
+    <thead><tr><th>Output type</th><th>Vault types injected</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>proposal</code></td>
+        <td>capability_statement · past_performance · references</td>
+        <td>Full proposal needs all three: who you are, what you've done, who'll vouch.</td>
+      </tr>
+      <tr>
+        <td><code>offer</code></td>
+        <td>capability_statement · references</td>
+        <td>Shorter form — less past-performance detail needed.</td>
+      </tr>
+      <tr>
+        <td><code>resume</code></td>
+        <td>capability_statement · past_performance</td>
+        <td>Resume tailored to a job posting — capability + past wins as career evidence.</td>
+      </tr>
+      <tr>
+        <td><code>analysis</code></td>
+        <td>(none)</td>
+        <td>Internal go/no-go analysis is opp-focused — vault content would be noise.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="feedback-block">
+    <div class="small">Vault-type-per-output feedback — should any of these change?</div>
+    <textarea data-fb-id="types"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== EXTRACTION -->
+<section class="block feature" id="extraction">
+  <h2>5 · Lazy text extraction (PDF + DOCX vault docs become readable)</h2>
+  <p>
+    Until v0.6, vault docs uploaded as PDF or DOCX were opaque to the AI — the system
+    knew the file existed and counted toward readiness, but couldn't read the content.
+    v0.6 adds a one-time extraction layer:
+  </p>
+<pre>// First read on a PDF vault doc:
+const text = await getOrExtractText(doc);
+// → loads file → pdf-parse → caches on metadata.extracted_text → returns text
+
+// Second read on the same doc:
+const text = await getOrExtractText(doc);
+// → metadata.extracted_text exists → returns immediately, no fs read</pre>
+  <ul>
+    <li><strong>PDF</strong>: pdf-parse (already installed for the v0.4 attachment locker).</li>
+    <li><strong>DOCX</strong>: mammoth.extractRawText (already installed).</li>
+    <li><strong>Markdown / text</strong>: plain utf8 read.</li>
+    <li><strong>Other</strong> (images, etc.): returns null — doc skipped from prompt.</li>
+  </ul>
+  <p class="small">Extraction is cached on <code>documents.metadata.extracted_text</code> + <code>extracted_at</code>. Re-uploads bump the document version which gets a fresh extraction on first read.</p>
+</section>
+
+<!-- ========================================================== CAPS -->
+<section class="block context" id="caps">
+  <h2>6 · Caps + prompt budget</h2>
+  <ul>
+    <li>Per-doc cap: <strong>2 KB</strong> of text — enough for a capability statement excerpt or a past-perf summary, not enough to overwhelm the prompt.</li>
+    <li>Total cap: <strong>10 KB</strong> across all injected vault docs.</li>
+    <li>If multiple docs of the same type exist, the loader picks the most recent active one (bid scope wins over global).</li>
+    <li>Excess content is truncated — explicit cap, not a silent drop.</li>
+  </ul>
+  <p class="small">
+    For a typical proposal call (~3500 tokens system + user prompt prior to vault), 10 KB of
+    vault content adds ~2500 tokens. Total stays well under gpt-4o-mini's 128k context.
+  </p>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block context" id="files">
+  <h2>Files changed</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/documents/document.service.js</code></td><td>+ <code>getOrExtractText</code> + <code>loadVaultExcerpts</code></td></tr>
+      <tr><td><code>backend/src/oied/actionGenerator.service.js</code></td><td>Per-type vault lists; <code>appendVaultBlock</code>; injection in both prompt builders; audit on metadata</td></tr>
+      <tr><td><code>backend/tests/documents/loadVaultExcerpts.test.js</code></td><td>5 new (no-types, dedupe, cache, missing-file, capTotal)</td></tr>
+      <tr><td><code>backend/tests/oied/actionGenerator.test.js</code></td><td>4 new (proposal prompt content, metadata audit, analysis-skip, empty-vault)</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Net: 9 new tests. Full backend suite: 115 suites / 1405 tests pass.</p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    <strong>What this unlocks:</strong> the engine has graduated from "track docs, draft from JSON
+    profile" to "draft from your actual approved material." Combined with v0.4 (RFP attachments
+    feeding AI tailoring) and v0.5 (one-click submission package), the proposal generator now
+    reads the RFP body AND the vault content, then assembles a draft that cites real org material.
+  </p>
+  <p><strong>Phases left:</strong></p>
+  <ul>
+    <li>Phase 5 polish — dedicated <code>/admin/opportunities/:id/submission-readiness</code> page + expiry alerts (~6–8h)</li>
+    <li>v0.5+ — SAM.gov + grants.gov detail-page fetchers (~14h)</li>
+  </ul>
+  <p>Net remaining ~20–22 dev hours.</p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback..." style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'submission-readiness-v06-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# v0.6 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
