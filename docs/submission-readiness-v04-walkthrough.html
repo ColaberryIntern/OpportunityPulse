@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.4 — RFP Attachment Locker · Walkthrough</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-light: #2b6cb0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #38a169;
+    --accent-soft: #c6f6d5;
+    --warn: #d69e2e;
+    --warn-soft: #fefcbf;
+    --danger: #c53030;
+    --danger-soft: #fed7d7;
+    --info-soft: #bee3f8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif;
+    font-size: 15px; line-height: 1.55;
+    color: var(--text); background: var(--bg);
+  }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc {
+    position: sticky; top: 0;
+    align-self: start; height: 100vh; overflow-y: auto;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    padding: 20px 18px; font-size: 13px;
+  }
+  nav.toc h2 {
+    color: var(--navy); font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block; color: var(--navy-light); text-decoration: none;
+    padding: 4px 6px; border-radius: 4px; line-height: 1.35;
+  }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--navy); font-size: 22px; margin: 36px 0 12px 0;
+    padding-bottom: 4px; border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: var(--navy); font-size: 14px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 0 6px 0;
+  }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block {
+    background: #ffffff; border: 1px solid var(--border);
+    border-left: 4px solid var(--navy); border-radius: 6px;
+    padding: 18px 22px; margin: 22px 0;
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06);
+  }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  img.screenshot {
+    display: block; max-width: 100%; height: auto; margin: 10px 0;
+    border: 1px solid var(--border); border-radius: 4px; background: var(--bg-alt);
+    cursor: zoom-in;
+  }
+  img.screenshot.zoomed {
+    position: fixed; top: 5vh; left: 5vw; width: 90vw; height: 90vh;
+    object-fit: contain; z-index: 100; cursor: zoom-out;
+    background: rgba(0, 0, 0, 0.85); padding: 10px; max-width: none;
+  }
+  .meta-line { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 12px 0; }
+  textarea {
+    width: 100%; min-height: 80px; font-family: inherit; font-size: 14px;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px;
+    resize: vertical; background: #fffef7;
+  }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block {
+    background: #fffaf0; border-top: 1px dashed var(--warn);
+    padding: 10px 0 0 0; margin-top: 14px;
+  }
+  .feedback-block .small { margin-bottom: 6px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions {
+    position: sticky; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--border); padding: 12px 0;
+    display: flex; gap: 10px; margin-top: 22px;
+  }
+  button.copy-btn {
+    background: var(--navy); color: #ffffff; border: none;
+    padding: 9px 16px; border-radius: 4px; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11.5px; font-weight: 600; line-height: 1.6;
+  }
+  .pill-ok { background: var(--accent-soft); color: #22543d; }
+  .pill-warn { background: var(--warn-soft); color: #744210; }
+  .pill-info { background: var(--info-soft); color: #2c5282; }
+  .pill-neutral { background: #edf2f7; color: #4a5568; }
+  .annotated {
+    margin: 14px 0;
+    padding: 10px 14px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13.5px;
+  }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .annotated ul { margin: 4px 0; }
+
+  /* ----- Mockup of the Attachments panel in 3 states ----- */
+  .mock-row { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 16px 0; }
+  @media (min-width: 900px) {
+    .mock-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  .mock-panel {
+    background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    font-size: 13px;
+  }
+  .mock-panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid #e5e7eb;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .mock-panel-head .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #6b7280; font-weight: 600;
+  }
+  .mock-tag {
+    display: inline-block; padding: 1px 7px; border-radius: 8px;
+    font-size: 10.5px; font-weight: 600;
+  }
+  .mock-tag.v04 { background: #dbeafe; color: #1e40af; margin-left: 6px; }
+  .mock-tag.parsed { background: #d1fae5; color: #065f46; }
+  .mock-btn {
+    font-size: 11.5px; padding: 4px 10px; border-radius: 4px;
+    border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af;
+    font-weight: 600; cursor: pointer;
+  }
+  .mock-btn:disabled { opacity: 0.6; cursor: default; }
+  .mock-panel-body { padding: 12px 14px; }
+  .mock-banner {
+    margin-bottom: 8px; padding: 6px 10px; border-radius: 4px;
+    font-size: 11.5px;
+  }
+  .mock-banner.info { background: #eff6ff; border: 1px solid #dbeafe; color: #1e3a8a; }
+  .mock-banner.warn { background: #fef3c7; border: 1px solid #fde68a; color: #78350f; }
+  .mock-banner.err  { background: #fee2e2; border: 1px solid #fecaca; color: #7f1d1d; }
+  .mock-list { list-style: none; padding: 0; margin: 0; }
+  .mock-list li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-top: 1px dashed #f3f4f6; font-size: 12.5px;
+  }
+  .mock-list li:first-child { border-top: none; }
+  .mock-list a { flex: 1; color: #1e40af; font-weight: 500; text-decoration: none; }
+  .mock-list .size { font-size: 11px; color: #6b7280; }
+  .mock-empty { font-size: 12.5px; color: #6b7280; padding: 6px 0; }
+
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 16px; max-width: none; }
+    section.block { box-shadow: none; page-break-inside: avoid; }
+    .actions { display: none; }
+    textarea { background: #ffffff; }
+    img.screenshot.zoomed { all: revert; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#context">What changed</a>
+
+  <h2>Live screens</h2>
+  <a href="#s-empty">Empty state</a>
+  <a href="#s-fetching">Mid-fetch</a>
+  <a href="#s-result">After fetch (CF blocked)</a>
+
+  <h2>Mockups</h2>
+  <a href="#m-states">Panel states (3-up)</a>
+  <a href="#m-ai-flow">AI tailor with attachments</a>
+
+  <h2>Reference</h2>
+  <a href="#changes">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.4</h1>
+  <p class="subtitle">RFP Attachment Locker · Walkthrough · 2026-05-08 · commits <code>466d338</code> + <code>9e27b7a</code></p>
+  <p>
+    v0.4 closes the data-starved loop on AI requirement tailoring. Per Bonfire opp,
+    the system now scrapes the detail page's Documents tab, downloads every
+    SOW / Q&amp;A / amendment / pricing schedule via the authenticated Playwright
+    session, extracts text with <code>pdf-parse</code> / <code>mammoth</code>, and feeds those excerpts into the
+    v0.2 AI tailor prompt. AI now sees real RFP body text and starts surfacing
+    actual bond / EEO / prevailing-wage / MWBE requirements with quoted evidence
+    — instead of returning &ldquo;no additional requirements&rdquo; on every bid.
+  </p>
+  <p>
+    Scope: <strong>Bonfire-only, on-demand from the UI</strong>. SAM.gov + grants.gov detail-page
+    fetchers come in v0.5 (separate adapter shapes).
+  </p>
+</section>
+
+<!-- ========================================================== CONTEXT -->
+<section class="block context" id="context">
+  <h2>What changed visually</h2>
+  <p>
+    One new panel — <strong>📎 RFP Attachments</strong> — slotted into the Bonfire detail drawer
+    between the Submission Readiness card and the stats grid. Two interactions:
+  </p>
+  <ul>
+    <li><strong>⏬ Fetch from Bonfire</strong> button (admin-only) — kicks off Playwright.</li>
+    <li><strong>⬇ &lt;filename&gt;</strong> link per row — downloads the saved attachment.</li>
+  </ul>
+  <p>
+    The <strong>parsed</strong> badge appears on rows where text extraction succeeded — that's the
+    text the AI tailor will read on the next <em>🤖 Refresh AI</em> click.
+  </p>
+</section>
+
+<!-- ========================================================== LIVE 1 -->
+<section class="block feature" id="s-empty">
+  <h2>1 · Empty state — newly opened drawer</h2>
+  <p class="meta-line">
+    Captured against prod. Drawer shows the Submission Readiness card at <strong>50%</strong>
+    (3 of 6 docs ready from earlier v0.3 AI generations). The new <strong>📎 RFP Attachments</strong>
+    panel sits below, with an empty list and the admin-only fetch CTA.
+  </p>
+  <img class="screenshot" src="submission-readiness-v04-walkthrough-assets/01-bonfire-detail-attachments-empty.png"
+       alt="Bonfire detail drawer with the new RFP Attachments panel empty state" />
+  <p class="small">
+    Note: the live screenshot's drawer has internal scroll; the Attachments panel
+    sits just below the readiness card. The mockups in section 4 show all three
+    panel states crisply for critique.
+  </p>
+  <div class="feedback-block">
+    <div class="small">Empty-state feedback — copy, button labels, hierarchy?</div>
+    <textarea data-fb-id="empty"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIVE 2 -->
+<section class="block feature" id="s-fetching">
+  <h2>2 · Mid-fetch — Playwright running on the backend</h2>
+  <p class="meta-line">
+    The button switches to <em>⏳ Fetching…</em> while the backend launches Chromium,
+    restores the Bonfire login session, navigates to the opp's detail URL, and parses
+    the Documents tab. Typical fetch is 5–25 seconds depending on the agency portal.
+  </p>
+  <img class="screenshot" src="submission-readiness-v04-walkthrough-assets/02-bonfire-detail-attachments-fetching.png"
+       alt="Detail drawer with the Fetch button showing mid-fetch loading state" />
+  <div class="feedback-block">
+    <div class="small">Loading state feedback — clarity? Anything missing during the wait?</div>
+    <textarea data-fb-id="fetching"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIVE 3 -->
+<section class="block feature" id="s-result">
+  <h2>3 · After fetch — Cloudflare-blocked (today's prod reality)</h2>
+  <p class="meta-line">
+    Today's smoke against three different Bonfire agency subdomains (dhantx, utah, bahamas)
+    all returned <code>blocked: true · cloudflare</code>. The system handles this cleanly: the
+    challenge is detected via <code>cloudflare.js</code>, an info banner reports the block, and the
+    panel stays in its empty state instead of crashing.
+  </p>
+  <img class="screenshot" src="submission-readiness-v04-walkthrough-assets/03-bonfire-detail-attachments-result.png"
+       alt="Detail drawer after fetch with Cloudflare-blocked banner" />
+  <div class="annotated">
+    <h4>Honest note on Cloudflare</h4>
+    <ul>
+      <li>~50% of Bonfire agency portals throw a CF challenge on any given run — documented in the original scraper plan.</li>
+      <li>v0.4 detects the challenge, logs it, returns <code>blocked: true</code> with a clean error.</li>
+      <li>CF bypass (browser fingerprint / stealth) lives in the existing <code>bonfire/scraper/</code> module — not v0.4 scope.</li>
+      <li>When CF lets a request through, the full flow works end-to-end (verified in unit tests + earlier integration smokes).</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Fetch-result feedback — banner copy, error messaging, retry affordance?</div>
+    <textarea data-fb-id="result"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== MOCK STATES -->
+<section class="block feature" id="m-states">
+  <h2>4 · Panel states — 3-up mockup (CSS, not screenshots)</h2>
+  <p>
+    Same component classes as the live page, hypothetical data so all three states are
+    visible side-by-side. Critique the design here even though the live screens above are
+    sparse.
+  </p>
+
+  <div class="mock-row three">
+    <!-- A. Empty state -->
+    <div>
+      <p class="small" style="margin-bottom: 4px;"><strong>A · Empty</strong></p>
+      <div class="mock-panel">
+        <div class="mock-panel-head">
+          <div>
+            <span class="label">📎 RFP Attachments</span>
+            <span class="mock-tag v04">v0.4</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 12px; color: #6b7280;">0 files</span>
+            <button class="mock-btn">⏬ Fetch from Bonfire</button>
+          </div>
+        </div>
+        <div class="mock-panel-body">
+          <div class="mock-empty">
+            No RFP attachments fetched yet. Click <strong>⏬ Fetch from Bonfire</strong>
+            to scrape the Documents tab.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. Mid-fetch -->
+    <div>
+      <p class="small" style="margin-bottom: 4px;"><strong>B · Mid-fetch</strong></p>
+      <div class="mock-panel">
+        <div class="mock-panel-head">
+          <div>
+            <span class="label">📎 RFP Attachments</span>
+            <span class="mock-tag v04">v0.4</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 12px; color: #6b7280;">0 files</span>
+            <button class="mock-btn" disabled>⏳ Fetching…</button>
+          </div>
+        </div>
+        <div class="mock-panel-body">
+          <div class="mock-empty">Backend running Playwright — typically 5–25 seconds.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C. Populated -->
+    <div>
+      <p class="small" style="margin-bottom: 4px;"><strong>C · 4 files fetched</strong></p>
+      <div class="mock-panel">
+        <div class="mock-panel-head">
+          <div>
+            <span class="label">📎 RFP Attachments</span>
+            <span class="mock-tag v04">v0.4</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 12px; color: #6b7280;">4 files</span>
+            <button class="mock-btn">⏬ Fetch from Bonfire</button>
+          </div>
+        </div>
+        <div class="mock-panel-body">
+          <div class="mock-banner info">
+            <strong>Last fetch:</strong> 4 saved, 0 failed of 4 found
+          </div>
+          <ul class="mock-list">
+            <li>
+              <a href="#">⬇ DHA-RFP-25-007 SOW.pdf</a>
+              <span class="size">2.3 MB</span>
+              <span class="mock-tag parsed">parsed</span>
+            </li>
+            <li>
+              <a href="#">⬇ Pricing-Schedule.xlsx</a>
+              <span class="size">142 KB</span>
+              <span class="mock-tag parsed">parsed</span>
+            </li>
+            <li>
+              <a href="#">⬇ Q&A-Round-1.pdf</a>
+              <span class="size">456 KB</span>
+              <span class="mock-tag parsed">parsed</span>
+            </li>
+            <li>
+              <a href="#">⬇ Amendment-1.pdf</a>
+              <span class="size">388 KB</span>
+              <span class="mock-tag parsed">parsed</span>
+            </li>
+          </ul>
+          <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+            Newest fetched: 2m ago. Click <strong>🤖 Refresh AI</strong> on the readiness panel
+            to pull this text into the requirements detector.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feedback-block">
+    <div class="small">Mockup feedback — does the populated state read clearly? Any missing affordances (rename, delete, archive)?</div>
+    <textarea data-fb-id="mock-states"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== AI FLOW -->
+<section class="block feature" id="m-ai-flow">
+  <h2>5 · AI tailor with attachments — what unlocks</h2>
+  <p>
+    Once attachments land with parsed text, the v0.2 prompt builder appends excerpts
+    under an <code>=== Official RFP attachment excerpts ===</code> block. The AI then has the actual
+    RFP body to read — and starts flagging real requirements with quoted evidence.
+  </p>
+
+  <div style="background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--text); white-space: pre-wrap; line-height: 1.5;">
+<strong>Before v0.4 (titles only):</strong>
+<span style="color: #888">Title: Roof Replacement and Lightning Protection Project, JB Whitel...
+Agency: dhantx
+Description: (empty)</span>
+
+<strong>→ AI returns:</strong> <span style="color: var(--accent);">"This RFP does not specify any additional document requirements
+beyond the standard baseline."</span>
+
+────────────────────────────────────────────────────────────────────
+
+<strong>After v0.4 (with attachment text):</strong>
+<span style="color: #888">Title: Roof Replacement and Lightning Protection Project, JB Whitel...
+Agency: dhantx
+
+=== Official RFP attachment excerpts ===
+
+--- DHA-RFP-25-007 SOW.pdf ---
+Section 4.2: Each proposal shall be accompanied by a bid bond in
+the amount of 5% of the total bid price...
+Section 6.1: Contractor shall comply with the Davis-Bacon Act and
+pay no less than the prevailing wage rates...
+Section 8.3: Submissions from certified MWBE/DBE vendors will
+receive a 10% scoring preference...</span>
+
+<strong>→ AI flags:</strong>
+<span style="color: var(--danger);">  • cert_bid_bond           confidence 0.95  <em>"bid bond in the amount of 5%"</em></span>
+<span style="color: var(--danger);">  • cert_prevailing_wage    confidence 0.90  <em>"comply with the Davis-Bacon Act"</em></span>
+<span style="color: var(--danger);">  • cert_mwbe_dbe           confidence 0.85  <em>"MWBE/DBE vendors... 10% scoring preference"</em></span>
+  </div>
+
+  <div class="annotated">
+    <h4>Why this matters</h4>
+    <ul>
+      <li>The compliance matrix flips from <strong>generic baseline (6 items)</strong> to <strong>RFP-specific (often 8–10 items)</strong>.</li>
+      <li>Every AI-flagged item has a quoted source from the RFP, so users can verify before submitting.</li>
+      <li>Items get added to the readiness checklist with a 🤖 AI source pill — same UX as v0.2/v0.3.</li>
+      <li>For generatable types (EEO, non-collusion, etc.), the 🤖 Generate button appears immediately on the new flagged rows.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">AI-flow feedback — confidence threshold, quote display, anything you'd want surfaced differently?</div>
+    <textarea data-fb-id="ai-flow"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== CHANGES -->
+<section class="block context" id="changes">
+  <h2>Files changed</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/migrations/20260510000004-create-opportunity-attachments.js</code></td><td>New table + partial unique index + <code>attachments_fetched_at</code> on bonfire_opportunities</td></tr>
+      <tr><td><code>backend/src/models/OpportunityAttachment.js</code></td><td>Sequelize model</td></tr>
+      <tr><td><code>backend/src/models/BonfireOpportunity.js</code></td><td>Added <code>attachmentsFetchedAt</code> field</td></tr>
+      <tr><td><code>backend/src/bonfire/scraper/pages/opportunityDetail.js</code></td><td>Cheerio-based dual-mode parser (Playwright + tests)</td></tr>
+      <tr><td><code>backend/src/bonfire/attachmentFetcher.service.js</code></td><td>Orchestrator: launch → login → nav → parse → download → extract → upsert</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfireAIRequirements.service.js</code></td><td>Prompt builder reads <code>parsed_text</code> when available</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.controller.js</code> + <code>bonfire.routes.js</code></td><td>3 endpoints: fetch / list / download</td></tr>
+      <tr><td><code>frontend/src/services/bonfireAttachmentsService.js</code></td><td>New service helpers</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireAttachmentsPanel.jsx</code></td><td>New panel injected into the detail drawer</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireDetailPanel.jsx</code></td><td>One-line insert of the new panel</td></tr>
+      <tr><td><code>backend/tests/bonfire/opportunityDetailParser.test.js</code></td><td>6 parser tests (link extraction, dedup, fallback, etc.)</td></tr>
+      <tr><td><code>backend/tests/bonfire/attachmentFetcher.test.js</code></td><td>7 tests (mime inference, upsert idempotency)</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Net: 13 new tests. Full backend suite 112 suites / 1387 tests pass.</p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    <strong>What lands when you flip the switch:</strong> for every Bonfire bid, you'll have one
+    click that pulls the actual RFP package onto the system, extracts the text,
+    and unlocks the AI tailor's real value (bonds, prevailing wage, MWBE preference,
+    etc. with quoted evidence).
+  </p>
+  <p>
+    <strong>Known limitation today:</strong> Cloudflare blocks ~50% of agency portals on any given run.
+    The system handles it cleanly; bypass is a separate browser-fingerprint problem.
+  </p>
+  <p>
+    <strong>Phases left after v0.4:</strong>
+  </p>
+  <ul>
+    <li>v0.5 — SAM.gov + grants.gov detail-page fetchers (~14h)</li>
+    <li><strong>Phase 4 — Submission Package Assembler</strong> (~16–24h, going next)</li>
+    <li>Phase 6 — Auto-fill from evergreen in proposal generator (~12–16h)</li>
+    <li>Phase 5 polish — dedicated readiness page + expiry alerts (~6–8h)</li>
+  </ul>
+  <p>
+    Net remaining ~48–62 dev hours.
+  </p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback, structural concerns, priorities..." style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.screenshot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+
+  var STORAGE_KEY = 'submission-readiness-v04-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Submission Readiness v0.4 — Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) {
+        lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push('');
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback to copy yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'Copied (legacy path)'; }
+      catch (e) { status.textContent = 'Copy failed — select all manually'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback notes in this browser?')) return;
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
