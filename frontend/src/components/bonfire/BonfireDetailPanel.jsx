@@ -1,6 +1,7 @@
 import React from 'react';
 import BonfireSignalBadges from './BonfireSignalBadges';
 import BonfireReadinessPanel from './BonfireReadinessPanel';
+import BonfireAttachmentsPanel from './BonfireAttachmentsPanel';
 
 function fmtUSD(cents) {
   if (cents == null) return '—';
@@ -58,6 +59,9 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
 
         {/* v0.1 Submission Readiness: completion % + checklist + jump-to-vault links */}
         {isAdmin && <BonfireReadinessPanel opportunityId={row.id} />}
+
+        {/* v0.4 RFP Attachments: scraper-fed file locker per opp */}
+        <BonfireAttachmentsPanel opportunityId={row.id} isAdmin={isAdmin} />
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
           <Stat label="Priority" value={row.priorityScore ?? '—'} />

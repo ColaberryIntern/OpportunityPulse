@@ -50,6 +50,17 @@ router.post(
   controller.tailorRequirements,
 );
 
+// v0.4 Attachment locker — admin-only fetch (Playwright); reads + downloads
+// authenticated for any user.
+router.post(
+  '/opportunities/:id/fetch-attachments',
+  verifyToken,
+  checkPermissions(ROLES.ADMIN),
+  controller.fetchAttachments,
+);
+router.get('/opportunities/:id/attachments', verifyToken, controller.listAttachments);
+router.get('/opportunities/:id/attachments/:attachmentId/download', verifyToken, controller.downloadAttachment);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',

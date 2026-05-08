@@ -63,6 +63,7 @@ const BonfireAgency = require('./BonfireAgency')(sequelize);
 const BonfireStrategicOpportunity = require('./BonfireStrategicOpportunity')(sequelize);
 const KeywordTrend = require('./KeywordTrend')(sequelize);
 const Document = require('./Document')(sequelize);
+const OpportunityAttachment = require('./OpportunityAttachment')(sequelize);
 const OpportunityFitScore = require('./OpportunityFitScore')(sequelize);
 const OpportunityOutput = require('./OpportunityOutput')(sequelize);
 const OpportunityEvent = require('./OpportunityEvent')(sequelize);
@@ -123,6 +124,7 @@ const models = {
   BonfireStrategicOpportunity,
   KeywordTrend,
   Document,
+  OpportunityAttachment,
   OpportunityFitScore,
   OpportunityOutput,
   OpportunityEvent,

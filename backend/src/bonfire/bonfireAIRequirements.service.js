@@ -9,10 +9,18 @@
 // requirement it flags. Confidence is also returned so the merge layer
 // can drop low-signal hits if needed.
 
-const { BonfireOpportunity } = require('../models');
+const { BonfireOpportunity, OpportunityAttachment } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
 const types = require('../documents/documentTypes');
 const logger = require('../logging/logger');
+
+// v0.4: when the opp has fetched RFP attachments with parsed_text, we
+// include excerpts in the prompt. This is the unlock that moves the AI
+// tailor from data-starved (titles only) to surfacing real bond / EEO /
+// MWBE requirements with quoted evidence. Cap per-attachment + total
+// excerpt size so we don't blow the context window.
+const MAX_EXCERPT_PER_ATTACHMENT = 4000;
+const MAX_TOTAL_EXCERPT = 20000;
 
 // v0.1 baseline — AI is told NOT to repeat these in the additional list.
 const BASELINE_TYPES = [
@@ -75,7 +83,7 @@ Return ONLY valid JSON in this exact shape:
   "summary": "<one-sentence summary of what's distinctive about this RFP's submission requirements>"
 }`;
 
-function buildUserPrompt(opp) {
+function buildUserPrompt(opp, { attachmentExcerpts = [] } = {}) {
   const flaggable = flaggableTypes();
   const lines = [
     'Available types you may flag (use the "key" exactly):',
@@ -101,7 +109,40 @@ function buildUserPrompt(opp) {
   if (extras.length > 0) {
     lines.push('', ...extras);
   }
+
+  // v0.4: include parsed text from RFP attachments if we have them.
+  // This is where bond / EEO / prevailing-wage / etc. requirements live;
+  // titles + descriptions almost never carry that detail.
+  if (attachmentExcerpts.length > 0) {
+    lines.push('', '=== Official RFP attachment excerpts (cited by AI when used) ===');
+    for (const att of attachmentExcerpts) {
+      lines.push('', `--- ${att.name} ---`);
+      lines.push(att.text);
+    }
+  }
+
   return lines.join('\n');
+}
+
+// Build [{name, text}] from an opp's attachments, capped per-file and total.
+async function loadAttachmentExcerpts(opp) {
+  const rows = await OpportunityAttachment.findAll({
+    where: { bonfireOpportunityId: opp.id, parsedText: { [require('sequelize').Op.ne]: null } },
+    order: [['downloaded_at', 'DESC']],
+  });
+  if (rows.length === 0) return [];
+  const out = [];
+  let totalChars = 0;
+  for (const r of rows) {
+    const text = String(r.parsedText || '').trim();
+    if (!text) continue;
+    const remaining = MAX_TOTAL_EXCERPT - totalChars;
+    if (remaining <= 200) break;
+    const slice = text.slice(0, Math.min(MAX_EXCERPT_PER_ATTACHMENT, remaining));
+    totalChars += slice.length;
+    out.push({ name: r.name, text: slice });
+  }
+  return out;
 }
 
 function validateAndFilter(parsed) {
@@ -145,7 +186,8 @@ async function tailorRequirements({ opportunityId, force = false } = {}) {
   }
 
   const ai = getAIClient();
-  const userPrompt = buildUserPrompt(opp);
+  const attachmentExcerpts = await loadAttachmentExcerpts(opp).catch(() => []);
+  const userPrompt = buildUserPrompt(opp, { attachmentExcerpts });
   const startedAt = new Date();
   let parsed = {};
   let modelUsed = ai.model;
@@ -175,6 +217,8 @@ async function tailorRequirements({ opportunityId, force = false } = {}) {
     additional_required: validated.additional_required,
     summary: validated.summary,
     error: parsed._error || null,
+    attachment_count: attachmentExcerpts.length,
+    attachment_chars: attachmentExcerpts.reduce((acc, a) => acc + a.text.length, 0),
   };
   opp.submissionRequirements = payload;
   await opp.save();

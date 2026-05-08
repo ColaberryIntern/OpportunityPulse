@@ -3,6 +3,8 @@ const logger = require('../logging/logger');
 const service = require('./bonfire.service');
 const readinessSvc = require('./bonfireReadiness.service');
 const aiReqSvc = require('./bonfireAIRequirements.service');
+const attachmentFetcher = require('./attachmentFetcher.service');
+const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
 const { isBonfireEnabled } = require('./bonfire.middleware');
 
@@ -177,6 +179,62 @@ async function tailorRequirements(req, res) {
   }
 }
 
+// v0.4: per-opp Bonfire detail-page attachment fetcher.
+async function fetchAttachments(req, res) {
+  try {
+    const out = await attachmentFetcher.fetchOneBonfireOpp({
+      bonfireOpportunityId: req.params.id,
+    });
+    return successResponse(res, out, 'Attachment fetch complete');
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'NO_SOURCE_URL') return errorResponse(res, e.message, 400);
+    logger.error('Bonfire attachments fetch failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Attachment fetch failed: ' + e.message, 500);
+  }
+}
+
+async function listAttachments(req, res) {
+  try {
+    const rows = await attachmentFetcher.listAttachments({
+      bonfireOpportunityId: req.params.id,
+    });
+    return successResponse(res, {
+      bonfire_opportunity_id: req.params.id,
+      count: rows.length,
+      attachments: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        mime: r.mime,
+        size_bytes: r.sizeBytes,
+        url_original: r.urlOriginal,
+        downloaded_at: r.downloadedAt,
+        has_parsed_text: !!r.parsedText,
+      })),
+    });
+  } catch (e) {
+    logger.error('Bonfire attachments list failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Failed to list attachments', 500);
+  }
+}
+
+async function downloadAttachment(req, res) {
+  try {
+    const row = await attachmentFetcher.getAttachmentRow({
+      bonfireOpportunityId: req.params.id,
+      id: req.params.attachmentId,
+    });
+    if (!row) return errorResponse(res, 'Attachment not found', 404);
+    const abs = attachmentFetcher.attachmentAbsolutePath(row.filePath);
+    res.set('Content-Type', row.mime || 'application/octet-stream');
+    res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(row.name)}"`);
+    return fs.createReadStream(abs).pipe(res);
+  } catch (e) {
+    logger.error('Bonfire attachment download failed', { error: e.message });
+    return errorResponse(res, 'Download failed: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   getFlag,
   listOpportunities,
@@ -189,4 +247,7 @@ module.exports = {
   getReadiness,
   getReadinessSummaries,
   tailorRequirements,
+  fetchAttachments,
+  listAttachments,
+  downloadAttachment,
 };
