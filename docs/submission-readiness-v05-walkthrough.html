@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.5 — Package Assembler · Walkthrough</title>
+<style>
+  :root {
+    --navy: #1a365d; --navy-light: #2b6cb0;
+    --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096;
+    --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5;
+    --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --info-soft: #bee3f8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.45; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  img.screenshot { display: block; max-width: 100%; height: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-alt); cursor: zoom-in; }
+  img.screenshot.zoomed { position: fixed; top: 5vh; left: 5vw; width: 90vw; height: 90vh; object-fit: contain; z-index: 100; cursor: zoom-out; background: rgba(0, 0, 0, 0.85); padding: 10px; max-width: none; }
+  .meta-line { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 12px 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .feedback-block .small { margin-bottom: 6px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .mock-zip {
+    background: #1f2937; color: #d1fae5; padding: 14px 16px; border-radius: 6px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.6;
+    overflow-x: auto;
+  }
+  .mock-zip .dim { color: #94a3b8; }
+  .mock-zip .hl { color: #fbbf24; font-weight: 600; }
+  .annotated { margin: 14px 0; padding: 10px 14px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 13.5px; }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600; line-height: 1.6; }
+  .pill-ok { background: var(--accent-soft); color: #22543d; }
+  .pill-info { background: var(--info-soft); color: #2c5282; }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } img.screenshot.zoomed { all: revert; } }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#what">What changed</a>
+
+  <h2>Live screen</h2>
+  <a href="#s-banner">📦 Submission Package banner</a>
+
+  <h2>Reference</h2>
+  <a href="#s-zip">Inside the ZIP</a>
+  <a href="#s-readme">README sample</a>
+  <a href="#s-manifest">manifest.json sample</a>
+  <a href="#s-pdf">Markdown→PDF rendering</a>
+  <a href="#s-files">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.5 (Phase 4)</h1>
+  <p class="subtitle">Package Assembler · Walkthrough · 2026-05-08 · commits <code>7632038</code> + <code>6a9ffd5</code></p>
+  <p>
+    The readiness panel can now be turned into a real upload. One click on the new
+    <strong>📦 Generate Package</strong> button on the Bonfire detail drawer streams a
+    single ZIP containing every vault doc (global + bid-local), every AI-generated
+    draft <em>also</em> rendered to PDF, every fetched RFP attachment, plus a README cover
+    page and a JSON manifest. End-to-end the engine moves from &ldquo;track docs&rdquo;
+    to &ldquo;deliver the bid.&rdquo;
+  </p>
+  <p>
+    <strong>Smoke verified on prod:</strong> ZIP built for a real Bonfire opp (the JB Whitel roof project)
+    in &lt;1s, 32 KB total, 13 files including <code>README.md</code>, <code>manifest.json</code>,
+    6 markdown vault docs each rendered ALSO to PDF, and the historic References List PDF.
+  </p>
+</section>
+
+<!-- ========================================================== WHAT -->
+<section class="block context" id="what">
+  <h2>What changed visually</h2>
+  <p>
+    One new admin-only banner at the bottom of the Bonfire detail drawer:
+  </p>
+  <ul>
+    <li><strong>📦 Submission Package</strong> blue banner — explains what the package contains.</li>
+    <li><strong>📦 Generate Package</strong> button — clicks → backend streams a ZIP → browser saves it.</li>
+    <li>Filename: <code>submission-package_&lt;title-slug&gt;_&lt;date&gt;.zip</code></li>
+  </ul>
+  <p class="small">No new pages, no new tables, no migration. Pure additive endpoint + UI.</p>
+</section>
+
+<!-- ========================================================== LIVE -->
+<section class="block feature" id="s-banner">
+  <h2>1 · Bonfire detail drawer with the new 📦 banner</h2>
+  <div class="meta-line">
+    Captured against prod. The banner sits below the Attachments panel and stays admin-only.
+  </div>
+  <img class="screenshot" src="submission-readiness-v05-walkthrough-assets/01-bonfire-detail-with-submission-package.png"
+       alt="Bonfire detail drawer with the new Submission Package banner" />
+  <div class="annotated">
+    <h4>What to look for</h4>
+    <ul>
+      <li>Blue banner labeled <strong>📦 Submission Package</strong> at the bottom of the drawer.</li>
+      <li>One-line copy explains what the ZIP contains (vault + AI drafts + attachments + manifest).</li>
+      <li>Right-aligned <strong>📦 Generate Package</strong> button — kicks off the stream.</li>
+      <li>Mid-build the button shows <em>⏳ Assembling…</em>; on failure an inline red error appears below the banner.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Banner UX feedback — copy, button placement, color, missing affordances?</div>
+    <textarea data-fb-id="banner"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== ZIP -->
+<section class="block feature" id="s-zip">
+  <h2>2 · Inside the ZIP — real prod sample</h2>
+  <p>
+    The smoke build for the JB Whitel Roof RFP (with 6 AI-generated vault docs and 0 attachments yet
+    fetched) produced this ZIP:
+  </p>
+  <div class="mock-zip">
+<span class="hl">Archive: submission-package_Roof-Replacement-and-Lightning-_2026-05-08.zip</span>
+<span class="dim">  Length      Date    Time    Name
+---------  ---------- -----   ----</span>
+     1598  2026-05-08 17:36   <span class="hl">README.md</span>
+     4342  2026-05-08 17:36   <span class="hl">manifest.json</span>
+     3289  2026-05-08 17:36   vault/bid-local/Cover Letter Template — ... (2026-05-08).pdf
+     2773  2026-05-08 17:36   vault/bid-local/EEO Statement — ... (2026-05-08).pdf
+     3518  2026-05-08 17:36   vault/global/Capability Statement — AI-generated v1.pdf
+     3289  2026-05-08 17:36   vault/global/Cover Letter Template — AI-generated v1.pdf
+     2773  2026-05-08 17:36   vault/global/EEO Statement — AI-generated v1.pdf
+     1688  2026-05-08 16:42   vault/bid-local/Cover Letter Template — ... (2026-05-08).md
+     1366  2026-05-08 16:42   vault/bid-local/EEO Statement — ... (2026-05-08).md
+     2213  2026-05-08 16:44   vault/global/Capability Statement — AI-generated v1.md
+     1688  2026-05-08 16:42   vault/global/Cover Letter Template — AI-generated v1.md
+     1366  2026-05-08 16:42   vault/global/EEO Statement — AI-generated v1.md
+    15057  2026-05-08 15:10   vault/global/References List — Advisory.pdf
+<span class="dim">---------                     -------</span>
+    44960                     <span class="hl">13 files</span>
+  </div>
+  <div class="annotated">
+    <h4>Layout rules</h4>
+    <ul>
+      <li><code>/vault/global/</code> — evergreen docs reusable across bids (capability, references, etc.).</li>
+      <li><code>/vault/bid-local/</code> — docs specific to THIS bid (AI-generated cover letter, etc.).</li>
+      <li>Markdown source kept as <code>.md</code>; auto-rendered PDF emitted alongside so agency portals that demand PDF have one.</li>
+      <li>Existing PDFs (e.g. the References List PDF that was uploaded directly) flow through as-is, no re-render.</li>
+      <li><code>/attachments/</code> — empty in this smoke since Bonfire CF blocked the fetcher today; would contain RFP attachments otherwise.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Folder layout feedback — anything you'd organize differently?</div>
+    <textarea data-fb-id="zip"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== README -->
+<section class="block feature" id="s-readme">
+  <h2>3 · README.md — cover page</h2>
+  <p>
+    The README at the root of the ZIP is the human-readable summary an agency reviewer
+    (or you) sees first. Generated for the same Roof RFP smoke:
+  </p>
+<pre># Submission Package — Roof Replacement and Lightning Protection Project, JB Whitel...
+
+**Agency**: dhantx
+**Opportunity ID**: b8335473-53a3-441b-bb21-ad63157a4a0b
+**Original RFP**: https://dhantx.bonfirehub.com/opportunities/...
+**Generated**: 2026-05-08T17:36:24.075Z
+
+## Readiness
+
+Readiness: 50% complete · 3/6 required docs · 3 gaps
+
+## Contents
+
+### /vault — Evergreen + bid-local documents (6)
+
+- 📌 Cover Letter Template — Cover Letter Template — Roof Replacement... (v1, AI-generated)
+- 📌 EEO / Non-Discrimination Statement — EEO ... (v1, AI-generated)
+- 🌐 Capability Statement — Capability Statement — AI-generated v1 (v1, AI-generated)
+- 🌐 Cover Letter Template — Cover Letter Template — AI-generated v1 (v1, AI-generated)
+- 🌐 EEO / Non-Discrimination Statement — EEO ... (v1, AI-generated)
+- 🌐 References List — Advisory (v1)
+
+### /attachments — RFP attachments scraped from Bonfire (0)
+
+## Compliance checklist (from Submission Readiness)
+
+- [x] Cover Letter Template
+- [x] Capability Statement
+- [ ] Certificate of Insurance (COI)
+- [x] References List
+- [ ] Technical Response Template
+- [ ] Pricing Response Template
+
+---
+Generated by Opportunity Pulse · Submission Readiness Engine v0.5.
+Verify every requirement before clicking Submit & Finalize on the Bonfire portal.</pre>
+  <div class="annotated">
+    <h4>Why a README</h4>
+    <ul>
+      <li>Single page tells you / a reviewer what's inside without unzipping.</li>
+      <li>Compliance checklist lets you audit at a glance — checked items are satisfied; unchecked are gaps.</li>
+      <li>📌 = bid-local · 🌐 = global vault · so you can tell where each doc came from.</li>
+      <li>Final line is a hard reminder that submission still requires a human signatory click.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">README feedback — sections missing, copy that should change?</div>
+    <textarea data-fb-id="readme"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== MANIFEST -->
+<section class="block feature" id="s-manifest">
+  <h2>4 · manifest.json — structured inventory</h2>
+  <p>
+    Machine-readable companion. Same data as the README in JSON form, with a
+    <code>schema_version</code> so future tooling can lock onto a contract.
+  </p>
+<pre>{
+  "schema_version": 1,
+  "generated_at": "2026-05-08T17:36:24.075Z",
+  "opportunity": {
+    "id": "b8335473-53a3-441b-bb21-ad63157a4a0b",
+    "title": "Roof Replacement and Lightning Protection Project, JB Whitel...",
+    "agency": "dhantx",
+    "source_url": "https://dhantx.bonfirehub.com/opportunities/...",
+    "close_date": "2026-06-15T00:00:00.000Z"
+  },
+  "readiness": {
+    "completion_pct": 50,
+    "counts": { "total": 6, "satisfied": 3, "expiring": 0, "expired": 0, "gaps": 3 },
+    "checklist": [ ... 6 items with type, status, source, reason ... ]
+  },
+  "vault": [
+    { "id": "...", "type": "cover_letter_template", "name": "...",
+      "version": 1, "scope": "bid", "source": "ai_generated",
+      "mime": "text/markdown", "size_bytes": 1688,
+      "lineage_id": "..." },
+    ...
+  ],
+  "attachments": [ ... ]
+}</pre>
+  <div class="feedback-block">
+    <div class="small">Manifest feedback — fields missing, schema concerns?</div>
+    <textarea data-fb-id="manifest"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PDF -->
+<section class="block feature" id="s-pdf">
+  <h2>5 · Markdown → PDF rendering</h2>
+  <p>
+    AI-generated docs are markdown. Many agency portals require PDF. The renderer
+    walks markdown-it tokens and emits pdfkit drawing commands — no Chromium, no
+    puppeteer, ~2 MB of pure-JS deps.
+  </p>
+  <p>
+    <strong>Supported markdown features:</strong>
+  </p>
+  <ul>
+    <li><code>#</code> / <code>##</code> / <code>###</code> headings (font hierarchy preserved)</li>
+    <li>Paragraphs with <strong>bold</strong>, <em>italic</em>, <code>inline code</code>, and links</li>
+    <li>Bulleted (<code>* / -</code>) and ordered (<code>1.</code>) lists, single level</li>
+    <li>Horizontal rules (<code>---</code>)</li>
+    <li>Fenced code blocks (mono font, indented)</li>
+  </ul>
+  <p>
+    Output is a Letter-size PDF with 1-inch margins, body 11pt Helvetica, headings
+    in the OIED navy. Procurement-portal acceptable for most cover-letter / capability /
+    EEO / non-collusion / etc. types.
+  </p>
+  <div class="annotated">
+    <h4>Trade-off</h4>
+    <ul>
+      <li>Lightweight by design — no Chromium means low memory footprint and fast cold start.</li>
+      <li>Complex markdown (tables, deep-nested lists, images) renders best-effort. If we hit cases requiring richer rendering, swap in a puppeteer pipeline later.</li>
+      <li>Headings are not numbered automatically; PDF has no clickable TOC. Both are easy adds in a future iteration.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">PDF rendering feedback — quality concerns, missing markdown features?</div>
+    <textarea data-fb-id="pdf"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block context" id="s-files">
+  <h2>Files changed</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/package.json</code></td><td>+ archiver ^7.0.1 + pdfkit ^0.18.0 + markdown-it ^14.1.1</td></tr>
+      <tr><td><code>backend/src/documents/documentRenderer.service.js</code></td><td>Markdown→PDF (markdown-it tokens → pdfkit drawing)</td></tr>
+      <tr><td><code>backend/src/bonfire/submissionPackage.service.js</code></td><td>ZIP assembler (README + manifest + vault + attachments)</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.controller.js</code></td><td>+ <code>downloadSubmissionPackage</code> handler</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.routes.js</code></td><td>GET /opportunities/:id/submission-package (admin)</td></tr>
+      <tr><td><code>frontend/src/services/bonfireAttachmentsService.js</code></td><td>+ <code>downloadSubmissionPackage()</code> client helper</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireDetailPanel.jsx</code></td><td>+ 📦 Submission Package banner + button</td></tr>
+      <tr><td><code>backend/tests/documents/documentRenderer.test.js</code></td><td>3 renderer tests (PDF magic header, lists/hr/code, empty)</td></tr>
+      <tr><td><code>backend/tests/bonfire/submissionPackage.test.js</code></td><td>6 assembler tests (README content, manifest schema, safeName)</td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    Net: 9 new tests. Full backend suite 114 suites / 1396 tests pass.
+    Smoke against prod produced a real 32 KB / 13-file ZIP for the JB Whitel Roof RFP.
+  </p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    <strong>What this unlocks:</strong> the readiness panel is no longer just a tracker — one
+    button assembles every artifact you have on hand for a bid into a single ZIP that's
+    ready to upload to the Bonfire portal. Vault docs come along, AI drafts come along
+    rendered to PDF, fetched RFP attachments come along, and a manifest + README make the
+    package self-explanatory.
+  </p>
+  <p><strong>Phases left:</strong></p>
+  <ul>
+    <li>v0.5+ — SAM.gov + grants.gov detail-page fetchers (~14h)</li>
+    <li><strong>Phase 6 — Auto-fill from evergreen in the proposal generator</strong> (~12–16h, going next)</li>
+    <li>Phase 5 polish — dedicated readiness page + expiry alerts (~6–8h)</li>
+  </ul>
+  <p>Net remaining ~32–38 dev hours.</p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback..." style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.screenshot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  var STORAGE_KEY = 'submission-readiness-v05-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# v0.5 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback to copy yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
