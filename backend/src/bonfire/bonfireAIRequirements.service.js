@@ -15,12 +15,37 @@ const types = require('../documents/documentTypes');
 const logger = require('../logging/logger');
 
 // v0.4: when the opp has fetched RFP attachments with parsed_text, we
-// include excerpts in the prompt. This is the unlock that moves the AI
-// tailor from data-starved (titles only) to surfacing real bond / EEO /
-// MWBE requirements with quoted evidence. Cap per-attachment + total
-// excerpt size so we don't blow the context window.
-const MAX_EXCERPT_PER_ATTACHMENT = 4000;
-const MAX_TOTAL_EXCERPT = 20000;
+// include excerpts in the prompt.
+//
+// v0.10.4: bumped per-attachment cap from 4000 → 12000 chars after SLCC
+// validation surfaced that the canonical "Proposal File Requirements" PDF
+// (9336 chars) was being truncated, hiding FILE 3–6 from the AI extractor.
+// Total cap raised to 30K to match. Also: attachments whose names look like
+// they ARE the requirements list get full text first via priority sort below.
+const MAX_EXCERPT_PER_ATTACHMENT = 12000;
+const MAX_TOTAL_EXCERPT = 30000;
+
+// Attachments whose names match these patterns are submission-requirements
+// docs themselves and get prioritized in the excerpt budget so AI sees the
+// canonical list in full before we spend bytes on T&Cs / general conditions.
+const REQUIREMENTS_DOC_PATTERNS = [
+  /proposal\s+file\s+requirements?/i,
+  /required?\s+(documents?|submissions?|files?|information)/i,
+  /submission\s+requirements?/i,
+  /proposal\s+format/i,
+  /response\s+format/i,
+  /response\s+template/i,
+  /files?\s+to\s+submit/i,
+];
+
+function attachmentPriority(name) {
+  const n = String(name || '');
+  for (const re of REQUIREMENTS_DOC_PATTERNS) {
+    if (re.test(n)) return 0; // highest — submission requirements doc
+  }
+  if (/(^|\b)(rfp|rfo|rfq|sow|statement of (work|need)|son)\b/i.test(n)) return 1; // RFP body
+  return 2; // everything else (T&Cs, general conditions, addenda, about, etc.)
+}
 
 // v0.1 baseline — AI is told NOT to repeat these in the additional list.
 const BASELINE_TYPES = [
@@ -125,12 +150,16 @@ function buildUserPrompt(opp, { attachmentExcerpts = [] } = {}) {
 }
 
 // Build [{name, text}] from an opp's attachments, capped per-file and total.
+// v0.10.4: sort by REQUIREMENTS_DOC_PATTERNS so the agency's published file-
+// list (e.g. "SLCC RFP Proposal File Requirements.pdf") gets full budget
+// before we spend bytes on T&Cs / general conditions / about-the-agency PDFs.
 async function loadAttachmentExcerpts(opp) {
   const rows = await OpportunityAttachment.findAll({
     where: { bonfireOpportunityId: opp.id, parsedText: { [require('sequelize').Op.ne]: null } },
     order: [['downloaded_at', 'DESC']],
   });
   if (rows.length === 0) return [];
+  rows.sort((a, b) => attachmentPriority(a.name) - attachmentPriority(b.name));
   const out = [];
   let totalChars = 0;
   for (const r of rows) {
