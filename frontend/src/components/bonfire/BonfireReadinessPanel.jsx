@@ -200,7 +200,9 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
           }`}>
             {data.required_information
-              ? '📸 From agency portal'
+              ? (data.required_information.via === 'ai_from_rfp_body'
+                ? '🤖 From RFP body'
+                : '📸 From agency portal')
               : data.ai && data.ai.generated_at
                 ? 'v0.2 · AI-tailored'
                 : 'v0.1 · baseline'}
@@ -258,14 +260,24 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
         <div className="mb-3 text-[11px] text-gray-600 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
           {data.required_information ? (
             <>
-              <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200 font-medium">📸 From agency portal</span>
+              <span className={`px-1.5 py-0.5 rounded font-medium ${
+                data.required_information.via === 'ai_from_rfp_body'
+                  ? 'bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                  : 'bg-purple-50 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+              }`}>
+                {data.required_information.via === 'ai_from_rfp_body'
+                  ? '🤖 AI extracted from RFP body'
+                  : '📸 From agency portal'}
+              </span>
               <span>
                 {data.required_information.row_count || (data.checklist || []).length} item{(data.required_information.row_count || (data.checklist || []).length) === 1 ? '' : 's'}
                 {data.required_information.section_label ? <> from <em>{data.required_information.section_label}</em></> : null}
                 {data.required_information.captured_at && (
                   <> · captured {new Date(data.required_information.captured_at).toLocaleDateString()}</>
                 )}.
-                Each row below is something the agency explicitly asks you to submit.
+                {data.required_information.via === 'ai_from_rfp_body'
+                  ? ' AI read the agency RFP and extracted the submission requirements list. Drop a portal screenshot to override with the canonical agency-published list.'
+                  : ' Each row below is something the agency explicitly asks you to submit.'}
               </span>
             </>
           ) : data.ai && data.ai.generated_at ? (

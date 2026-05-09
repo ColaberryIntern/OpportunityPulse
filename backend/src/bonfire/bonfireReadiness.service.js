@@ -267,6 +267,13 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
         captured_at: reqInfo.captured_at,
         section_label: reqInfo.section_label,
         row_count: reqInfo.rows.length,
+        // 'portal_screenshot' if extracted via vision from a user-dropped
+        // image, 'ai_from_rfp_body' if AI extracted from the parsed RFP
+        // attachment text. Frontend uses this to pick the right label.
+        via: reqInfo.via
+          || (Array.isArray(reqInfo.screenshot_paths) && reqInfo.screenshot_paths.length > 0
+            ? 'portal_screenshot'
+            : 'unknown'),
       },
       source_url: opp.sourceUrl || null,
       generated_at: new Date().toISOString(),
