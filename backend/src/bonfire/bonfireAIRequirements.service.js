@@ -145,6 +145,136 @@ async function loadAttachmentExcerpts(opp) {
   return out;
 }
 
+// v0.10.4 — second AI pass: extract the agency's structured submission
+// requirements list directly from the RFP body. Many RFPs don't publish a
+// "Required Information" table on the portal, but they DO contain a section
+// like "FILE ONE — Letter of Transmittal / FILE TWO — Technical Proposal /
+// FILE THREE — Cost Proposal" inside the RFP PDF itself. This pass produces
+// the same shape as the portal-screenshot extractor (rows + found flag) so
+// the readiness service can use either source interchangeably.
+const REQUIRED_INFO_SYSTEM_PROMPT = `You are a state and local government procurement compliance officer.
+You receive the parsed text of one or more RFP attachments (the actual solicitation documents).
+Your job is to find the section that lists what the vendor must SUBMIT — usually titled something like:
+  "Proposal File Requirements", "Required Submission", "Required Information", "Required Documents",
+  "Submission Requirements", "Response Format", "Proposal Format", "Files to Submit", or similar.
+That section may use language like "FILE ONE", "FILE TWO", "Section 1", "Section 2", "Required Files",
+or simply a numbered list of items.
+
+For each ITEM the agency requires the vendor to submit, extract one row:
+  - name: the item's title as written in the RFP (verbatim, no paraphrasing — e.g. "Letter of Transmittal", "Technical Proposal", "Cost Proposal", "Sample Contract/Agreement", "Financial Responsibility", "HECVAT", "Accessibility Conformance Report (VPAT)")
+  - file_type: the format the agency wants if specified ("pdf", "docx", "xlsx", "Microsoft Word", "BidTable") — null if not specified
+  - required: true unless the RFP explicitly marks it optional, conditional, or "if applicable"
+  - conditions: any conditional language ("if applicable", "use Response Template", "in MS Word for redlines", "≥5 references") — null if none
+  - source_quote: an EXACT short phrase from the RFP that supports this row (≤200 chars). MUST be present.
+
+Also include any non-file deliverables that the RFP explicitly requires (e.g. HECVAT, ACR, audited financials, D&B report, bonds, certifications) as separate rows.
+
+CRITICAL RULES:
+- Only extract items the RFP explicitly says the vendor must submit. Do NOT invent items.
+- No source_quote → drop the row.
+- If you can't find a structured submission-requirements section in the RFP text, return { "found": false, "reason": "..." }.
+- Return only items the AGENCY asks for in this specific RFP. Do not include generic things common to all bids unless THIS RFP names them.
+
+Respond ONLY with JSON:
+{
+  "found": true,
+  "section_label": "Proposal File Requirements",
+  "rows": [
+    {
+      "name": "Letter of Transmittal",
+      "file_type": "pdf",
+      "required": true,
+      "conditions": "must be signed by authorized signatory; include addenda acknowledgment",
+      "source_quote": "FILE ONE – LETTER OF TRANSMITTAL ... shall be signed by an individual authorized to legally bind the offeror"
+    }
+  ]
+}
+OR
+{
+  "found": false,
+  "reason": "RFP body does not contain a structured submission-requirements section. Try uploading a portal screenshot."
+}`;
+
+const REQUIRED_INFO_USER_PREFIX = 'Read the attached RFP text and extract the structured submission-requirements list. Each row must include a verbatim source_quote.';
+
+function buildRequiredInfoUserPrompt(opp, { attachmentExcerpts }) {
+  const lines = [
+    REQUIRED_INFO_USER_PREFIX,
+    '',
+    `Bid title: ${opp.title || ''}`,
+    `Agency: ${opp.agency || ''}`,
+    '',
+    '=== RFP attachment text (cite verbatim phrases in source_quote) ===',
+  ];
+  for (const att of attachmentExcerpts) {
+    lines.push('', `--- ${att.name} ---`);
+    lines.push(att.text);
+  }
+  return lines.join('\n');
+}
+
+function sanitizeRequiredInfoRows(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+    const name = String(r.name || '').trim().slice(0, 240);
+    if (!name) continue;
+    const sourceQuote = r.source_quote ? String(r.source_quote).trim().slice(0, 400) : null;
+    if (!sourceQuote) continue; // hard rule: no quote, no row
+    out.push({
+      name,
+      file_type: r.file_type ? String(r.file_type).trim().slice(0, 60) : null,
+      required: r.required !== false,
+      conditions: r.conditions ? String(r.conditions).trim().slice(0, 240) : null,
+      count: typeof r.count === 'number' ? r.count
+        : (typeof r.count === 'string' && r.count.trim() ? r.count.trim().slice(0, 30) : null),
+      source_quote: sourceQuote,
+    });
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
+async function extractRequiredInformationFromText({ opp, attachmentExcerpts }) {
+  if (!attachmentExcerpts || attachmentExcerpts.length === 0) {
+    return { found: false, reason: 'No attachment text available — cannot read RFP body.', rows: [] };
+  }
+  const totalChars = attachmentExcerpts.reduce((acc, a) => acc + (a.text || '').length, 0);
+  if (totalChars < 500) {
+    return { found: false, reason: 'Attachment text too short for structured extraction.', rows: [] };
+  }
+  const ai = getAIClient();
+  const userPrompt = buildRequiredInfoUserPrompt(opp, { attachmentExcerpts });
+  let parsed = null;
+  let aiError = null;
+  let tokensUsed = 0;
+  try {
+    const { content, tokensUsed: t } = await ai.chat(REQUIRED_INFO_SYSTEM_PROMPT, userPrompt, {
+      temperature: 0,
+      maxTokens: 2500,
+    });
+    tokensUsed = t;
+    try { parsed = JSON.parse(content); }
+    catch (e) {
+      logger.warn('extractRequiredInformationFromText: non-JSON AI response', { id: opp.id, snippet: String(content).slice(0, 200) });
+      parsed = null;
+    }
+  } catch (e) {
+    aiError = e.message;
+    logger.error('extractRequiredInformationFromText: AI call failed', { id: opp.id, error: e.message });
+  }
+  const found = !!(parsed && parsed.found === true);
+  return {
+    found,
+    section_label: parsed?.section_label || null,
+    reason: parsed?.reason || null,
+    rows: found ? sanitizeRequiredInfoRows(parsed.rows) : [],
+    tokens_used: tokensUsed,
+    ai_error: aiError,
+  };
+}
+
 function validateAndFilter(parsed) {
   const validKeys = new Set(flaggableTypes().map((t) => t.key));
   const additional = Array.isArray(parsed && parsed.additional_required) ? parsed.additional_required : [];
@@ -219,6 +349,31 @@ async function tailorRequirements({ opportunityId, force = false } = {}) {
   }
 
   const validated = validateAndFilter(parsed);
+
+  // v0.10.4 — second pass: ask AI to extract a structured submission-
+  // requirements list from the RFP body (the "FILE ONE / FILE TWO / ..."
+  // pattern that SLCC and many institutional RFPs use). If found, this
+  // becomes the canonical readiness checklist via required_information,
+  // mirroring the portal-screenshot path. Only runs when we have
+  // substantial attachment text (no point asking AI to read a title).
+  let extractedReqInfo = null;
+  if (attachmentExcerpts.length > 0) {
+    try {
+      extractedReqInfo = await extractRequiredInformationFromText({ opp, attachmentExcerpts });
+    } catch (e) {
+      logger.warn('bonfireAIRequirements: required-info extraction failed', { opportunityId, error: e.message });
+    }
+  }
+
+  // Decision: required_information from a portal screenshot is canonical;
+  // never overwrite it with the AI-from-RFP-body version. If no portal
+  // screenshot exists OR the prior required_information also came from RFP,
+  // use the new extraction.
+  const priorReqInfo = (opp.submissionRequirements && opp.submissionRequirements.required_information) || null;
+  const priorViaPortal = priorReqInfo
+    && Array.isArray(priorReqInfo.screenshot_paths)
+    && priorReqInfo.screenshot_paths.length > 0;
+
   const payload = {
     generated_at: startedAt.toISOString(),
     model_used: modelUsed,
@@ -229,6 +384,28 @@ async function tailorRequirements({ opportunityId, force = false } = {}) {
     attachment_count: attachmentExcerpts.length,
     attachment_chars: attachmentExcerpts.reduce((acc, a) => acc + a.text.length, 0),
   };
+
+  // Preserve non-AI-generated metadata that lives on submissionRequirements.
+  if (opp.submissionRequirements && opp.submissionRequirements.last_attachment_fetch) {
+    payload.last_attachment_fetch = opp.submissionRequirements.last_attachment_fetch;
+  }
+  if (priorViaPortal) {
+    // Keep the portal-derived list — it's the canonical agency list.
+    payload.required_information = priorReqInfo;
+  } else if (extractedReqInfo && extractedReqInfo.found && extractedReqInfo.rows.length > 0) {
+    payload.required_information = {
+      found: true,
+      section_label: extractedReqInfo.section_label,
+      rows: extractedReqInfo.rows,
+      captured_at: new Date().toISOString(),
+      via: 'ai_from_rfp_body',
+      tokens_used: extractedReqInfo.tokens_used,
+    };
+  } else if (priorReqInfo) {
+    // Preserve prior (non-portal) required_information rather than nuking it.
+    payload.required_information = priorReqInfo;
+  }
+
   opp.submissionRequirements = payload;
   await opp.save();
   return payload;
