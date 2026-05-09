@@ -192,8 +192,18 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
           <span className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
             Submission Readiness
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
-            {data.ai && data.ai.generated_at ? 'v0.2 · AI-tailored' : 'v0.1 · baseline'}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+            data.required_information
+              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200'
+              : data.ai && data.ai.generated_at
+                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+          }`}>
+            {data.required_information
+              ? '📸 From agency portal'
+              : data.ai && data.ai.generated_at
+                ? 'v0.2 · AI-tailored'
+                : 'v0.1 · baseline'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -241,11 +251,24 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
           <div className={`h-full ${progressColor(pct)} transition-all`} style={{ width: pct + '%' }} />
         </div>
 
-        {/* Be honest about what we read to compute this. The 6-doc baseline applies
-            to any government bid; the bid-specific stuff (bonds, prevailing wage,
-            EEO, MWBE thresholds) only surfaces when AI reads the actual RFP PDFs. */}
+        {/* Honest about what drove the checklist:
+            - required_information (from portal screenshot via vision) = canonical agency list
+            - ai-tailored (from RFP body) = inferred bid-specific requirements
+            - baseline = generic 6-doc fallback (rare now in v0.10) */}
         <div className="mb-3 text-[11px] text-gray-600 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
-          {data.ai && data.ai.generated_at ? (
+          {data.required_information ? (
+            <>
+              <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200 font-medium">📸 From agency portal</span>
+              <span>
+                {data.required_information.row_count || (data.checklist || []).length} item{(data.required_information.row_count || (data.checklist || []).length) === 1 ? '' : 's'}
+                {data.required_information.section_label ? <> from <em>{data.required_information.section_label}</em></> : null}
+                {data.required_information.captured_at && (
+                  <> · captured {new Date(data.required_information.captured_at).toLocaleDateString()}</>
+                )}.
+                Each row below is something the agency explicitly asks you to submit.
+              </span>
+            </>
+          ) : data.ai && data.ai.generated_at ? (
             <>
               <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 font-medium">🤖 AI-tailored</span>
               <span>checklist reflects this RFP's specific requirements{data.ai.attachments_used ? ' (read from fetched documents)' : ' (inferred from title + description)'}.</span>
@@ -253,7 +276,7 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
           ) : (
             <>
               <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 font-medium">📋 Baseline</span>
-              <span>generic checklist for any government bid. Click <strong>🤖 Tailor with AI</strong> to surface bid-specific requirements (bonds, prevailing wage, EEO, etc.).</span>
+              <span>generic checklist for any government bid. Drop a screenshot of the portal's <strong>Required Information</strong> section to get the agency's actual list, or click <strong>🤖 Tailor with AI</strong> to surface bid-specific clauses from the RFP body.</span>
             </>
           )}
         </div>
@@ -271,24 +294,50 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
 
         <ul className="text-sm space-y-1.5">
           {data.checklist.map((item, idx) => {
-            const meta = STATUS_META[item.status] || STATUS_META.gap;
-            const sourceLabel = item.source === 'ai'
-              ? '🤖 AI'
-              : item.source === 'conditional'
-                ? '⚡ rule'
-                : null;
+            const isOptionalRow = item.required === false;
+            const meta = isOptionalRow
+              ? { label: item.status === 'satisfied_optional' ? '✓ optional, on file' : '— optional', cls: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300' }
+              : (STATUS_META[item.status] || STATUS_META.gap);
+            const sourceLabel = item.source === 'portal'
+              ? '📸 portal'
+              : item.source === 'ai'
+                ? '🤖 AI'
+                : item.source === 'conditional'
+                  ? '⚡ rule'
+                  : null;
             return (
               <li key={`${item.type}-${idx}`} className="flex items-start gap-2">
                 <span className={`text-[11px] px-2 py-0.5 rounded font-medium shrink-0 ${meta.cls}`}>{meta.label}</span>
                 <div className="flex-1 min-w-0">
                   <div className="text-gray-900 dark:text-gray-100 flex items-center gap-1.5 flex-wrap">
                     <span>{item.type_label}</span>
+                    {item.file_type_expected && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" title="File type the agency expects">
+                        {item.file_type_expected}
+                      </span>
+                    )}
+                    {item.count_expected && item.count_expected !== 1 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                        {item.count_expected}
+                      </span>
+                    )}
                     {sourceLabel && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" title={`Source: ${item.source}${item.confidence != null ? ` · confidence ${Math.round(item.confidence * 100)}%` : ''}`}>
                         {sourceLabel}
                       </span>
                     )}
                   </div>
+                  {Array.isArray(item.matched_attachments) && item.matched_attachments.length > 0 && (
+                    <div className="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5">
+                      Matched:{' '}
+                      {item.matched_attachments.map((a, i) => (
+                        <span key={a.id}>
+                          <span className="text-blue-700 dark:text-blue-300 font-medium">{a.name}</span>
+                          {i < item.matched_attachments.length - 1 ? ' · ' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {item.reason && (
                     <div className="text-[11px] text-gray-500 dark:text-gray-400 italic">{item.reason}</div>
                   )}
@@ -549,16 +598,10 @@ function AttachmentsOnlyCard({ data, opportunityId, tailoring, pursuing, onTailo
       </div>
       <div className="px-4 py-4">
         <FlowSteps state={data.state || 'attachments-only'} />
-        <div className="mb-3 text-[12px] text-gray-700 dark:text-gray-300 px-2 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
-          <strong>📸 Tip:</strong> for the most accurate readiness checklist, also screenshot the
-          portal's <em>Required Information</em> section and drop it in below — AI vision extracts
-          the agency's actual submission requirements.
-        </div>
-        <BonfirePortalScreenshotZone
-          opportunityId={opportunityId}
-          sourceUrl={data.source_url}
-          onExtracted={onUploaded}
-        />
+        {/* v0.10.2 — no longer showing the screenshot drop-zone here. The user
+            had their chance to drop one (or skip) in the previous state. Asking
+            again is noise. The AI tailor path below works with or without a
+            captured Required Information list. */}
         <div className="text-sm text-gray-800 dark:text-gray-100 mb-2">
           <strong>RFP files are uploaded.</strong> Run AI to read them and produce a real readiness checklist
           (bid bonds, prevailing wage, EEO, page limits, etc. — quoted with evidence from the RFP body).
