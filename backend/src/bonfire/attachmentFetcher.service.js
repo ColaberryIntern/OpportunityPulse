@@ -68,10 +68,10 @@ async function extractText(fileAbs, mime) {
   try {
     if (mime === 'application/pdf') {
       // eslint-disable-next-line global-require
-      const pdfParse = require('pdf-parse');
+      const { extractPdfText } = require('../utils/pdfText');
       const buf = fs.readFileSync(fileAbs);
-      const out = await pdfParse(buf);
-      return String(out.text || '').replace(/\s+\n/g, '\n').trim();
+      const text = await extractPdfText(buf);
+      return text.replace(/\s+\n/g, '\n').trim();
     }
     if (mime && /wordprocessingml|msword/.test(mime)) {
       // eslint-disable-next-line global-require

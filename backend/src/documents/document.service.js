@@ -150,10 +150,10 @@ async function getOrExtractText(doc) {
     const mime = String(doc.mime || '').toLowerCase();
     if (mime === 'application/pdf' || /\.pdf$/i.test(doc.filePath)) {
       // eslint-disable-next-line global-require
-      const pdfParse = require('pdf-parse');
+      const { extractPdfText } = require('../utils/pdfText');
       const buf = fs.readFileSync(abs);
-      const out = await pdfParse(buf);
-      text = String(out.text || '').replace(/\s+\n/g, '\n').trim();
+      const out = await extractPdfText(buf);
+      text = out.replace(/\s+\n/g, '\n').trim();
     } else if (/wordprocessingml|msword/.test(mime) || /\.docx?$/i.test(doc.filePath)) {
       // eslint-disable-next-line global-require
       const mammoth = require('mammoth');
