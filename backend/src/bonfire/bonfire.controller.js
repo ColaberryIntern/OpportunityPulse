@@ -8,6 +8,7 @@ const submissionPackage = require('./submissionPackage.service');
 const pursuitSvc = require('./bonfirePursuit.service');
 const manualUpload = require('./bonfireManualUpload.service');
 const attachmentClassifier = require('./attachmentClassifier.service');
+const portalScreenshot = require('./portalScreenshotExtractor.service');
 const { BonfireOpportunity } = require('../models');
 const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
@@ -324,6 +325,32 @@ async function cancelPursuit(req, res) {
   }
 }
 
+// v0.10 — vision extraction of the Required Information table from a portal
+// screenshot. Admin only. Replaces the hardcoded baseline with the agency's
+// actual submission checklist.
+async function uploadPortalScreenshot(req, res) {
+  try {
+    const file = req.file;
+    if (!file || !file.buffer) return errorResponse(res, 'No screenshot uploaded', 400);
+    const out = await portalScreenshot.extractFromScreenshot({
+      bonfireOpportunityId: req.params.id,
+      buffer: file.buffer,
+      originalName: file.originalname,
+      mime: file.mimetype,
+      uploadedBy: req.user?.id || null,
+    });
+    if (!out.found) {
+      return successResponse(res, out, 'Screenshot processed but no Required Information section detected');
+    }
+    return successResponse(res, out, `Extracted ${out.rows.length} required item${out.rows.length === 1 ? '' : 's'} from the portal page`);
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'EMPTY_BUFFER' || e.code === 'OVERSIZE') return errorResponse(res, e.message, 400);
+    logger.error('Bonfire portal-screenshot extract failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Extraction failed: ' + e.message, 500);
+  }
+}
+
 // v0.9 — re-classify every attachment for an opp. Admin only. Idempotent.
 async function reclassifyAttachments(req, res) {
   try {
@@ -381,4 +408,6 @@ module.exports = {
   uploadAttachments,
   // v0.9
   reclassifyAttachments,
+  // v0.10
+  uploadPortalScreenshot,
 };

@@ -37,6 +37,24 @@ export async function cancelPursuit(bonfireOpportunityId, { decline = false } = 
   return res.data?.data || null;
 }
 
+// v0.10 — upload a screenshot of the Bonfire portal page so vision extracts
+// the agency's published Required Information table. Single PNG/JPG/WEBP.
+export async function uploadPortalScreenshot(bonfireOpportunityId, file, onProgress = null) {
+  const fd = new FormData();
+  fd.append('screenshot', file, file.name);
+  const res = await api.post(
+    `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/portal-screenshot`,
+    fd,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress
+        ? (e) => onProgress(e.loaded || 0, e.total || 0)
+        : undefined,
+    },
+  );
+  return res.data?.data || null;
+}
+
 // Manual upload. files: an array of File objects from a drop-zone or input.
 // onProgress: optional (loaded, total) callback for the UI's progress bar.
 export async function uploadAttachments(bonfireOpportunityId, files, onProgress = null) {

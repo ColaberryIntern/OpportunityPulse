@@ -13,6 +13,7 @@ import {
 } from '../../services/documentService';
 import { pursueBid, cancelPursuit } from '../../services/bonfireAttachmentsService';
 import BonfireUploadZone from './BonfireUploadZone';
+import BonfirePortalScreenshotZone from './BonfirePortalScreenshotZone';
 
 const STATUS_META = {
   satisfied: { label: '✓ On file',   cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
@@ -370,12 +371,14 @@ export default function BonfireReadinessPanel({ opportunityId, onStateChange }) 
   );
 }
 
-// v0.8 — step indicator shown on every non-terminal state so the order of
-// operations is always visible: Pursue → Upload RFP → Tailor with AI → Generate Package.
+// v0.10 step indicator: 5 steps now that we have the portal screenshot capture
+// step. Order: Pursue → Capture requirements (screenshot+vision) → Upload
+// supporting files → AI tailoring against RFP body → Generate Package.
 const FLOW_STEPS = [
-  { key: 'pursue',   label: 'Pursue',         emoji: '📌', satisfiedIn: ['pursuing-no-attachments', 'attachments-only', 'tailored', 'submitted'] },
-  { key: 'upload',   label: 'Upload RFP',     emoji: '📥', satisfiedIn: ['attachments-only', 'tailored', 'submitted'] },
-  { key: 'tailor',   label: 'Tailor with AI', emoji: '🤖', satisfiedIn: ['tailored', 'submitted'] },
+  { key: 'pursue',   label: 'Pursue',           emoji: '📌', satisfiedIn: ['pursuing-no-attachments', 'attachments-only', 'tailored', 'submitted'] },
+  { key: 'capture',  label: 'Capture requirements', emoji: '📸', satisfiedIn: ['tailored', 'submitted'] },
+  { key: 'upload',   label: 'Upload supporting files', emoji: '📥', satisfiedIn: ['attachments-only', 'tailored', 'submitted'] },
+  { key: 'tailor',   label: 'Tailor with AI',   emoji: '🤖', satisfiedIn: ['tailored', 'submitted'] },
   { key: 'package',  label: 'Generate Package', emoji: '📦', satisfiedIn: ['submitted'] },
 ];
 
@@ -432,9 +435,10 @@ function PrePursuitCard({ data, pursuing, onPursue, wasDeclined }) {
         </div>
         <ol className="list-decimal pl-5 text-[13px] text-gray-700 dark:text-gray-300 space-y-0.5 mb-3">
           <li>Click <strong>📌 Pursue this bid</strong>.</li>
-          <li>Open the original RFP on Bonfire and download every file under the Documents tab.</li>
-          <li>Drop the files into the upload zone we'll show you next.</li>
-          <li>We run AI against the actual RFP and tell you exactly what's missing.</li>
+          <li>Open the agency portal page in your browser. Screenshot the <strong>Required Information</strong> section + drop it in our zone — AI vision extracts the agency's published submission checklist.</li>
+          <li>Click <em>Download All Files</em> on the portal, drop the ZIP in our zone — we auto-expand + classify each file.</li>
+          <li>Run AI against the RFP body to surface bid-specific clauses (bonds, EEO, etc.).</li>
+          <li>We assemble a ready-to-upload package against the agency's actual checklist.</li>
         </ol>
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -486,21 +490,31 @@ function PursuingNoAttachmentsCard({ data, opportunityId, pursuing, onCancelPurs
       <div className="px-4 py-4">
         <FlowSteps state={data.state || 'pursuing-no-attachments'} />
         <div className="text-sm text-gray-800 dark:text-gray-100 mb-1">
-          <strong>Step 1 done.</strong> Now grab the RFP and drop the files below.
+          <strong>Step 1 done.</strong> Two things to do next:
         </div>
-        <div className="text-[12px] text-gray-600 dark:text-gray-300 mb-3">
-          {data.attachments?.last_attachment_fetch?.status === 'blocked' && (
-            <>
-              ⚠ Cloudflare blocked our automated download last time, so the upload zone is the path forward.{' '}
-            </>
-          )}
-          {data.source_url ? (
-            <a href={data.source_url} target="_blank" rel="noopener noreferrer"
-               className="text-blue-700 dark:text-blue-300 underline font-medium">
-              Open the original RFP on Bonfire ↗
-            </a>
-          ) : 'Open the agency portal'} to download every file under the Documents tab.
-        </div>
+        <ol className="list-decimal pl-5 text-[13px] text-gray-700 dark:text-gray-300 space-y-0.5 mb-3">
+          <li>
+            <strong>Capture the agency's requirements list.</strong> Open the portal page
+            {data.source_url ? (
+              <>
+                {' '}(<a href={data.source_url} target="_blank" rel="noopener noreferrer"
+                      className="text-blue-700 dark:text-blue-300 underline font-medium">
+                  link ↗
+                </a>)
+              </>
+            ) : ''}, screenshot the <strong>Required Information</strong> section, drop it in the purple zone below.
+            We use AI vision to extract the agency's published submission checklist.
+          </li>
+          <li>
+            <strong>Upload the supporting docs.</strong> Click <em>Download All Files</em> on the portal,
+            drop the ZIP in the blue zone below. We auto-expand + classify each file.
+          </li>
+        </ol>
+        <BonfirePortalScreenshotZone
+          opportunityId={opportunityId}
+          sourceUrl={data.source_url}
+          onExtracted={onUploaded}
+        />
         <BonfireUploadZone
           opportunityId={opportunityId}
           sourceUrl={data.source_url}
@@ -535,6 +549,16 @@ function AttachmentsOnlyCard({ data, opportunityId, tailoring, pursuing, onTailo
       </div>
       <div className="px-4 py-4">
         <FlowSteps state={data.state || 'attachments-only'} />
+        <div className="mb-3 text-[12px] text-gray-700 dark:text-gray-300 px-2 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+          <strong>📸 Tip:</strong> for the most accurate readiness checklist, also screenshot the
+          portal's <em>Required Information</em> section and drop it in below — AI vision extracts
+          the agency's actual submission requirements.
+        </div>
+        <BonfirePortalScreenshotZone
+          opportunityId={opportunityId}
+          sourceUrl={data.source_url}
+          onExtracted={onUploaded}
+        />
         <div className="text-sm text-gray-800 dark:text-gray-100 mb-2">
           <strong>RFP files are uploaded.</strong> Run AI to read them and produce a real readiness checklist
           (bid bonds, prevailing wage, EEO, page limits, etc. — quoted with evidence from the RFP body).

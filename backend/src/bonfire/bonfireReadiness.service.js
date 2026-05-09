@@ -87,7 +87,8 @@ function buildChecklistItem(typeKey, { vaultDocByType, reason, source = 'baselin
 //   attachments-only        — RFP body present, AI hasn't tailored yet
 //   tailored                — AI has read the RFP and produced a real checklist
 //
-// Until 'tailored', completion_pct is null (a generic baseline % is misleading).
+// Until we have the agency's published checklist (or a tailored AI run on
+// attachments), completion_pct is null — a generic baseline % is misleading.
 async function computeReadinessState({ opp, attachmentCount }) {
   const pursuit = opp.pursuitStatus || 'none';
   if (pursuit !== 'pursuing') {
@@ -95,6 +96,20 @@ async function computeReadinessState({ opp, attachmentCount }) {
     if (pursuit === 'declined')  return 'declined';
     return 'pre-pursuit';
   }
+  // v0.10 — once we have the required_information from a portal screenshot,
+  // we can compute readiness even before any attachments are uploaded
+  // (because the checklist exists; rows just show as gaps until templates +
+  // filled versions land).
+  const hasRequiredInformation = !!(
+    opp.submissionRequirements &&
+    opp.submissionRequirements.required_information &&
+    opp.submissionRequirements.required_information.found &&
+    Array.isArray(opp.submissionRequirements.required_information.rows) &&
+    opp.submissionRequirements.required_information.rows.length > 0
+  );
+  if (hasRequiredInformation) return 'tailored';
+  // Fallback path (v0.2 AI tailoring against RFP body) — still valid when
+  // user prefers AI over screenshot, OR for older bids that weren't captured.
   if (attachmentCount === 0) return 'pursuing-no-attachments';
   const tailoredAgainstAttachments = !!(
     opp.submissionRequirements &&
@@ -103,6 +118,52 @@ async function computeReadinessState({ opp, attachmentCount }) {
   );
   if (!tailoredAgainstAttachments) return 'attachments-only';
   return 'tailored';
+}
+
+// v0.10 — match one Required Information row against the uploaded attachments
+// list. We look for ANY attachment whose name overlaps the row's name.
+// Loose matching (substring on lowercased + cleaned name) — agencies vary in
+// how they spell things between the portal table and the file they hand out.
+//
+// Future graduation: when Phase B (form filler) is shipped, "satisfied" should
+// require the FILLED version of the doc, not just the template. For now,
+// having the template uploaded is enough to mark the row green.
+function buildPortalRowItem(row, attachments) {
+  const rowKey = String(row.name || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const required = row.required === true;
+  const matchedAttachments = (attachments || []).filter((a) => {
+    const aName = String(a.name || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!aName || !rowKey) return false;
+    // Direct substring match either way (row title may be "Pricing Schedule"
+    // and attachment may be "7-03. Pricing Schedule.xlsx").
+    if (aName.includes(rowKey)) return true;
+    // Or row name short-words present in attachment name.
+    const sigWords = rowKey.split(' ').filter((w) => w.length >= 4);
+    if (sigWords.length === 0) return false;
+    return sigWords.every((w) => aName.includes(w));
+  });
+  let status = required ? 'gap' : 'optional';
+  if (matchedAttachments.length > 0) {
+    status = required ? 'satisfied' : 'satisfied_optional';
+  }
+  return {
+    type: 'portal_row',
+    type_label: row.name,
+    type_generatable: false,
+    required,
+    status,
+    source: 'portal',
+    reason: row.conditions || null,
+    file_type_expected: row.file_type || null,
+    count_expected: row.count != null ? row.count : null,
+    matched_attachments: matchedAttachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      mime: a.mime,
+      classification: a.metadata?.classification || null,
+    })),
+    document: null,
+  };
 }
 
 async function computeReadiness({ opportunityId, organizationId, userId } = {}) {
@@ -160,6 +221,58 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
     organizationId: orgId,
     bonfireOpportunityId: opp.id,
   });
+
+  // v0.10 — when the agency's published Required Information list is on
+  // file (from a portal screenshot), use it as the canonical checklist.
+  // Each row from the agency becomes one checklist item, with status driven
+  // by whether we can match an uploaded attachment to it.
+  const reqInfo = opp.submissionRequirements?.required_information;
+  if (reqInfo && reqInfo.found && Array.isArray(reqInfo.rows) && reqInfo.rows.length > 0) {
+    // eslint-disable-next-line global-require
+    const { OpportunityAttachment: AttModel } = require('../models');
+    const allAttachments = await AttModel.findAll({
+      where: { bonfireOpportunityId: opp.id },
+      attributes: ['id', 'name', 'mime', 'metadata', 'sizeBytes'],
+    });
+    const checklist = reqInfo.rows.map((row) => buildPortalRowItem(row, allAttachments));
+    const required = checklist.filter((c) => c.required);
+    const total = required.length;
+    const satisfied = required.filter((c) => c.status === 'satisfied').length;
+    const gaps = required.filter((c) => c.status === 'gap').length;
+    const completion = total > 0 ? Math.round((satisfied / total) * 100) : 0;
+    return {
+      opportunity_id: opp.id,
+      title: opp.title,
+      agency: opp.agency,
+      state: 'tailored',
+      completion_pct: completion,
+      counts: { total, satisfied, expiring: 0, expired: 0, gaps, optional: checklist.length - required.length },
+      checklist,
+      pursuit: {
+        status: opp.pursuitStatus || 'none',
+        pursued_at: opp.pursuedAt,
+        pursued_by: opp.pursuedBy,
+      },
+      attachments: {
+        count: allAttachments.length,
+        last_attachment_fetch: opp.submissionRequirements?.last_attachment_fetch || null,
+      },
+      ai: opp.submissionRequirements && opp.submissionRequirements.generated_at ? {
+        generated_at: opp.submissionRequirements.generated_at,
+        attachments_used: (opp.submissionRequirements.attachment_count || 0) > 0,
+        attachment_count: opp.submissionRequirements.attachment_count || 0,
+        summary: opp.submissionRequirements.summary || null,
+      } : null,
+      required_information: {
+        captured_at: reqInfo.captured_at,
+        section_label: reqInfo.section_label,
+        row_count: reqInfo.rows.length,
+      },
+      source_url: opp.sourceUrl || null,
+      generated_at: new Date().toISOString(),
+      version: 'v0.10-portal-required-info',
+    };
+  }
 
   // Baseline 6 types (always required for any Bonfire bid).
   const baseline = ALWAYS_REQUIRED.map((t) => ({ type: t, source: 'baseline', reason: null }));

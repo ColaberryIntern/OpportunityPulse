@@ -118,6 +118,25 @@ router.post(
   controller.reclassifyAttachments,
 );
 
+// v0.10 — portal screenshot upload (vision extraction of Required Information).
+// Single PNG/JPG/WEBP up to 20 MB.
+const portalShotUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = ['image/png', 'image/jpeg', 'image/webp'].includes(String(file.mimetype || '').toLowerCase())
+      || /\.(png|jpe?g|webp)$/i.test(file.originalname || '');
+    if (ok) cb(null, true);
+    else cb(new Error('Only PNG / JPG / WEBP screenshots accepted.'));
+  },
+});
+router.post(
+  '/opportunities/:id/portal-screenshot',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  portalShotUpload.single('screenshot'),
+  controller.uploadPortalScreenshot,
+);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',
