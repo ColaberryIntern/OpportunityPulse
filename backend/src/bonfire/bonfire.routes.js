@@ -119,10 +119,11 @@ router.post(
 );
 
 // v0.10 — portal screenshot upload (vision extraction of Required Information).
-// Single PNG/JPG/WEBP up to 20 MB.
+// Up to 5 PNG/JPG/WEBP screenshots, 20 MB each, sent to vision in one call so
+// AI can correlate rows across long portal pages split into chunks.
 const portalShotUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024, files: 5 },
   fileFilter: (req, file, cb) => {
     const ok = ['image/png', 'image/jpeg', 'image/webp'].includes(String(file.mimetype || '').toLowerCase())
       || /\.(png|jpe?g|webp)$/i.test(file.originalname || '');
@@ -133,7 +134,7 @@ const portalShotUpload = multer({
 router.post(
   '/opportunities/:id/portal-screenshot',
   verifyToken, checkPermissions(ROLES.ADMIN),
-  portalShotUpload.single('screenshot'),
+  portalShotUpload.array('screenshot', 5),
   controller.uploadPortalScreenshot,
 );
 

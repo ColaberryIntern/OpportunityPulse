@@ -24,7 +24,7 @@ const SCREENSHOT_STORAGE_ROOT = process.env.DOCUMENT_STORAGE_ROOT
   : path.resolve(process.cwd(), 'uploads', 'portal-screenshots');
 
 const SYSTEM_PROMPT = `You are a procurement portal page reader.
-You receive a screenshot of a Bonfire (or similar) agency procurement portal page.
+You receive one or more screenshots of a Bonfire (or similar) agency procurement portal page (the user may screenshot a long page in chunks; treat them as one continuous document, in the order provided).
 Your job is to find the "Required Information" section — the table that lists every document the vendor must submit — and extract it as structured JSON.
 
 Common section titles agencies use: "Required Information" · "Required Documents" · "Submission Requirements" · "Response Submission" · "Required Response".
@@ -79,9 +79,9 @@ function sanitizeRows(raw) {
   return out;
 }
 
-// Persist the screenshot to disk so we can re-extract later (e.g. after a
-// prompt change) without asking the user to re-upload.
-function storeScreenshot({ bonfireOpportunityId, buffer, originalName, mime }) {
+// Persist a single screenshot to disk so we can re-extract later (e.g. after
+// a prompt change) without asking the user to re-upload.
+function storeOneScreenshot({ bonfireOpportunityId, buffer, originalName, mime }) {
   const dirRel = path.posix.join(String(bonfireOpportunityId));
   const dirAbs = path.join(SCREENSHOT_STORAGE_ROOT, dirRel);
   ensureDir(dirAbs);
@@ -93,36 +93,71 @@ function storeScreenshot({ bonfireOpportunityId, buffer, originalName, mime }) {
   return { fileRel, fileAbs };
 }
 
-async function extractFromScreenshot({ bonfireOpportunityId, buffer, originalName, mime, uploadedBy = null }) {
+const MAX_SHOTS = 5;
+const MAX_BYTES_PER_SHOT = 20 * 1024 * 1024;
+
+// Accepts either a single { buffer, originalName, mime } OR an array of them.
+// Long portal pages need multiple screenshots — they're sent to vision in a
+// single call so AI can correlate rows across the chunks.
+async function extractFromScreenshot({
+  bonfireOpportunityId, buffer, originalName, mime, files, uploadedBy = null,
+} = {}) {
+  // Normalize input.
+  const shots = files && files.length
+    ? files
+    : (buffer ? [{ buffer, originalName, mime }] : []);
+  if (!shots.length) {
+    const err = new Error('No screenshot provided');
+    err.code = 'EMPTY_BUFFER';
+    throw err;
+  }
+  if (shots.length > MAX_SHOTS) {
+    const err = new Error(`Too many screenshots (max ${MAX_SHOTS})`);
+    err.code = 'TOO_MANY';
+    throw err;
+  }
+  for (const s of shots) {
+    if (!Buffer.isBuffer(s.buffer) || s.buffer.length === 0) {
+      const err = new Error('Screenshot buffer is empty');
+      err.code = 'EMPTY_BUFFER';
+      throw err;
+    }
+    if (s.buffer.length > MAX_BYTES_PER_SHOT) {
+      const err = new Error(`Screenshot too large (max ${MAX_BYTES_PER_SHOT / 1024 / 1024} MB per file)`);
+      err.code = 'OVERSIZE';
+      throw err;
+    }
+  }
+
   const opp = await BonfireOpportunity.findByPk(bonfireOpportunityId);
   if (!opp) {
     const err = new Error('Bonfire opportunity not found');
     err.code = 'NOT_FOUND';
     throw err;
   }
-  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-    const err = new Error('Screenshot buffer is empty');
-    err.code = 'EMPTY_BUFFER';
-    throw err;
-  }
-  // Cap at 20 MB — gpt-4o-mini vision limit.
-  if (buffer.length > 20 * 1024 * 1024) {
-    const err = new Error('Screenshot too large (max 20 MB)');
-    err.code = 'OVERSIZE';
-    throw err;
-  }
 
-  // Persist to disk first so we have a record even if AI fails.
-  const stored = storeScreenshot({ bonfireOpportunityId, buffer, originalName, mime });
+  // Persist each to disk first so we have a record even if AI fails.
+  const stored = shots.map((s) => storeOneScreenshot({
+    bonfireOpportunityId,
+    buffer: s.buffer,
+    originalName: s.originalName,
+    mime: s.mime,
+  }));
 
-  // Call vision model.
+  // Single AI call across all images.
   let parsed = null;
   let aiError = null;
   let tokensUsed = 0;
   try {
     const ai = getAIClient();
-    const out = await ai.chatVision(SYSTEM_PROMPT, USER_TEXT, buffer, {
-      mime: mime === 'image/jpeg' ? 'image/jpeg' : 'image/png',
+    const visionInput = shots.map((s) => ({
+      buffer: s.buffer,
+      mime: s.mime === 'image/jpeg' ? 'image/jpeg' : 'image/png',
+    }));
+    const userText = shots.length === 1
+      ? USER_TEXT
+      : `${USER_TEXT}\n\n(${shots.length} screenshots provided — they are chunks of one long portal page, in order.)`;
+    const out = await ai.chatVision(SYSTEM_PROMPT, userText, visionInput, {
       temperature: 0,
       maxTokens: 2500,
     });
@@ -151,8 +186,9 @@ async function extractFromScreenshot({ bonfireOpportunityId, buffer, originalNam
     rows,
     captured_at: new Date().toISOString(),
     captured_by: uploadedBy,
-    screenshot_path: stored.fileRel,
-    screenshot_bytes: buffer.length,
+    screenshot_paths: stored.map((s) => s.fileRel),
+    screenshot_count: stored.length,
+    screenshot_bytes_total: shots.reduce((a, s) => a + s.buffer.length, 0),
     tokens_used: tokensUsed,
     ai_error: aiError,
   };
@@ -161,7 +197,7 @@ async function extractFromScreenshot({ bonfireOpportunityId, buffer, originalNam
   await opp.save();
 
   logger.info('portalScreenshotExtractor: complete', {
-    bonfireOpportunityId, found, row_count: rows.length, tokensUsed,
+    bonfireOpportunityId, screenshotCount: stored.length, found, row_count: rows.length, tokensUsed,
   });
 
   return {
@@ -172,7 +208,8 @@ async function extractFromScreenshot({ bonfireOpportunityId, buffer, originalNam
     rows,
     tokens_used: tokensUsed,
     ai_error: aiError,
-    screenshot_path: stored.fileRel,
+    screenshot_paths: stored.map((s) => s.fileRel),
+    screenshot_count: stored.length,
   };
 }
 

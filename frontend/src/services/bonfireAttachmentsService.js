@@ -37,11 +37,14 @@ export async function cancelPursuit(bonfireOpportunityId, { decline = false } = 
   return res.data?.data || null;
 }
 
-// v0.10 — upload a screenshot of the Bonfire portal page so vision extracts
-// the agency's published Required Information table. Single PNG/JPG/WEBP.
-export async function uploadPortalScreenshot(bonfireOpportunityId, file, onProgress = null) {
+// v0.10 — upload one or more screenshots of the Bonfire portal page so AI
+// vision extracts the published Required Information table. Up to 5 files;
+// they are sent in a single call so the model can correlate rows that span
+// chunks of a long portal page.
+export async function uploadPortalScreenshot(bonfireOpportunityId, fileOrFiles, onProgress = null) {
+  const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
   const fd = new FormData();
-  fd.append('screenshot', file, file.name);
+  for (const f of files) fd.append('screenshot', f, f.name);
   const res = await api.post(
     `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/portal-screenshot`,
     fd,

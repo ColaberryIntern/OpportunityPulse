@@ -330,22 +330,31 @@ async function cancelPursuit(req, res) {
 // actual submission checklist.
 async function uploadPortalScreenshot(req, res) {
   try {
-    const file = req.file;
-    if (!file || !file.buffer) return errorResponse(res, 'No screenshot uploaded', 400);
+    // Accept either single (req.file from .single) or multiple (req.files
+    // from .array) — we now use .array to support long portal pages that
+    // need multiple screenshots stitched into one extraction.
+    const incoming = (req.files && req.files.length)
+      ? req.files
+      : (req.file ? [req.file] : []);
+    if (!incoming.length) return errorResponse(res, 'No screenshot uploaded', 400);
+    const files = incoming.map((f) => ({
+      buffer: f.buffer,
+      originalName: f.originalname,
+      mime: f.mimetype,
+    }));
     const out = await portalScreenshot.extractFromScreenshot({
       bonfireOpportunityId: req.params.id,
-      buffer: file.buffer,
-      originalName: file.originalname,
-      mime: file.mimetype,
+      files,
       uploadedBy: req.user?.id || null,
     });
     if (!out.found) {
       return successResponse(res, out, 'Screenshot processed but no Required Information section detected');
     }
-    return successResponse(res, out, `Extracted ${out.rows.length} required item${out.rows.length === 1 ? '' : 's'} from the portal page`);
+    const shotsLabel = out.screenshot_count > 1 ? ` (${out.screenshot_count} screenshots)` : '';
+    return successResponse(res, out, `Extracted ${out.rows.length} required item${out.rows.length === 1 ? '' : 's'} from the portal page${shotsLabel}`);
   } catch (e) {
     if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
-    if (e.code === 'EMPTY_BUFFER' || e.code === 'OVERSIZE') return errorResponse(res, e.message, 400);
+    if (['EMPTY_BUFFER', 'OVERSIZE', 'TOO_MANY'].includes(e.code)) return errorResponse(res, e.message, 400);
     logger.error('Bonfire portal-screenshot extract failed', { id: req.params.id, error: e.message });
     return errorResponse(res, 'Extraction failed: ' + e.message, 500);
   }
