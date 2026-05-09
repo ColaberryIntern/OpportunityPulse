@@ -81,8 +81,12 @@ function AiToolsPage() {
           </div>
         )}
 
-        {/* Loading state */}
-        {loading && (
+        {/* Initial-load skeletons — only when we have nothing to show yet.
+            On refetch (filter/sort change, background poll, etc.) we keep the
+            existing cards mounted with reduced opacity so a mid-click refetch
+            doesn't unmount the card you're clicking on (caused stuck clicks
+            that needed 3–4 retries). */}
+        {loading && (!tools || tools.length === 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 9 }).map((_, i) => (
               <div key={i} className="animate-pulse bg-white dark:bg-gray-800 shadow rounded-lg p-5">
@@ -101,11 +105,11 @@ function AiToolsPage() {
           </div>
         )}
 
-        {/* Tools grid */}
-        {!loading && tools && tools.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tools.map((tool) => (
-              <AiToolCard key={tool.id} tool={tool} />
+        {/* Tools grid — mounted whenever we have data, even mid-refetch. */}
+        {tools && tools.length > 0 && (
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+            {tools.map((tool, idx) => (
+              <AiToolCard key={tool.id || tool.slug || idx} tool={tool} />
             ))}
           </div>
         )}

@@ -8,7 +8,13 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
-## Submission Readiness Engine v0.7 — Phase 5 polish (expiry alerts + dedicated readiness page)
+## AI Tools page — fix stuck-click bug ("takes 3–4 clicks to navigate")
+
+- [x] User report: clicking a card on `/ai-tools` "doesn't always pop up what I'm clicking on … takes 3-4 clicks." Root cause: the page rendered the tools grid as `{!loading && tools && tools.length > 0 && ...}` and skeletons as `{loading && ...}`, so any refetch (`fetchAiTools.pending` flips `loading: true`) unmounted the entire grid mid-interaction. If a refetch fired between mousedown and click, the `<Link>` you clicked was no longer in the DOM and the navigation never landed. Fix: keep cards mounted across refetches with reduced opacity, render skeletons only on cold-start (no data yet).
+  - Date: 2026-05-09
+  - What changed: `frontend/src/pages/AiToolsPage.jsx` — skeleton block now gated on `loading && (!tools || tools.length === 0)` so it only shows on initial load; tools grid is always mounted whenever data exists, with `opacity-60` + `transition-opacity` while loading. Also tightened the React `key` to fall back to `tool.slug` then index if `tool.id` is missing, so reconciliation never silently re-uses DOM nodes for different tools.
+  - Verification: `tsc --noEmit` clean (frontend), prod redeploy `op-frontend` smoke-tested at <a href="http://95.216.199.47/ai-tools">/ai-tools</a> — cards remain clickable through filter changes; no DOM unmount on refetch.
+  - Notes: This is a pure UI-stability fix — no API change, no slice change. Same pattern would help any other list page that swaps data-grid ↔ skeletons on `loading`. If the issue persists after this fix, next step would be to convert the card to programmatic `useNavigate()` onClick in addition to the Link's default href, but holding off until we see whether this resolves it.
 
 - [x] Two complementary additions: (a) the daily Source Health Agent email now includes vault doc expiry alerts (🚨 Expired + ⏳ Expiring within 30 days sections), so renewals are surfaced before they bite a submission; (b) a dedicated `/admin/bonfire/:id/submission-readiness` page that gives one bid a full-screen view with linkable URL — handy for sharing a single bid's status with a teammate without screenshotting the drawer.
   - Date: 2026-05-08
