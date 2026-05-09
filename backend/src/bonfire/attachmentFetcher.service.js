@@ -142,7 +142,15 @@ async function stampLastFetch(opp, { status, result }) {
   await opp.save();
 }
 
-async function fetchOneBonfireOpp({ bonfireOpportunityId, headless = true } = {}) {
+async function fetchOneBonfireOpp({ bonfireOpportunityId, headless } = {}) {
+  // v0.10 — default to headed mode for detail-page fetches because most agency
+  // Bonfire portals run Cloudflare bot-fight-mode that headless Playwright
+  // can't pass even with stealth. The container has Xvfb running on :99 from
+  // the entrypoint so headed Chromium has a display to render into.
+  // Call sites can still force headless via { headless: true } for tests.
+  if (headless === undefined) {
+    headless = process.env.BONFIRE_DETAIL_FETCHER_HEADLESS === 'true';
+  }
   const opp = await BonfireOpportunity.findByPk(bonfireOpportunityId);
   if (!opp) {
     const err = new Error('Bonfire opportunity not found');
