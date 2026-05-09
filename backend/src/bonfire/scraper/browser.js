@@ -33,10 +33,27 @@ function ensureStorageDir() {
   fs.mkdirSync(cfg.storageDir, { recursive: true });
 }
 
+// v0.10 — playwright-extra + stealth plugin patches headless Chromium's most
+// obvious bot fingerprints (navigator.webdriver, plugins, languages, canvas
+// noise, permissions, WebGL vendor, etc.) so Cloudflare's "Just a moment…"
+// challenge actually clears. Without it, txdot.bonfirehub.com (and ~80% of
+// agency Bonfire portals) silently stall on the JS challenge forever.
+//
+// We toggle this off via BONFIRE_SCRAPER_STEALTH=false if a future Playwright
+// or stealth update breaks something — the plain `playwright` import is the
+// fallback path.
 async function launchBrowser({ headless } = {}) {
-  // Lazy require so unit tests that don't touch the browser don't pay the load cost
-  // and don't fail when Playwright's binary isn't installed in CI.
-  const { chromium } = require('playwright');
+  const useStealth = process.env.BONFIRE_SCRAPER_STEALTH !== 'false';
+  // Lazy require so unit tests that don't touch the browser don't pay the load
+  // cost and don't fail when Playwright's binary isn't installed in CI.
+  // eslint-disable-next-line global-require
+  const playwright = useStealth ? require('playwright-extra') : require('playwright');
+  if (useStealth) {
+    // eslint-disable-next-line global-require
+    const stealth = require('puppeteer-extra-plugin-stealth')();
+    playwright.chromium.use(stealth);
+  }
+  const { chromium } = playwright;
   const cfg = getScraperConfig();
   // Production runs on Alpine where Playwright's bundled Chromium doesn't work —
   // the Dockerfile installs the system chromium and sets BONFIRE_CHROMIUM_PATH.
