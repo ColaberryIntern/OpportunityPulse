@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submission Readiness v0.8 — Pursuit-First Flow · Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --info-soft: #bee3f8; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .annotated { margin: 14px 0; padding: 10px 14px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 13.5px; }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .shot { display: block; max-width: 100%; height: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; box-shadow: 0 2px 6px rgba(26, 54, 93, 0.08); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.85); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  .compare-col { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; background: var(--bg-alt); font-size: 13px; }
+  .compare-col h4 { margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .compare-col.before h4 { color: #944e1c; }
+  .compare-col.after  h4 { color: #22543d; }
+  .state-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .pill-pre { background: #f1f5f9; color: #475569; }
+  .pill-pursuing { background: #dbeafe; color: #1e3a8a; }
+  .pill-attach { background: #fef3c7; color: #92400e; }
+  .pill-tailored { background: #d1fae5; color: #065f46; }
+  .pill-submitted { background: #c6f6d5; color: #1f5132; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .compare { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Walkthrough</h2>
+  <a href="#cover">Cover</a>
+  <a href="#problem">The problem</a>
+  <a href="#open-app">Open in app</a>
+
+  <h2>The flow</h2>
+  <a href="#states">4 states</a>
+  <a href="#state-pre">State A · Pre-pursuit</a>
+  <a href="#state-pursuing">State B · Pursuing</a>
+  <a href="#state-attach">State C · Attachments only</a>
+  <a href="#state-tailored">State D · Tailored</a>
+
+  <h2>List + gating</h2>
+  <a href="#list">List view</a>
+  <a href="#package-gate">Package gating</a>
+
+  <h2>Mechanics</h2>
+  <a href="#state-machine">State machine</a>
+  <a href="#manual-upload">Manual upload</a>
+  <a href="#tradeoffs">Tradeoffs</a>
+
+  <h2>Details</h2>
+  <a href="#files">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Submission Readiness v0.8 (Pursuit-First Flow)</h1>
+  <p class="subtitle">Show interest before computing readiness · Walkthrough · 2026-05-09 · commit <code>cdaed60</code></p>
+  <p>
+    Per your feedback: <em>"downloading the documents is going to have to be a person… that needs to be the
+    1st step before you can assess what % it is at."</em>
+  </p>
+  <p>
+    The readiness flow is now inverted. A bid you haven't pursued shows <strong>no number</strong> — instead it shows
+    <em>what to do next</em>. The 67% baseline against 6 standard docs that you saw on a freshly-opened opp is gone:
+    until we know what <em>this</em> bid actually requires (which lives in the RFP body), no % can be honest.
+  </p>
+  <p>
+    Four states. One next-action per state. <span class="state-pill pill-pre">pre-pursuit</span> →
+    <span class="state-pill pill-pursuing">pursuing</span> →
+    <span class="state-pill pill-attach">attachments-only</span> →
+    <span class="state-pill pill-tailored">tailored</span>.
+  </p>
+</section>
+
+<!-- ========================================================== PROBLEM -->
+<section class="block context" id="problem">
+  <h2>The problem with the prior flow</h2>
+  <div class="compare">
+    <div class="compare-col before">
+      <h4>Before v0.8</h4>
+      <p>Open any Bonfire opp, drawer renders <strong>67% complete</strong> immediately.</p>
+      <ul>
+        <li>The 67% reflected: "do you have the 6 standard docs (cover letter, capability, references, COI, technical, pricing)?"</li>
+        <li>Misleading: most of what determines a real bid (bonds, prevailing wage, EEO, page limits, MWBE thresholds) lives in the RFP PDF, not in our metadata.</li>
+        <li>A 67% baseline implied "you're 2/3 of the way ready" when really we hadn't read the RFP at all.</li>
+      </ul>
+    </div>
+    <div class="compare-col after">
+      <h4>After v0.8</h4>
+      <p>Open the same opp → <strong>"Show interest first."</strong></p>
+      <ul>
+        <li>No % until you've pursued + uploaded the RFP files + run AI tailoring.</li>
+        <li>Each state shows exactly the next action — Pursue, Drop files here, Run AI, etc.</li>
+        <li>The number you see at the end is real: AI read the RFP, matched against your vault, surfaced bid-specific gaps with quoted evidence.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== OPEN IN APP -->
+<section class="block feature" id="open-app">
+  <h2>Open in the live app</h2>
+  <table>
+    <thead><tr><th>Surface</th><th>Live URL</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Bonfire opportunities list</td>
+        <td><a href="http://95.216.199.47/bonfire" target="_blank" rel="noopener">/bonfire ↗</a></td>
+      </tr>
+      <tr>
+        <td>Dedicated readiness page (any opp)</td>
+        <td><code>/admin/bonfire/&lt;id&gt;/submission-readiness</code> — open via <strong>📑 Open full readiness page</strong> in the drawer</td>
+      </tr>
+      <tr>
+        <td>Document Vault</td>
+        <td><a href="http://95.216.199.47/admin/documents" target="_blank" rel="noopener">/admin/documents ↗</a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========================================================== STATES -->
+<section class="block context" id="states">
+  <h2>The 4 states at a glance</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>State</th>
+        <th>When</th>
+        <th>Number shown</th>
+        <th>Next action surfaced</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="state-pill pill-pre">pre-pursuit</span></td>
+        <td>Default — user hasn't expressed intent</td>
+        <td><em>none</em></td>
+        <td><strong>📌 Pursue this bid</strong> + open original RFP link</td>
+      </tr>
+      <tr>
+        <td><span class="state-pill pill-pursuing">pursuing-no-attachments</span></td>
+        <td>Pursued, but RFP files not uploaded yet</td>
+        <td><em>none</em></td>
+        <td>Drop-zone for the user to upload the RFP files</td>
+      </tr>
+      <tr>
+        <td><span class="state-pill pill-attach">attachments-only</span></td>
+        <td>Files uploaded, AI hasn't tailored yet</td>
+        <td><em>none</em></td>
+        <td><strong>🤖 Tailor with AI</strong> against the actual RFP</td>
+      </tr>
+      <tr>
+        <td><span class="state-pill pill-tailored">tailored</span></td>
+        <td>AI has read the RFP and produced a real checklist</td>
+        <td>real % + per-item status</td>
+        <td>Generate Package · 🤖 Generate per missing doc</td>
+      </tr>
+      <tr>
+        <td><span class="state-pill pill-submitted">submitted</span> / <span class="state-pill pill-pre">declined</span></td>
+        <td>Terminal states (audit trail)</td>
+        <td>frozen historical record</td>
+        <td>none — bid is closed</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========================================================== STATE PRE -->
+<section class="block feature" id="state-pre">
+  <h2>State A · Pre-pursuit</h2>
+  <p>What you see when you open any Bonfire opp on the dedicated readiness page (default for every existing bid after v0.8 ship):</p>
+  <img class="shot" src="submission-readiness-v08-walkthrough-assets/01-pre-pursuit.png" alt="Pre-pursuit state showing 'Show interest first' message + numbered steps + Pursue button + Open RFP on Bonfire link" />
+  <div class="annotated">
+    <h4>What's on screen</h4>
+    <ul>
+      <li>Header card with the opp title, agency, value, close date — but no <strong>📦 Generate Package</strong> button (gated until tailored).</li>
+      <li>Body: <em>"Show interest first. A real readiness score isn't possible until we know what this bid actually requires…"</em></li>
+      <li>Numbered playbook: 1) Pursue · 2) Open RFP on Bonfire · 3) Drop files in the upload zone we'll show next · 4) Run AI.</li>
+      <li>Two CTAs: <strong>📌 Pursue this bid</strong> (blue, primary) and <strong>🔗 Open RFP on Bonfire ↗</strong> (grey, secondary).</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Pre-pursuit feedback — does the copy feel right? Is anything missing from the playbook?</div>
+    <textarea data-fb-id="state-pre"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== STATE PURSUING -->
+<section class="block feature" id="state-pursuing">
+  <h2>State B · Pursuing-no-attachments</h2>
+  <p>After clicking <strong>📌 Pursue this bid</strong>, the panel switches to a drop-zone-first view:</p>
+  <img class="shot" src="submission-readiness-v08-walkthrough-assets/02-pursuing-no-attachments.png" alt="Pursuing state showing the drop zone with 'Step 2 · Drop the RFP files here' label and instructions to download from Bonfire" />
+  <div class="annotated">
+    <h4>What's on screen</h4>
+    <ul>
+      <li>Header: <span class="state-pill pill-pursuing">📌 pursuing · no attachments yet</span> · <em>"Cancel pursuit"</em> link in the top-right (resets to pre-pursuit).</li>
+      <li>Body copy: <em>"Step 1 done. Now grab the RFP and drop the files below."</em> Plus the hyperlinked Bonfire URL.</li>
+      <li>If the prior automated fetch was Cloudflare-blocked, the body adds: <em>"⚠ Cloudflare blocked our automated download last time, so the upload zone is the path forward."</em></li>
+      <li>Embedded drop-zone: drag-and-drop OR click-to-browse. Multi-file. PDF · DOCX · XLSX · TXT · CSV · ZIP · PNG · JPG · max 50 MB each.</li>
+      <li>Staged file list with per-file remove · clear-all · upload progress bar.</li>
+    </ul>
+  </div>
+  <div class="feedback-block">
+    <div class="small">Drop-zone feedback — anything else you'd want surfaced (e.g. preview of just-uploaded files)?</div>
+    <textarea data-fb-id="state-pursuing"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== STATE ATTACH -->
+<section class="block context" id="state-attach">
+  <h2>State C · Attachments-only</h2>
+  <p>After files upload successfully, the panel switches to a "Run AI" CTA. (Couldn't capture a clean live screenshot for this state without uploading dummy RFP files to a real prod opp — described instead.)</p>
+<pre>┌── Submission Readiness · 📎 4 files uploaded · AI hasn't tailored yet ──┐
+│                                                          Cancel pursuit │
+├─────────────────────────────────────────────────────────────────────────┤
+│  RFP files are uploaded. Run AI to read them and produce a real         │
+│  readiness checklist (bid bonds, prevailing wage, EEO, page limits,     │
+│  etc. — quoted with evidence from the RFP body).                        │
+│                                                                         │
+│  [🤖 Tailor with AI]   ~10–30 seconds · uses gpt-4o-mini                │
+│                                                                         │
+│  ▸ Need to add more files?  (collapsible — same drop-zone re-shown)     │
+└─────────────────────────────────────────────────────────────────────────┘</pre>
+  <p>Single primary CTA: <strong>🤖 Tailor with AI</strong>. The expandable "Need to add more files?" gives you a way to drop additional files mid-flow without resetting.</p>
+</section>
+
+<!-- ========================================================== STATE TAILORED -->
+<section class="block feature" id="state-tailored">
+  <h2>State D · Tailored (the only state that shows a number)</h2>
+  <p>This is the existing v0.1+v0.2+v0.6 panel that you've already seen — full % bar, per-item checklist with on-file / missing / expiring statuses, vault links, AI summary, source-quoted RFP requirements. No screenshot here because it's unchanged from v0.7; the only difference is <strong>you only get here after you've pursued, uploaded files, and run AI.</strong></p>
+  <p>What changed in this state for v0.8:</p>
+  <ul>
+    <li><strong>The % is real.</strong> Computed against the actual RFP requirements quoted by the AI, not a generic baseline.</li>
+    <li><strong>Generate Package is unlocked.</strong> The button stays gated in earlier states (server returns HTTP 409 NOT_TAILORED unless <code>?override=1</code> for emergencies).</li>
+    <li><strong>Pursuit context preserved.</strong> The header still carries the opp's pursuit timestamp + who pursued it.</li>
+  </ul>
+</section>
+
+<!-- ========================================================== LIST -->
+<section class="block context" id="list">
+  <h2>List view — pursuit pill replaces the misleading %</h2>
+  <p>On the Bonfire opportunities list, the Readiness column now shows a pursuit pill instead of an always-present percentage:</p>
+  <img class="shot" src="submission-readiness-v08-walkthrough-assets/04-list-with-pursuing-pill.png" alt="Bonfire opportunities list. Readiness column shows pills for pursuing/submitted bids; pre-pursuit rows show no number." />
+  <div class="annotated">
+    <h4>Readiness column legend (in priority order)</h4>
+    <ul>
+      <li><span class="state-pill pill-pursuing">📌 pursuing</span> — bid is being pursued; readiness pending RFP upload + AI tailoring</li>
+      <li><span class="state-pill pill-submitted">✅ submitted</span> — terminal state, historical record</li>
+      <li><span class="state-pill pill-pre">passed</span> — declined after consideration</li>
+      <li><strong>—</strong> — pre-pursuit; no number to show until you decide to bid</li>
+      <li><strong>real % bar</strong> — only when AI has tailored against attachments</li>
+    </ul>
+  </div>
+  <p class="small">
+    The list doubles as a pipeline view: anything with the <strong>📌 pursuing</strong> pill is what you're actively working on.
+    Future filter: "show me only pursuing bids" so the list collapses to your actual pipeline.
+  </p>
+</section>
+
+<!-- ========================================================== PACKAGE GATE -->
+<section class="block context" id="package-gate">
+  <h2>Generate Package — gated to the tailored state</h2>
+  <p>
+    The <strong>📦 Generate Package</strong> CTA was always present pre-v0.8. It now returns <code>HTTP 409 NOT_TAILORED</code>
+    unless the bid is in the <span class="state-pill pill-tailored">tailored</span> state. Reasoning: a ZIP that ships
+    a misleading-baseline readiness in the manifest is worse than no ZIP at all.
+  </p>
+  <table>
+    <thead><tr><th>Bid state</th><th>Package endpoint behavior</th></tr></thead>
+    <tbody>
+      <tr><td><span class="state-pill pill-pre">pre-pursuit</span></td><td>409 — "Cannot package a bid in state 'pre-pursuit'. Pursue the bid…"</td></tr>
+      <tr><td><span class="state-pill pill-pursuing">pursuing-no-attachments</span></td><td>409 — same message, hint says "upload the RFP attachments…"</td></tr>
+      <tr><td><span class="state-pill pill-attach">attachments-only</span></td><td>409 — hint says "run AI tailoring first"</td></tr>
+      <tr><td><span class="state-pill pill-tailored">tailored</span></td><td>200 — streams the ZIP as before</td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    Admin escape hatch: <code>?override=1</code> on the package endpoint bypasses the gate. Not exposed in the UI on purpose
+    — only for the case where AI tailoring is broken and you need to ship a bid manually.
+  </p>
+</section>
+
+<!-- ========================================================== STATE MACHINE -->
+<section class="block context" id="state-machine">
+  <h2>State machine — backend mechanics</h2>
+<pre>none ──pursue──▶ pursuing ──submit──▶ submitted (terminal)
+  ▲                  │
+  │                  ├──decline──▶ declined ──pursue──▶ pursuing
+  │                  │
+  └────────reset (to=none) ────────┘</pre>
+  <ul>
+    <li><strong>Idempotent</strong> — pursuing → pursuing returns the existing record without bumping <code>pursuedAt</code>.</li>
+    <li><strong>Audit trail preserved</strong> on transitions to <code>declined</code> or <code>submitted</code> — <code>pursuedAt</code> + <code>pursuedBy</code> stay populated as the historical record.</li>
+    <li><strong>Audit cleared</strong> on transitions to <code>none</code> (true reset — re-pursuing later starts fresh).</li>
+    <li><strong>Submitted is terminal</strong> — no transitions out (audit invariant).</li>
+    <li><strong>9 unit tests</strong> in <code>tests/bonfire/bonfirePursuit.test.js</code> cover all valid + illegal transitions, idempotency, audit-field semantics.</li>
+  </ul>
+</section>
+
+<!-- ========================================================== MANUAL UPLOAD -->
+<section class="block feature" id="manual-upload">
+  <h2>Manual upload — the explicit Cloudflare bypass</h2>
+  <p>
+    The drop-zone is the answer to <em>"Cloudflare blocks ~80% of Bonfire portals."</em> A human opens the agency portal,
+    downloads every file from the Documents tab, drags them into the zone, and we treat them identically to
+    automatically-fetched files going forward.
+  </p>
+  <ul>
+    <li><strong>Endpoint:</strong> <code>POST /api/v1/bonfire/opportunities/:id/attachments</code> (multipart, admin-only).</li>
+    <li><strong>Multer:</strong> 50 MB per file × 30 files per drop. Defense in depth: same caps client-side + server-side + service-level.</li>
+    <li><strong>Accept list:</strong> PDF · DOCX · DOC · XLSX · XLS · TXT · CSV · ZIP · PNG · JPG. Anything else → 400 with a clear message.</li>
+    <li><strong>Storage:</strong> reuses the v0.4 layout — files land at <code>${DOCUMENT_STORAGE_ROOT}/../attachments/opportunities/&lt;oppId&gt;/&lt;hash&gt;-&lt;name&gt;</code>.</li>
+    <li><strong>Extraction:</strong> pdf-parse / mammoth / utf8 (text). Cached on the row's <code>parsed_text</code> column for AI tailoring to consume immediately.</li>
+    <li><strong>Idempotent re-upload:</strong> dedupe by (opp_id, source='manual', name) — uploading <code>rfp.pdf</code> again replaces both the bytes and the parsed text. Prior bytes are cleaned up from disk.</li>
+    <li><strong>Stamps the opp:</strong> writes <code>submission_requirements.last_attachment_fetch = { status: 'manual_upload', via: 'manual', at, found, saved, failed }</code> so the panel can render the right state on reload.</li>
+  </ul>
+</section>
+
+<!-- ========================================================== TRADEOFFS -->
+<section class="block context" id="tradeoffs">
+  <h2>Tradeoffs we accepted</h2>
+  <table>
+    <thead><tr><th>Tradeoff</th><th>Why we accepted it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Existing opps reset to <span class="state-pill pill-pre">pre-pursuit</span></td>
+        <td>The prior baseline % was misleading anyway. Better to start clean than carry forward a bad number.</td>
+      </tr>
+      <tr>
+        <td>One extra click ("Pursue") before the panel does anything</td>
+        <td>That friction is the point — it forces a real intent signal before we burn AI tokens or ship a misleading number.</td>
+      </tr>
+      <tr>
+        <td>Generic baseline checklist (6 standard docs) no longer surfaces per-bid</td>
+        <td>It still exists at the org level — the Document Vault still tracks coverage of the 6. Just not on opps you haven't decided to pursue.</td>
+      </tr>
+      <tr>
+        <td>Manual upload re-introduces a human bottleneck</td>
+        <td>Cloudflare made the automated path unreliable for ~80% of Bonfire portals. Until we add a paid CF-friendly proxy, this is the honest path.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block context" id="files">
+  <h2>Files changed</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/migrations/20260510000005-bonfire-pursuit-state.js</code></td><td>NEW · adds <code>pursuit_status</code> + <code>pursued_at</code> + <code>pursued_by</code> + index</td></tr>
+      <tr><td><code>backend/src/models/BonfireOpportunity.js</code></td><td>Three new attributes mirroring the migration columns</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfirePursuit.service.js</code></td><td>NEW · state machine (transitions, idempotency, audit semantics)</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfireManualUpload.service.js</code></td><td>NEW · multipart ingest, dedupe, extraction, opp stamping</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfireReadiness.service.js</code></td><td>+ <code>computeReadinessState()</code> helper, state envelope return for non-tailored states, list-summary gating</td></tr>
+      <tr><td><code>backend/src/bonfire/submissionPackage.service.js</code></td><td>409 NOT_TAILORED unless tailored or <code>?override=1</code></td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.controller.js</code></td><td>+4 handlers: getPursuitStatus, pursueBid, cancelPursuit, uploadAttachments</td></tr>
+      <tr><td><code>backend/src/bonfire/bonfire.routes.js</code></td><td>+4 routes (admin RBAC) + <code>rfpUpload</code> multer with 50MB×30 cap + accept-list filter</td></tr>
+      <tr><td><code>backend/tests/bonfire/bonfirePursuit.test.js</code></td><td>NEW · 9 tests (transitions + idempotency + audit + invalid)</td></tr>
+      <tr><td><code>backend/tests/bonfire/bonfireManualUpload.test.js</code></td><td>NEW · 6 tests (create / update / oversize / no_buffer / preserve-status)</td></tr>
+      <tr><td><code>backend/tests/bonfire/bonfireReadiness.test.js</code></td><td>+5 v0.8 state-gate tests + 1 summary state test; legacy tests adapted to tailored-state fixture</td></tr>
+      <tr><td><code>frontend/src/services/bonfireAttachmentsService.js</code></td><td>+ <code>getPursuitStatus</code>, <code>pursueBid</code>, <code>cancelPursuit</code>, <code>uploadAttachments</code></td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireUploadZone.jsx</code></td><td>NEW · drag/click drop-zone, multi-file staging, progress bar</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireReadinessPanel.jsx</code></td><td>State-machine fork — 4 sub-cards (PrePursuit, PursuingNoAttachments, AttachmentsOnly, Submitted) + legacy tailored UI</td></tr>
+      <tr><td><code>frontend/src/components/bonfire/BonfireTable.jsx</code></td><td>ReadinessCell renders pursuit pills before any %</td></tr>
+      <tr><td><code>backend/scripts/capture-submission-readiness-v08-walkthrough.js</code></td><td>NEW · transitions opp through states + screenshots each one</td></tr>
+      <tr><td><code>docs/submission-readiness-v08-walkthrough.html</code></td><td>This file</td></tr>
+      <tr><td><code>docs/submission-readiness-v08-walkthrough-assets/*.png</code></td><td>Screenshots</td></tr>
+      <tr><td><code>PROGRESS.md</code></td><td>v0.8 entry</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Backend test suite: <strong>117 suites / 1431 tests pass</strong>. One new migration, no new dependencies.</p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    <strong>Engine state after v0.8:</strong> the readiness flow is now honest end-to-end. No misleading numbers, no
+    silent baselines. Every bid you're looking at on the list either shows a pursuit pill (so you know it's in your
+    active pipeline) or shows a dash (so you know we haven't even tried to assess it yet).
+  </p>
+  <p>
+    <strong>What's still on the master plan:</strong>
+  </p>
+  <ul>
+    <li>SAM.gov + grants.gov per-opportunity attachment fetchers (~14h). Same shape as the v0.4 Bonfire fetcher;
+      both platforms have public APIs that don't have the Cloudflare problem, so the manual upload zone
+      should rarely be needed there.</li>
+    <li>Future polish: a "show only pursuing bids" filter on the Bonfire list so it doubles as a pipeline view;
+      a "submitted on / submitted by" timeline; an inline "Mark submitted" CTA on the readiness page after Generate
+      Package downloads.</li>
+  </ul>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'submission-readiness-v08-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# v0.8 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
