@@ -125,6 +125,24 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'attachments_fetched_at',
     },
+    // v0.8 — pursuit state machine. Readiness % only computed when
+    // pursuit_status='pursuing' and attachments are present.
+    pursuitStatus: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'none',
+      field: 'pursuit_status',
+    },
+    pursuedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'pursued_at',
+    },
+    pursuedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'pursued_by',
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,

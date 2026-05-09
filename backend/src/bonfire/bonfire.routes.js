@@ -28,6 +28,20 @@ const fileUpload = multer({
   },
 });
 
+// v0.8 — manual RFP upload accepts the actual procurement formats agencies
+// post: PDF / DOCX / DOC / XLSX / XLS / TXT / CSV / ZIP / images. 50 MB cap
+// per file (matches the v0.4 fetcher ceiling); up to 30 files per drop.
+const rfpUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024, files: 30 },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    const ok = /\.(pdf|docx?|xlsx?|txt|csv|zip|png|jpe?g)$/i.test(name);
+    if (ok) cb(null, true);
+    else cb(new Error('Only RFP-style files accepted (PDF, DOCX, XLSX, TXT, CSV, ZIP, PNG, JPG).'));
+  },
+});
+
 // Route-local JSON parser with a 5 MB limit — the global express.json() is capped at 50 KB,
 // which would reject bulk uploads. Mounted only on this route so the global cap still applies
 // to every other endpoint in the app (security invariant).
@@ -66,6 +80,33 @@ router.get(
   '/opportunities/:id/submission-package',
   verifyToken, checkPermissions(ROLES.ADMIN),
   controller.downloadSubmissionPackage,
+);
+
+// v0.8 — pursuit state machine. Until 'pursuing', readiness % is not computed.
+router.get(
+  '/opportunities/:id/pursuit',
+  verifyToken,
+  controller.getPursuitStatus,
+);
+router.post(
+  '/opportunities/:id/pursue',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  controller.pursueBid,
+);
+router.post(
+  '/opportunities/:id/cancel-pursuit',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  express.json({ limit: '4kb' }),
+  controller.cancelPursuit,
+);
+
+// v0.8 — manual RFP attachment upload (Cloudflare bypass: human downloads
+// from the portal, drops files here). Multi-file, multipart.
+router.post(
+  '/opportunities/:id/attachments',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  rfpUpload.array('files', 30),
+  controller.uploadAttachments,
 );
 
 // ---- Writes (admin-only).

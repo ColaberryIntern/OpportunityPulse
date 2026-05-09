@@ -1,12 +1,18 @@
 // Submission Readiness Engine v0.1 — per-bid panel rendered inside the
-// Bonfire detail drawer. Shows the completion %, the 6–7 required-doc
-// checklist, and a deep-link to the Document Vault for any gaps.
+// Bonfire detail drawer. v0.8: now switches on a four-state machine —
+//   pre-pursuit              → "Pursue this bid" CTA, no number shown
+//   pursuing-no-attachments  → drop-zone for the human to upload the RFP
+//   attachments-only         → "Run AI tailoring" CTA against the uploaded RFP
+//   tailored                 → real % + per-item checklist (legacy panel)
+// Generic baselines no longer surface a misleading 67%.
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getBonfireReadiness, tailorBonfireRequirements, generateDocument, downloadDocumentToFile,
 } from '../../services/documentService';
+import { pursueBid, cancelPursuit } from '../../services/bonfireAttachmentsService';
+import BonfireUploadZone from './BonfireUploadZone';
 
 const STATUS_META = {
   satisfied: { label: '✓ On file',   cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
@@ -65,6 +71,32 @@ export default function BonfireReadinessPanel({ opportunityId }) {
     }
   }
 
+  const [pursuing, setPursuing] = useState(false);
+
+  async function handlePursue() {
+    setPursuing(true); setErr(null);
+    try {
+      await pursueBid(opportunityId);
+      await reload();
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Pursue failed');
+    } finally {
+      setPursuing(false);
+    }
+  }
+
+  async function handleCancelPursuit({ decline = false } = {}) {
+    setPursuing(true); setErr(null);
+    try {
+      await cancelPursuit(opportunityId, { decline });
+      await reload();
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Cancel failed');
+    } finally {
+      setPursuing(false);
+    }
+  }
+
   async function handleGenerate(typeKey) {
     setGenerating((s) => ({ ...s, [typeKey]: true }));
     setErr(null);
@@ -98,6 +130,48 @@ export default function BonfireReadinessPanel({ opportunityId }) {
   }
   if (!data) return null;
 
+  // v0.8 — state-machine fork. Each non-tailored state has a focused UI
+  // that points the user to exactly the next action.
+  const state = data.state || 'tailored';
+  if (state === 'pre-pursuit' || state === 'declined') {
+    return (
+      <PrePursuitCard
+        data={data}
+        pursuing={pursuing}
+        onPursue={handlePursue}
+        wasDeclined={state === 'declined'}
+      />
+    );
+  }
+  if (state === 'pursuing-no-attachments') {
+    return (
+      <PursuingNoAttachmentsCard
+        data={data}
+        opportunityId={opportunityId}
+        pursuing={pursuing}
+        onCancelPursuit={handleCancelPursuit}
+        onUploaded={reload}
+      />
+    );
+  }
+  if (state === 'attachments-only') {
+    return (
+      <AttachmentsOnlyCard
+        data={data}
+        opportunityId={opportunityId}
+        tailoring={tailoring}
+        pursuing={pursuing}
+        onTailor={() => handleTailor({ force: false })}
+        onCancelPursuit={handleCancelPursuit}
+        onUploaded={reload}
+      />
+    );
+  }
+  if (state === 'submitted') {
+    return <SubmittedCard data={data} />;
+  }
+
+  // state === 'tailored' — legacy UI with the full % + checklist.
   const pct = Number(data.completion_pct) || 0;
   const c = data.counts || {};
 
@@ -281,6 +355,181 @@ export default function BonfireReadinessPanel({ opportunityId }) {
           </span>
           <Link to="/admin/documents" className="text-blue-700 dark:text-blue-300 hover:underline">Manage documents →</Link>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// v0.8 — state cards. Each renders the right next-action for the bid's state.
+
+function PrePursuitCard({ data, pursuing, onPursue, wasDeclined }) {
+  return (
+    <div className="mb-4 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-wrap gap-2">
+        <span className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
+          Submission Readiness
+        </span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+          {wasDeclined ? 'previously declined' : 'not yet pursued'}
+        </span>
+      </div>
+      <div className="px-4 py-4">
+        <div className="text-sm text-gray-700 dark:text-gray-200 mb-2">
+          <strong>Show interest first.</strong> A real readiness score isn't possible until we know what
+          <em> this </em> bid actually requires — and that lives inside the RFP attachments on the agency portal.
+        </div>
+        <ol className="list-decimal pl-5 text-[13px] text-gray-700 dark:text-gray-300 space-y-0.5 mb-3">
+          <li>Click <strong>📌 Pursue this bid</strong>.</li>
+          <li>Open the original RFP on Bonfire and download every file under the Documents tab.</li>
+          <li>Drop the files into the upload zone we'll show you next.</li>
+          <li>We run AI against the actual RFP and tell you exactly what's missing.</li>
+        </ol>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled={pursuing}
+            onClick={onPursue}
+            className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {pursuing ? '⏳ Setting…' : (wasDeclined ? '📌 Re-pursue this bid' : '📌 Pursue this bid')}
+          </button>
+          {data.source_url && (
+            <a
+              href={data.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              🔗 Open RFP on Bonfire ↗
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PursuingNoAttachmentsCard({ data, opportunityId, pursuing, onCancelPursuit, onUploaded }) {
+  return (
+    <div className="mb-4 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20">
+      <div className="px-4 py-3 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-blue-800 dark:text-blue-200 font-semibold">
+            Submission Readiness
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-200 text-blue-900 dark:bg-blue-700 dark:text-blue-100">
+            📌 pursuing · no attachments yet
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={pursuing}
+          onClick={() => onCancelPursuit({ decline: false })}
+          className="text-[11px] text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
+          title="Clear pursuit (you can re-pursue later)"
+        >
+          Cancel pursuit
+        </button>
+      </div>
+      <div className="px-4 py-4">
+        <div className="text-sm text-gray-800 dark:text-gray-100 mb-1">
+          <strong>Step 1 done.</strong> Now grab the RFP and drop the files below.
+        </div>
+        <div className="text-[12px] text-gray-600 dark:text-gray-300 mb-3">
+          {data.attachments?.last_attachment_fetch?.status === 'blocked' && (
+            <>
+              ⚠ Cloudflare blocked our automated download last time, so the upload zone is the path forward.{' '}
+            </>
+          )}
+          {data.source_url ? (
+            <a href={data.source_url} target="_blank" rel="noopener noreferrer"
+               className="text-blue-700 dark:text-blue-300 underline font-medium">
+              Open the original RFP on Bonfire ↗
+            </a>
+          ) : 'Open the agency portal'} to download every file under the Documents tab.
+        </div>
+        <BonfireUploadZone
+          opportunityId={opportunityId}
+          sourceUrl={data.source_url}
+          onUploaded={onUploaded}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AttachmentsOnlyCard({ data, opportunityId, tailoring, pursuing, onTailor, onCancelPursuit, onUploaded }) {
+  const count = data.attachments?.count || 0;
+  return (
+    <div className="mb-4 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20">
+      <div className="px-4 py-3 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-amber-900 dark:text-amber-100 font-semibold">
+            Submission Readiness
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-700 dark:text-amber-100">
+            📎 {count} file{count === 1 ? '' : 's'} uploaded · AI hasn't tailored yet
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={pursuing}
+          onClick={() => onCancelPursuit({ decline: false })}
+          className="text-[11px] text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
+        >
+          Cancel pursuit
+        </button>
+      </div>
+      <div className="px-4 py-4">
+        <div className="text-sm text-gray-800 dark:text-gray-100 mb-2">
+          <strong>RFP files are uploaded.</strong> Run AI to read them and produce a real readiness checklist
+          (bid bonds, prevailing wage, EEO, page limits, etc. — quoted with evidence from the RFP body).
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <button
+            type="button"
+            disabled={tailoring}
+            onClick={onTailor}
+            className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {tailoring ? '🤖 Analyzing the RFP…' : '🤖 Tailor with AI'}
+          </button>
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            ~10–30 seconds · uses gpt-4o-mini
+          </span>
+        </div>
+        <details className="mb-2">
+          <summary className="cursor-pointer text-[12px] text-gray-600 dark:text-gray-300">
+            Need to add more files?
+          </summary>
+          <div className="mt-2">
+            <BonfireUploadZone
+              opportunityId={opportunityId}
+              sourceUrl={data.source_url}
+              onUploaded={onUploaded}
+            />
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+function SubmittedCard({ data }) {
+  return (
+    <div className="mb-4 rounded border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/20">
+      <div className="px-4 py-3 border-b border-green-200 dark:border-green-800">
+        <span className="text-xs uppercase tracking-wide text-green-900 dark:text-green-100 font-semibold">
+          Submission Readiness
+        </span>
+        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-green-200 text-green-900 dark:bg-green-700 dark:text-green-100">
+          ✅ submitted
+        </span>
+      </div>
+      <div className="px-4 py-4 text-sm text-gray-800 dark:text-gray-100">
+        This bid was submitted{data.pursuit?.pursued_at && (
+          <> on {new Date(data.pursuit.pursued_at).toLocaleDateString()}</>
+        )}. The readiness score, attachments, and assembled package are preserved as the historical record.
       </div>
     </div>
   );

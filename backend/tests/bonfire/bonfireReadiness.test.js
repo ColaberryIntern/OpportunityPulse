@@ -4,6 +4,7 @@
 jest.mock('../../src/models', () => ({
   sequelize: {},
   BonfireOpportunity: { findByPk: jest.fn(), findAll: jest.fn() },
+  OpportunityAttachment: { count: jest.fn() },
   Document: {},
 }));
 jest.mock('../../src/documents/document.service', () => ({
@@ -13,10 +14,13 @@ jest.mock('../../src/oied/profile.service', () => ({
   resolveOrgId: jest.fn(async () => 1),
 }));
 
-const { BonfireOpportunity } = require('../../src/models');
+const { BonfireOpportunity, OpportunityAttachment } = require('../../src/models');
 const docSvc = require('../../src/documents/document.service');
 const svc = require('../../src/bonfire/bonfireReadiness.service');
 
+// v0.8: tests assume the opp is in the "tailored" state by default — pursuit
+// is on, attachments are present, AI has run against them. Tests for the
+// upstream gates live in their own describe block below.
 function makeOpp(overrides = {}) {
   return Object.assign({
     id: 'opp-1',
@@ -25,12 +29,22 @@ function makeOpp(overrides = {}) {
     rawText: '',
     overview: '',
     agency: 'DHA Texas',
+    pursuitStatus: 'pursuing',
+    pursuedAt: new Date(),
+    submissionRequirements: {
+      generated_at: new Date().toISOString(),
+      attachment_count: 3,
+    },
   }, overrides);
 }
 
 beforeEach(() => {
   BonfireOpportunity.findByPk.mockReset();
   BonfireOpportunity.findAll.mockReset();
+  OpportunityAttachment.count.mockReset();
+  // Default to "attachments present" so the legacy tests still see the
+  // tailored state path. State-gate tests override this.
+  OpportunityAttachment.count.mockResolvedValue(3);
   docSvc.activeTypeMap.mockReset();
 });
 
@@ -126,6 +140,7 @@ describe('bonfireReadiness.computeReadiness — v0.2 AI merge', () => {
       submissionRequirements: {
         generated_at: new Date().toISOString(),
         model_used: 'gpt-4o-mini',
+        attachment_count: 3,
         baseline_types: ['cover_letter_template'],
         additional_required: [
           { type: 'cert_bid_bond', confidence: 0.9, reason: 'Bid bond ≥ 5%', source_quote: 'Bid bond of 5% required.' },
@@ -147,12 +162,17 @@ describe('bonfireReadiness.computeReadiness — v0.2 AI merge', () => {
     expect(out.ai.summary).toMatch(/Construction RFP/);
   });
 
-  it('returns ai=null when no submission_requirements have been generated', async () => {
-    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp());
+  it('returns ai=null when no submission_requirements have been generated (in tailored state)', async () => {
+    // To reach tailored state without submissionRequirements is impossible by
+    // design; this test verifies the guard's strictness — when AI hasn't run,
+    // state goes to attachments-only and the response shape is the envelope,
+    // not the full checklist.
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({ submissionRequirements: null }));
     docSvc.activeTypeMap.mockResolvedValue(new Map());
     const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.state).toBe('attachments-only');
+    expect(out.completion_pct).toBeNull();
     expect(out.ai).toBeNull();
-    expect(out.counts.total).toBe(6); // baseline only
   });
 
   it('does not double-count when AI flags a type the regex-conditional already added', async () => {
@@ -160,6 +180,7 @@ describe('bonfireReadiness.computeReadiness — v0.2 AI merge', () => {
       description: 'MWBE preference applies',
       submissionRequirements: {
         generated_at: new Date().toISOString(),
+        attachment_count: 3,
         additional_required: [
           { type: 'cert_mwbe_dbe', confidence: 0.9, reason: 'MWBE preference', source_quote: 'MWBE-certified vendors preferred' },
         ],
@@ -176,7 +197,7 @@ describe('bonfireReadiness.computeReadiness — v0.2 AI merge', () => {
 });
 
 describe('bonfireReadiness.computeReadinessSummaries', () => {
-  it('returns one summary per opp keyed by id', async () => {
+  it('returns numbers when AI has tailored against attachments', async () => {
     BonfireOpportunity.findAll.mockResolvedValue([
       makeOpp({ id: 'opp-1' }),
       makeOpp({ id: 'opp-2', description: 'minority-owned vendors welcome' }),
@@ -189,7 +210,78 @@ describe('bonfireReadiness.computeReadinessSummaries', () => {
     const out = await svc.computeReadinessSummaries({ opportunityIds: ['opp-1', 'opp-2'], organizationId: 1 });
     expect(out['opp-1'].total).toBe(6);
     expect(out['opp-1'].satisfied).toBe(3);
+    expect(out['opp-1'].ai_tailored).toBe(true);
     expect(out['opp-2'].total).toBe(7); // MWBE added
     expect(out['opp-2'].satisfied).toBe(3);
+  });
+
+  it('returns null fields (no misleading %) when AI has not tailored against attachments', async () => {
+    // Bare opp — pursuit none, no submissionRequirements.
+    BonfireOpportunity.findAll.mockResolvedValue([
+      { id: 'opp-1', title: 't', description: 'd', rawText: '', overview: '', submissionRequirements: null, pursuitStatus: 'none' },
+    ]);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadinessSummaries({ opportunityIds: ['opp-1'], organizationId: 1 });
+    expect(out['opp-1'].pursuit_status).toBe('none');
+    expect(out['opp-1'].completion_pct).toBeNull();
+    expect(out['opp-1'].satisfied).toBeNull();
+    expect(out['opp-1'].ai_tailored).toBe(false);
+  });
+});
+
+// v0.8 — state machine gates the readiness compute. Each upstream gate
+// produces a different envelope; the panel renders four distinct UIs.
+describe('bonfireReadiness.computeReadiness — v0.8 state gating', () => {
+  it('returns state=pre-pursuit + null % when pursuit_status is "none"', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({ pursuitStatus: 'none' }));
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.state).toBe('pre-pursuit');
+    expect(out.completion_pct).toBeNull();
+    expect(out.checklist).toEqual([]);
+    expect(out.pursuit.status).toBe('none');
+  });
+
+  it('returns state=pursuing-no-attachments when intent set but no attachments yet', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({
+      pursuitStatus: 'pursuing', submissionRequirements: null,
+    }));
+    OpportunityAttachment.count.mockResolvedValue(0);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.state).toBe('pursuing-no-attachments');
+    expect(out.completion_pct).toBeNull();
+    expect(out.attachments.count).toBe(0);
+  });
+
+  it('returns state=attachments-only when files present but AI not run', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({
+      pursuitStatus: 'pursuing', submissionRequirements: null,
+    }));
+    OpportunityAttachment.count.mockResolvedValue(4);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.state).toBe('attachments-only');
+    expect(out.completion_pct).toBeNull();
+    expect(out.attachments.count).toBe(4);
+  });
+
+  it('returns state=attachments-only when AI ran but had no attachments to read', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({
+      pursuitStatus: 'pursuing',
+      submissionRequirements: { generated_at: new Date().toISOString(), attachment_count: 0 },
+    }));
+    OpportunityAttachment.count.mockResolvedValue(2);
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    // AI ran on metadata only — not enough to graduate to "tailored."
+    expect(out.state).toBe('attachments-only');
+  });
+
+  it('returns state=submitted for terminal status', async () => {
+    BonfireOpportunity.findByPk.mockResolvedValue(makeOpp({ pursuitStatus: 'submitted' }));
+    docSvc.activeTypeMap.mockResolvedValue(new Map());
+    const out = await svc.computeReadiness({ opportunityId: 'opp-1', organizationId: 1 });
+    expect(out.state).toBe('submitted');
   });
 });

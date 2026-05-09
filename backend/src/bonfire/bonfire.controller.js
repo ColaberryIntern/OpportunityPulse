@@ -5,6 +5,8 @@ const readinessSvc = require('./bonfireReadiness.service');
 const aiReqSvc = require('./bonfireAIRequirements.service');
 const attachmentFetcher = require('./attachmentFetcher.service');
 const submissionPackage = require('./submissionPackage.service');
+const pursuitSvc = require('./bonfirePursuit.service');
+const manualUpload = require('./bonfireManualUpload.service');
 const { BonfireOpportunity } = require('../models');
 const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
@@ -250,20 +252,88 @@ async function downloadAttachment(req, res) {
 async function downloadSubmissionPackage(req, res) {
   try {
     const userId = req.user && req.user.id;
+    const override = req.query.override === '1' || req.query.override === 'true';
     await submissionPackage.streamPackage({
       bonfireOpportunityId: req.params.id,
       organizationId: req.user && req.user.organizationId,
       userId,
+      override,
       res,
     });
     // streamPackage pipes via archiver.finalize; no extra send needed.
   } catch (e) {
     if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'NOT_TAILORED') return errorResponse(res, e.message, 409);
     logger.error('Bonfire submission-package failed', { id: req.params.id, error: e.message });
     if (!res.headersSent) {
       return errorResponse(res, 'Package failed: ' + e.message, 500);
     }
     return null;
+  }
+}
+
+// v0.8 — pursuit state machine handlers.
+async function getPursuitStatus(req, res) {
+  try {
+    const out = await pursuitSvc.getStatus(req.params.id);
+    return successResponse(res, out);
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    logger.error('Bonfire pursuit status failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Pursuit status failed', 500);
+  }
+}
+
+async function pursueBid(req, res) {
+  try {
+    const out = await pursuitSvc.transition(req.params.id, {
+      to: 'pursuing',
+      userId: req.user?.id || null,
+    });
+    return successResponse(res, out, out.transitioned ? 'Bid pursued' : 'Already pursuing');
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'ILLEGAL_TRANSITION') return errorResponse(res, e.message, 409);
+    logger.error('Bonfire pursue failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Pursue failed', 500);
+  }
+}
+
+async function cancelPursuit(req, res) {
+  try {
+    // 'declined' if they had a real go at it, else 'none' to reset.
+    const target = req.body?.to === 'declined' ? 'declined' : 'none';
+    const out = await pursuitSvc.transition(req.params.id, {
+      to: target,
+      userId: req.user?.id || null,
+    });
+    return successResponse(res, out, 'Pursuit cleared');
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    if (e.code === 'ILLEGAL_TRANSITION') return errorResponse(res, e.message, 409);
+    logger.error('Bonfire cancel-pursuit failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Cancel pursuit failed', 500);
+  }
+}
+
+// v0.8 — manual RFP attachment upload (Cloudflare bypass: human downloads
+// from Bonfire + uploads here). Multipart, multi-file. Stores into the
+// same opportunity_attachments table as the v0.4 fetcher, but with
+// source='manual' so reports can distinguish.
+async function uploadAttachments(req, res) {
+  try {
+    const files = req.files || [];
+    if (!files.length) return errorResponse(res, 'No files uploaded', 400);
+    const out = await manualUpload.ingestFiles({
+      bonfireOpportunityId: req.params.id,
+      files,
+      uploadedBy: req.user?.id || null,
+    });
+    return successResponse(res, out, `${out.saved} file${out.saved === 1 ? '' : 's'} uploaded`);
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
+    logger.error('Bonfire manual upload failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Upload failed: ' + e.message, 500);
   }
 }
 
@@ -283,4 +353,9 @@ module.exports = {
   listAttachments,
   downloadAttachment,
   downloadSubmissionPackage,
+  // v0.8
+  getPursuitStatus,
+  pursueBid,
+  cancelPursuit,
+  uploadAttachments,
 };

@@ -17,6 +17,44 @@ export async function fetchAttachments(bonfireOpportunityId) {
   return res.data?.data || null;
 }
 
+// v0.8 — pursuit state machine + manual upload. Cloudflare bypass for
+// Bonfire portals: human downloads from the agency portal + drops files here.
+export async function getPursuitStatus(bonfireOpportunityId) {
+  const res = await api.get(`/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/pursuit`);
+  return res.data?.data || null;
+}
+
+export async function pursueBid(bonfireOpportunityId) {
+  const res = await api.post(`/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/pursue`);
+  return res.data?.data || null;
+}
+
+export async function cancelPursuit(bonfireOpportunityId, { decline = false } = {}) {
+  const res = await api.post(
+    `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/cancel-pursuit`,
+    { to: decline ? 'declined' : 'none' },
+  );
+  return res.data?.data || null;
+}
+
+// Manual upload. files: an array of File objects from a drop-zone or input.
+// onProgress: optional (loaded, total) callback for the UI's progress bar.
+export async function uploadAttachments(bonfireOpportunityId, files, onProgress = null) {
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f, f.name);
+  const res = await api.post(
+    `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/attachments`,
+    fd,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress
+        ? (e) => onProgress(e.loaded || 0, e.total || 0)
+        : undefined,
+    },
+  );
+  return res.data?.data || null;
+}
+
 export async function downloadAttachment(bonfireOpportunityId, attachmentId, name) {
   const res = await api.get(
     `/bonfire/opportunities/${encodeURIComponent(bonfireOpportunityId)}/attachments/${encodeURIComponent(attachmentId)}/download`,

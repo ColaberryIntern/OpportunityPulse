@@ -20,9 +20,33 @@ function fmtDate(iso) {
 // v0.1 — small inline progress bar for the Readiness column. Color follows
 // the same priority ramp (green ≥80, yellow ≥60, gray below) so the
 // "ready to bid" eye-test matches the rest of the table.
-function ReadinessCell({ summary }) {
-  if (!summary) {
-    return <span className="text-xs text-gray-400">—</span>;
+function ReadinessCell({ summary, pursuitStatus }) {
+  // v0.8 — pursuit pill takes precedence; readiness % only shown for tailored bids.
+  const status = pursuitStatus || summary?.pursuit_status || 'none';
+  if (status === 'pursuing' && summary && summary.completion_pct == null) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 text-[10px] font-medium" title="Pursuing this bid; readiness pending RFP upload + AI tailoring">
+        📌 pursuing
+      </span>
+    );
+  }
+  if (status === 'submitted') {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 text-[10px] font-medium">
+        ✅ submitted
+      </span>
+    );
+  }
+  if (status === 'declined') {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 text-[10px] font-medium">
+        passed
+      </span>
+    );
+  }
+  if (!summary || summary.completion_pct == null) {
+    // Pre-pursuit / no AI yet — no number to show.
+    return <span className="text-xs text-gray-400" title="Pursue the bid + upload the RFP to compute readiness">—</span>;
   }
   const pct = Number(summary.completion_pct) || 0;
   const barColor = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : pct >= 30 ? 'bg-orange-500' : 'bg-red-500';
@@ -87,7 +111,7 @@ function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy, readiness
               <Td>{r.automationPotential != null ? r.automationPotential + '%' : '—'}</Td>
               <Td>{fmtUSD(r.estimatedValue)}</Td>
               <Td>{fmtDate(r.closeDate)}</Td>
-              <Td><ReadinessCell summary={readinessSummaries && readinessSummaries[r.id]} /></Td>
+              <Td><ReadinessCell summary={readinessSummaries && readinessSummaries[r.id]} pursuitStatus={r.pursuitStatus || r.pursuit_status} /></Td>
               <Td><BonfireSignalBadges signals={r.signals} /></Td>
               <Td>
                 <div className="flex items-center gap-1.5 text-xs">

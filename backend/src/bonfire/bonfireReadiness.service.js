@@ -80,6 +80,31 @@ function buildChecklistItem(typeKey, { vaultDocByType, reason, source = 'baselin
   };
 }
 
+// v0.8 — derive the user-facing flow state from the opp's pursuit + attachment +
+// AI-tailoring signals. Drives the four distinct UIs in BonfireReadinessPanel.
+//   pre-pursuit             — user hasn't expressed intent yet
+//   pursuing-no-attachments — intent expressed, but no RFP body uploaded yet
+//   attachments-only        — RFP body present, AI hasn't tailored yet
+//   tailored                — AI has read the RFP and produced a real checklist
+//
+// Until 'tailored', completion_pct is null (a generic baseline % is misleading).
+async function computeReadinessState({ opp, attachmentCount }) {
+  const pursuit = opp.pursuitStatus || 'none';
+  if (pursuit !== 'pursuing') {
+    if (pursuit === 'submitted') return 'submitted';
+    if (pursuit === 'declined')  return 'declined';
+    return 'pre-pursuit';
+  }
+  if (attachmentCount === 0) return 'pursuing-no-attachments';
+  const tailoredAgainstAttachments = !!(
+    opp.submissionRequirements &&
+    opp.submissionRequirements.generated_at &&
+    (opp.submissionRequirements.attachment_count || 0) > 0
+  );
+  if (!tailoredAgainstAttachments) return 'attachments-only';
+  return 'tailored';
+}
+
 async function computeReadiness({ opportunityId, organizationId, userId } = {}) {
   const orgId = organizationId || await profileSvc.resolveOrgId(userId);
   const opp = await BonfireOpportunity.findByPk(opportunityId);
@@ -88,6 +113,47 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
     err.code = 'NOT_FOUND';
     throw err;
   }
+
+  // v0.8: derive UI state. For non-tailored states we short-circuit and
+  // return a state envelope without computing a misleading %.
+  // eslint-disable-next-line global-require
+  const { OpportunityAttachment } = require('../models');
+  const attachmentCount = await OpportunityAttachment.count({
+    where: { bonfireOpportunityId: opp.id },
+  });
+  const state = await computeReadinessState({ opp, attachmentCount });
+
+  if (state !== 'tailored') {
+    return {
+      opportunity_id: opp.id,
+      title: opp.title,
+      agency: opp.agency,
+      state,
+      completion_pct: null,
+      counts: null,
+      checklist: [],
+      pursuit: {
+        status: opp.pursuitStatus || 'none',
+        pursued_at: opp.pursuedAt,
+        pursued_by: opp.pursuedBy,
+      },
+      attachments: {
+        count: attachmentCount,
+        last_attachment_fetch: opp.submissionRequirements?.last_attachment_fetch || null,
+      },
+      ai: opp.submissionRequirements && opp.submissionRequirements.generated_at ? {
+        generated_at: opp.submissionRequirements.generated_at,
+        attachments_used: (opp.submissionRequirements.attachment_count || 0) > 0,
+        attachment_count: opp.submissionRequirements.attachment_count || 0,
+        summary: opp.submissionRequirements.summary || null,
+      } : null,
+      source_url: opp.sourceUrl || null,
+      generated_at: new Date().toISOString(),
+      version: 'v0.8-state-gated',
+    };
+  }
+
+  // Tailored path — compute the real checklist + %.
 
   // v0.3: scope-aware — local-for-this-bid docs take precedence over globals.
   const vaultDocByType = await docSvc.activeTypeMap({
@@ -153,22 +219,31 @@ async function computeReadiness({ opportunityId, organizationId, userId } = {}) 
     opportunity_id: opp.id,
     title: opp.title,
     agency: opp.agency,
+    state: 'tailored',
     completion_pct: completion,
     counts: { total, satisfied, expiring, expired, gaps },
     checklist,
+    pursuit: {
+      status: opp.pursuitStatus || 'none',
+      pursued_at: opp.pursuedAt,
+      pursued_by: opp.pursuedBy,
+    },
+    attachments: {
+      count: attachmentCount,
+      last_attachment_fetch: opp.submissionRequirements?.last_attachment_fetch || null,
+    },
     ai: opp.submissionRequirements ? {
       generated_at: opp.submissionRequirements.generated_at,
       model_used: opp.submissionRequirements.model_used,
       summary: opp.submissionRequirements.summary || null,
       additional_count: (opp.submissionRequirements.additional_required || []).length,
       error: opp.submissionRequirements.error || null,
-      // Tells the UI whether AI read the actual RFP PDFs or only the metadata
-      // (title + description). Used to color the "AI-tailored" framing on the panel.
       attachments_used: (opp.submissionRequirements.attachment_count || 0) > 0,
       attachment_count: opp.submissionRequirements.attachment_count || 0,
     } : null,
+    source_url: opp.sourceUrl || null,
     generated_at: new Date().toISOString(),
-    version: 'v0.2-ai-tailored',
+    version: 'v0.8-state-gated',
   };
 }
 
@@ -183,7 +258,7 @@ async function computeReadinessSummaries({ opportunityIds, organizationId, userI
   const vaultDocByType = await docSvc.activeTypeMap({ organizationId: orgId });
   const opps = await BonfireOpportunity.findAll({
     where: { id: opportunityIds },
-    attributes: ['id', 'title', 'description', 'rawText', 'overview', 'submissionRequirements'],
+    attributes: ['id', 'title', 'description', 'rawText', 'overview', 'submissionRequirements', 'pursuitStatus'],
   });
   const out = {};
   for (const opp of opps) {
@@ -210,12 +285,22 @@ async function computeReadinessSummaries({ opportunityIds, organizationId, userI
     }));
     const total = items.length;
     const satisfied = items.filter((c) => c.status === 'satisfied').length;
+    // v0.8 — only emit a meaningful % when AI has tailored against attachments.
+    // Otherwise list rows just show the pursuit pill, not a misleading number.
+    const tailoredAgainstAttachments = !!(
+      opp.submissionRequirements &&
+      opp.submissionRequirements.generated_at &&
+      (opp.submissionRequirements.attachment_count || 0) > 0
+    );
     out[opp.id] = {
-      completion_pct: total > 0 ? Math.round((satisfied / total) * 100) : 0,
-      satisfied,
-      total,
-      gaps: items.filter((c) => c.status === 'gap').length,
-      ai_tailored: !!(opp.submissionRequirements && opp.submissionRequirements.generated_at),
+      pursuit_status: opp.pursuitStatus || 'none',
+      completion_pct: tailoredAgainstAttachments
+        ? (total > 0 ? Math.round((satisfied / total) * 100) : 0)
+        : null,
+      satisfied: tailoredAgainstAttachments ? satisfied : null,
+      total: tailoredAgainstAttachments ? total : null,
+      gaps: tailoredAgainstAttachments ? items.filter((c) => c.status === 'gap').length : null,
+      ai_tailored: tailoredAgainstAttachments,
     };
   }
   return out;
@@ -223,6 +308,7 @@ async function computeReadinessSummaries({ opportunityIds, organizationId, userI
 
 module.exports = {
   computeReadiness,
+  computeReadinessState,
   computeReadinessSummaries,
   ALWAYS_REQUIRED,
   CONDITIONAL,

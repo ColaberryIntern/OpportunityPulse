@@ -149,6 +149,7 @@ function buildManifest({ opp, vault, attachments, readinessOut, generatedAt }) {
 
 async function streamPackage({
   bonfireOpportunityId, organizationId = null, userId = null,
+  override = false, // v0.8 — admin override to bypass the tailored-state gate
   res, // optional Express response — if provided, pipe directly
 }) {
   const orgId = organizationId || (userId ? await profileSvc.resolveOrgId(userId) : 1);
@@ -164,6 +165,18 @@ async function streamPackage({
     loadAttachments({ bonfireOpportunityId }),
     readiness.computeReadiness({ opportunityId: bonfireOpportunityId, organizationId: orgId, userId }),
   ]);
+
+  // v0.8 — Generate Package is gated on the tailored state (real readiness %
+  // computed against the actual RFP). Admins can override with ?override=1
+  // for emergency packaging when AI tailoring is broken.
+  if (!override && readinessOut.state !== 'tailored') {
+    const err = new Error(
+      `Cannot package a bid in state "${readinessOut.state}". Pursue the bid, upload the RFP attachments, and run AI tailoring first. Pass ?override=1 to bypass.`,
+    );
+    err.code = 'NOT_TAILORED';
+    err.state = readinessOut.state;
+    throw err;
+  }
 
   const generatedAt = new Date();
   // eslint-disable-next-line global-require
