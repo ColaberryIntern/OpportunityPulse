@@ -180,13 +180,22 @@ async function tailorRequirements({ opportunityId, force = false } = {}) {
     err.code = 'NOT_FOUND';
     throw err;
   }
-  // Cached path — return existing unless force=true.
-  if (!force && opp.submissionRequirements && opp.submissionRequirements.generated_at) {
-    return opp.submissionRequirements;
-  }
-
+  // Cache-or-rerun decision. v0.8: if attachments are now present but the
+  // cached run didn't read any, the cache is stale by definition — re-run
+  // even without force=true. Otherwise the user clicks "Tailor with AI" in
+  // attachments-only state, the cache returns the old (attachment_count:0)
+  // payload, and the readiness state stays stuck on attachments-only.
   const ai = getAIClient();
   const attachmentExcerpts = await loadAttachmentExcerpts(opp).catch(() => []);
+  const cached = opp.submissionRequirements;
+  const cachedHasGen = !!(cached && cached.generated_at);
+  const cachedAttachmentCount = (cached && cached.attachment_count) || 0;
+  const staleByAttachments = cachedHasGen
+    && cachedAttachmentCount === 0
+    && attachmentExcerpts.length > 0;
+  if (!force && cachedHasGen && !staleByAttachments) {
+    return cached;
+  }
   const userPrompt = buildUserPrompt(opp, { attachmentExcerpts });
   const startedAt = new Date();
   let parsed = {};

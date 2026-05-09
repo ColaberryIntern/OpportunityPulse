@@ -42,6 +42,10 @@ export default function BonfireSubmissionReadinessPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [packaging, setPackaging] = useState(false);
+  // v0.8 — track the bid's flow state so the Generate Package button can
+  // be gated correctly (server returns 409 NOT_TAILORED for non-tailored
+  // bids; we don't want users to click a button that's going to error out).
+  const [readinessState, setReadinessState] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,14 +104,26 @@ export default function BonfireSubmissionReadinessPage() {
               )}
             </div>
             <div className="flex flex-col gap-2 items-end">
-              <button
-                type="button"
-                disabled={packaging}
-                onClick={handleGeneratePackage}
-                className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 whitespace-nowrap"
-              >
-                {packaging ? '⏳ Assembling…' : '📦 Generate Package'}
-              </button>
+              {/* v0.8 — only show Generate Package once the bid is in the tailored state.
+                  Before that, the button would 409 from the server with a cryptic message.
+                  Pre-tailored states surface the correct next-action via the readiness panel below. */}
+              {readinessState === 'tailored' ? (
+                <button
+                  type="button"
+                  disabled={packaging}
+                  onClick={handleGeneratePackage}
+                  className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 whitespace-nowrap"
+                >
+                  {packaging ? '⏳ Assembling…' : '📦 Generate Package'}
+                </button>
+              ) : readinessState ? (
+                <span
+                  className="text-[11px] px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                  title="Pursue the bid + upload the RFP + run AI tailoring before packaging"
+                >
+                  📦 Package — locked until tailored
+                </span>
+              ) : null}
               {opp.priorityScore != null && (
                 <span className="text-xs text-gray-500">Priority: <strong>{opp.priorityScore}</strong></span>
               )}
@@ -131,7 +147,7 @@ export default function BonfireSubmissionReadinessPage() {
         {/* Two-column layout: readiness + attachments on left, vault sidebar on right */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">
-            <BonfireReadinessPanel opportunityId={id} />
+            <BonfireReadinessPanel opportunityId={id} onStateChange={setReadinessState} />
             <BonfireAttachmentsPanel opportunityId={id} isAdmin={isAdmin} />
           </div>
           <aside className="lg:col-span-1">

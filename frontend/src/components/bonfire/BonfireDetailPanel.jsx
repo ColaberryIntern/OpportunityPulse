@@ -14,6 +14,10 @@ function fmtUSD(cents) {
 function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy }) {
   const [packaging, setPackaging] = useState(false);
   const [packageErr, setPackageErr] = useState(null);
+  // v0.8 — track readiness state from the embedded panel so we can gate the
+  // Generate Package CTA. Server returns 409 outside tailored state — we'd
+  // rather not show a button that's known to error.
+  const [readinessState, setReadinessState] = useState(null);
   if (!row) return null;
 
   async function handleGeneratePackage() {
@@ -83,13 +87,15 @@ function BonfireDetailPanel({ row, isAdmin, onClose, onEnrich, onStrategy, busy 
         )}
 
         {/* v0.1 Submission Readiness: completion % + checklist + jump-to-vault links */}
-        {isAdmin && <BonfireReadinessPanel opportunityId={row.id} />}
+        {isAdmin && <BonfireReadinessPanel opportunityId={row.id} onStateChange={setReadinessState} />}
 
         {/* v0.4 RFP Attachments: scraper-fed file locker per opp */}
         <BonfireAttachmentsPanel opportunityId={row.id} isAdmin={isAdmin} />
 
-        {/* v0.5 (Phase 4) — Submission Package: one-click ZIP of vault + attachments + manifest */}
-        {isAdmin && (
+        {/* v0.5 (Phase 4) — Submission Package: one-click ZIP of vault + attachments + manifest.
+            v0.8 — only visible once the bid reaches the tailored state. Otherwise the readiness
+            panel above tells you what to do next; packaging would just 409 here. */}
+        {isAdmin && readinessState === 'tailored' && (
           <div className="mb-4 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>

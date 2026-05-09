@@ -28,12 +28,18 @@ function progressColor(pct) {
   return 'bg-red-500';
 }
 
-export default function BonfireReadinessPanel({ opportunityId }) {
+export default function BonfireReadinessPanel({ opportunityId, onStateChange }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [tailoring, setTailoring] = useState(false);
   const [generating, setGenerating] = useState({}); // { typeKey: true } while AI is generating that doc
+
+  // Lift the bid's flow state up to whatever wraps this component (e.g. the
+  // dedicated readiness page) so it can gate Generate Package etc.
+  React.useEffect(() => {
+    if (onStateChange && data) onStateChange(data.state || null);
+  }, [data, onStateChange]);
 
   const reload = React.useCallback(async () => {
     if (!opportunityId) return;
@@ -161,7 +167,10 @@ export default function BonfireReadinessPanel({ opportunityId }) {
         opportunityId={opportunityId}
         tailoring={tailoring}
         pursuing={pursuing}
-        onTailor={() => handleTailor({ force: false })}
+        // Always force a fresh AI run when the user explicitly clicks the CTA
+        // from this state — otherwise the cache might short-circuit and the
+        // panel never graduates to 'tailored'.
+        onTailor={() => handleTailor({ force: true })}
         onCancelPursuit={handleCancelPursuit}
         onUploaded={reload}
       />
@@ -207,6 +216,7 @@ export default function BonfireReadinessPanel({ opportunityId }) {
       </div>
 
       <div className="px-4 py-3">
+        <FlowSteps state="tailored" />
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">{pct}%</span>
           <span className="text-sm text-gray-500 dark:text-gray-400">complete</span>
@@ -360,6 +370,47 @@ export default function BonfireReadinessPanel({ opportunityId }) {
   );
 }
 
+// v0.8 — step indicator shown on every non-terminal state so the order of
+// operations is always visible: Pursue → Upload RFP → Tailor with AI → Generate Package.
+const FLOW_STEPS = [
+  { key: 'pursue',   label: 'Pursue',         emoji: '📌', satisfiedIn: ['pursuing-no-attachments', 'attachments-only', 'tailored', 'submitted'] },
+  { key: 'upload',   label: 'Upload RFP',     emoji: '📥', satisfiedIn: ['attachments-only', 'tailored', 'submitted'] },
+  { key: 'tailor',   label: 'Tailor with AI', emoji: '🤖', satisfiedIn: ['tailored', 'submitted'] },
+  { key: 'package',  label: 'Generate Package', emoji: '📦', satisfiedIn: ['submitted'] },
+];
+
+function FlowSteps({ state }) {
+  // Active step = first un-satisfied step; satisfied = green; future = grey.
+  const activeIdx = FLOW_STEPS.findIndex((s) => !s.satisfiedIn.includes(state));
+  return (
+    <div className="flex items-center gap-1 mb-4 overflow-x-auto" aria-label="Submission flow steps">
+      {FLOW_STEPS.map((s, idx) => {
+        const satisfied = s.satisfiedIn.includes(state);
+        const active = idx === activeIdx;
+        const cls = satisfied
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700'
+          : active
+            ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100 border-blue-300 dark:border-blue-700 ring-2 ring-blue-300 dark:ring-blue-600'
+            : 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700';
+        return (
+          <React.Fragment key={s.key}>
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border whitespace-nowrap ${cls}`}
+              title={satisfied ? 'Done' : (active ? 'Next step' : 'Coming up')}
+            >
+              <span aria-hidden="true">{satisfied ? '✓' : s.emoji}</span>
+              <span>{idx + 1}. {s.label}</span>
+            </span>
+            {idx < FLOW_STEPS.length - 1 && (
+              <span className="text-gray-300 dark:text-gray-600 select-none" aria-hidden="true">›</span>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 // v0.8 — state cards. Each renders the right next-action for the bid's state.
 
 function PrePursuitCard({ data, pursuing, onPursue, wasDeclined }) {
@@ -374,6 +425,7 @@ function PrePursuitCard({ data, pursuing, onPursue, wasDeclined }) {
         </span>
       </div>
       <div className="px-4 py-4">
+        <FlowSteps state={data.state || 'pre-pursuit'} />
         <div className="text-sm text-gray-700 dark:text-gray-200 mb-2">
           <strong>Show interest first.</strong> A real readiness score isn't possible until we know what
           <em> this </em> bid actually requires — and that lives inside the RFP attachments on the agency portal.
@@ -432,6 +484,7 @@ function PursuingNoAttachmentsCard({ data, opportunityId, pursuing, onCancelPurs
         </button>
       </div>
       <div className="px-4 py-4">
+        <FlowSteps state={data.state || 'pursuing-no-attachments'} />
         <div className="text-sm text-gray-800 dark:text-gray-100 mb-1">
           <strong>Step 1 done.</strong> Now grab the RFP and drop the files below.
         </div>
@@ -481,6 +534,7 @@ function AttachmentsOnlyCard({ data, opportunityId, tailoring, pursuing, onTailo
         </button>
       </div>
       <div className="px-4 py-4">
+        <FlowSteps state={data.state || 'attachments-only'} />
         <div className="text-sm text-gray-800 dark:text-gray-100 mb-2">
           <strong>RFP files are uploaded.</strong> Run AI to read them and produce a real readiness checklist
           (bid bonds, prevailing wage, EEO, page limits, etc. — quoted with evidence from the RFP body).

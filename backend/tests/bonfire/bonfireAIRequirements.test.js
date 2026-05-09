@@ -5,6 +5,7 @@
 jest.mock('../../src/models', () => ({
   sequelize: {},
   BonfireOpportunity: { findByPk: jest.fn() },
+  OpportunityAttachment: { findAll: jest.fn(async () => []) },
   Document: {},
 }));
 jest.mock('../../src/analysis/ai.client', () => {
@@ -15,7 +16,7 @@ jest.mock('../../src/analysis/ai.client', () => {
   return { getAIClient: () => client, __client: client };
 });
 
-const { BonfireOpportunity } = require('../../src/models');
+const { BonfireOpportunity, OpportunityAttachment } = require('../../src/models');
 const aiMod = require('../../src/analysis/ai.client');
 const svc = require('../../src/bonfire/bonfireAIRequirements.service');
 
@@ -123,6 +124,37 @@ describe('bonfireAIRequirements.tailorRequirements', () => {
     expect(out.additional_required[0].type).toBe('cert_bid_bond');
     expect(opp.save).toHaveBeenCalledTimes(1);
     expect(opp.submissionRequirements).toBe(out);
+  });
+
+  it('auto-invalidates the cache when prior run had 0 attachments but new ones now exist (v0.8 fix)', async () => {
+    // Reproduces the silent-failure bug: user pursued a bid before uploading the
+    // RFP, ran AI on metadata only (attachment_count: 0 cached), then uploaded
+    // files. Without this fix, clicking "Tailor with AI" again returned the
+    // stale cache and state stayed stuck on attachments-only.
+    const stale = {
+      generated_at: '2026-05-01T00:00:00Z',
+      attachment_count: 0,
+      additional_required: [],
+      summary: 'stale (no attachments at the time)',
+    };
+    const opp = makeOpp({ submissionRequirements: stale });
+    BonfireOpportunity.findByPk.mockResolvedValue(opp);
+    OpportunityAttachment.findAll.mockResolvedValue([
+      { name: 'rfp.pdf', parsedText: 'Bid bond of 5% required. EEO statement attached.' },
+    ]);
+    aiMod.__client.chat.mockResolvedValue({
+      content: JSON.stringify({
+        additional_required: [
+          { type: 'cert_bid_bond', confidence: 0.9, reason: 'Bid bond', source_quote: 'Bid bond of 5% required.' },
+        ],
+        summary: 'fresh',
+      }),
+      tokensUsed: 600,
+    });
+    const out = await svc.tailorRequirements({ opportunityId: 'opp-1', force: false });
+    expect(aiMod.__client.chat).toHaveBeenCalledTimes(1);  // re-ran, didn't return cache
+    expect(out.summary).toBe('fresh');
+    expect(out.attachment_count).toBe(1);
   });
 
   it('regenerates when force=true even if cache exists', async () => {
