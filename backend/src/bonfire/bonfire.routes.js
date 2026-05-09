@@ -109,6 +109,15 @@ router.post(
   controller.uploadAttachments,
 );
 
+// v0.9 — re-classify all attachments (read_only_reference / vendor_form /
+// vendor_schedule / other). Used to backfill rows uploaded before v0.9 or
+// after a prompt change. Idempotent.
+router.post(
+  '/opportunities/:id/reclassify-attachments',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  controller.reclassifyAttachments,
+);
+
 // ---- Writes (admin-only).
 router.post(
   '/upload/file',

@@ -14,6 +14,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const logger = require('../logging/logger');
 const { BonfireOpportunity, OpportunityAttachment } = require('../models');
+const classifier = require('./attachmentClassifier.service');
 
 const STORAGE_ROOT = process.env.DOCUMENT_STORAGE_ROOT
   ? path.resolve(process.env.DOCUMENT_STORAGE_ROOT, '..', 'attachments')
@@ -73,6 +74,55 @@ async function extractText(fileAbs, mime) {
   return null;
 }
 
+// v0.9 — when the user drops a .zip on the upload zone (which is what
+// Bonfire portals hand out for whole RFPs), we transparently expand it
+// into one attachment row per inner file. Otherwise the ZIP would land
+// as a single opaque blob and downstream extraction / classification
+// would never see the actual RFP / SOW / forms.
+async function expandZips(files) {
+  // eslint-disable-next-line global-require
+  const JSZip = require('jszip');
+  const expanded = [];
+  for (const f of files) {
+    const isZip = /\.zip$/i.test(f.originalname || '') ||
+      f.mimetype === 'application/zip' ||
+      f.mimetype === 'application/x-zip-compressed';
+    if (!isZip || !Buffer.isBuffer(f.buffer)) {
+      expanded.push(f);
+      continue; // eslint-disable-line no-continue
+    }
+    try {
+      const zip = await JSZip.loadAsync(f.buffer);
+      let count = 0;
+      for (const [innerName, entry] of Object.entries(zip.files)) {
+        if (entry.dir) continue; // eslint-disable-line no-continue
+        if (innerName.startsWith('__MACOSX')) continue; // eslint-disable-line no-continue
+        const innerBuf = await entry.async('nodebuffer');
+        // Use only the file's basename — Bonfire ZIPs typically don't have
+        // nested directories, but guard against it anyway.
+        const baseName = path.posix.basename(innerName);
+        if (!baseName) continue; // eslint-disable-line no-continue
+        expanded.push({
+          originalname: baseName,
+          buffer: innerBuf,
+          mimetype: null,
+          // Track provenance so the UI / manifest can show "extracted from <zip>".
+          fromZip: f.originalname,
+        });
+        count += 1;
+      }
+      logger.info('manualUpload: expanded zip', { zipName: f.originalname, count });
+    } catch (e) {
+      // ZIP wouldn't open — fall back to treating it as a regular file.
+      logger.warn('manualUpload: zip expand failed, keeping as opaque', {
+        zipName: f.originalname, error: e.message,
+      });
+      expanded.push(f);
+    }
+  }
+  return expanded;
+}
+
 async function ingestFiles({ bonfireOpportunityId, files, uploadedBy = null }) {
   const opp = await BonfireOpportunity.findByPk(bonfireOpportunityId);
   if (!opp) {
@@ -81,20 +131,25 @@ async function ingestFiles({ bonfireOpportunityId, files, uploadedBy = null }) {
     throw err;
   }
 
+  // v0.9 — expand any ZIPs on the way in.
+  const flatFiles = await expandZips(files);
+
   const dirRel = path.posix.join('opportunities', String(bonfireOpportunityId));
   const dirAbs = path.join(STORAGE_ROOT, dirRel);
   ensureDir(dirAbs);
 
   const result = {
     bonfire_opportunity_id: bonfireOpportunityId,
-    received: files.length,
+    received: flatFiles.length,
+    received_raw: files.length,
+    expanded_from_zip: flatFiles.length - files.length,
     saved: 0,
     failed: 0,
     skipped: 0,
     files: [],
   };
 
-  for (const f of files) {
+  for (const f of flatFiles) {
     const originalName = f.originalname || f.filename || 'upload';
     const buf = f.buffer;
     if (!buf || !Buffer.isBuffer(buf)) {
@@ -143,11 +198,25 @@ async function ingestFiles({ bonfireOpportunityId, files, uploadedBy = null }) {
       existing.mime = mime;
       existing.sizeBytes = buf.length;
       existing.parsedText = parsedText;
-      existing.metadata = { ...(existing.metadata || {}), uploaded_by: uploadedBy, uploaded_via: 'manual_drop_zone' };
+      existing.metadata = {
+        ...(existing.metadata || {}),
+        uploaded_by: uploadedBy,
+        uploaded_via: 'manual_drop_zone',
+        ...(f.fromZip ? { extracted_from_zip: f.fromZip } : {}),
+      };
       existing.downloadedAt = new Date();
       await existing.save();
-      result.files.push({ id: existing.id, name: safe, status: 'updated', has_parsed_text: !!parsedText });
+      // v0.9 — auto-classify on (re-)upload so the panel shows the right
+      // chip + Phase B form-filler has the field list ready.
+      const cls = await classifier.classifyOne({ attachmentId: existing.id })
+        .catch((e) => { logger.warn('classifier: failed for ' + existing.id + ': ' + e.message); return null; });
+      result.files.push({
+        id: existing.id, name: safe, status: 'updated',
+        has_parsed_text: !!parsedText,
+        classification: cls?.classification || null,
+      });
     } else {
+      // eslint-disable-next-line no-unused-vars -- block scope; row used below
       const row = await OpportunityAttachment.create({
         bonfireOpportunityId,
         source: 'manual',
@@ -157,10 +226,20 @@ async function ingestFiles({ bonfireOpportunityId, files, uploadedBy = null }) {
         sizeBytes: buf.length,
         urlOriginal: null,
         parsedText,
-        metadata: { uploaded_by: uploadedBy, uploaded_via: 'manual_drop_zone' },
+        metadata: {
+          uploaded_by: uploadedBy,
+          uploaded_via: 'manual_drop_zone',
+          ...(f.fromZip ? { extracted_from_zip: f.fromZip } : {}),
+        },
         downloadedAt: new Date(),
       });
-      result.files.push({ id: row.id, name: safe, status: 'created', has_parsed_text: !!parsedText });
+      const cls = await classifier.classifyOne({ attachmentId: row.id })
+        .catch((e) => { logger.warn('classifier: failed for ' + row.id + ': ' + e.message); return null; });
+      result.files.push({
+        id: row.id, name: safe, status: 'created',
+        has_parsed_text: !!parsedText,
+        classification: cls?.classification || null,
+      });
     }
     result.saved += 1;
   }

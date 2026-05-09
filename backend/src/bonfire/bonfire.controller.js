@@ -7,6 +7,7 @@ const attachmentFetcher = require('./attachmentFetcher.service');
 const submissionPackage = require('./submissionPackage.service');
 const pursuitSvc = require('./bonfirePursuit.service');
 const manualUpload = require('./bonfireManualUpload.service');
+const attachmentClassifier = require('./attachmentClassifier.service');
 const { BonfireOpportunity } = require('../models');
 const fs = require('fs');
 const { redactForRole, redactListForRole } = require('./bonfire.util');
@@ -222,6 +223,13 @@ async function listAttachments(req, res) {
         url_original: r.urlOriginal,
         downloaded_at: r.downloadedAt,
         has_parsed_text: !!r.parsedText,
+        // v0.9 — classifier output (null for legacy rows that haven't been
+        // classified; admin can run /reclassify-attachments to backfill).
+        classification: r.metadata?.classification || null,
+        classification_confidence: r.metadata?.classification_confidence || null,
+        classification_reason: r.metadata?.classification_reason || null,
+        fields: r.metadata?.fields || null,
+        extracted_from_zip: r.metadata?.extracted_from_zip || null,
       })),
     });
   } catch (e) {
@@ -316,6 +324,19 @@ async function cancelPursuit(req, res) {
   }
 }
 
+// v0.9 — re-classify every attachment for an opp. Admin only. Idempotent.
+async function reclassifyAttachments(req, res) {
+  try {
+    const out = await attachmentClassifier.classifyAllForOpp({
+      bonfireOpportunityId: req.params.id,
+    });
+    return successResponse(res, out, `Classified ${out.classified} attachment${out.classified === 1 ? '' : 's'}`);
+  } catch (e) {
+    logger.error('Bonfire reclassify failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Reclassify failed: ' + e.message, 500);
+  }
+}
+
 // v0.8 — manual RFP attachment upload (Cloudflare bypass: human downloads
 // from Bonfire + uploads here). Multipart, multi-file. Stores into the
 // same opportunity_attachments table as the v0.4 fetcher, but with
@@ -358,4 +379,6 @@ module.exports = {
   pursueBid,
   cancelPursuit,
   uploadAttachments,
+  // v0.9
+  reclassifyAttachments,
 };

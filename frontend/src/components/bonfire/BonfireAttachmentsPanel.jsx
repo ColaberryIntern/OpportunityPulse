@@ -12,6 +12,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   listAttachments, fetchAttachments, downloadAttachment,
 } from '../../services/bonfireAttachmentsService';
+import api from '../../services/api';
+
+const CLASSIFICATION_META = {
+  read_only_reference: { label: '📖 reference', cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200', desc: 'Read-only — RFP body / SOW / Q&A' },
+  vendor_form:         { label: '✍ form',       cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200', desc: 'Vendor fills + signs (auto-pre-filled from your org profile in v0.9)' },
+  vendor_schedule:     { label: '📊 schedule',   cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200', desc: 'Vendor populates (pricing / assumptions / exceptions)' },
+  other:               { label: '— other',       cls: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', desc: 'Unclassified or ambiguous' },
+};
 
 function fmtBytes(n) {
   if (n == null) return '—';
@@ -38,6 +46,7 @@ export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
   const [fetching, setFetching] = useState(false);
   const [err, setErr] = useState(null);
   const [lastFetchResult, setLastFetchResult] = useState(null);
+  const [reclassifying, setReclassifying] = useState(false);
 
   const reload = useCallback(async () => {
     if (!opportunityId) return;
@@ -64,6 +73,18 @@ export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
       setErr(e?.response?.data?.message || e.message || 'Fetch failed');
     } finally {
       setFetching(false);
+    }
+  }
+
+  async function handleReclassify() {
+    setReclassifying(true); setErr(null);
+    try {
+      await api.post(`/bonfire/opportunities/${encodeURIComponent(opportunityId)}/reclassify-attachments`);
+      await reload();
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Reclassify failed');
+    } finally {
+      setReclassifying(false);
     }
   }
 
@@ -147,6 +168,17 @@ export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
                 <span className="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">
                   {fmtBytes(a.size_bytes)}
                 </span>
+                {/* v0.9 — classification chip. Drives the color-coding of how
+                    each file gets used downstream (read for context vs filled
+                    by the form-filler vs populated by the strategist). */}
+                {a.classification && CLASSIFICATION_META[a.classification] && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${CLASSIFICATION_META[a.classification].cls}`}
+                    title={CLASSIFICATION_META[a.classification].desc + (a.classification_reason ? ` · ${a.classification_reason}` : '')}
+                  >
+                    {CLASSIFICATION_META[a.classification].label}
+                  </span>
+                )}
                 {a.has_parsed_text && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 shrink-0" title="Text extracted; AI tailoring will read this on next run.">
                     parsed
@@ -157,8 +189,21 @@ export default function BonfireAttachmentsPanel({ opportunityId, isAdmin }) {
           </ul>
         )}
         {data.count > 0 && (
-          <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-            Newest fetched: {fmtRel(data.attachments[0]?.downloaded_at)}. Click <strong>🤖 Refresh AI</strong> on the Submission Readiness panel above to pull this text into the requirements detector.
+          <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between flex-wrap gap-1">
+            <span>
+              Newest fetched: {fmtRel(data.attachments[0]?.downloaded_at)}. Click <strong>🤖 Refresh AI</strong> on the Submission Readiness panel above to pull this text into the requirements detector.
+            </span>
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={reclassifying}
+                onClick={handleReclassify}
+                className="text-[11px] text-blue-700 dark:text-blue-300 hover:underline disabled:opacity-50"
+                title="Re-run the file classifier on every attachment"
+              >
+                {reclassifying ? '⏳ Reclassifying…' : '🏷 Reclassify all'}
+              </button>
+            )}
           </div>
         )}
       </div>
