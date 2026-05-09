@@ -49,7 +49,13 @@ Respond with JSON only, no prose, matching this schema exactly:
 // Heuristic shortcut — for unambiguous filenames we can skip the AI call.
 // This is a cost optimization for ZIPs with 7-9 files like the CARS bid.
 function fastClassifyByName(name) {
-  const n = String(name || '').toLowerCase();
+  // Normalize: punctuation (incl. underscore — our safeFilename replaces commas
+  // with underscores during storage) becomes a space so word boundaries work
+  // around phrases like "Statement of Work_ 920-03-53067_ Dated November 2025".
+  const n = String(name || '')
+    .toLowerCase()
+    .replace(/[_,;:]+/g, ' ')
+    .replace(/\s+/g, ' ');
   // Read-only references — RFP / SOW / RFO / Q&A / addendum
   if (/\b(rfp|rfo|rfq|sow|statement of work|solicitation|q&a|qna|amendment|addendum|introduction|intro)\b/.test(n)) {
     return { classification: 'read_only_reference', confidence: 0.85, reason: 'Filename indicates agency-authored reference doc.', fields: [] };

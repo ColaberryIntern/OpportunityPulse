@@ -42,6 +42,8 @@ describe('attachmentClassifier.fastClassifyByName — heuristic shortcuts', () =
     expect(svc.fastClassifyByName('Statement of Work, 920-03.pdf').classification).toBe('read_only_reference');
     expect(svc.fastClassifyByName('6-01. RFO 601440000053067.pdf').classification).toBe('read_only_reference');
     expect(svc.fastClassifyByName('Q&A Round 2.pdf').classification).toBe('read_only_reference');
+    // Real CARS bid stored filename — commas converted to underscores by safeFilename.
+    expect(svc.fastClassifyByName('4-02. Statement of Work_ 920-03-53067_ Dated November 2025.pdf').classification).toBe('read_only_reference');
   });
 
   it('classifies XLSX as vendor_schedule', () => {
