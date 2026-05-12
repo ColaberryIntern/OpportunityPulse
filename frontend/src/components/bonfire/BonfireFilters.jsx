@@ -65,6 +65,16 @@ function BonfireFilters({ value, onChange }) {
         />
         High AI Fit only
       </label>
+      {/* v0.11 — expired opps are hidden by default unless pursued/submitted.
+          This toggle lets admins see the full historical list. */}
+      <label className="flex items-center gap-2 text-sm mb-1" title="By default expired bids are hidden unless you're already pursuing them">
+        <input
+          type="checkbox"
+          checked={String(v.includeExpired) === 'true'}
+          onChange={(e) => set({ includeExpired: e.target.checked ? 'true' : '' })}
+        />
+        Show expired
+      </label>
       <button
         type="button"
         onClick={() => onChange({})}

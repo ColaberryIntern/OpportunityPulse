@@ -22,6 +22,11 @@ async function listOpportunities(filters = {}) {
     limit = 50,
     offset = 0,
     order = 'priority_desc',
+    // v0.11 — by default, hide opps whose close_date is in the past UNLESS
+    // the user is actively pursuing them. Ali's request: "don't show me
+    // expired contracts unless I've already started working on them."
+    // Pass includeExpired=true to opt in to the full historical list.
+    includeExpired = false,
   } = filters;
 
   const where = {};
@@ -36,6 +41,20 @@ async function listOpportunities(filters = {}) {
       { title: { [Op.iLike]: `%${q}%` } },
       { description: { [Op.iLike]: `%${q}%` } },
       { agency: { [Op.iLike]: `%${q}%` } },
+    ];
+  }
+  // v0.11 — hide expired opps unless pursued/submitted. Always show opps
+  // with no close_date set (we don't know they're expired).
+  if (String(includeExpired) !== 'true') {
+    where[Op.and] = [
+      ...(where[Op.and] || []),
+      {
+        [Op.or]: [
+          { closeDate: null },
+          { closeDate: { [Op.gte]: new Date() } },
+          { pursuitStatus: { [Op.in]: ['pursuing', 'submitted'] } },
+        ],
+      },
     ];
   }
 

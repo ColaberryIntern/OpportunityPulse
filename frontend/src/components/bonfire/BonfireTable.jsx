@@ -17,6 +17,50 @@ function fmtDate(iso) {
   } catch { return '—'; }
 }
 
+// v0.11 — close-date status: countdown for upcoming, EXPIRED badge for past.
+// Returns { label, cls, daysLeft } or null if no close_date.
+function closeDateStatus(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const daysLeft = Math.round((d.getTime() - Date.now()) / 86_400_000);
+  const dateStr = fmtDate(iso);
+  if (daysLeft < 0) {
+    return {
+      daysLeft,
+      label: `EXPIRED · ${-daysLeft}d ago`,
+      cls: 'bg-red-600 text-white dark:bg-red-700 dark:text-red-50',
+      isExpired: true,
+    };
+  }
+  if (daysLeft === 0) {
+    return { daysLeft, label: 'CLOSES TODAY', cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 font-bold', isExpired: false };
+  }
+  if (daysLeft <= 3) {
+    return { daysLeft, label: `${daysLeft}d left · ${dateStr}`, cls: 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200 font-semibold', isExpired: false };
+  }
+  if (daysLeft <= 7) {
+    return { daysLeft, label: `${daysLeft}d · ${dateStr}`, cls: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200', isExpired: false };
+  }
+  if (daysLeft <= 30) {
+    return { daysLeft, label: `${daysLeft}d · ${dateStr}`, cls: 'bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200', isExpired: false };
+  }
+  return { daysLeft, label: dateStr, cls: 'text-gray-600 dark:text-gray-400', isExpired: false };
+}
+
+function CloseCell({ closeDate }) {
+  const s = closeDateStatus(closeDate);
+  if (!s) return <span className="text-xs text-gray-400">—</span>;
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] whitespace-nowrap ${s.cls}`}
+      title={`Close date: ${new Date(closeDate).toLocaleString()}`}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 // v0.1 — small inline progress bar for the Readiness column. Color follows
 // the same priority ramp (green ≥80, yellow ≥60, gray below) so the
 // "ready to bid" eye-test matches the rest of the table.
@@ -110,7 +154,7 @@ function BonfireTable({ rows, isAdmin, onSelect, onEnrich, onStrategy, readiness
               </Td>
               <Td>{r.automationPotential != null ? r.automationPotential + '%' : '—'}</Td>
               <Td>{fmtUSD(r.estimatedValue)}</Td>
-              <Td>{fmtDate(r.closeDate)}</Td>
+              <Td><CloseCell closeDate={r.closeDate} /></Td>
               <Td><ReadinessCell summary={readinessSummaries && readinessSummaries[r.id]} pursuitStatus={r.pursuitStatus || r.pursuit_status} /></Td>
               <Td><BonfireSignalBadges signals={r.signals} /></Td>
               <Td>

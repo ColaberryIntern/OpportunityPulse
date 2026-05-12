@@ -86,6 +86,49 @@ export default function BonfireSubmissionReadinessPage() {
           <span>Submission Readiness</span>
         </div>
 
+        {/* v0.11 — prominent EXPIRED banner above the header card. Only renders
+            if the bid is past its close date. We still show the page (because the
+            user is pursuing — that's why expired+unpursued opps don't appear here
+            at all), but flag it loudly so they don't waste effort. */}
+        {(() => {
+          if (!opp.closeDate) return null;
+          const days = Math.round((new Date(opp.closeDate).getTime() - Date.now()) / 86_400_000);
+          if (days >= 0) return null;
+          return (
+            <div className="mb-3 px-4 py-3 rounded-lg bg-red-600 text-white border border-red-700 shadow-md flex items-center gap-3 flex-wrap">
+              <span className="text-xl" aria-hidden="true">⛔</span>
+              <div className="flex-1">
+                <div className="font-bold uppercase tracking-wide text-sm">
+                  This bid has EXPIRED — {-days} day{-days === 1 ? '' : 's'} ago ({fmtDate(opp.closeDate)})
+                </div>
+                <div className="text-sm text-red-50 opacity-90">
+                  Submissions are no longer accepted. You've already invested time here, so the page stays — but don't write new drafts unless the agency reopens the solicitation.
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* v0.11 — countdown banner for opps closing very soon. */}
+        {(() => {
+          if (!opp.closeDate) return null;
+          const days = Math.round((new Date(opp.closeDate).getTime() - Date.now()) / 86_400_000);
+          if (days < 0 || days > 7) return null;
+          const sevenColor = days <= 1
+            ? 'bg-red-50 border-red-300 text-red-900 dark:bg-red-900/30 dark:border-red-700 dark:text-red-100'
+            : days <= 3
+              ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100'
+              : 'bg-blue-50 border-blue-300 text-blue-900 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-100';
+          const label = days === 0 ? 'CLOSES TODAY' : days === 1 ? '1 day left' : `${days} days left`;
+          return (
+            <div className={`mb-3 px-4 py-2 rounded-lg border flex items-center gap-2 text-sm ${sevenColor}`}>
+              <span aria-hidden="true">⏳</span>
+              <strong>{label}</strong>
+              <span className="opacity-80">· Submission deadline {fmtDate(opp.closeDate)}</span>
+            </div>
+          );
+        })()}
+
         {/* Header card */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 mb-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
