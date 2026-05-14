@@ -1,29 +1,65 @@
 // Deep Research Intelligence Engine — sample report seeder.
 //
-// Phase 1 ships while the OpenAI account quota is exhausted, so a live
-// runDeepResearch() can't be exercised on prod yet. This seeds ONE
-// representative report + venture ideas directly via the models so the
-// report page, the venture idea cards, and the requirements-generation
-// flow can be validated and screenshotted end-to-end.
+// The OpenAI account quota is exhausted, so a live runDeepResearch() can't
+// be exercised on prod. This seeds ONE representative report + venture
+// ideas directly via the models so the report page, the venture idea
+// cards, and the requirements-generation flow can be validated and
+// screenshotted end-to-end.
+//
+// Phase 2: the seeder also builds a synthetic channel context and runs the
+// REAL deterministic engines (cross-channel correlation, market timing,
+// venture scoring) over it — so the seeded report is a genuine Phase 2
+// report and those engines are validated against live prod data.
 //
 // Idempotent: re-running replaces the prior seeded sample (matched by its
 // distinctive search_term) rather than piling up duplicates.
 //
 //   docker exec op-backend node scripts/seed-deep-research-sample.js
 
-const { DeepResearchReport, VentureIdea } = require('../src/models');
+const {
+  DeepResearchReport, VentureIdea, SignalCorrelation, MonetizationModel,
+} = require('../src/models');
+const crossChannelCorrelation = require('../src/deepResearch/crossChannelCorrelation.service');
+const marketTiming = require('../src/deepResearch/marketTiming.service');
+const ventureScoring = require('../src/deepResearch/ventureScoring.service');
 
 const SEARCH_TERM = 'AI agents for government operations [sample]';
 
+// A synthetic channel context with a clear commercial-acceleration shape:
+// research + talent + capital + government all active and accelerating.
+const SAMPLE_CONTEXT = {
+  searchTerm: SEARCH_TERM,
+  totals: {
+    sourceCount: 27, channelCount: 5, totalValue: 4250000,
+    buildableResearchCount: 6, withDemandSignalCount: 11,
+  },
+  channels: [
+    { key: 'research', label: 'Research', count: 9, totalValue: 0, recentCount: 7, priorCount: 2, items: [] },
+    { key: 'government', label: 'Government', count: 8, totalValue: 3100000, recentCount: 6, priorCount: 2, items: [] },
+    { key: 'talent', label: 'Talent', count: 5, totalValue: 0, recentCount: 4, priorCount: 1, items: [] },
+    { key: 'freelance', label: 'Freelance', count: 3, totalValue: 150000, recentCount: 2, priorCount: 1, items: [] },
+    { key: 'capital', label: 'Capital', count: 2, totalValue: 1000000, recentCount: 2, priorCount: 0, items: [] },
+  ],
+};
+
 async function main() {
-  // Idempotency — clear any prior seeded sample first.
+  // Idempotency — clear any prior seeded sample (+ its Phase 2 child rows).
   const prior = await DeepResearchReport.findAll({ where: { searchTerm: SEARCH_TERM } });
   for (const p of prior) {
     // eslint-disable-next-line no-await-in-loop
     await VentureIdea.destroy({ where: { reportId: p.id } });
     // eslint-disable-next-line no-await-in-loop
+    await SignalCorrelation.destroy({ where: { reportId: p.id } });
+    // eslint-disable-next-line no-await-in-loop
+    await MonetizationModel.destroy({ where: { reportId: p.id } });
+    // eslint-disable-next-line no-await-in-loop
     await p.destroy();
   }
+
+  // Run the REAL deterministic engines over the synthetic context — this
+  // both validates the engines on prod and produces genuine Phase 2 data.
+  const correlation = crossChannelCorrelation.analyzeCorrelations(SAMPLE_CONTEXT);
+  const timing = marketTiming.classifyTiming(correlation, SAMPLE_CONTEXT);
 
   const report = await DeepResearchReport.create({
     searchTerm: SEARCH_TERM,
@@ -35,8 +71,11 @@ async function main() {
       + 'contracts), and the talent market is heating up. The single most important takeaway — this is '
       + 'a near-term services-plus-product play, not a research bet. A small team can win a pilot '
       + 'contract now and productize the delivered work into a repeatable offering.',
-    marketStage: 'emerging',
-    confidenceScore: 0.72,
+    // Phase 2: the deterministic timing engine is authoritative for stage.
+    marketStage: timing.stage,
+    confidenceScore: timing.confidence,
+    timingScore: timing.timing_score,
+    correlationStrength: correlation.correlation_strength,
     reportJson: {
       search_term: SEARCH_TERM,
       totals: {
@@ -81,9 +120,58 @@ async function main() {
         + 'competitive window is open but closing — staffing signals show others moving.',
       trend_summary: 'Accelerating — research volume, procurement demand, and hiring are all rising '
         + 'month-over-month.',
+      // Phase 2 — the intelligence engine outputs.
+      correlation,
+      market_timing: timing,
       generated_at: new Date().toISOString(),
     },
   });
+
+  // Persist the cross-channel correlation row.
+  await SignalCorrelation.create({
+    reportId: report.id,
+    correlationStrength: correlation.correlation_strength,
+    acceleration: correlation.acceleration,
+    convergenceType: correlation.convergence_type,
+    signalBreakdown: correlation.signal_breakdown,
+    supportingEvidence: correlation.supporting_evidence,
+  });
+
+  // Seed a representative monetization model set (AI-generated in a live
+  // run; static here, but each fit_score is computed by the real engine).
+  const { computeFitScore } = require('../src/deepResearch/monetizationIntelligence.service');
+  const monetizationModels = [
+    {
+      modelType: 'government',
+      pricingSuggestion: 'Fixed-fee pilot contracts $80k-250k, then $40k-90k/agency/yr maintenance.',
+      idealIcp: 'State + municipal agencies with high-volume constituent operations.',
+      revenueModel: 'Project revenue on the pilot, recurring license + support thereafter.',
+      implementationComplexity: 'medium',
+    },
+    {
+      modelType: 'saas',
+      pricingSuggestion: 'Per-seat $50-120/user/mo for the Agent Ops Console, platform fee on top.',
+      idealIcp: 'Regulated mid-market teams adopting agents who need a governance layer.',
+      revenueModel: 'Recurring per-seat SaaS, expands with the customer\'s agent footprint.',
+      implementationComplexity: 'medium',
+    },
+    {
+      modelType: 'services',
+      pricingSuggestion: 'T&M or fixed-scope delivery engagements, $25k-150k per build.',
+      idealIcp: 'Agencies + contractors who want the agent built and integrated for them.',
+      revenueModel: 'Project services revenue; funds the productized SaaS roadmap.',
+      implementationComplexity: 'low',
+    },
+  ];
+  for (const m of monetizationModels) {
+    // eslint-disable-next-line no-await-in-loop
+    await MonetizationModel.create({
+      ...m,
+      reportId: report.id,
+      fitScore: computeFitScore(m.modelType, SAMPLE_CONTEXT),
+      metadata: {},
+    });
+  }
 
   const ideas = [
     {
@@ -154,14 +242,37 @@ async function main() {
     },
   ];
 
+  // Score each venture idea with the REAL deterministic scoring engine,
+  // then persist with its 8-dimension scores + composite + recommendation.
+  let compositeSum = 0;
   for (const idea of ideas) {
+    const scored = ventureScoring.scoreVenture(idea, {
+      context: SAMPLE_CONTEXT, correlation, timing,
+    });
+    compositeSum += scored.composite_score;
     // eslint-disable-next-line no-await-in-loop
-    await VentureIdea.create({ ...idea, reportId: report.id });
+    await VentureIdea.create({
+      ...idea,
+      reportId: report.id,
+      compositeScore: scored.composite_score,
+      recommendationLevel: scored.recommendation_level,
+      scores: scored.scores,
+    });
   }
+  // Report-level rollup.
+  await report.update({
+    commercializationScore: Number((compositeSum / ideas.length).toFixed(2)),
+  });
 
   // eslint-disable-next-line no-console
   console.log(JSON.stringify({
-    seeded: true, reportId: report.id, ventureIdeas: ideas.length,
+    seeded: true,
+    reportId: report.id,
+    ventureIdeas: ideas.length,
+    marketStage: timing.stage,
+    convergence: correlation.convergence_type,
+    correlationStrength: correlation.correlation_strength,
+    monetizationModels: monetizationModels.length,
     url: `/admin/deep-research/${report.id}`,
   }));
   process.exit(0);
