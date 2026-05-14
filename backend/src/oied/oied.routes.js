@@ -45,6 +45,10 @@ router.post(
   '/research/embed',
   verifyToken, checkPermissions(ROLES.ADMIN), express.json({ limit: '4kb' }), research.runEmbedding,
 );
+router.post(
+  '/research/build-briefs',
+  verifyToken, checkPermissions(ROLES.ADMIN), express.json({ limit: '4kb' }), research.runBuildBriefs,
+);
 router.get('/profile',                  BRIDGE, c.getMyProfile);
 
 // ---- Bridge ACTION endpoints (dual-auth + admin) -----------------------

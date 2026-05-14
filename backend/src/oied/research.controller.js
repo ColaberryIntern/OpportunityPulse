@@ -12,6 +12,7 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 const semanticSearch = require('./semanticSearch.service');
 const researchAgg = require('./researchAggregation.service');
 const researchGraph = require('./researchGraph.service');
+const researchBuildBrief = require('./researchBuildBrief.service');
 
 async function search(req, res) {
   try {
@@ -96,6 +97,25 @@ async function topicGraph(req, res) {
   }
 }
 
+// Admin — kick a build-brief batch on demand (the cron does it daily at 7:45).
+async function runBuildBriefs(req, res) {
+  try {
+    const run = await researchBuildBrief.generateBuildBriefBatch({
+      limit: Number(req.body?.limit) || 20,
+      force: req.body?.force === true,
+    });
+    return successResponse(res, {
+      status: run.status,
+      input: run.inputCount,
+      output: run.outputCount,
+      results: run.results,
+    }, 'Build brief batch complete');
+  } catch (e) {
+    logger.error('research.runBuildBriefs failed', { error: e.message });
+    return errorResponse(res, 'Build brief batch failed: ' + e.message, 500);
+  }
+}
+
 module.exports = {
   search,
   similar,
@@ -103,4 +123,5 @@ module.exports = {
   topAuthors,
   runEmbedding,
   topicGraph,
+  runBuildBriefs,
 };

@@ -34,6 +34,9 @@ function startActionEngineScheduler() {
   const embeddingSchedule = process.env.EMBEDDING_SCHEDULE || '30 6 * * *';
   // Phase 3c — research graph build, daily after cross-channel + aggregation.
   const researchGraphSchedule = process.env.RESEARCH_GRAPH_SCHEDULE || '30 7 * * *';
+  // Phase 4 — research-to-build briefs, daily after the graph build so each
+  // buildable paper's demand signal (cross-channel matches) is fresh.
+  const researchBriefSchedule = process.env.RESEARCH_BRIEF_SCHEDULE || '45 7 * * *';
 
   // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
   cron.schedule(trendDetectionSchedule, async () => {
@@ -200,7 +203,24 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 10 jobs registered');
+  // Research Build Briefs: daily at 7:45 AM UTC — turn buildable research
+  // papers into concrete build plans (product idea / architecture / MVP /
+  // proposal angle), grounded in their cross-channel demand signal.
+  cron.schedule(researchBriefSchedule, async () => {
+    logger.info('Scheduled: Research build brief generation starting');
+    try {
+      const { generateBuildBriefBatch } = require('../oied/researchBuildBrief.service');
+      const run = await generateBuildBriefBatch({ limit: 20 });
+      logger.info('Scheduled: Research build briefs complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Research build brief generation failed', { error: error.message });
+    }
+  });
+
+  logger.info('Action Engine scheduler started — 11 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

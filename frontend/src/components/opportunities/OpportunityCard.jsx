@@ -42,6 +42,7 @@ function ResearchMeta({ opportunity }) {
   const xMatches = opportunity.aiAnalysis
     && opportunity.aiAnalysis.cross_channel_matches
     && opportunity.aiAnalysis.cross_channel_matches.matches;
+  const buildBrief = opportunity.aiAnalysis && opportunity.aiAnalysis.build_brief;
   const authors = Array.isArray(sd.authors) ? sd.authors : [];
   const citations = sd.citationCount;
   const upvotes = sd.upvotes;
@@ -52,7 +53,7 @@ function ResearchMeta({ opportunity }) {
   if (typeof upvotes === 'number') bits.push({ key: 'up', label: `▲ ${upvotes}` });
   if (sd.venue) bits.push({ key: 'venue', label: sd.venue });
   if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf && !summary
-    && !(xMatches && xMatches.length)) return null;
+    && !(xMatches && xMatches.length) && !buildBrief) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
       {bits.map((b) => (
@@ -99,6 +100,16 @@ function ResearchMeta({ opportunity }) {
           title={`Linked to: ${xMatches.slice(0, 5).map((m) => `${m.title} (${m.channel})`).join(' · ')}`}
         >
           🔗 {xMatches.length} cross-channel link{xMatches.length === 1 ? '' : 's'}
+        </span>
+      )}
+      {/* Phase 4 — research-to-build brief: a concrete product idea + MVP scope
+          + proposal angle generated from this buildable paper. */}
+      {buildBrief && buildBrief.product_idea && (
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+          title={`Build idea: ${buildBrief.product_idea}${buildBrief.proposal_angle ? `\n\nPitch: ${buildBrief.proposal_angle}` : ''}`}
+        >
+          🧭 Build brief
         </span>
       )}
     </div>
