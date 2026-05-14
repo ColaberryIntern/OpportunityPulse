@@ -22,6 +22,9 @@ function startActionEngineScheduler() {
   const saturationSchedule = process.env.SATURATION_SCHEDULE || '0 5 * * *';
   const actionRecSchedule = process.env.ACTION_REC_SCHEDULE || '30 5 * * *';
   const execBriefSchedule = process.env.EXEC_BRIEF_SCHEDULE || '0 6 * * *';
+  // Research Intelligence Phase 2.1 — AI research summaries, daily after
+  // ingestion (which runs ~6 AM) so fresh papers get summarized same-day.
+  const researchSummarySchedule = process.env.RESEARCH_SUMMARY_SCHEDULE || '45 6 * * *';
 
   // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
   cron.schedule(trendDetectionSchedule, async () => {
@@ -30,7 +33,7 @@ function startActionEngineScheduler() {
       const { detectTrends } = require('../analysis/analysis.service');
       const types = [
         'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
-        'bonfire', 'bonfire_strategic',
+        'bonfire', 'bonfire_strategic', 'research',
       ];
       for (const type of types) {
         try {
@@ -105,7 +108,24 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 5 jobs registered');
+  // Research Summaries: daily at 6:45 AM UTC — business-oriented summaries
+  // for freshly-ingested research papers (exec summary / build rec / market
+  // timing / competitive insight).
+  cron.schedule(researchSummarySchedule, async () => {
+    logger.info('Scheduled: Research summary generation starting');
+    try {
+      const { summarizeResearchBatch } = require('../oied/researchSummary.service');
+      const run = await summarizeResearchBatch({ limit: 40 });
+      logger.info('Scheduled: Research summaries complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Research summary generation failed', { error: error.message });
+    }
+  });
+
+  logger.info('Action Engine scheduler started — 6 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

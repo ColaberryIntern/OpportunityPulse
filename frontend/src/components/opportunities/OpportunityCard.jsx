@@ -21,13 +21,24 @@ const TYPE_LABELS = {
   research: '🔬 Research',
 };
 
+// Research Intelligence Phase 2.1 — market-timing badge styling.
+const MARKET_TIMING_META = {
+  too_early: { label: 'Too early', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' },
+  emerging: { label: 'Emerging', cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+  active: { label: 'Active market', cls: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  saturated: { label: 'Saturated', cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+};
+
 // Research Intelligence Phase 1 — research opps carry paper-specific metadata
 // in sourceData (authors, institution, citations, GitHub repo). The generic
 // card's value/date/category strip doesn't surface those, so this renders a
 // small extra strip for type='research' rows only.
+// Phase 2.1 — also surfaces the AI research summary (market timing + build
+// recommendation) when one has been generated.
 function ResearchMeta({ opportunity }) {
   if (opportunity.type !== 'research') return null;
   const sd = opportunity.sourceData || {};
+  const summary = opportunity.aiAnalysis && opportunity.aiAnalysis.research_summary;
   const authors = Array.isArray(sd.authors) ? sd.authors : [];
   const citations = sd.citationCount;
   const upvotes = sd.upvotes;
@@ -37,7 +48,7 @@ function ResearchMeta({ opportunity }) {
   if (typeof citations === 'number') bits.push({ key: 'cite', label: `${citations.toLocaleString()} citations` });
   if (typeof upvotes === 'number') bits.push({ key: 'up', label: `▲ ${upvotes}` });
   if (sd.venue) bits.push({ key: 'venue', label: sd.venue });
-  if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf) return null;
+  if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf && !summary) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
       {bits.map((b) => (
@@ -64,6 +75,17 @@ function ResearchMeta({ opportunity }) {
         >
           📄 PDF
         </a>
+      )}
+      {/* Phase 2.1 — AI research summary badges (market timing + buildable). */}
+      {summary && MARKET_TIMING_META[summary.market_timing] && (
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-medium ${MARKET_TIMING_META[summary.market_timing].cls}`}>
+          {MARKET_TIMING_META[summary.market_timing].label}
+        </span>
+      )}
+      {summary && summary.buildable && (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300" title={summary.build_recommendation}>
+          🔨 Buildable
+        </span>
       )}
     </div>
   );
