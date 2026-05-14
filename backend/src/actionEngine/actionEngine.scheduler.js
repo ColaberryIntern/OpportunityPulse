@@ -25,6 +25,8 @@ function startActionEngineScheduler() {
   // Research Intelligence Phase 2.1 — AI research summaries, daily after
   // ingestion (which runs ~6 AM) so fresh papers get summarized same-day.
   const researchSummarySchedule = process.env.RESEARCH_SUMMARY_SCHEDULE || '45 6 * * *';
+  // Phase 2.2 — cross-channel matching, daily right after the summaries.
+  const crossChannelSchedule = process.env.CROSS_CHANNEL_SCHEDULE || '0 7 * * *';
 
   // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
   cron.schedule(trendDetectionSchedule, async () => {
@@ -125,7 +127,24 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 6 jobs registered');
+  // Cross-Channel Matching: daily at 7:00 AM UTC — link research opps to
+  // gov/talent/capital/freelance opps via keyword overlap. force=true so
+  // matches refresh as new opps land in other channels.
+  cron.schedule(crossChannelSchedule, async () => {
+    logger.info('Scheduled: Cross-channel matching starting');
+    try {
+      const { matchResearchBatch } = require('../oied/crossChannelMatch.service');
+      const run = await matchResearchBatch({ limit: 60, force: true });
+      logger.info('Scheduled: Cross-channel matching complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Cross-channel matching failed', { error: error.message });
+    }
+  });
+
+  logger.info('Action Engine scheduler started — 7 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

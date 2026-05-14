@@ -39,6 +39,9 @@ function ResearchMeta({ opportunity }) {
   if (opportunity.type !== 'research') return null;
   const sd = opportunity.sourceData || {};
   const summary = opportunity.aiAnalysis && opportunity.aiAnalysis.research_summary;
+  const xMatches = opportunity.aiAnalysis
+    && opportunity.aiAnalysis.cross_channel_matches
+    && opportunity.aiAnalysis.cross_channel_matches.matches;
   const authors = Array.isArray(sd.authors) ? sd.authors : [];
   const citations = sd.citationCount;
   const upvotes = sd.upvotes;
@@ -48,7 +51,8 @@ function ResearchMeta({ opportunity }) {
   if (typeof citations === 'number') bits.push({ key: 'cite', label: `${citations.toLocaleString()} citations` });
   if (typeof upvotes === 'number') bits.push({ key: 'up', label: `▲ ${upvotes}` });
   if (sd.venue) bits.push({ key: 'venue', label: sd.venue });
-  if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf && !summary) return null;
+  if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf && !summary
+    && !(xMatches && xMatches.length)) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
       {bits.map((b) => (
@@ -85,6 +89,16 @@ function ResearchMeta({ opportunity }) {
       {summary && summary.buildable && (
         <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300" title={summary.build_recommendation}>
           🔨 Buildable
+        </span>
+      )}
+      {/* Phase 2.2 — cross-channel matches: this paper connects to N opps in
+          other channels (gov contracts, jobs, funding rounds). */}
+      {xMatches && xMatches.length > 0 && (
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300"
+          title={`Linked to: ${xMatches.slice(0, 5).map((m) => `${m.title} (${m.channel})`).join(' · ')}`}
+        >
+          🔗 {xMatches.length} cross-channel link{xMatches.length === 1 ? '' : 's'}
         </span>
       )}
     </div>
