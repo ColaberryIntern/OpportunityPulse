@@ -34,6 +34,11 @@ describe('channels.getChannelForOpp', () => {
   it('investment → capital', () => {
     expect(getChannelKey({ type: 'investment', source: 'funding_news' })).toBe('capital');
   });
+  it('research → research channel (Research Intelligence Phase 1)', () => {
+    expect(getChannelKey({ type: 'research', source: 'arxiv' })).toBe('research');
+    expect(getChannelKey({ type: 'research', source: 'semantic_scholar' })).toBe('research');
+    expect(getChannelKey({ type: 'research', source: 'huggingface_papers' })).toBe('research');
+  });
   it('unknown type → unknown channel', () => {
     expect(getChannelKey({ type: 'martian_signal', source: 'mars' })).toBe('unknown');
   });
@@ -67,15 +72,15 @@ describe('channels.getChannelByKey', () => {
 describe('channels.listChannels', () => {
   it('returns all 7 channels in canonical order', () => {
     const list = listChannels();
-    expect(list).toHaveLength(7);
+    expect(list).toHaveLength(8);
     expect(list.map((c) => c.key)).toEqual([
-      'strategic', 'bonfire', 'government', 'talent', 'private-sector', 'freelance', 'capital',
+      'strategic', 'bonfire', 'government', 'talent', 'private-sector', 'freelance', 'capital', 'research',
     ]);
   });
   it('returns a copy (mutation-safe)', () => {
     const list = listChannels();
     list.push({ key: 'mutation', label: 'mutation' });
-    expect(listChannels()).toHaveLength(7);
+    expect(listChannels()).toHaveLength(8);
   });
 });
 
@@ -115,6 +120,9 @@ describe('channels coverage — every prod source maps to a known channel', () =
     ['freelance', 'freelancer'],
     ['investment', 'funding_news'],
     ['investment', 'mock_investments'],
+    ['research', 'arxiv'],
+    ['research', 'semantic_scholar'],
+    ['research', 'huggingface_papers'],
   ];
   it.each(PROD_SOURCES)('(%s, %s) maps to a known channel', (type, source) => {
     const key = getChannelKey({ type, source });

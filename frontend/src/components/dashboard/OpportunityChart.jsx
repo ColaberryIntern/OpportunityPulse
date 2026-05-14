@@ -17,6 +17,8 @@ const TYPE_LINES = [
   // v9.4 unified-channels: Bonfire + Strategic Patterns join the chart.
   { dataKey: 'bonfire', name: 'Bonfire', color: '#EA580C' },
   { dataKey: 'bonfire_strategic', name: 'Strategic Patterns', color: '#A855F7' },
+  // Research Intelligence Phase 1 — AI papers / benchmarks trend line.
+  { dataKey: 'research', name: 'Research', color: '#6366F1' },
 ];
 
 function OpportunityChart({ chartData, loading, onPeriodChange }) {

@@ -102,6 +102,7 @@ function Sidebar({ open, onClose }) {
         { to: '/admin/opportunities/my?channel=private-sector', label: '🧠 News',                icon: ICON.list },
         { to: '/admin/opportunities/my?channel=freelance',      label: '💼 Freelance',           icon: ICON.list },
         { to: '/admin/opportunities/my?channel=capital',        label: '💰 Capital',             icon: ICON.list },
+        { to: '/admin/opportunities/my?channel=research',       label: '🔬 Research',            icon: ICON.list },
       ],
     },
     {

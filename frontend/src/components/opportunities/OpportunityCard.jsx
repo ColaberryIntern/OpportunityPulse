@@ -9,6 +9,7 @@ const TYPE_COLORS = {
   investment: 'bg-green-100 dark:bg-green-900/30 text-green-800',
   grant: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800',
   ai_news: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800',
+  research: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800',
 };
 
 const TYPE_LABELS = {
@@ -17,7 +18,56 @@ const TYPE_LABELS = {
   investment: 'Investment',
   grant: 'Grant',
   ai_news: 'AI News',
+  research: '🔬 Research',
 };
+
+// Research Intelligence Phase 1 — research opps carry paper-specific metadata
+// in sourceData (authors, institution, citations, GitHub repo). The generic
+// card's value/date/category strip doesn't surface those, so this renders a
+// small extra strip for type='research' rows only.
+function ResearchMeta({ opportunity }) {
+  if (opportunity.type !== 'research') return null;
+  const sd = opportunity.sourceData || {};
+  const authors = Array.isArray(sd.authors) ? sd.authors : [];
+  const citations = sd.citationCount;
+  const upvotes = sd.upvotes;
+  const bits = [];
+  if (sd.institution) bits.push({ key: 'inst', label: sd.institution });
+  if (authors.length) bits.push({ key: 'auth', label: `${authors.length} author${authors.length === 1 ? '' : 's'}` });
+  if (typeof citations === 'number') bits.push({ key: 'cite', label: `${citations.toLocaleString()} citations` });
+  if (typeof upvotes === 'number') bits.push({ key: 'up', label: `▲ ${upvotes}` });
+  if (sd.venue) bits.push({ key: 'venue', label: sd.venue });
+  if (bits.length === 0 && !sd.githubRepo && !sd.paperPdf) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
+      {bits.map((b) => (
+        <span key={b.key} className="inline-flex items-center">{b.label}</span>
+      ))}
+      {sd.githubRepo && (
+        <a
+          href={sd.githubRepo}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200"
+        >
+          ⎇ Code
+        </a>
+      )}
+      {sd.paperPdf && (
+        <a
+          href={sd.paperPdf}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100"
+        >
+          📄 PDF
+        </a>
+      )}
+    </div>
+  );
+}
 
 const STATUS_COLORS = {
   active: 'bg-green-100 dark:bg-green-900/30 text-green-800',
@@ -198,6 +248,7 @@ function OpportunityCard({ opportunity, isPublic = false, initialSaved = false }
                 </div>
               )}
             </div>
+            <ResearchMeta opportunity={opportunity} />
           </div>
           <div className="ml-4 shrink-0 text-right">
             {!isPublic && opportunity.aiScore != null ? (

@@ -48,6 +48,10 @@ const OPPORTUNITY_TYPES = {
   // bonfire_opportunities; the sync (bonfire/sync.service.js) keeps a
   // type='bonfire' shadow here so they show up in the main /opportunities view.
   BONFIRE: 'bonfire',
+  // research = AI papers, benchmarks, technical breakthroughs ingested from
+  // arXiv / Semantic Scholar / HuggingFace. Research Intelligence expansion
+  // Phase 1 — treated as a first-class channel alongside government/talent/etc.
+  RESEARCH: 'research',
 };
 
 const FREELANCE_ACTION_TYPES = {

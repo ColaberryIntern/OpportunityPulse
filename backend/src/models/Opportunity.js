@@ -11,7 +11,9 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(30),
       allowNull: false,
       validate: {
-        isIn: [['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance', 'bonfire', 'bonfire_strategic']],
+        // 'research' added in the Research Intelligence expansion (Phase 1) —
+        // AI papers, benchmarks, technical breakthroughs as first-class opps.
+        isIn: [['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance', 'bonfire', 'bonfire_strategic', 'research']],
       },
     },
     title: {

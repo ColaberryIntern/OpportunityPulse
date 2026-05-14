@@ -29,9 +29,66 @@ function classifyByRules(opportunity) {
       return classifyAiNews(score, tags);
     case 'freelance':
       return classifyFreelance(score, value, tags);
+    case 'research':
+      return classifyResearch(opportunity, score, tags);
     default:
       return { actionType: ACTION_TYPES.IGNORE, confidenceScore: 50, reasoning: `Unknown opportunity type: ${type}` };
   }
+}
+
+// Research Intelligence Phase 1 — high-priority research topics from the
+// expansion plan's "Intelligent Filtering" section. A research opp that
+// touches these is worth a BUILD/PARTNER look; everything else is noise
+// the channel still surfaces but classifies as IGNORE so it doesn't crowd
+// the action queue.
+const RESEARCH_HIGH_PRIORITY = [
+  'multi-agent', 'multiagent', 'agent', 'llm orchestration', 'orchestration',
+  'ai infrastructure', 'reasoning', 'memory', 'retrieval', 'rag',
+  'observability', 'evaluation', 'eval', 'benchmark', 'autonomous',
+  'workflow automation', 'ai coding', 'code generation', 'enterprise ai',
+  'edge ai', 'ai governance', 'fine-tuning', 'inference',
+];
+
+function classifyResearch(opportunity, score, tags) {
+  const haystack = [
+    opportunity.title || '',
+    opportunity.description || '',
+    ...(tags || []),
+    ...((opportunity.sourceData && opportunity.sourceData.domains) || []),
+  ].join(' ').toLowerCase();
+  const matchedTopics = RESEARCH_HIGH_PRIORITY.filter((kw) => haystack.includes(kw));
+  const sd = opportunity.sourceData || {};
+  // Community-traction signal: S2 citations or HF upvotes. Either being
+  // high is a strong "people care about this" indicator.
+  const traction = Math.max(
+    Number(sd.citationCount) || 0,
+    Number(sd.upvotes) || 0,
+  );
+  const hasRepo = !!sd.githubRepo;
+
+  if (matchedTopics.length === 0) {
+    return {
+      actionType: ACTION_TYPES.IGNORE,
+      confidenceScore: 70,
+      reasoning: 'Research outside Colaberry\'s high-priority AI topics — surfaced in the channel but not actionable',
+    };
+  }
+  // On-topic + has a GitHub repo or strong traction → buildable signal.
+  if (hasRepo || traction >= 40) {
+    return {
+      actionType: ACTION_TYPES.BUILD,
+      confidenceScore: 78,
+      reasoning: `On-topic research (${matchedTopics.slice(0, 3).join(', ')})`
+        + `${hasRepo ? ' with a public repo' : ''}`
+        + `${traction >= 40 ? ` · traction ${traction}` : ''} — evaluate for a build`,
+    };
+  }
+  // On-topic but early (no repo, low traction) → worth watching / partner.
+  return {
+    actionType: ACTION_TYPES.PARTNER,
+    confidenceScore: 60,
+    reasoning: `On-topic research (${matchedTopics.slice(0, 3).join(', ')}) — early-stage; watch or reach out to the authors`,
+  };
 }
 
 function classifyGovContract(score, value, daysUntilExpiry) {

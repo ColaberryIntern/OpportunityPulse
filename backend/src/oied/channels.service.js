@@ -73,6 +73,15 @@ const CHANNELS = [
     sources: ['funding_news', 'mock_investments'],
     description: 'Investment opportunities, funding rounds, and capital allocation.',
   },
+  {
+    key: 'research',
+    label: 'Research',
+    icon: '🔬',
+    color: 'indigo',
+    types: ['research'],
+    sources: ['arxiv', 'semantic_scholar', 'huggingface_papers'],
+    description: 'AI research papers, benchmarks, technical breakthroughs, and emerging capabilities.',
+  },
 ];
 
 const UNKNOWN_CHANNEL = {

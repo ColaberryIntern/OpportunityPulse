@@ -26,6 +26,10 @@ const UpworkRssAdapter = require('./adapters/upworkRss.adapter');
 const FreelancerApiAdapter = require('./adapters/freelancerApi.adapter');
 const LinkedInManualAdapter = require('./adapters/linkedinManual.adapter');
 const GenericFreelanceRssAdapter = require('./adapters/genericFreelanceRss.adapter');
+// Research Intelligence Phase 1 — AI research paper / benchmark adapters.
+const ArxivAdapter = require('./adapters/research/arxiv.adapter');
+const SemanticScholarAdapter = require('./adapters/research/semanticScholar.adapter');
+const HuggingFacePapersAdapter = require('./adapters/research/huggingFacePapers.adapter');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -86,6 +90,13 @@ function getAdapter(dataSource) {
       return new LinkedInManualAdapter(dataSource);
     case 'generic_freelance_rss':
       return new GenericFreelanceRssAdapter(dataSource);
+    // Research Intelligence Phase 1.
+    case 'arxiv':
+      return new ArxivAdapter(dataSource);
+    case 'semantic_scholar':
+      return new SemanticScholarAdapter(dataSource);
+    case 'huggingface_papers':
+      return new HuggingFacePapersAdapter(dataSource);
     default:
       throw new AppError(`Unknown data source adapter: ${dataSource.name}`, 400);
   }
