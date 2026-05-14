@@ -21,8 +21,8 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
   - Verification: semanticSearch.test.js + researchGraph.test.js. Smoke-run on prod: 239 research opps embedded, semantic search returns 195 matches (top: "MEME: Multi-entity & Evolving Memory Evaluation", sim 0.642), graph build upserted 264 edges across 47 research opps.
 - [x] Phase 4 — research-to-build brief generator. New `oied/researchBuildBrief.service.js` turns a buildable research paper into a concrete build plan (product_idea, target_customers, suggested_architecture, mvp_scope, proposal_angle, confidence) via gpt-4o-mini, stored on `aiAnalysis.build_brief`. Only briefs papers Phase 2.1 flagged `research_summary.buildable === true`; grounds target_customers in the paper's `cross_channel_matches` demand signal. Idempotent batch (skips already-briefed unless force=true). Daily cron 7:45 AM UTC. `POST /research/build-briefs` admin trigger. Frontend OpportunityCard shows a 🧭 Build brief badge. `AnalysisRun` enum gains `research_build_brief`.
   - Date: 2026-05-14
-  - Verification: 10 new tests (researchBuildBrief.test.js). Full suite 127 suites / 1520 tests pass.
-  - Notes: No migration — `AnalysisRun.type` is a plain varchar (enum enforced in-model only) and `build_brief` lives in the existing `aiAnalysis` JSONB. Prod smoke-test pending deploy.
+  - Verification: 10 new tests (researchBuildBrief.test.js). Full suite 127 suites / 1520 tests pass. Prod smoke-run: 9 briefs persisted (11 of 15 had a demand signal, 29 buildable total) with grounded content; 6 opps failed on OpenAI 429 quota — service caught per-opp, marked the run `partial`, persisted the 9 successes (failure-first design working as intended).
+  - Notes: No migration — `AnalysisRun.type` is a plain varchar (enum enforced in-model only) and `build_brief` lives in the existing `aiAnalysis` JSONB. The 429s are an OpenAI account billing/quota issue, not a code defect — re-running the batch after quota refresh will pick up the remaining buildable papers (idempotent, skips already-briefed).
 
 ## Research Intelligence Expansion — Phase 2 (2.1–2.3: summaries, cross-channel, aggregation)
 

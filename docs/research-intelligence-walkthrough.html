@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Research Intelligence Expansion — Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --info-soft: #bee3f8; --indigo: #6366f1; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.phase    { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .annotated { margin: 14px 0; padding: 10px 14px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 13.5px; }
+  .annotated h4 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--navy); }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .pipeline .step { flex: 1; min-width: 130px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 4px; font-size: 12.5px; }
+  .pipeline .step b { color: var(--navy); display: block; font-size: 13px; margin-bottom: 3px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cron { background: #dbeafe; color: #1e3a8a; }
+  .b-data { background: #ede9fe; color: #5b21b6; }
+  .metric { display: inline-block; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; margin: 4px 6px 4px 0; }
+  .metric b { color: var(--navy); font-size: 20px; display: block; }
+  .metric span { font-size: 12px; color: var(--text-muted); }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 12px; background: #e0e7ff; color: #3730a3; margin: 1px 2px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } .pipeline { flex-direction: column; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#why">Why a research channel</a>
+  <a href="#pipeline">The pipeline</a>
+
+  <h2>Phase 1 — Foundation</h2>
+  <a href="#p1">Research as a channel</a>
+
+  <h2>Phase 2 — Intelligence</h2>
+  <a href="#p21">2.1 · AI summaries</a>
+  <a href="#p22">2.2 · Cross-channel matching</a>
+  <a href="#p23">2.3 · Authors + topics</a>
+  <a href="#p24">2.4 · Per-source intervals</a>
+  <a href="#p25">2.5 · Tier-2 adapters</a>
+
+  <h2>Phase 3 — Search + graph</h2>
+  <a href="#p3">Semantic search + graph</a>
+
+  <h2>Phase 4 — Synthesis</h2>
+  <a href="#p4">Research-to-build briefs</a>
+
+  <h2>Details</h2>
+  <a href="#schedule">Daily schedule</a>
+  <a href="#endpoints">API endpoints</a>
+  <a href="#prod">What's live on prod</a>
+  <a href="#decisions">Key decisions</a>
+  <a href="#files">Files changed</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Research Intelligence Expansion</h1>
+  <p class="subtitle">arXiv → buildable product plan · Walkthrough · 2026-05-14 · Phases 1–4 shipped</p>
+  <p>
+    You handed over the <em>Research Channel Expansion Plan</em> and said <em>"put together a plan to implement
+    this"</em>, then <em>"proceed with everything."</em> This is everything — Phases 1 through 4, built, tested,
+    and (Phases 1–3) running on prod.
+  </p>
+  <p>
+    Opportunity Pulse already watched government contracts, jobs, funding, freelance and news. It now also watches
+    <strong>research</strong> — arXiv papers, Hugging Face papers, AI-lab blogs — as a first-class channel. But the
+    point was never to just list papers. The point is a pipeline that takes a raw paper and walks it all the way to
+    <strong>"here is a product Colaberry could build, here is who would buy it, here is the MVP."</strong>
+  </p>
+  <p>
+    Four phases. <span class="badge b-done">Phase 1 live</span> <span class="badge b-done">Phase 2 live</span>
+    <span class="badge b-done">Phase 3 live</span> <span class="badge b-done">Phase 4 shipped</span>
+  </p>
+</section>
+
+<!-- ========================================================== WHY -->
+<section class="block context" id="why">
+  <h2>Why add a research channel</h2>
+  <p>
+    Every other channel in Opportunity Pulse is <em>demand</em> — someone already wrote a contract, posted a job,
+    raised a round. Research is <em>supply that hasn't found its demand yet</em>. A paper on agent memory published
+    today is the thing three state IT contracts will be asking for in eight months.
+  </p>
+  <p>The expansion answers three questions the other channels can't:</p>
+  <ul>
+    <li><strong>What's coming?</strong> — momentum scoring on research topics surfaces what's accelerating before it's a buzzword.</li>
+    <li><strong>Is it real?</strong> — cross-channel matching links a paper to actual paid opportunities already in the system. A paper with 5 linked gov contracts is a different bet than one with zero.</li>
+    <li><strong>What would we build?</strong> — the Phase 4 build brief turns a buildable paper into a concrete product idea, architecture sketch, MVP scope and proposal angle.</li>
+  </ul>
+  <div class="feedback-block">
+    <h4 class="small">Your feedback on the rationale</h4>
+    <textarea data-fb-id="why" placeholder="Does the framing match what you wanted out of this?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PIPELINE -->
+<section class="block feature" id="pipeline">
+  <h2>The pipeline, end to end</h2>
+  <p>Each stage runs on its own daily cron and writes onto the opportunity row, so every later stage builds on the earlier ones.</p>
+  <div class="pipeline">
+    <div class="step"><b>1 · Ingest</b>arXiv / HF papers / AI-lab RSS → <code>opportunities</code> rows, type <code>research</code></div>
+    <div class="step"><b>2.1 · Summarize</b>AI exec summary, build rec, <code>buildable</code> flag, market timing</div>
+    <div class="step"><b>2.2 · Match</b>Keyword overlap → links to gov / talent / capital / freelance opps</div>
+    <div class="step"><b>2.3 · Aggregate</b>Rebuild author + topic tables, momentum scores</div>
+    <div class="step"><b>3 · Embed + graph</b>Vector embeddings → semantic search; matches → edge table</div>
+    <div class="step"><b>4 · Brief</b>Buildable paper → product idea / architecture / MVP / pitch</div>
+  </div>
+  <p class="small">
+    Stages 2.1–4 only ever <em>add</em> keys to <code>aiAnalysis</code> on the opportunity row — nothing is destructive,
+    every stage is idempotent and safe to re-run.
+  </p>
+</section>
+
+<!-- ========================================================== PHASE 1 -->
+<section class="block phase" id="p1">
+  <h2>Phase 1 — Research as a first-class channel</h2>
+  <p>
+    Before any intelligence can run, research has to be a real channel — not a bolt-on. Phase 1 threaded
+    <code>research</code> through every layer that already knew about gov contracts and jobs.
+  </p>
+  <h3>What landed</h3>
+  <ul>
+    <li><strong>3 keyless ingestion adapters</strong> — arXiv, Semantic Scholar, Hugging Face Papers. Each follows the existing <code>BaseAdapter</code> <code>fetch()</code> + <code>transform()</code> contract, registered in <code>ingestion.service.js</code>, seeded as <code>data_sources</code> rows.</li>
+    <li><strong>New opportunity type</strong> <code>research</code> — added to the model enum, <code>OPPORTUNITY_TYPES</code> constant, and the <code>channels.service</code> channel list (🔬 Research, indigo).</li>
+    <li><strong>Research-aware classification</strong> — <code>classifyResearch()</code> routes a paper to BUILD (on-topic + has a repo/traction), PARTNER (on-topic but early), or IGNORE (off-topic) using a high-priority keyword list.</li>
+    <li><strong>Frontend</strong> — research line on the trends chart, sidebar channel link, channel dropdown option, and a <code>ResearchMeta</code> strip on the opportunity card showing authors, citations, upvotes, venue, and GitHub/PDF links.</li>
+  </ul>
+  <p>
+    A research paper now flows through ingestion, classification, the dashboard, and the opportunity list exactly
+    like every other opportunity — it just carries paper-specific metadata in <code>sourceData</code>.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 1 feedback</h4>
+    <textarea data-fb-id="p1" placeholder="Anything about research as a channel…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 2.1 -->
+<section class="block phase" id="p21">
+  <h2>Phase 2.1 — AI research summaries</h2>
+  <p>
+    A raw abstract is written for academics, not for a services company deciding where to spend a quarter.
+    <code>researchSummary.service.js</code> runs each research opp through gpt-4o-mini and produces a
+    <strong>business-oriented summary</strong> stored on <code>aiAnalysis.research_summary</code>:
+  </p>
+  <table>
+    <tr><th>Field</th><th>What it answers</th></tr>
+    <tr><td><code>executive_summary</code></td><td>What is this, in plain business English?</td></tr>
+    <tr><td><code>build_recommendation</code> + <code>buildable</code></td><td>Could Colaberry actually ship something from this? (boolean gate for Phase 4)</td></tr>
+    <tr><td><code>market_timing</code></td><td>One of <span class="chip">too_early</span><span class="chip">emerging</span><span class="chip">active</span><span class="chip">saturated</span></td></tr>
+    <tr><td><code>competitive_insight</code></td><td>Who else is already in this space?</td></tr>
+  </table>
+  <p>
+    The <code>buildable</code> flag is the important one — it's the gate that decides which papers get a Phase 4
+    build brief. No point briefing a paper we've already judged we can't ship.
+  </p>
+  <p class="small"><span class="badge b-cron">cron 6:45 AM UTC</span> &nbsp; Frontend shows a market-timing badge + 🔨 Buildable badge on the card.</p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 2.1 feedback</h4>
+    <textarea data-fb-id="p21" placeholder="On the summary fields / market-timing buckets…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 2.2 -->
+<section class="block phase" id="p22">
+  <h2>Phase 2.2 — Cross-channel matching</h2>
+  <p>
+    This is the "is it real?" stage. <code>crossChannelMatch.service.js</code> links a research paper to
+    opportunities <em>in other channels</em> — a gov contract, a job posting, a funding round, a freelance project —
+    by keyword and tag overlap.
+  </p>
+  <ul>
+    <li><code>extractTerms()</code> pulls significant words from the paper's title, tags and domains (with a domain stopword list so "learning", "model", "neural" don't match everything).</li>
+    <li>Candidate opportunities are scored by shared-term count; the top 8 with an overlap score ≥ 2 are persisted on <code>aiAnalysis.cross_channel_matches</code>.</li>
+    <li>The candidate query uses Postgres tag-overlap + title regex, capped at 400 rows per paper so it stays cheap.</li>
+  </ul>
+  <p>
+    This is deliberately <strong>not</strong> embeddings or a graph yet — it's fast keyword overlap. Phase 3 adds the
+    semantic layer on top. The card shows a <strong>🔗 N cross-channel links</strong> badge, and these matches become
+    the "demand signal" that Phase 4 grounds its build brief in.
+  </p>
+  <p class="small"><span class="badge b-cron">cron 7:00 AM UTC, force=true</span> &nbsp; (re-runs fully each day because matches go stale as new opps land in other channels).</p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 2.2 feedback</h4>
+    <textarea data-fb-id="p22" placeholder="On how papers get linked to real opportunities…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 2.3 -->
+<section class="block phase" id="p23">
+  <h2>Phase 2.3 — Author + topic aggregation</h2>
+  <p>
+    Two new tables, rebuilt idempotently from the research opps every day:
+  </p>
+  <ul>
+    <li><strong><code>research_authors</code></strong> — per distinct author name: paper count, summed citation traction, the topics and sources they show up in. "Who is publishing in this space."</li>
+    <li><strong><code>research_topics</code></strong> — per topic: paper count, a <code>momentum_score</code> from comparing the recent 30-day window against the prior 30 days, a <code>growth_rate</code>, and a <code>commercial_score</code> from the high-priority keyword list. "What's hot, and is it getting hotter."</li>
+  </ul>
+  <p>
+    Momentum scoring is the answer to "what's coming?" — a topic accelerating month-over-month is a leading
+    indicator before it shows up as contract demand.
+  </p>
+  <p class="small"><span class="badge b-cron">cron 7:15 AM UTC</span> &nbsp; <span class="badge b-data">research_authors</span> <span class="badge b-data">research_topics</span></p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 2.3 feedback</h4>
+    <textarea data-fb-id="p23" placeholder="On author/topic tracking + momentum scoring…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 2.4 -->
+<section class="block phase" id="p24">
+  <h2>Phase 2.4 — Per-source ingestion intervals</h2>
+  <p>
+    The expansion plan called for arXiv to be polled every couple of hours but Semantic Scholar only daily — they
+    have very different publish cadences and rate limits. Rather than one fixed cron, each <code>data_sources</code>
+    row now carries an <code>ingest_interval_minutes</code> value.
+  </p>
+  <ul>
+    <li>Seeded: arXiv every <strong>120 min</strong>, Hugging Face Papers every <strong>360 min</strong>, Semantic Scholar every <strong>1440 min</strong>.</li>
+    <li>New <code>research.scheduler.js</code> ticks every 30 minutes and runs <em>only</em> the sources whose interval has elapsed since their last run.</li>
+  </ul>
+  <p class="small"><span class="badge b-cron">tick every 30 min</span></p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 2.4 feedback</h4>
+    <textarea data-fb-id="p24" placeholder="On per-source polling cadence…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 2.5 -->
+<section class="block phase" id="p25">
+  <h2>Phase 2.5 — Tier-2 adapters</h2>
+  <p>Two more sources, with one honest caveat:</p>
+  <ul>
+    <li><strong>Research-blog RSS adapter</strong> — a configurable multi-feed adapter (OpenAI / DeepMind / BAIR) using <code>rss-parser</code>. Live on prod.</li>
+    <li><strong>Papers With Code adapter</strong> — built to the same contract, but <strong>disabled on prod</strong>: Meta shut down the public API after the acquisition and it now returns HTML for every endpoint. The adapter stays in the codebase so it's a one-line re-enable if the API ever comes back.</li>
+  </ul>
+  <p class="small">
+    Semantic Scholar's keyless tier also rate-limits hard (429 on the first request) — it's seeded but disabled until
+    a free API key is added. Graceful degradation: the channel works fine on arXiv + HF + blogs alone.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 2.5 feedback</h4>
+    <textarea data-fb-id="p25" placeholder="On the additional sources…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 3 -->
+<section class="block phase" id="p3">
+  <h2>Phase 3 — Semantic search + research graph</h2>
+  <p>
+    Phase 2.2 matched papers to opportunities by literal shared words. Phase 3 adds the <em>meaning</em> layer.
+  </p>
+  <h3>Embeddings + semantic search</h3>
+  <ul>
+    <li>The AI client gained an <code>embed()</code> method (OpenAI <code>text-embedding-3-small</code>, single or batched).</li>
+    <li><code>semanticSearch.service.js</code> embeds each research opp and stores the vector as JSONB on the opportunity row. Search embeds the query, then ranks by in-process cosine similarity.</li>
+    <li><code>findSimilar(id)</code> does "more papers like this one" off the same vectors.</li>
+  </ul>
+  <div class="annotated">
+    <h4>Why JSONB and not pgvector</h4>
+    Production Postgres is the <code>postgres:15-alpine</code> image with no pgvector extension. Adding it would
+    mean a full dump/restore across a musl→glibc collation change — a risky migration for a feature that works fine
+    without it at this data scale. Embeddings are stored as JSONB and cosine similarity runs in-process. It's
+    forward-compatible: if we ever swap the image, the vectors are already there to backfill into a real
+    <code>vector</code> column.
+  </div>
+  <h3>The research graph</h3>
+  <ul>
+    <li><code>research_relationships</code> — an edge table. <code>buildRelationships()</code> materializes the Phase 2.2 cross-channel matches into queryable edges (research opp → related opp, with channel + score).</li>
+    <li><code>buildTopicGraph(topic)</code> assembles a topic into a tree: the topic, its papers, its authors, and its cross-channel connections grouped by channel.</li>
+  </ul>
+  <p class="small"><span class="badge b-cron">embed cron 6:30 AM</span> <span class="badge b-cron">graph cron 7:30 AM</span> <span class="badge b-data">research_relationships</span></p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 3 feedback</h4>
+    <textarea data-fb-id="p3" placeholder="On semantic search + the graph…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PHASE 4 -->
+<section class="block phase" id="p4">
+  <h2>Phase 4 — Research-to-build briefs</h2>
+  <p>
+    The capstone. Every prior phase exists to feed this one. <code>researchBuildBrief.service.js</code> takes a
+    paper that Phase 2.1 flagged <code>buildable</code> and turns it into a concrete build plan a product strategist
+    could act on.
+  </p>
+  <p>The AI is given three things: the paper itself, its Phase 2.1 summary, and — crucially — its Phase 2.2
+    cross-channel matches as a <strong>demand signal</strong>. It produces, onto <code>aiAnalysis.build_brief</code>:</p>
+  <table>
+    <tr><th>Field</th><th>Example shape</th></tr>
+    <tr><td><code>product_idea</code></td><td>The specific product/service to build from this research.</td></tr>
+    <tr><td><code>target_customers</code></td><td>Who buys it — grounded in the linked opportunities ("the 3 linked state IT contracts suggest gov procurement is a near-term buyer").</td></tr>
+    <tr><td><code>suggested_architecture</code></td><td>Rough technical shape — what's reused vs. net-new.</td></tr>
+    <tr><td><code>mvp_scope</code></td><td>The smallest version that proves value and ships in ~1 quarter.</td></tr>
+    <tr><td><code>proposal_angle</code></td><td>The one-line pitch for a proposal or sales conversation.</td></tr>
+    <tr><td><code>confidence</code></td><td>0–1, how real + near-term this build is.</td></tr>
+  </table>
+  <p>
+    The prompt is explicit: be concrete to <em>this</em> paper, no generic "build an AI platform" filler, and if
+    there's no demand signal, say so honestly ("no direct demand signal yet — speculative") rather than inventing one.
+  </p>
+  <p>
+    The card shows a <strong>🧭 Build brief</strong> badge; hovering surfaces the product idea and pitch. The batch
+    is idempotent — it skips papers that already have a brief unless <code>force=true</code> — and admins can trigger
+    it on demand via <code>POST /research/build-briefs</code>.
+  </p>
+  <p class="small"><span class="badge b-cron">cron 7:45 AM UTC</span> &nbsp; 10 unit tests covering prompt build, sanitize, single-generate, and batch happy/force/empty/partial paths.</p>
+  <div class="feedback-block">
+    <h4 class="small">Phase 4 feedback</h4>
+    <textarea data-fb-id="p4" placeholder="On the build brief — is this the synthesis you wanted?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCHEDULE -->
+<section class="block" id="schedule">
+  <h2>The daily research schedule</h2>
+  <p>Everything runs in the early-morning UTC window, deliberately ordered so each stage has fresh input from the one before it:</p>
+  <table>
+    <tr><th>Time (UTC)</th><th>Job</th><th>Reads</th></tr>
+    <tr><td>~every 30 min</td><td>Research ingestion tick</td><td>per-source interval</td></tr>
+    <tr><td>6:30 AM</td><td>Embedding generation</td><td>research opps without a vector</td></tr>
+    <tr><td>6:45 AM</td><td>AI research summaries</td><td>freshly-ingested papers</td></tr>
+    <tr><td>7:00 AM</td><td>Cross-channel matching</td><td>summaries + all other channels</td></tr>
+    <tr><td>7:15 AM</td><td>Author + topic aggregation</td><td>all research opps</td></tr>
+    <tr><td>7:30 AM</td><td>Research graph build</td><td>cross-channel matches</td></tr>
+    <tr><td>7:45 AM</td><td>Research build briefs</td><td>buildable papers + their matches</td></tr>
+  </table>
+</section>
+
+<!-- ========================================================== ENDPOINTS -->
+<section class="block" id="endpoints">
+  <h2>API endpoints</h2>
+  <p>All under <code>/api/v1/oied/research</code>, bridge-auth for reads, admin-only for the triggers:</p>
+  <pre>GET  /research/search?q=...              semantic search across channels
+GET  /research/opportunities/:id/similar  "more like this"
+GET  /research/topics                     top topics by momentum
+GET  /research/authors                    top authors
+GET  /research/graph/:topic               topic tree (papers + authors + links)
+POST /research/embed            (admin)    kick an embedding batch
+POST /research/build-briefs     (admin)    kick a build-brief batch</pre>
+</section>
+
+<!-- ========================================================== PROD -->
+<section class="block summary" id="prod">
+  <h2>What's live on prod right now</h2>
+  <p>Smoke-tested numbers from the prod box (Phases 1–3 verified live; Phase 4 deployed 2026-05-14):</p>
+  <div>
+    <span class="metric"><b>179</b><span>papers ingested</span></span>
+    <span class="metric"><b>30</b><span>AI summaries</span></span>
+    <span class="metric"><b>264</b><span>cross-channel links</span></span>
+    <span class="metric"><b>1,126</b><span>distinct authors</span></span>
+    <span class="metric"><b>25</b><span>research topics</span></span>
+    <span class="metric"><b>239</b><span>papers embedded</span></span>
+    <span class="metric"><b>264</b><span>graph edges</span></span>
+  </div>
+  <p class="small">
+    Top topics by momentum: cs.CL (92), cs.MA (80), cs.AI (80), cs.LG (56). Semantic search top match for
+    "memory agents": <em>"MEME: Multi-entity &amp; Evolving Memory Evaluation"</em> at 0.642 cosine similarity.
+    Cross-channel links break down as 142 news / 61 freelance / 39 talent / 9 bonfire / 9 government / 2 capital / 2 strategic.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the prod numbers</h4>
+    <textarea data-fb-id="prod" placeholder="Anything look off, or want different volume/cadence?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== DECISIONS -->
+<section class="block context" id="decisions">
+  <h2>Key decisions worth knowing</h2>
+  <ul>
+    <li><strong>JSONB embeddings over pgvector</strong> — avoided a risky prod DB image swap; forward-compatible (see Phase 3).</li>
+    <li><strong>Keyword matching before semantic matching</strong> — Phase 2.2 is cheap literal overlap; Phase 3 layers meaning on top. Both run; they answer slightly different questions.</li>
+    <li><strong>Everything is additive + idempotent</strong> — each stage only adds keys to <code>aiAnalysis</code>; every batch is safe to re-run, and <code>force=true</code> exists where a full refresh is wanted.</li>
+    <li><strong>Graceful source degradation</strong> — Papers With Code (dead API) and Semantic Scholar (keyless 429) are seeded but disabled; the channel runs fine on arXiv + HF + blogs.</li>
+    <li><strong><code>buildable</code> as the Phase 4 gate</strong> — only papers the AI judged shippable get a build brief, so we don't spend tokens briefing dead ends.</li>
+  </ul>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New services + models</h3>
+  <pre>backend/src/ingestion/adapters/research/   arxiv, semanticScholar, huggingFacePapers,
+                                           papersWithCode, researchBlogRss adapters
+backend/src/ingestion/research.scheduler.js
+backend/src/oied/researchSummary.service.js
+backend/src/oied/crossChannelMatch.service.js
+backend/src/oied/researchAggregation.service.js
+backend/src/oied/semanticSearch.service.js
+backend/src/oied/researchGraph.service.js
+backend/src/oied/researchBuildBrief.service.js
+backend/src/oied/research.controller.js
+backend/src/models/{ResearchAuthor,ResearchTopic,ResearchRelationship}.js</pre>
+  <h3>Migrations</h3>
+  <pre>20260510000006  seed research data_sources
+20260510000007  create research_authors + research_topics
+20260510000008  data_source ingest_interval_minutes
+20260510000009  seed tier-2 research sources
+20260510000010  opportunity embedding columns
+20260510000011  create research_relationships</pre>
+  <h3>Touched</h3>
+  <pre>Opportunity, AnalysisRun, DataSource models · ingestion.service · channels.service
+classification.rules · actionEngine.scheduler · ai.client · oied.routes · server.js
+frontend: OpportunityCard, Sidebar, OpportunityChart, MyOpportunitiesPage, dashboard.service</pre>
+  <p class="small">8 new test files; full suite 127 suites / 1,520 tests passing.</p>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    The whole expansion is shipped: Phases 1–3 verified on prod, Phase 4 deployed today. The arXiv → buildable
+    product-plan pipeline runs every morning without anyone touching it.
+  </p>
+  <p><strong>Natural next steps, none of them blocking:</strong></p>
+  <ul>
+    <li>A free Semantic Scholar API key would re-enable that source (richer citation data).</li>
+    <li>A dedicated Research page — topic momentum leaderboard, author leaderboard, the topic graph rendered visually — right now the intelligence is on the cards and behind the API but there's no single research dashboard.</li>
+    <li>Surfacing the full build brief in the opportunity detail modal (the card only shows the badge + hover today).</li>
+    <li>If embedding volume grows past comfort, revisit the pgvector swap.</li>
+  </ul>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'research-intelligence-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Research Intelligence Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
