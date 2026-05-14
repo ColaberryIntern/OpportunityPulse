@@ -35,3 +35,61 @@ export async function getJobStatus(jobId) {
   const res = await api.get(`${base}/jobs/${jobId}/status`);
   return res.data?.data;
 }
+
+// ---- Phase 2 — reports index + management --------------------------------
+
+// The searchable / filterable reports index.
+export async function listReports(params = {}) {
+  const res = await api.get(base, { params });
+  return res.data?.data;
+}
+
+// Re-run a report (snapshots history, bumps version, re-synthesizes).
+export async function reRunReport(id) {
+  const res = await api.post(`${base}/${id}/rerun`);
+  return res.data?.data;
+}
+
+// Toggle favorite / archived flags.
+export async function setReportFlags(id, flags) {
+  const res = await api.patch(`${base}/${id}/flags`, flags);
+  return res.data?.data;
+}
+
+// Report version history (metadata only).
+export async function getReportVersions(id) {
+  const res = await api.get(`${base}/${id}/versions`);
+  return res.data?.data?.versions || [];
+}
+
+// ---- Phase 2 — briefing center -------------------------------------------
+
+export async function listBriefingSubscriptions() {
+  const res = await api.get(`${base}/briefings`);
+  return res.data?.data?.subscriptions || [];
+}
+
+export async function createBriefingSubscription(body) {
+  const res = await api.post(`${base}/briefings`, body);
+  return res.data?.data;
+}
+
+export async function updateBriefingSubscription(id, body) {
+  const res = await api.patch(`${base}/briefings/${id}`, body);
+  return res.data?.data;
+}
+
+export async function deleteBriefingSubscription(id) {
+  const res = await api.delete(`${base}/briefings/${id}`);
+  return res.data?.data;
+}
+
+export async function previewBriefing() {
+  const res = await api.get(`${base}/briefings/preview`);
+  return res.data?.data;
+}
+
+export async function getBriefingHistory() {
+  const res = await api.get(`${base}/briefings/history`);
+  return res.data?.data?.history || [];
+}

@@ -17,6 +17,12 @@ module.exports = (sequelize) => {
     gtmSummary: { type: DataTypes.TEXT, allowNull: true, field: 'gtm_summary' },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     sortOrder: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'sort_order' },
+    // Phase 2 — venture scoring engine output.
+    compositeScore: { type: DataTypes.DECIMAL(5, 2), allowNull: true, field: 'composite_score' },
+    recommendationLevel: {
+      type: DataTypes.STRING(20), allowNull: true, field: 'recommendation_level',
+    },
+    scores: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   }, {
     tableName: 'venture_ideas',
     timestamps: true,

@@ -19,6 +19,17 @@ module.exports = (sequelize) => {
     createdBy: { type: DataTypes.INTEGER, allowNull: true, field: 'created_by' },
     analysisRunId: { type: DataTypes.INTEGER, allowNull: true, field: 'analysis_run_id' },
     error: { type: DataTypes.TEXT, allowNull: true },
+    // Phase 2 — versioning + management + denormalized intelligence scores.
+    version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    isFavorite: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_favorite' },
+    isArchived: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_archived' },
+    timingScore: { type: DataTypes.DECIMAL(4, 3), allowNull: true, field: 'timing_score' },
+    commercializationScore: {
+      type: DataTypes.DECIMAL(5, 2), allowNull: true, field: 'commercialization_score',
+    },
+    correlationStrength: {
+      type: DataTypes.DECIMAL(4, 3), allowNull: true, field: 'correlation_strength',
+    },
   }, {
     tableName: 'deep_research_reports',
     timestamps: true,
@@ -34,6 +45,18 @@ module.exports = (sequelize) => {
     DeepResearchReport.hasMany(models.VentureIdea, {
       foreignKey: 'report_id',
       as: 'ventureIdeas',
+    });
+    DeepResearchReport.hasMany(models.MonetizationModel, {
+      foreignKey: 'report_id',
+      as: 'monetizationModels',
+    });
+    DeepResearchReport.hasOne(models.SignalCorrelation, {
+      foreignKey: 'report_id',
+      as: 'signalCorrelation',
+    });
+    DeepResearchReport.hasMany(models.ReportVersion, {
+      foreignKey: 'report_id',
+      as: 'versions',
     });
   };
 

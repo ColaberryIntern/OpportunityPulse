@@ -2,6 +2,8 @@
 
 jest.mock('../../src/models', () => ({
   DailyResearchScan: { create: jest.fn() },
+  BriefingSubscription: { findAll: jest.fn() },
+  DeepResearchReport: { findAll: jest.fn() },
 }));
 jest.mock('../../src/deepResearch/deepResearch.service', () => ({ runDeepResearch: jest.fn() }));
 jest.mock('../../src/deepResearch/emailBriefing.service', () => ({ sendDailyBriefing: jest.fn() }));

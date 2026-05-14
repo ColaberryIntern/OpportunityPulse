@@ -13,7 +13,9 @@
 // integration lands, only that one function changes — the job model, the
 // phase walker, the progress tracking, and the polling API all stay.
 
-const { VentureIdea, ProjectGenerationJob } = require('../models');
+const {
+  VentureIdea, ProjectGenerationJob, DeepResearchReport, MonetizationModel, SignalCorrelation,
+} = require('../models');
 const logger = require('../logging/logger');
 
 // The phase sequence every requirements-generation job walks. Persisted
@@ -59,25 +61,91 @@ function clonePhases(phases) {
 // ---------------------------------------------------------------------------
 // THE SEAM — Agent Foundry handoff.
 // ---------------------------------------------------------------------------
+// Pull the full venture-aware context for a venture idea: its parent
+// report, the report's monetization models, and the cross-channel
+// correlation. Returns nulls gracefully if a piece is missing.
+async function _loadVentureContext(ventureIdea) {
+  if (!ventureIdea.reportId) return { report: null, monetizationModels: [], correlation: null };
+  const [report, monetizationModels, correlation] = await Promise.all([
+    DeepResearchReport.findByPk(ventureIdea.reportId),
+    MonetizationModel.findAll({ where: { reportId: ventureIdea.reportId } }),
+    SignalCorrelation.findOne({ where: { reportId: ventureIdea.reportId } }),
+  ]);
+  return { report, monetizationModels: monetizationModels || [], correlation };
+}
+
 // Phase 1 foundation: there is no Agent Foundry API wired up yet, so this
 // produces a structured requirements scaffold deterministically from the
-// venture idea. It is real, useful output (a requirements doc the team can
-// act on) — not a fake. When Agent Foundry exposes an API, replace the body
-// of this function with the HTTP handoff; its return contract stays the same:
-//   { projectSlug, architectUrl, requirements }
-async function _dispatchToAgentFoundry(ventureIdea) {
+// venture idea. It is real, useful output — not a fake. When Agent Foundry
+// exposes an API, replace the body with the HTTP handoff; the return
+// contract stays the same: { projectSlug, architectUrl, requirements }.
+//
+// Phase 2 — the scaffold is now VENTURE-AWARE, not just topic summarization:
+// it carries the strategic context (market stage, correlation, convergence),
+// the monetization model set, the ICP, GTM, and competitive landscape — so
+// the downstream Architect run is grounded in the full venture intelligence.
+async function _dispatchToAgentFoundry(ventureIdea, ctx = {}) {
   const slug = slugify(ventureIdea.title);
   const meta = ventureIdea.metadata || {};
+  const { report, monetizationModels, correlation } = ctx;
+  const reportJson = (report && report.reportJson) || {};
+  const scores = ventureIdea.scores || {};
+
+  // Strategic context — the "why now / how big" framing.
+  const strategicContext = {
+    research_topic: report ? report.searchTerm : null,
+    market_stage: report ? report.marketStage : null,
+    executive_summary: report ? report.executiveSummary : null,
+    correlation_strength: correlation ? Number(correlation.correlationStrength) : null,
+    convergence_type: correlation ? correlation.convergenceType : null,
+    acceleration: correlation ? Number(correlation.acceleration) : null,
+    venture_composite_score: ventureIdea.compositeScore != null
+      ? Number(ventureIdea.compositeScore) : null,
+    recommendation_level: ventureIdea.recommendationLevel || null,
+  };
+
+  // Monetization transfer — the full model set, best-fit first.
+  const monetization = {
+    primary_strategy: ventureIdea.monetizationStrategy || '',
+    models: (monetizationModels || [])
+      .slice()
+      .sort((a, b) => Number(b.fitScore || 0) - Number(a.fitScore || 0))
+      .map((m) => ({
+        type: m.modelType,
+        pricing: m.pricingSuggestion,
+        icp: m.idealIcp,
+        revenue_model: m.revenueModel,
+        complexity: m.implementationComplexity,
+        fit_score: m.fitScore != null ? Number(m.fitScore) : null,
+      })),
+  };
+
+  // Competitive landscape — from the report's opportunity signals + the
+  // correlation's convergence read.
+  const competitiveLandscape = {
+    market_stage: report ? report.marketStage : 'unknown',
+    convergence: correlation ? correlation.convergenceType : 'none',
+    opportunity_signals: Array.isArray(reportJson.opportunity_signals)
+      ? reportJson.opportunity_signals.slice(0, 5) : [],
+    competition_saturation_score: scores.competition_saturation != null
+      ? scores.competition_saturation : null,
+  };
+
   const requirements = {
     project_name: ventureIdea.title,
-    generated_by: 'deep-research-phase-1-foundation',
+    generated_by: 'deep-research-phase-2-venture-aware',
     overview: ventureIdea.description || '',
+    // Venture-aware context blocks.
+    strategic_context: strategicContext,
     target_customers: meta.target_customers || '',
+    ideal_customer_profile: monetization.models[0] ? monetization.models[0].icp : (meta.target_customers || ''),
     mvp_scope: ventureIdea.mvpScope || '',
     suggested_architecture: meta.suggested_architecture || '',
-    monetization: ventureIdea.monetizationStrategy || '',
+    monetization,
     go_to_market: ventureIdea.gtmSummary || '',
-    market_timing: ventureIdea.marketTiming || 'unknown',
+    competitive_landscape: competitiveLandscape,
+    venture_scores: scores,
+    market_timing: ventureIdea.marketTiming || (report ? report.marketStage : 'unknown'),
     buildability_score: ventureIdea.buildabilityScore != null
       ? Number(ventureIdea.buildabilityScore) : null,
     revenue_potential: ventureIdea.revenuePotential || 'medium',
@@ -85,16 +153,15 @@ async function _dispatchToAgentFoundry(ventureIdea) {
     functional_requirements: [
       'Define the core data model and persistence layer.',
       'Implement the primary user workflow described in the MVP scope.',
-      'Stand up the monetization / billing path.',
+      `Stand up the monetization path — primary model: ${monetization.models[0] ? monetization.models[0].type : 'tbd'}.`,
       'Add observability: structured logs + a health endpoint.',
+      'Wire the go-to-market motion described in the GTM context.',
     ],
-    next_step: 'Hand this scaffold to the AI Project Architect (Agent Foundry) '
+    next_step: 'Hand this venture-aware scaffold to the AI Project Architect (Agent Foundry) '
       + 'for full requirement expansion and code generation.',
   };
   return {
     projectSlug: slug,
-    // Foundation: a deterministic placeholder URL. The real integration
-    // returns the actual Agent Foundry project URL here.
     architectUrl: `/agent-foundry/projects/${slug}`,
     requirements,
   };
@@ -147,7 +214,9 @@ async function processJob(jobId) {
       // The Agent Foundry handoff happens on its dedicated phase.
       if (phase.key === 'handoff_to_architect') {
         // eslint-disable-next-line no-await-in-loop
-        architectResult = await _dispatchToAgentFoundry(ventureIdea);
+        const ventureCtx = await _loadVentureContext(ventureIdea);
+        // eslint-disable-next-line no-await-in-loop
+        architectResult = await _dispatchToAgentFoundry(ventureIdea, ventureCtx);
       }
 
       phase.status = 'completed';

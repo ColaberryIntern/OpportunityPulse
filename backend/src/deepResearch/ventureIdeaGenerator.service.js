@@ -9,7 +9,7 @@
 // does this mean", this answers "what would we build". Two responsibilities,
 // two services, two prompts.
 
-const { getAIClient } = require('../analysis/ai.client');
+const aiProvider = require('./aiProvider.service');
 const logger = require('../logging/logger');
 
 const MARKET_TIMINGS = ['too_early', 'emerging', 'active', 'saturated'];
@@ -101,11 +101,11 @@ function sanitizeIdea(raw) {
 // nameless venture idea is noise. Throws if the AI call itself fails;
 // the orchestrator catches that and degrades the report to 'partial'.
 async function generateVentureIdeas(context, synthesis) {
-  const ai = getAIClient();
-  const { content, tokensUsed } = await ai.chat(SYSTEM_PROMPT, buildUserPrompt(context, synthesis), {
-    temperature: 0.6,
-    maxTokens: 2000,
-  });
+  const { content, tokensUsed } = await aiProvider.chat(
+    SYSTEM_PROMPT,
+    buildUserPrompt(context, synthesis),
+    { temperature: 0.6, maxTokens: 2000, operation: 'venture_idea_generation' },
+  );
   let parsed;
   try {
     parsed = JSON.parse(content);

@@ -7,7 +7,7 @@
 //
 // One model call, schema-shaped output, sanitized before return.
 
-const { getAIClient } = require('../analysis/ai.client');
+const aiProvider = require('./aiProvider.service');
 const logger = require('../logging/logger');
 
 const MARKET_STAGES = ['too_early', 'emerging', 'active', 'saturated', 'unknown'];
@@ -98,10 +98,10 @@ function sanitizeSynthesis(parsed) {
 // Run the synthesis. Returns { synthesis, tokensUsed }. Throws if the AI
 // call itself fails — the orchestrator treats this as the hard gate.
 async function synthesize(context) {
-  const ai = getAIClient();
-  const { content, tokensUsed } = await ai.chat(SYSTEM_PROMPT, buildUserPrompt(context), {
+  const { content, tokensUsed } = await aiProvider.chat(SYSTEM_PROMPT, buildUserPrompt(context), {
     temperature: 0.4,
     maxTokens: 1600,
+    operation: 'strategy_synthesis',
   });
   let parsed;
   try {

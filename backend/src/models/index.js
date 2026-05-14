@@ -88,6 +88,12 @@ const DeepResearchReport = require('./DeepResearchReport')(sequelize);
 const VentureIdea = require('./VentureIdea')(sequelize);
 const ProjectGenerationJob = require('./ProjectGenerationJob')(sequelize);
 const DailyResearchScan = require('./DailyResearchScan')(sequelize);
+// Deep Research Phase 2 — versioning, correlation, monetization, AI logs, briefings.
+const ReportVersion = require('./ReportVersion')(sequelize);
+const SignalCorrelation = require('./SignalCorrelation')(sequelize);
+const MonetizationModel = require('./MonetizationModel')(sequelize);
+const AiProviderLog = require('./AiProviderLog')(sequelize);
+const BriefingSubscription = require('./BriefingSubscription')(sequelize);
 
 const models = {
   UserRole,
@@ -153,6 +159,11 @@ const models = {
   VentureIdea,
   ProjectGenerationJob,
   DailyResearchScan,
+  ReportVersion,
+  SignalCorrelation,
+  MonetizationModel,
+  AiProviderLog,
+  BriefingSubscription,
 };
 
 // Set up associations

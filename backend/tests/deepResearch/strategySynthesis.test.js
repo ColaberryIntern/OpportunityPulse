@@ -1,14 +1,11 @@
 // Deep Research Intelligence Engine — strategySynthesis.service tests.
 
-jest.mock('../../src/analysis/ai.client', () => {
-  const client = { model: 'gpt-4o-mini', chat: jest.fn() };
-  return { getAIClient: () => client, __client: client };
-});
+jest.mock('../../src/deepResearch/aiProvider.service', () => ({ chat: jest.fn() }));
 
-const aiMod = require('../../src/analysis/ai.client');
+const aiProvider = require('../../src/deepResearch/aiProvider.service');
 const svc = require('../../src/deepResearch/strategySynthesis.service');
 
-beforeEach(() => { aiMod.__client.chat.mockReset(); });
+beforeEach(() => { aiProvider.chat.mockReset(); });
 
 const sampleContext = {
   searchTerm: 'AI agents',
@@ -72,7 +69,7 @@ describe('strategySynthesis.sanitizeSynthesis', () => {
 
 describe('strategySynthesis.synthesize', () => {
   it('calls the AI and returns the sanitized synthesis + tokens', async () => {
-    aiMod.__client.chat.mockResolvedValue({
+    aiProvider.chat.mockResolvedValue({
       content: JSON.stringify({
         executive_summary: 'Agents are hot.',
         market_stage: 'emerging',
@@ -88,14 +85,14 @@ describe('strategySynthesis.synthesize', () => {
   });
 
   it('tolerates non-JSON AI output by returning an empty-ish synthesis', async () => {
-    aiMod.__client.chat.mockResolvedValue({ content: 'no json here', tokensUsed: 10 });
+    aiProvider.chat.mockResolvedValue({ content: 'no json here', tokensUsed: 10 });
     const { synthesis } = await svc.synthesize(sampleContext);
     expect(synthesis.market_stage).toBe('unknown');
     expect(synthesis.executive_summary).toBe('');
   });
 
   it('propagates an AI client failure (the hard gate)', async () => {
-    aiMod.__client.chat.mockRejectedValue(new Error('429 quota'));
+    aiProvider.chat.mockRejectedValue(new Error('429 quota'));
     await expect(svc.synthesize(sampleContext)).rejects.toThrow('429 quota');
   });
 });

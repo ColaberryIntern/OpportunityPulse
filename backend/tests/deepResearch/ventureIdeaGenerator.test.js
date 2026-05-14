@@ -1,14 +1,11 @@
 // Deep Research Intelligence Engine — ventureIdeaGenerator.service tests.
 
-jest.mock('../../src/analysis/ai.client', () => {
-  const client = { model: 'gpt-4o-mini', chat: jest.fn() };
-  return { getAIClient: () => client, __client: client };
-});
+jest.mock('../../src/deepResearch/aiProvider.service', () => ({ chat: jest.fn() }));
 
-const aiMod = require('../../src/analysis/ai.client');
+const aiProvider = require('../../src/deepResearch/aiProvider.service');
 const svc = require('../../src/deepResearch/ventureIdeaGenerator.service');
 
-beforeEach(() => { aiMod.__client.chat.mockReset(); });
+beforeEach(() => { aiProvider.chat.mockReset(); });
 
 const context = {
   searchTerm: 'AI agents',
@@ -67,7 +64,7 @@ describe('ventureIdeaGenerator.sanitizeIdea', () => {
 
 describe('ventureIdeaGenerator.generateVentureIdeas', () => {
   it('parses, sanitizes, caps at 5, and drops nameless ideas', async () => {
-    aiMod.__client.chat.mockResolvedValue({
+    aiProvider.chat.mockResolvedValue({
       content: JSON.stringify({
         venture_ideas: [
           { title: 'A', revenue_potential: 'high', buildability_score: 0.6 },
@@ -86,19 +83,19 @@ describe('ventureIdeaGenerator.generateVentureIdeas', () => {
   });
 
   it('returns an empty list for non-JSON output', async () => {
-    aiMod.__client.chat.mockResolvedValue({ content: 'sorry', tokensUsed: 5 });
+    aiProvider.chat.mockResolvedValue({ content: 'sorry', tokensUsed: 5 });
     const { ideas } = await svc.generateVentureIdeas(context, synthesis);
     expect(ideas).toEqual([]);
   });
 
   it('returns an empty list when venture_ideas is missing', async () => {
-    aiMod.__client.chat.mockResolvedValue({ content: JSON.stringify({ other: 1 }), tokensUsed: 5 });
+    aiProvider.chat.mockResolvedValue({ content: JSON.stringify({ other: 1 }), tokensUsed: 5 });
     const { ideas } = await svc.generateVentureIdeas(context, synthesis);
     expect(ideas).toEqual([]);
   });
 
   it('propagates an AI client failure', async () => {
-    aiMod.__client.chat.mockRejectedValue(new Error('429 quota'));
+    aiProvider.chat.mockRejectedValue(new Error('429 quota'));
     await expect(svc.generateVentureIdeas(context, synthesis)).rejects.toThrow('429 quota');
   });
 });
