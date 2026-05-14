@@ -22,6 +22,8 @@ const {
 const crossChannelCorrelation = require('../src/deepResearch/crossChannelCorrelation.service');
 const marketTiming = require('../src/deepResearch/marketTiming.service');
 const ventureScoring = require('../src/deepResearch/ventureScoring.service');
+const ventureLifecycle = require('../src/deepResearch/ventureLifecycle.service');
+const executionQueue = require('../src/deepResearch/executionQueue.service');
 
 const SEARCH_TERM = 'AI agents for government operations [sample]';
 
@@ -245,24 +247,49 @@ async function main() {
   // Score each venture idea with the REAL deterministic scoring engine,
   // then persist with its 8-dimension scores + composite + recommendation.
   let compositeSum = 0;
+  const ideaRows = [];
   for (const idea of ideas) {
     const scored = ventureScoring.scoreVenture(idea, {
       context: SAMPLE_CONTEXT, correlation, timing,
     });
     compositeSum += scored.composite_score;
     // eslint-disable-next-line no-await-in-loop
-    await VentureIdea.create({
+    const row = await VentureIdea.create({
       ...idea,
       reportId: report.id,
       compositeScore: scored.composite_score,
       recommendationLevel: scored.recommendation_level,
       scores: scored.scores,
     });
+    ideaRows.push(row);
   }
   // Report-level rollup.
   await report.update({
     commercializationScore: Number((compositeSum / ideas.length).toFixed(2)),
   });
+
+  // ---- Phase 3 — seed execution intelligence ----------------------------
+  // Move each venture through a few lifecycle stages (so the pipeline view
+  // has spread) and run the REAL deterministic execution engines via
+  // assessVenture — this both validates the engines on prod and gives the
+  // execution dashboard + venture panels real data. The AI engines
+  // (mvpPlanning / launchStrategy) are intentionally skipped here — they'd
+  // 429 on the exhausted OpenAI quota; run them on-demand from the UI once
+  // a provider is healthy.
+  const lifecyclePlan = [
+    ['researching', 'evaluating', 'approved'], // idea 0 → approved
+    ['researching', 'evaluating'], // idea 1 → evaluating
+    ['researching'], // idea 2 → researching
+  ];
+  for (let i = 0; i < ideaRows.length; i += 1) {
+    const row = ideaRows[i];
+    for (const toState of (lifecyclePlan[i] || [])) {
+      // eslint-disable-next-line no-await-in-loop
+      await ventureLifecycle.transition(row.id, toState, { actor: 'seeder', note: 'sample seed' });
+    }
+    // eslint-disable-next-line no-await-in-loop
+    await executionQueue.assessVenture(row.id);
+  }
 
   // eslint-disable-next-line no-console
   console.log(JSON.stringify({
