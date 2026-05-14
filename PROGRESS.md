@@ -8,6 +8,12 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Research Intelligence Expansion — fixes
+
+- [x] Research missing from the keyword-search per-channel breakdown strip. `ChannelBucketStrip` in `MyOpportunitiesPage.jsx` had a hardcoded `order` array (`private-sector, talent, government, bonfire, capital, freelance, strategic`) that never got `research` added — the backend already built a `research` bucket (its loop runs over all 8 `channelsSvc.listChannels()`), but the frontend filtered it out. Added `'research'` to the order array (before `strategic`).
+  - Date: 2026-05-14
+  - Verification: user-reported (screenshots — `?q=mcp` breakdown showed News/Talent/Freelance cards but no Research card despite `?channel=research&q=MCP` returning 2 matches). Backend confirmed already correct; one-line frontend order-array fix. Deploy pending.
+
 ## Research Intelligence Expansion — Phases 2.4–4 (intervals, tier-2 adapters, semantic search + graph, build briefs)
 
 - [x] Phase 2.4 — per-source ingestion intervals. Migration `20260510000008` adds `ingest_interval_minutes` to `data_sources` (seeds arxiv=120, semantic_scholar=1440, huggingface_papers=360). `DataSource` model gains `ingestIntervalMinutes`. New `ingestion/research.scheduler.js` ticks every 30 min, runs only sources whose interval has elapsed since `last_run_at`. Wired into `server.js` after the main scheduler.

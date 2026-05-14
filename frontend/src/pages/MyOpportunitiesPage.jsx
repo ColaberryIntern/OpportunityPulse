@@ -170,7 +170,7 @@ function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail 
 // the top 5 rows so users can drill into a specific channel without
 // paginating through a unified priority-sorted blob.
 function ChannelBucketStrip({ buckets, qFromUrl, sortFromUrl, onOpenDetail }) {
-  const order = ['private-sector', 'talent', 'government', 'bonfire', 'capital', 'freelance', 'strategic'];
+  const order = ['private-sector', 'talent', 'government', 'bonfire', 'capital', 'freelance', 'research', 'strategic'];
   const orderedKeys = order.filter((k) => buckets && buckets[k] && buckets[k].rows && buckets[k].rows.length > 0);
   if (orderedKeys.length === 0) return null;
   return (
