@@ -23,6 +23,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(20), allowNull: true, field: 'recommendation_level',
     },
     scores: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    // Phase 3 — execution lifecycle.
+    lifecycleState: {
+      type: DataTypes.STRING(40), allowNull: false, defaultValue: 'discovered', field: 'lifecycle_state',
+    },
+    lifecycleOwner: { type: DataTypes.STRING(120), allowNull: true, field: 'lifecycle_owner' },
   }, {
     tableName: 'venture_ideas',
     timestamps: true,

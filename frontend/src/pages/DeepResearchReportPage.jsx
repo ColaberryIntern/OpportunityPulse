@@ -7,6 +7,7 @@ import {
   getDeepResearchReport, getDeepResearchStatus, reRunReport, setReportFlags,
 } from '../services/deepResearchService';
 import RequirementsProgressModal from '../components/deepResearch/RequirementsProgressModal';
+import VentureExecutionPanel from '../components/deepResearch/VentureExecutionPanel';
 import {
   MarketStageBadge, RecommendationBadge, ConvergenceBadge, ConfidenceGauge, ScoreBar,
   CorrelationStrengthBar, SignalHeatStrip, CompositeScoreChip,
@@ -113,6 +114,9 @@ function VentureIdeaCard({ idea, onGenerate }) {
           </span>
         )}
       </div>
+
+      {/* Phase 3 — execution intelligence (lazy, collapsible). */}
+      <VentureExecutionPanel ventureIdea={idea} />
     </div>
   );
 }

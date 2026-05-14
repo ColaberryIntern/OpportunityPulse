@@ -17,6 +17,11 @@ module.exports = (sequelize) => {
     architectUrl: { type: DataTypes.STRING(500), allowNull: true, field: 'architect_url' },
     requirementsJson: { type: DataTypes.JSONB, allowNull: true, field: 'requirements_json' },
     error: { type: DataTypes.TEXT, allowNull: true },
+    // Phase 3 — the real Agent Foundry integration. external_job_id is the
+    // remote job id; provider is 'foundation' (deterministic scaffold) or
+    // 'agent_foundry' (the live HTTP integration once configured).
+    externalJobId: { type: DataTypes.STRING(120), allowNull: true, field: 'external_job_id' },
+    provider: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'foundation' },
     createdBy: { type: DataTypes.INTEGER, allowNull: true, field: 'created_by' },
     startedAt: { type: DataTypes.DATE, allowNull: true, field: 'started_at' },
     completedAt: { type: DataTypes.DATE, allowNull: true, field: 'completed_at' },

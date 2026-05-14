@@ -8,6 +8,8 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 const deepResearch = require('./deepResearch.service');
 const projectArchitectBridge = require('./projectArchitectBridge.service');
 const briefingSubscription = require('./briefingSubscription.service');
+const ventureLifecycle = require('./ventureLifecycle.service');
+const executionQueue = require('./executionQueue.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -207,6 +209,93 @@ async function briefingHistory(req, res) {
   }
 }
 
+// ---- Phase 3 — execution intelligence ------------------------------------
+
+// GET /api/v1/deep-research/ventures/:id/lifecycle
+async function getLifecycle(req, res) {
+  try {
+    const lifecycle = await ventureLifecycle.getLifecycle(req.params.id);
+    return successResponse(res, lifecycle);
+  } catch (e) {
+    return mapError(res, e, 'getLifecycle', 'Failed to load venture lifecycle');
+  }
+}
+
+// POST /api/v1/deep-research/ventures/:id/lifecycle  { toState, note }
+async function transitionLifecycle(req, res) {
+  try {
+    const { toState, note } = req.body || {};
+    const lifecycle = await ventureLifecycle.transition(req.params.id, toState, {
+      actor: req.user ? (req.user.email || `user:${req.user.id}`) : null,
+      note,
+    });
+    return successResponse(res, lifecycle, 'Lifecycle transitioned');
+  } catch (e) {
+    return mapError(res, e, 'transitionLifecycle', 'Lifecycle transition failed');
+  }
+}
+
+// PATCH /api/v1/deep-research/ventures/:id/owner  { owner }
+async function setVentureOwner(req, res) {
+  try {
+    const out = await ventureLifecycle.setOwner(req.params.id, (req.body || {}).owner);
+    return successResponse(res, out, 'Owner updated');
+  } catch (e) {
+    return mapError(res, e, 'setVentureOwner', 'Failed to set owner');
+  }
+}
+
+// POST /api/v1/deep-research/ventures/:id/assess
+async function assessVenture(req, res) {
+  try {
+    const out = await executionQueue.assessVenture(req.params.id);
+    return successResponse(res, out, 'Venture assessed');
+  } catch (e) {
+    return mapError(res, e, 'assessVenture', 'Venture assessment failed');
+  }
+}
+
+// POST /api/v1/deep-research/ventures/:id/mvp-plan
+async function planMvp(req, res) {
+  try {
+    const out = await executionQueue.planMvp(req.params.id);
+    const status = out.errors && out.errors.length ? 'MVP planning completed with partial errors' : 'MVP plan generated';
+    return successResponse(res, out, status);
+  } catch (e) {
+    return mapError(res, e, 'planMvp', 'MVP planning failed');
+  }
+}
+
+// GET /api/v1/deep-research/ventures/:id/execution
+async function getVentureExecution(req, res) {
+  try {
+    const out = await executionQueue.getVentureExecution(req.params.id);
+    return successResponse(res, out);
+  } catch (e) {
+    return mapError(res, e, 'getVentureExecution', 'Failed to load venture execution intelligence');
+  }
+}
+
+// GET /api/v1/deep-research/execution/queue
+async function getExecutionQueue(req, res) {
+  try {
+    const out = await executionQueue.listQueue({ lifecycleState: req.query.lifecycleState });
+    return successResponse(res, out);
+  } catch (e) {
+    return mapError(res, e, 'getExecutionQueue', 'Failed to load execution queue');
+  }
+}
+
+// GET /api/v1/deep-research/execution/pipeline
+async function getPipeline(req, res) {
+  try {
+    const out = await executionQueue.getPipeline();
+    return successResponse(res, out);
+  } catch (e) {
+    return mapError(res, e, 'getPipeline', 'Failed to load opportunity pipeline');
+  }
+}
+
 module.exports = {
   run,
   listReports,
@@ -223,4 +312,13 @@ module.exports = {
   deleteBriefing,
   previewBriefing,
   briefingHistory,
+  // Phase 3
+  getLifecycle,
+  transitionLifecycle,
+  setVentureOwner,
+  assessVenture,
+  planMvp,
+  getVentureExecution,
+  getExecutionQueue,
+  getPipeline,
 };

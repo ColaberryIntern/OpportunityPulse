@@ -93,3 +93,48 @@ export async function getBriefingHistory() {
   const res = await api.get(`${base}/briefings/history`);
   return res.data?.data?.history || [];
 }
+
+// ---- Phase 3 — execution intelligence ------------------------------------
+
+export async function getVentureLifecycle(ventureIdeaId) {
+  const res = await api.get(`${base}/ventures/${ventureIdeaId}/lifecycle`);
+  return res.data?.data;
+}
+
+export async function transitionVentureLifecycle(ventureIdeaId, toState, note) {
+  const res = await api.post(`${base}/ventures/${ventureIdeaId}/lifecycle`, { toState, note });
+  return res.data?.data;
+}
+
+export async function setVentureOwner(ventureIdeaId, owner) {
+  const res = await api.patch(`${base}/ventures/${ventureIdeaId}/owner`, { owner });
+  return res.data?.data;
+}
+
+// Run the deterministic engines (execution readiness + build-vs-monitor).
+export async function assessVenture(ventureIdeaId) {
+  const res = await api.post(`${base}/ventures/${ventureIdeaId}/assess`);
+  return res.data?.data;
+}
+
+// Run the AI engines (MVP plan + launch strategy) + deployment readiness.
+export async function planVentureMvp(ventureIdeaId) {
+  const res = await api.post(`${base}/ventures/${ventureIdeaId}/mvp-plan`);
+  return res.data?.data;
+}
+
+// All execution intelligence for one venture.
+export async function getVentureExecution(ventureIdeaId) {
+  const res = await api.get(`${base}/ventures/${ventureIdeaId}/execution`);
+  return res.data?.data;
+}
+
+export async function getExecutionQueue(params = {}) {
+  const res = await api.get(`${base}/execution/queue`, { params });
+  return res.data?.data;
+}
+
+export async function getOpportunityPipeline() {
+  const res = await api.get(`${base}/execution/pipeline`);
+  return res.data?.data;
+}

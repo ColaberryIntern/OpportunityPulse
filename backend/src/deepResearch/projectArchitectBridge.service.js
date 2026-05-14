@@ -17,6 +17,7 @@ const {
   VentureIdea, ProjectGenerationJob, DeepResearchReport, MonetizationModel, SignalCorrelation,
 } = require('../models');
 const logger = require('../logging/logger');
+const projectArchitectClient = require('./projectArchitectClient.service');
 
 // The phase sequence every requirements-generation job walks. Persisted
 // onto the job row so the UI renders a phase tracker.
@@ -171,10 +172,126 @@ async function _dispatchToAgentFoundry(ventureIdea, ctx = {}) {
 // Job lifecycle.
 // ---------------------------------------------------------------------------
 
-// Walk a queued job through every phase, persisting progress at each step.
-// Fire-and-forget from createJob — the HTTP request returns immediately and
-// the UI polls getJobStatus. Retry-safe: a job that died mid-walk can be
-// re-driven by calling this again (it re-runs from where the phases say).
+// How long the real-architect path will poll a remote job before giving up.
+const REMOTE_POLL_MAX = process.env.NODE_ENV === 'test' ? 3 : 40;
+const REMOTE_POLL_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 3000;
+
+// FOUNDATION PATH — the deterministic phase walk. Used when Agent Foundry
+// is not configured. Builds the venture-aware requirements scaffold locally.
+async function _runFoundationWalk(job, ventureIdea) {
+  const phases = scaffoldPhases();
+  let architectResult = null;
+
+  for (let i = 0; i < phases.length; i += 1) {
+    const phase = phases[i];
+    phase.status = 'running';
+    phase.started_at = new Date().toISOString();
+    // eslint-disable-next-line no-await-in-loop
+    await job.update({
+      currentPhase: phase.label,
+      phases: clonePhases(phases),
+      progressPercent: Math.round((i / phases.length) * 100),
+    });
+    // eslint-disable-next-line no-await-in-loop
+    await wait(PHASE_DELAY_MS);
+    if (phase.key === 'handoff_to_architect') {
+      // eslint-disable-next-line no-await-in-loop
+      const ventureCtx = await _loadVentureContext(ventureIdea);
+      // eslint-disable-next-line no-await-in-loop
+      architectResult = await _dispatchToAgentFoundry(ventureIdea, ventureCtx);
+    }
+    phase.status = 'completed';
+    phase.completed_at = new Date().toISOString();
+    // eslint-disable-next-line no-await-in-loop
+    await job.update({
+      phases: clonePhases(phases),
+      progressPercent: Math.round(((i + 1) / phases.length) * 100),
+    });
+  }
+
+  await job.update({
+    status: 'success',
+    currentPhase: 'Complete',
+    progressPercent: 100,
+    phases: clonePhases(phases),
+    provider: 'foundation',
+    projectSlug: architectResult ? architectResult.projectSlug : slugify(ventureIdea.title),
+    architectUrl: architectResult ? architectResult.architectUrl : null,
+    requirementsJson: architectResult ? architectResult.requirements : null,
+    completedAt: new Date(),
+  });
+}
+
+// REAL PATH — the live Agent Foundry HTTP integration. Builds the venture-
+// aware payload, creates a remote job, then polls it (resumable: the remote
+// job id is persisted, so a re-driven processJob picks up the same job).
+async function _runRealArchitect(job, ventureIdea) {
+  const phases = scaffoldPhases();
+  const markPhase = async (idx, status) => {
+    phases[idx].status = status;
+    if (status === 'running') phases[idx].started_at = new Date().toISOString();
+    if (status === 'completed') phases[idx].completed_at = new Date().toISOString();
+    await job.update({ phases: clonePhases(phases), currentPhase: phases[idx].label });
+  };
+
+  // Phases 0-2 — local prep: build the venture-aware payload.
+  for (let i = 0; i < 3; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await markPhase(i, 'running');
+    // eslint-disable-next-line no-await-in-loop
+    await job.update({ progressPercent: Math.round((i / phases.length) * 100) });
+    // eslint-disable-next-line no-await-in-loop
+    await markPhase(i, 'completed');
+  }
+  const ventureCtx = await _loadVentureContext(ventureIdea);
+  const scaffold = await _dispatchToAgentFoundry(ventureIdea, ventureCtx);
+
+  // Phase 3 — the real handoff. Resumable: reuse an existing externalJobId.
+  await markPhase(3, 'running');
+  let externalJobId = job.externalJobId;
+  if (!externalJobId) {
+    const created = await projectArchitectClient.createJob(scaffold.requirements);
+    externalJobId = created.externalJobId;
+    await job.update({ externalJobId, provider: 'agent_foundry', projectSlug: scaffold.projectSlug });
+  }
+  await markPhase(3, 'completed');
+
+  // Phase 4 — poll the remote job until it terminates.
+  await markPhase(4, 'running');
+  let remote = null;
+  for (let poll = 0; poll < REMOTE_POLL_MAX; poll += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    remote = await projectArchitectClient.pollJob(externalJobId);
+    // eslint-disable-next-line no-await-in-loop
+    await job.update({
+      progressPercent: remote.progressPercent != null
+        ? Math.max(80, Math.min(99, remote.progressPercent)) : 90,
+      currentPhase: remote.currentPhase || 'AI Project Architect working…',
+    });
+    if (remote.status === 'success' || remote.status === 'failed') break;
+    // eslint-disable-next-line no-await-in-loop
+    await wait(REMOTE_POLL_DELAY_MS);
+  }
+
+  if (!remote || remote.status === 'failed') {
+    throw new Error(`Agent Foundry job ${externalJobId} did not complete successfully`);
+  }
+  await markPhase(4, 'completed');
+  await job.update({
+    status: 'success',
+    currentPhase: 'Complete',
+    progressPercent: 100,
+    phases: clonePhases(phases),
+    architectUrl: remote.artifactUrl || scaffold.architectUrl,
+    requirementsJson: remote.requirements || scaffold.requirements,
+    completedAt: new Date(),
+  });
+}
+
+// Walk a queued job to completion. Fire-and-forget from createJob — the HTTP
+// request returns immediately and the UI polls getJobStatus. Retry-safe: a
+// job that died mid-walk can be re-driven by calling this again (the real
+// path reuses the persisted externalJobId; the foundation path re-walks).
 async function processJob(jobId) {
   const job = await ProjectGenerationJob.findByPk(jobId);
   if (!job) {
@@ -193,53 +310,16 @@ async function processJob(jobId) {
     return;
   }
 
+  const useRealArchitect = projectArchitectClient.isConfigured();
   try {
     await job.update({ status: 'running', startedAt: job.startedAt || new Date() });
-    const phases = scaffoldPhases();
-    let architectResult = null;
-
-    for (let i = 0; i < phases.length; i += 1) {
-      const phase = phases[i];
-      phase.status = 'running';
-      phase.started_at = new Date().toISOString();
-      await job.update({
-        currentPhase: phase.label,
-        phases: clonePhases(phases),
-        progressPercent: Math.round((i / phases.length) * 100),
-      });
-
-      // eslint-disable-next-line no-await-in-loop
-      await wait(PHASE_DELAY_MS);
-
-      // The Agent Foundry handoff happens on its dedicated phase.
-      if (phase.key === 'handoff_to_architect') {
-        // eslint-disable-next-line no-await-in-loop
-        const ventureCtx = await _loadVentureContext(ventureIdea);
-        // eslint-disable-next-line no-await-in-loop
-        architectResult = await _dispatchToAgentFoundry(ventureIdea, ventureCtx);
-      }
-
-      phase.status = 'completed';
-      phase.completed_at = new Date().toISOString();
-      // eslint-disable-next-line no-await-in-loop
-      await job.update({
-        phases: clonePhases(phases),
-        progressPercent: Math.round(((i + 1) / phases.length) * 100),
-      });
+    if (useRealArchitect) {
+      await _runRealArchitect(job, ventureIdea);
+    } else {
+      await _runFoundationWalk(job, ventureIdea);
     }
-
-    await job.update({
-      status: 'success',
-      currentPhase: 'Complete',
-      progressPercent: 100,
-      phases: clonePhases(phases),
-      projectSlug: architectResult ? architectResult.projectSlug : slugify(ventureIdea.title),
-      architectUrl: architectResult ? architectResult.architectUrl : null,
-      requirementsJson: architectResult ? architectResult.requirements : null,
-      completedAt: new Date(),
-    });
     logger.info('projectArchitectBridge: job complete', {
-      jobId: job.id, ventureIdeaId: job.ventureIdeaId,
+      jobId: job.id, ventureIdeaId: job.ventureIdeaId, provider: useRealArchitect ? 'agent_foundry' : 'foundation',
     });
   } catch (error) {
     logger.error('projectArchitectBridge: job failed', { jobId: job.id, error: error.message });

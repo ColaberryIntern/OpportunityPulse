@@ -35,6 +35,7 @@ import MyOpportunitiesPage from './pages/MyOpportunitiesPage';
 import DeepResearchReportPage from './pages/DeepResearchReportPage';
 import DeepResearchIndexPage from './pages/DeepResearchIndexPage';
 import BriefingCenterPage from './pages/BriefingCenterPage';
+import ExecutionDashboardPage from './pages/ExecutionDashboardPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -376,6 +377,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <BriefingCenterPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/execution"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ExecutionDashboardPage />
             </ProtectedLayout>
           }
         />

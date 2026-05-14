@@ -94,6 +94,13 @@ const SignalCorrelation = require('./SignalCorrelation')(sequelize);
 const MonetizationModel = require('./MonetizationModel')(sequelize);
 const AiProviderLog = require('./AiProviderLog')(sequelize);
 const BriefingSubscription = require('./BriefingSubscription')(sequelize);
+// Deep Research Phase 3 — execution intelligence.
+const VentureLifecycleEvent = require('./VentureLifecycleEvent')(sequelize);
+const ExecutionReadiness = require('./ExecutionReadiness')(sequelize);
+const MvpPlan = require('./MvpPlan')(sequelize);
+const LaunchStrategy = require('./LaunchStrategy')(sequelize);
+const DeploymentReadiness = require('./DeploymentReadiness')(sequelize);
+const ExecutionQueueItem = require('./ExecutionQueueItem')(sequelize);
 
 const models = {
   UserRole,
@@ -164,6 +171,12 @@ const models = {
   MonetizationModel,
   AiProviderLog,
   BriefingSubscription,
+  VentureLifecycleEvent,
+  ExecutionReadiness,
+  MvpPlan,
+  LaunchStrategy,
+  DeploymentReadiness,
+  ExecutionQueueItem,
 };
 
 // Set up associations

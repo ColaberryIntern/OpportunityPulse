@@ -37,6 +37,19 @@ router.delete('/briefings/:id', ...admin, c.deleteBriefing);
 // Project generation job status poll.
 router.get('/jobs/:id/status', ...admin, c.getJobStatus);
 
+// ---- Phase 3 — execution intelligence -------------------------------------
+// Venture-scoped (static `ventures` + `execution` prefixes, so they never
+// collide with the /:id param routes).
+router.get('/ventures/:id/lifecycle', ...admin, c.getLifecycle);
+router.post('/ventures/:id/lifecycle', ...admin, jsonSmall, c.transitionLifecycle);
+router.patch('/ventures/:id/owner', ...admin, jsonSmall, c.setVentureOwner);
+router.post('/ventures/:id/assess', ...admin, c.assessVenture);
+router.post('/ventures/:id/mvp-plan', ...admin, c.planMvp);
+router.get('/ventures/:id/execution', ...admin, c.getVentureExecution);
+// Execution dashboard.
+router.get('/execution/queue', ...admin, c.getExecutionQueue);
+router.get('/execution/pipeline', ...admin, c.getPipeline);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);
