@@ -27,6 +27,8 @@ function startActionEngineScheduler() {
   const researchSummarySchedule = process.env.RESEARCH_SUMMARY_SCHEDULE || '45 6 * * *';
   // Phase 2.2 — cross-channel matching, daily right after the summaries.
   const crossChannelSchedule = process.env.CROSS_CHANNEL_SCHEDULE || '0 7 * * *';
+  // Phase 2.3 — author + topic aggregation rebuild, daily after matching.
+  const researchAggSchedule = process.env.RESEARCH_AGG_SCHEDULE || '15 7 * * *';
 
   // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
   cron.schedule(trendDetectionSchedule, async () => {
@@ -144,7 +146,23 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 7 jobs registered');
+  // Research Aggregation: daily at 7:15 AM UTC — rebuild research_authors +
+  // research_topics from the research opps (who's publishing, what's hot).
+  cron.schedule(researchAggSchedule, async () => {
+    logger.info('Scheduled: Research aggregation starting');
+    try {
+      const { rebuildResearchAggregates } = require('../oied/researchAggregation.service');
+      const run = await rebuildResearchAggregates();
+      logger.info('Scheduled: Research aggregation complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Research aggregation failed', { error: error.message });
+    }
+  });
+
+  logger.info('Action Engine scheduler started — 8 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

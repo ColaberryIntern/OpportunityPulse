@@ -78,6 +78,9 @@ const WinProbabilityHistory = require('./WinProbabilityHistory')(sequelize);
 const TriggerLog = require('./TriggerLog')(sequelize);
 const UsageMetric = require('./UsageMetric')(sequelize);
 const ExecutionPlan = require('./ExecutionPlan')(sequelize);
+// Research Intelligence Phase 2.3 — author + topic aggregation tables.
+const ResearchAuthor = require('./ResearchAuthor')(sequelize);
+const ResearchTopic = require('./ResearchTopic')(sequelize);
 
 const models = {
   UserRole,
@@ -136,6 +139,8 @@ const models = {
   TriggerLog,
   UsageMetric,
   ExecutionPlan,
+  ResearchAuthor,
+  ResearchTopic,
 };
 
 // Set up associations
