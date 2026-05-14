@@ -266,6 +266,10 @@ app.use('/api/v1/oied', require('./oied/oied.routes'));
 // v0.1 Submission Readiness — evergreen document vault (admin-only).
 app.use('/api/v1/documents', require('./documents/document.routes'));
 
+// Deep Research Intelligence Engine — venture intelligence synthesis,
+// venture ideas, requirements-generation jobs (admin-only).
+app.use('/api/v1/deep-research', require('./deepResearch/deepResearch.routes'));
+
 // ----- 404 Handler -----
 app.use((req, res) => {
   res.status(404).json({
@@ -377,6 +381,11 @@ async function startServer() {
       // enable with OIED_SOURCE_HEALTH_AGENT_ENABLED=true.
       const { startSourceHealthAgentScheduler } = require('./admin/sourceHealthAgent.scheduler');
       startSourceHealthAgentScheduler();
+
+      // Deep Research Intelligence Engine — once-per-day strategic scan.
+      // Default OFF — enable with DEEP_RESEARCH_SCAN_ENABLED=true.
+      const { startDailyResearchScheduler } = require('./deepResearch/dailyResearchScheduler.service');
+      startDailyResearchScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

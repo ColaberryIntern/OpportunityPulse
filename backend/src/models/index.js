@@ -83,6 +83,11 @@ const ResearchAuthor = require('./ResearchAuthor')(sequelize);
 const ResearchTopic = require('./ResearchTopic')(sequelize);
 // Phase 3c — research relationship graph edges.
 const ResearchRelationship = require('./ResearchRelationship')(sequelize);
+// Deep Research Intelligence Engine — venture intelligence tables.
+const DeepResearchReport = require('./DeepResearchReport')(sequelize);
+const VentureIdea = require('./VentureIdea')(sequelize);
+const ProjectGenerationJob = require('./ProjectGenerationJob')(sequelize);
+const DailyResearchScan = require('./DailyResearchScan')(sequelize);
 
 const models = {
   UserRole,
@@ -144,6 +149,10 @@ const models = {
   ResearchAuthor,
   ResearchTopic,
   ResearchRelationship,
+  DeepResearchReport,
+  VentureIdea,
+  ProjectGenerationJob,
+  DailyResearchScan,
 };
 
 // Set up associations

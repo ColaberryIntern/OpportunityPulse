@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { listMyOpportunities, recordEvent } from '../services/oiedService';
+import { runDeepResearch } from '../services/deepResearchService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 import ChannelChip from '../components/oied/ChannelChip';
@@ -237,6 +238,7 @@ function ChannelBucketStrip({ buckets, qFromUrl, sortFromUrl, onOpenDetail }) {
 
 function MyOpportunitiesPage() {
   const { user } = useSelector((s) => s.auth);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const channelFromUrl = searchParams.get('channel') || '';
   const sortFromUrl = searchParams.get('sort') || 'priority';
@@ -250,6 +252,10 @@ function MyOpportunitiesPage() {
   const [pageSize] = useState(25);
   const [minScore, setMinScore] = useState('');
   const [detailOppId, setDetailOppId] = useState(null);
+  // Deep Research — synthesizes the current search/results into a venture
+  // intelligence report, then redirects to the report page.
+  const [deepResearchRunning, setDeepResearchRunning] = useState(false);
+  const [deepResearchErr, setDeepResearchErr] = useState(null);
 
   // Always request ONE page at a time (pageSize rows). The backend
   // pulls a wider candidate pool internally for channel-filtered
@@ -316,6 +322,31 @@ function MyOpportunitiesPage() {
   const displayRows = channelFiltered;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Run a deep research synthesis over the current search term + the
+  // currently-loaded results, then redirect to the generated report page.
+  async function handleDeepResearch() {
+    if (deepResearchRunning) return;
+    setDeepResearchRunning(true);
+    setDeepResearchErr(null);
+    try {
+      const opportunityIds = displayRows.map((r) => r.id).filter(Boolean);
+      const report = await runDeepResearch({
+        searchTerm: qFromUrl || undefined,
+        opportunityIds: opportunityIds.length ? opportunityIds : undefined,
+      });
+      if (report && report.id) {
+        navigate(`/admin/deep-research/${report.id}`);
+      } else {
+        setDeepResearchErr('Deep research returned no report.');
+      }
+    } catch (e) {
+      setDeepResearchErr(e?.response?.data?.message || e.message || 'Deep research failed');
+    } finally {
+      setDeepResearchRunning(false);
+    }
+  }
+  const canDeepResearch = Boolean(qFromUrl) || displayRows.length > 0;
+
   if (!user || user.role !== 'admin') {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -376,7 +407,26 @@ function MyOpportunitiesPage() {
           >
             🔍 Search
           </button>
+          {/* Deep Research — synthesizes the current search/results into a
+              cross-channel venture intelligence report. */}
+          <button
+            type="button"
+            onClick={handleDeepResearch}
+            disabled={deepResearchRunning || !canDeepResearch}
+            title={canDeepResearch
+              ? 'Synthesize these results into a venture intelligence report'
+              : 'Search or load opportunities first'}
+            className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            data-testid="deep-research-button"
+          >
+            {deepResearchRunning ? '🧠 Researching…' : '🧠 Deep Research'}
+          </button>
         </form>
+        {deepResearchErr && (
+          <div className="mb-3 text-sm text-red-600 dark:text-red-400" data-testid="deep-research-error">
+            {deepResearchErr}
+          </div>
+        )}
 
         {/* Related AI Tools — shows when a keyword is active. Hidden silently
             when no tools match. */}
