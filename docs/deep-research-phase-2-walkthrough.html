@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 2 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .pipeline .step { flex: 1; min-width: 150px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 4px; font-size: 12.5px; }
+  .pipeline .step b { color: var(--navy); display: block; font-size: 13px; margin-bottom: 3px; }
+  .pipeline .step.ai b::after { content: ' · AI'; color: var(--indigo); font-size: 11px; }
+  .pipeline .step.det b::after { content: ' · deterministic'; color: var(--accent); font-size: 11px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-ai { background: var(--indigo-soft); color: #3730a3; }
+  .b-data { background: #ede9fe; color: #5b21b6; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .seam { background: var(--indigo-soft); border: 1px solid #c7d2fe; border-radius: 6px; padding: 10px 14px; margin: 12px 0; font-size: 13.5px; }
+  .seam b { color: #3730a3; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } .pipeline { flex-direction: column; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 2 objective</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The intelligence engines</h2>
+  <a href="#pipeline">The upgraded pipeline</a>
+  <a href="#aiprovider">AI resiliency layer</a>
+  <a href="#correlation">Cross-channel correlation</a>
+  <a href="#timing">Market timing engine</a>
+  <a href="#scoring">Venture scoring engine</a>
+  <a href="#monetization">Monetization engine</a>
+
+  <h2>Management</h2>
+  <a href="#index">Reports index</a>
+  <a href="#rerun">Re-run + versioning</a>
+  <a href="#handoff">Venture-aware handoff</a>
+  <a href="#briefings">Briefing center</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-index">Reports index</a>
+  <a href="#screen-correlation">Correlation section</a>
+  <a href="#screen-scores">Venture scoring</a>
+  <a href="#screen-briefings">Briefing center</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 3</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 2</h1>
+  <p class="subtitle">Real Strategic Intelligence · 2026-05-14 · commit <code>796c067</code> · all 1,630 backend tests passing</p>
+  <p>
+    Phase 1 built the foundation — the report lifecycle, job tracking, the scheduler scaffolding.
+    Phase 2 turns it into <strong>real strategic intelligence</strong>: four new analysis engines, a
+    resilient AI layer, report management, and a venture-aware requirements handoff.
+  </p>
+  <p>
+    The headline is the <strong>cross-channel correlation engine</strong> — it reads <em>across</em>
+    research, news, talent, capital, government, and freelance to find where signals reinforce each
+    other ("research spike + hiring spike + funding spike = commercial acceleration"). On the seeded
+    sample it correctly classified a <strong>commercial-acceleration convergence</strong> at
+    <strong>0.77 strength</strong>, which the market-timing engine then read as a
+    <strong>breakout</strong>-stage market.
+  </p>
+  <p>
+    Three of the four engines are <strong>fully deterministic</strong> — auditable math, not model
+    opinion — exactly as the spec required ("deterministic scoring pipelines", "no UI-only fake
+    intelligence").
+  </p>
+  <p>
+    <span class="badge b-done">5 tables live</span>
+    <span class="badge b-done">4 intelligence engines</span>
+    <span class="badge b-done">AI resiliency</span>
+    <span class="badge b-done">reports index</span>
+    <span class="badge b-done">re-run + versioning</span>
+    <span class="badge b-done">briefing center</span>
+  </p>
+</section>
+
+<!-- ========================================================== OBJECTIVE -->
+<section class="block context" id="objective">
+  <h2>The Phase 2 objective</h2>
+  <p>
+    Phase 1's report was a synthesis: an AI narrative plus a venture-idea shortlist. Useful, but it
+    couldn't answer the strategic questions — <em>how do the channels relate to each other? where is
+    this market in its lifecycle? which venture idea actually scores best, and why? how does it make
+    money?</em>
+  </p>
+  <p>
+    Phase 2 answers all four with dedicated engines, and wraps the whole thing in operational
+    infrastructure: a searchable reports index, versioned re-runs, a DB-driven briefing center, and
+    an AI layer that survives the provider outages Phase 1 was exposed to.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Your feedback on the Phase 2 direction</h4>
+    <textarea data-fb-id="objective" placeholder="Does Phase 2 take it where you wanted?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WHAT SHIPPED -->
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <tr><th>#</th><th>Capability</th><th>Delivered</th></tr>
+    <tr><td>1</td><td>Reports Index</td><td><code>/admin/deep-research</code> — searchable, filterable, with scores + re-run/favorite/archive</td></tr>
+    <tr><td>2</td><td>Cross-Channel Correlation</td><td><code>crossChannelCorrelation.service</code> — deterministic convergence detection</td></tr>
+    <tr><td>3</td><td>Market Timing</td><td><code>marketTiming.service</code> — deterministic 6-stage lifecycle classifier</td></tr>
+    <tr><td>4</td><td>Venture Scoring</td><td><code>ventureScoring.service</code> — deterministic 8-dimension weighted scoring</td></tr>
+    <tr><td>5</td><td>Monetization Intelligence</td><td><code>monetizationIntelligence.service</code> — 6-category models, deterministic fit scoring</td></tr>
+    <tr><td>6</td><td>AI Resiliency</td><td><code>aiProvider.service</code> — retry, backoff, error classification, logging, provider abstraction</td></tr>
+    <tr><td>7</td><td>Report Re-Run</td><td>versioned re-run — snapshots history into <code>report_versions</code></td></tr>
+    <tr><td>8</td><td>Venture-Aware Handoff</td><td><code>projectArchitectBridge</code> upgraded — strategic context, monetization, ICP, GTM, competitive landscape</td></tr>
+    <tr><td>9</td><td>Briefing Center</td><td><code>/admin/deep-research/briefings</code> — DB-driven scan subscriptions + preview + history</td></tr>
+    <tr><td>10</td><td>Visual Intelligence</td><td>confidence gauges, score bars, correlation strength bars, signal heat strips, an acceleration chart</td></tr>
+  </table>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the shipped scope</h4>
+    <textarea data-fb-id="what-shipped" placeholder="Anything missing or different from expected?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PIPELINE -->
+<section class="block arch" id="pipeline">
+  <h2>The upgraded pipeline</h2>
+  <p>
+    The orchestrator still owns the report lifecycle and delegates every step. Phase 2 inserts the
+    three deterministic engines between synthesis and persistence, and adds monetization as a soft
+    AI step.
+  </p>
+  <div class="pipeline">
+    <div class="step"><b>1 · Aggregate</b>Normalize cross-channel data into a context — now with per-channel recency windows.</div>
+    <div class="step ai"><b>2 · Synthesize</b>Executive narrative. Hard gate.</div>
+    <div class="step det"><b>3 · Correlate</b>Signal convergence, strength, acceleration.</div>
+    <div class="step det"><b>4 · Time</b>Lifecycle stage from momentum × maturity.</div>
+    <div class="step ai"><b>5 · Ideas</b>Venture idea shortlist. Soft.</div>
+    <div class="step ai"><b>6 · Monetize</b>6-category monetization models. Soft.</div>
+    <div class="step det"><b>7 · Score</b>8-dimension venture scoring per idea.</div>
+    <div class="step"><b>8 · Persist</b>Report + ideas + correlation + monetization rows.</div>
+  </div>
+  <p class="small">
+    <strong>Failure-first, unchanged:</strong> synthesis is the hard gate; the deterministic engines
+    (3, 4, 7) never fail; the soft AI steps (5, 6) degrade the report to <code>partial</code> rather
+    than failing it. Every AI call now goes through the resilient provider layer.
+  </p>
+</section>
+
+<!-- ========================================================== AIPROVIDER -->
+<section class="block arch" id="aiprovider">
+  <h2>AI resiliency layer</h2>
+  <p>
+    Phase 1's OpenAI outage exposed a single point of failure: one un-retried call could fail the
+    whole pipeline. <code>aiProvider.service</code> wraps every AI call with:
+  </p>
+  <ul>
+    <li><strong>Exponential backoff retry</strong> with full jitter — only on transient classes (rate_limit, server, network).</li>
+    <li><strong>Typed error classification</strong> — <code>rate_limit</code> / <code>auth</code> / <code>server</code> / <code>network</code> / <code>bad_response</code> / <code>other</code>. Auth + bad-response fail fast (no pointless retries).</li>
+    <li><strong>Per-attempt logging</strong> to <code>ai_provider_logs</code> — provider, model, status, attempt #, duration, tokens, error class. Full observability; logging failure can never break the call it observes.</li>
+    <li><strong>Provider abstraction</strong> — OpenAI is wired; Anthropic / Gemini are explicit, documented stubs. A future fallback provider is a localized change in one registry, no caller touched.</li>
+  </ul>
+  <div class="seam">
+    <b>The seam:</b> the <code>PROVIDERS</code> registry. Each provider exposes the same
+    <code>{ chat, embed, model }</code> shape. Wiring Anthropic means filling in one entry — the retry
+    manager, classification, and logging are all provider-agnostic.
+  </div>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the resiliency approach</h4>
+    <textarea data-fb-id="aiprovider" placeholder="On retry / provider abstraction…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== CORRELATION -->
+<section class="block arch" id="correlation">
+  <h2>Cross-channel correlation engine</h2>
+  <p>
+    The most important Phase 2 capability — and fully deterministic. For each channel it computes a
+    <strong>signal</strong>: volume (soft-capped count), recency (fraction of opportunities in the
+    last 90 days), value, and an acceleration ratio (recent window vs. prior window). Each signal is
+    scaled by a defined <strong>commercial weight</strong> — capital and government weigh heaviest
+    (demand proof), research is supply-side, news is the weakest signal alone.
+  </p>
+  <p>From the set of "active" channels it classifies the <strong>convergence pattern</strong>:</p>
+  <table>
+    <tr><th>Pattern</th><th>Trigger</th></tr>
+    <tr><td><code>commercial_acceleration</code></td><td>research + talent + (capital or government) all active</td></tr>
+    <tr><td><code>procurement_pull</code></td><td>research + government</td></tr>
+    <tr><td><code>capital_convergence</code></td><td>capital + (talent or research)</td></tr>
+    <tr><td><code>talent_convergence</code></td><td>talent + ≥1 other channel</td></tr>
+    <tr><td><code>research_only</code> / <code>diffuse</code> / <code>none</code></td><td>single-channel / broad-but-unpatterned / nothing</td></tr>
+  </table>
+  <p>
+    <strong>correlation_strength</strong> is a 60/40 blend of breadth (active channels ÷ total) and
+    depth (mean active signal score) — so one very strong channel can't fake a "correlation".
+    <strong>acceleration</strong> is the volume-weighted mean of the per-channel acceleration ratios.
+    Every number traces back to the channel data it came from.
+  </p>
+  <p class="small">
+    <span class="badge b-det">deterministic</span> On the seeded sample: <code>commercial_acceleration</code>,
+    strength <code>0.771</code>, acceleration <code>2.81×</code>.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the correlation engine</h4>
+    <textarea data-fb-id="correlation" placeholder="On convergence detection / the weighting model…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== TIMING -->
+<section class="block arch" id="timing">
+  <h2>Market timing engine</h2>
+  <p>
+    Deterministic lifecycle classification. It consumes the correlation output and reads it along two
+    axes:
+  </p>
+  <ul>
+    <li><strong>Momentum</strong> — the acceleration ratio, re-centered onto 0-1.</li>
+    <li><strong>Maturity</strong> — total volume (soft-capped) blended with breadth (channels carrying signal).</li>
+  </ul>
+  <p>
+    The (momentum × maturity) quadrant maps to one of six stages:
+    <strong>emerging → acceleration → breakout → mainstream → saturated → declining</strong>.
+    A low acceleration ratio (recent window well below prior) overrides the quadrant to
+    <code>declining</code>. Each report carries the stage, a <code>timing_score</code> (a single
+    "market heat" number), a rationale, and a <strong>confidence</strong> that reflects how much
+    corroborating data the classification actually had — thin data, low confidence, regardless of how
+    clean the quadrant looks.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span> On the seeded sample: <strong>breakout</strong>, timing score 0.87, confidence 0.84.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the timing engine</h4>
+    <textarea data-fb-id="timing" placeholder="On the 6-stage model / the momentum × maturity read…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCORING -->
+<section class="block arch" id="scoring">
+  <h2>Venture scoring engine</h2>
+  <p>
+    Deterministic, auditable scoring of each venture idea across <strong>8 dimensions</strong>, every
+    one computed from real inputs — the idea's own fields, the report context, and the correlation +
+    timing outputs:
+  </p>
+  <p>
+    <code>commercialization</code> · <code>buildability</code> · <code>market_timing</code> ·
+    <code>competition_saturation</code> · <code>technical_feasibility</code> ·
+    <code>revenue_potential</code> · <code>gov_alignment</code> · <code>ai_defensibility</code>
+  </p>
+  <p>
+    The dimension weights are a <strong>defined model</strong> (module constants that sum to 1.0) —
+    not magic numbers buried in the math. The weighted composite (0-100) maps to a
+    <strong>recommendation level</strong>: <code>strong_build</code> (≥75) / <code>build</code> (≥60) /
+    <code>watch</code> (≥42) / <code>pass</code>. Same inputs always produce the same score — the
+    engine has an explicit determinism test.
+  </p>
+  <p class="small">
+    <span class="badge b-det">deterministic</span> On the seeded sample, the Constituent Services
+    Triage Agent scored <strong>77.5 → strong_build</strong>.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the scoring engine</h4>
+    <textarea data-fb-id="scoring" placeholder="On the 8 dimensions / the weight model…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== MONETIZATION -->
+<section class="block arch" id="monetization">
+  <h2>Monetization intelligence engine</h2>
+  <p>
+    Hybrid by design. The model <em>content</em> — pricing, ICP, revenue model — is AI-generated
+    (it's inherently creative). But the <em>structure</em> is fixed (six model types: SaaS,
+    enterprise, government, education, services, marketplace) and the <strong>fit_score is
+    deterministic</strong> — computed from the report's channel signal mix. So which models actually
+    fit is auditable math, not a model opinion: a government model scores high when the government
+    channel carries real signal; a SaaS model leans on research + talent; a marketplace model needs
+    broad signal.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the monetization engine</h4>
+    <textarea data-fb-id="monetization" placeholder="On the hybrid AI-content / deterministic-fit split…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== INDEX -->
+<section class="block" id="index">
+  <h2>Reports index</h2>
+  <p>
+    <code>/admin/deep-research</code> is the command center — every synthesized report in a
+    searchable, filterable table: market stage, confidence, commercialization + timing scores,
+    correlation strength, venture idea count. Filter by topic, stage, min confidence, favorites, or
+    archived. Per-row actions: open, re-run, favorite, archive.
+  </p>
+</section>
+
+<!-- ========================================================== RERUN -->
+<section class="block" id="rerun">
+  <h2>Re-run + versioning</h2>
+  <p>
+    A re-run snapshots the current full report into an immutable <code>report_versions</code> row,
+    bumps the report's version, clears the prior intelligence rows, and re-runs the pipeline on the
+    <strong>same report id</strong> — so the URL is stable and the history is preserved. The report
+    page shows the current version and how many prior versions exist.
+  </p>
+</section>
+
+<!-- ========================================================== HANDOFF -->
+<section class="block" id="handoff">
+  <h2>Venture-aware requirements handoff</h2>
+  <p>
+    Phase 1's <code>projectArchitectBridge</code> produced a topic summary. Phase 2 makes the
+    requirements scaffold <strong>venture-aware</strong>: it now carries the strategic context
+    (market stage, correlation strength, convergence type, the venture's composite score), the full
+    monetization model set (best-fit first), the ICP, the GTM motion, and a competitive-landscape
+    block (market stage, convergence, opportunity signals, competition-saturation score). The Agent
+    Foundry seam is unchanged — still the single <code>_dispatchToAgentFoundry</code> function — it
+    just hands off a far richer payload.
+  </p>
+</section>
+
+<!-- ========================================================== BRIEFINGS -->
+<section class="block" id="briefings">
+  <h2>Daily executive briefing center</h2>
+  <p>
+    <code>/admin/deep-research/briefings</code> — the daily scan is now <strong>DB-driven</strong>.
+    Each <code>briefing_subscriptions</code> row is a recurring scan topic with a frequency, a
+    recipient list, and an on/off flag. The scheduler reads enabled rows and runs the ones that are
+    due; env topics remain as a zero-config fallback when no subscriptions exist. The UI manages
+    subscriptions, previews the briefing email (rendered in an iframe), and shows the history of
+    previous scans. Delivery stays opt-in and conservative — same posture as every other scheduler.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the management surfaces</h4>
+    <textarea data-fb-id="management" placeholder="On the index / re-run / handoff / briefing center…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCREENS -->
+<section class="block" id="screen-index">
+  <h2>Screen — the reports index</h2>
+  <p>The intelligence terminal: every report scored and re-runnable, with a dedicated sidebar section.</p>
+  <img class="shot" src="deep-research-assets/p2-01-reports-index.png" alt="Deep Research reports index" />
+  <p class="caption">The reports index — market stage, confidence, commercialization / timing / correlation scores, and per-row actions.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-index" placeholder="On the index page…"></textarea>
+  </div>
+</section>
+
+<section class="block" id="screen-correlation">
+  <h2>Screen — cross-channel correlation</h2>
+  <img class="shot" src="deep-research-assets/p2-02-report-correlation.png" alt="Cross-channel correlation section" />
+  <p class="caption">The correlation section: strength bar + acceleration, the per-channel signal heat strip, the channel signal-score chart (bars colored by acceleration), and the supporting evidence — with the <strong>Commercial Acceleration</strong> convergence badge.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-correlation" placeholder="On the correlation visualization…"></textarea>
+  </div>
+</section>
+
+<section class="block" id="screen-scores">
+  <h2>Screen — venture scoring</h2>
+  <img class="shot" src="deep-research-assets/p2-03-venture-scores.png" alt="Venture idea cards with 8-dimension scoring" />
+  <p class="caption">Venture idea cards — composite score chip, recommendation badge, and the 8-dimension score bars.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-scores" placeholder="On the venture scoring display…"></textarea>
+  </div>
+</section>
+
+<section class="block" id="screen-briefings">
+  <h2>Screen — briefing center</h2>
+  <img class="shot" src="deep-research-assets/p2-05-briefing-center.png" alt="Daily executive briefing center" />
+  <p class="caption">The briefing center — add scan subscriptions, manage frequency + recipients, preview the email, review scan history.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-briefings" placeholder="On the briefing center…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCHEMA -->
+<section class="block arch" id="schema">
+  <h2>Database schema</h2>
+  <p>Migration <code>20260514000002-deep-research-phase-2.js</code> — 5 tables + columns, applied live on prod.</p>
+  <pre>report_versions        immutable report snapshots (report_id, version, snapshot JSONB)
+signal_correlations    correlation engine output (strength, acceleration, convergence_type,
+                       signal_breakdown JSONB, supporting_evidence JSONB)
+monetization_models    monetization engine output (model_type, pricing, icp, revenue_model,
+                       implementation_complexity, fit_score)
+ai_provider_logs       every AI attempt (provider, model, status, attempt, duration_ms,
+                       tokens_used, error_class)
+briefing_subscriptions DB-driven scan config (scan_topic, frequency, recipients, enabled,
+                       last_scan_at)
+
++ deep_research_reports : version, is_favorite, is_archived, timing_score,
+                          commercialization_score, correlation_strength
++ venture_ideas         : composite_score, recommendation_level, scores JSONB</pre>
+</section>
+
+<!-- ========================================================== ROUTES -->
+<section class="block arch" id="routes">
+  <h2>API routes</h2>
+  <p>All under <code>/api/v1/deep-research</code>, admin-only. Phase 2 additions in bold context:</p>
+  <pre>GET    /api/v1/deep-research                    reports index (search + filters)
+POST   /api/v1/deep-research/:id/rerun          versioned re-run
+PATCH  /api/v1/deep-research/:id/flags          favorite / archive
+GET    /api/v1/deep-research/:id/versions       version history
+GET    /api/v1/deep-research/briefings          list scan subscriptions
+POST   /api/v1/deep-research/briefings          create subscription
+PATCH  /api/v1/deep-research/briefings/:id      update subscription
+DELETE /api/v1/deep-research/briefings/:id      delete subscription
+GET    /api/v1/deep-research/briefings/preview  render the briefing email
+GET    /api/v1/deep-research/briefings/history  previous scan log
+  (+ the Phase 1 routes: /run, /:id, /:id/status, /:id/generate-requirements, /jobs/:id/status)</pre>
+  <p class="small">Route ordering: the collection + static routes are declared before the <code>/:id</code> param routes so the matcher can't swallow them.</p>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New — backend</h3>
+  <pre>backend/src/migrations/20260514000002-deep-research-phase-2.js
+backend/src/models/{ReportVersion,SignalCorrelation,MonetizationModel,AiProviderLog,BriefingSubscription}.js
+backend/src/deepResearch/aiProvider.service.js              resilient AI layer
+backend/src/deepResearch/crossChannelCorrelation.service.js correlation engine
+backend/src/deepResearch/marketTiming.service.js            timing engine
+backend/src/deepResearch/ventureScoring.service.js          scoring engine
+backend/src/deepResearch/monetizationIntelligence.service.js monetization engine
+backend/src/deepResearch/briefingSubscription.service.js    briefing CRUD
+backend/scripts/capture-deep-research-phase-2-walkthrough.js
+backend/tests/deepResearch/{aiProvider,crossChannelCorrelation,marketTiming,
+  ventureScoring,monetizationIntelligence,briefingSubscription}.test.js</pre>
+  <h3>New — frontend</h3>
+  <pre>frontend/src/pages/DeepResearchIndexPage.jsx       the intelligence terminal
+frontend/src/pages/BriefingCenterPage.jsx          the briefing center
+frontend/src/components/deepResearch/IntelVisuals.jsx  gauges / bars / badges / heat strips</pre>
+  <h3>Modified</h3>
+  <pre>backend/src/deepResearch/deepResearch.service.js       orchestrator wires the 4 engines + listReports/reRun/flags
+backend/src/deepResearch/strategySynthesis.service.js  → aiProvider
+backend/src/deepResearch/ventureIdeaGenerator.service.js → aiProvider
+backend/src/deepResearch/projectArchitectBridge.service.js  venture-aware handoff
+backend/src/deepResearch/dailyResearchScheduler.service.js  DB-driven scan plan
+backend/src/deepResearch/deepResearch.controller.js + .routes.js  Phase 2 endpoints
+backend/src/models/{index,DeepResearchReport,VentureIdea}.js
+backend/scripts/seed-deep-research-sample.js           runs the real engines
+frontend/src/services/deepResearchService.js · pages/DeepResearchReportPage.jsx
+frontend/src/App.jsx · components/common/Sidebar.jsx</pre>
+  <p class="small">53 new tests; full suite 139 suites / 1,630 tests passing.</p>
+</section>
+
+<!-- ========================================================== VALIDATION -->
+<section class="block feature" id="validation">
+  <h2>Validations performed</h2>
+  <table>
+    <tr><th>#</th><th>Check</th><th>Result</th></tr>
+    <tr><td>1</td><td>Migration runs clean on prod</td><td>✅ <code>migrated (0.300s)</code></td></tr>
+    <tr><td>2</td><td>All 5 tables + 9 columns created</td><td>✅ verified in <code>pg_tables</code> / <code>information_schema</code></td></tr>
+    <tr><td>3</td><td>Correlation engine produces output</td><td>✅ seeded sample → <code>commercial_acceleration</code>, strength 0.771</td></tr>
+    <tr><td>4</td><td>Market timing classifications stable</td><td>✅ seeded sample → <code>breakout</code>, deterministic test asserts stability</td></tr>
+    <tr><td>5</td><td>Venture scores persist</td><td>✅ composite 77.48, <code>strong_build</code>, 8 score dimensions on the row</td></tr>
+    <tr><td>6</td><td>Monetization models generate</td><td>✅ 3 models persisted with deterministic fit scores</td></tr>
+    <tr><td>7</td><td>AI retries function correctly</td><td>✅ retry-on-transient / fail-fast-on-auth covered by tests; classification verified on prod</td></tr>
+    <tr><td>8</td><td>Report reruns preserve history</td><td>✅ snapshots into <code>report_versions</code>, bumps version (test + service logic)</td></tr>
+    <tr><td>9</td><td>Briefing center functions</td><td>✅ create / delete subscription verified on prod; recipients normalized</td></tr>
+    <tr><td>10</td><td>Reports index works</td><td>✅ <code>listReports</code> returns rows + venture idea counts; filters applied</td></tr>
+    <tr><td>11</td><td>Existing reports still load</td><td>✅ <code>getReport</code> returns Phase 2 shape (correlation + monetization included)</td></tr>
+    <tr><td>12</td><td>Existing requirements generation still works</td><td>✅ projectArchitectBridge tests pass; handoff payload enriched</td></tr>
+    <tr><td>13</td><td>Existing scheduler + channels unaffected</td><td>✅ full suite 139 suites / 1,630 tests green</td></tr>
+  </table>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on validation coverage</h4>
+    <textarea data-fb-id="validation" placeholder="Anything you'd want validated that wasn't?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIMITATIONS -->
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Live AI synthesis still not validated end-to-end — OpenAI quota exhausted.</strong> The
+      prod OpenAI account still returns 429. The <em>deterministic</em> engines (correlation, timing,
+      scoring + monetization fit) were validated against the seeded sample by running the real engine
+      code on prod; the AI steps (synthesis, venture ideas, monetization content) are covered by
+      unit tests including the failure paths. Crucially, the new resiliency layer means a transient
+      outage now retries instead of failing the run outright — but a fully-exhausted quota still
+      degrades the report. Live end-to-end validates as soon as the quota is restored.
+    </li>
+    <li>
+      <strong>Anthropic / Gemini providers are stubs.</strong> The abstraction seam is built and
+      tested; wiring a real fallback provider is a localized change in the <code>PROVIDERS</code>
+      registry. (This directly de-risks the quota issue above once done.)
+    </li>
+    <li>
+      <strong>Per-channel recency is window-based.</strong> The correlation + timing engines use
+      90-day / 180-day windows from each opportunity's <code>publishedAt</code>. Opportunities with a
+      missing date are treated as old — accurate for most channels, slightly conservative for any
+      source that doesn't populate <code>publishedAt</code>.
+    </li>
+    <li>
+      <strong>The briefing email still sends conservatively.</strong> A subscription with no
+      recipients (or no <code>DEEP_RESEARCH_BRIEFING_TO</code>) renders the briefing but does not
+      send — deliberate until delivery is turned on.
+    </li>
+    <li>
+      <strong>Reports index is unpaginated past the first 100.</strong> <code>listReports</code> caps
+      at 100 rows; a cursor/pager is a small Phase 3 addition once report volume warrants it.
+    </li>
+  </ul>
+</section>
+
+<!-- ========================================================== FUTURE -->
+<section class="block summary" id="future">
+  <h2>Recommended Phase 3</h2>
+  <ul>
+    <li><strong>Wire the Anthropic fallback provider.</strong> The seam is built — this is the highest-leverage next step: it makes the whole engine resilient to the exact OpenAI outage that's blocked live validation twice.</li>
+    <li><strong>Live synthesis validation + prompt tuning.</strong> Once a provider is healthy, run live reports end-to-end and tune the three AI prompts against real output.</li>
+    <li><strong>The real Agent Foundry integration.</strong> Replace <code>_dispatchToAgentFoundry</code> with the live HTTP handoff — the venture-aware payload is already built for it.</li>
+    <li><strong>Correlation over time.</strong> Today correlation is a snapshot. Persisting it per re-run (the version history already does) unlocks a "is this market's correlation strengthening?" trend.</li>
+    <li><strong>Autonomous venture progression.</strong> The daily scan + scoring already rank ventures; the next step is acting on the highest-confidence <code>strong_build</code> ideas automatically — gated, human-in-the-loop.</li>
+    <li><strong>SSE for the requirements modal + a reports pager.</strong> Both small, both deferred from earlier phases.</li>
+  </ul>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the Phase 3 roadmap</h4>
+    <textarea data-fb-id="future" placeholder="On sequencing / priorities…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    Phase 2 is shipped and deployed. The four intelligence engines, the resilient AI layer, the
+    reports index, versioned re-runs, the venture-aware handoff, and the briefing center are all live
+    on prod. The full backend suite — 1,630 tests — is green.
+  </p>
+  <p>
+    The three deterministic engines were validated by running the real engine code against a seeded
+    sample on prod: it correctly read a <strong>commercial-acceleration convergence</strong> at
+    <strong>0.77 strength</strong>, classified the market as <strong>breakout</strong>, and scored
+    the lead venture idea <strong>77.5 → strong_build</strong>. The one thing still waiting on the
+    outside world is a healthy AI provider — and Phase 2's resiliency layer plus the provider seam
+    are precisely what makes that a one-step fix.
+  </p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'deep-research-phase-2-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Deep Research Phase 2 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
