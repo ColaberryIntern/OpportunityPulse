@@ -79,7 +79,7 @@ const CHANNELS = [
     icon: '🔬',
     color: 'indigo',
     types: ['research'],
-    sources: ['arxiv', 'semantic_scholar', 'huggingface_papers'],
+    sources: ['arxiv', 'semantic_scholar', 'huggingface_papers', 'papers_with_code', 'research_blogs'],
     description: 'AI research papers, benchmarks, technical breakthroughs, and emerging capabilities.',
   },
 ];

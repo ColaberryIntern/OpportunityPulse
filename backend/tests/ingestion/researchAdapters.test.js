@@ -6,6 +6,8 @@
 const ArxivAdapter = require('../../src/ingestion/adapters/research/arxiv.adapter');
 const SemanticScholarAdapter = require('../../src/ingestion/adapters/research/semanticScholar.adapter');
 const HuggingFacePapersAdapter = require('../../src/ingestion/adapters/research/huggingFacePapers.adapter');
+const PapersWithCodeAdapter = require('../../src/ingestion/adapters/research/papersWithCode.adapter');
+const ResearchBlogRssAdapter = require('../../src/ingestion/adapters/research/researchBlogRss.adapter');
 const { classifyByRules } = require('../../src/actionEngine/classification.rules');
 
 const fakeDataSource = (name) => ({ name, config: {} });
@@ -91,6 +93,52 @@ describe('HuggingFacePapersAdapter.transform', () => {
   it('skips records with no stable id', () => {
     const out = adapter.transform([{ paper: { title: 'No ID Paper' } }]);
     expect(out).toEqual([]);
+  });
+});
+
+describe('PapersWithCodeAdapter.transform', () => {
+  const adapter = new PapersWithCodeAdapter(fakeDataSource('papers_with_code'));
+  it('maps the linked GitHub repo into sourceData.githubRepo', () => {
+    const [opp] = adapter.transform([{
+      id: 'pwc-xyz',
+      arxiv_id: '2505.04444',
+      title: 'Implemented Agent Framework',
+      abstract: 'Comes with code.',
+      url_abs: 'https://paperswithcode.com/paper/xyz',
+      url_pdf: 'https://arxiv.org/pdf/2505.04444',
+      published: '2026-05-03',
+      authors: ['E. Coder'],
+      repository_url: 'https://github.com/x/agent-framework',
+    }]);
+    expect(opp.type).toBe('research');
+    expect(opp.source).toBe('papers_with_code');
+    expect(opp.sourceData.githubRepo).toBe('https://github.com/x/agent-framework');
+    expect(opp.sourceData.arxivId).toBe('2505.04444');
+  });
+  it('skips records with no id', () => {
+    expect(adapter.transform([{ title: 'No ID' }])).toEqual([]);
+  });
+});
+
+describe('ResearchBlogRssAdapter.transform', () => {
+  const adapter = new ResearchBlogRssAdapter(fakeDataSource('research_blogs'));
+  it('normalizes an RSS item, strips HTML, tags the lab', () => {
+    const [opp] = adapter.transform([{
+      link: 'https://openai.com/blog/some-post',
+      title: 'A Research Post',
+      contentSnippet: '<p>Some <b>HTML</b> content.</p>',
+      isoDate: '2026-05-07T00:00:00Z',
+      creator: 'OpenAI Research',
+      _lab: 'OpenAI',
+      _feedUrl: 'https://openai.com/blog/rss.xml',
+    }]);
+    expect(opp.type).toBe('research');
+    expect(opp.source).toBe('research_blogs');
+    expect(opp.sourceId).toBe('https://openai.com/blog/some-post');
+    expect(opp.description).toBe('Some HTML content.');
+    expect(opp.category).toBe('OpenAI');
+    expect(opp.sourceData.researchType).toBe('corporate_research');
+    expect(opp.sourceData.institution).toBe('OpenAI');
   });
 });
 

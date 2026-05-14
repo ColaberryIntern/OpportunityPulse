@@ -30,6 +30,9 @@ const GenericFreelanceRssAdapter = require('./adapters/genericFreelanceRss.adapt
 const ArxivAdapter = require('./adapters/research/arxiv.adapter');
 const SemanticScholarAdapter = require('./adapters/research/semanticScholar.adapter');
 const HuggingFacePapersAdapter = require('./adapters/research/huggingFacePapers.adapter');
+// Research Intelligence Phase 2.5 — tier-2 research adapters.
+const PapersWithCodeAdapter = require('./adapters/research/papersWithCode.adapter');
+const ResearchBlogRssAdapter = require('./adapters/research/researchBlogRss.adapter');
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -97,6 +100,10 @@ function getAdapter(dataSource) {
       return new SemanticScholarAdapter(dataSource);
     case 'huggingface_papers':
       return new HuggingFacePapersAdapter(dataSource);
+    case 'papers_with_code':
+      return new PapersWithCodeAdapter(dataSource);
+    case 'research_blogs':
+      return new ResearchBlogRssAdapter(dataSource);
     default:
       throw new AppError(`Unknown data source adapter: ${dataSource.name}`, 400);
   }

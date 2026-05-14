@@ -123,6 +123,8 @@ describe('channels coverage — every prod source maps to a known channel', () =
     ['research', 'arxiv'],
     ['research', 'semantic_scholar'],
     ['research', 'huggingface_papers'],
+    ['research', 'papers_with_code'],
+    ['research', 'research_blogs'],
   ];
   it.each(PROD_SOURCES)('(%s, %s) maps to a known channel', (type, source) => {
     const key = getChannelKey({ type, source });
