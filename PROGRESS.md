@@ -8,6 +8,22 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Research Intelligence Expansion — Phases 2.4–4 (intervals, tier-2 adapters, semantic search + graph, build briefs)
+
+- [x] Phase 2.4 — per-source ingestion intervals. Migration `20260510000008` adds `ingest_interval_minutes` to `data_sources` (seeds arxiv=120, semantic_scholar=1440, huggingface_papers=360). `DataSource` model gains `ingestIntervalMinutes`. New `ingestion/research.scheduler.js` ticks every 30 min, runs only sources whose interval has elapsed since `last_run_at`. Wired into `server.js` after the main scheduler.
+  - Date: 2026-05-09
+  - Verification: backend suite passes. Smoke: scheduler ticks, arxiv re-ingested on the 2h cadence on prod.
+- [x] Phase 2.5 — tier-2 research adapters. `papersWithCode.adapter.js` (built, then disabled on prod — Meta killed the public API, returns HTML) and `researchBlogRss.adapter.js` (configurable multi-feed RSS — OpenAI/DeepMind/BAIR — via `rss-parser`). Migration `20260510000009` seeds both data_sources rows.
+  - Date: 2026-05-09
+  - Verification: researchAdapters.test.js extended. Notes: papers_with_code + semantic_scholar both disabled via SQL on prod (dead API / keyless 429); research_blogs live.
+- [x] Phase 3 — semantic search + research relationship graph. Migrations `20260510000010` (Opportunity gains `embedding` JSONB + `embedding_model` + `embedded_at` + partial index) and `20260510000011` (`research_relationships` edge table, unique on the edge triple). `ai.client.js` gains `embed()` (text-embedding-3-small, single or batched). New `semanticSearch.service.js` (embeddingText, cosineSimilarity, embedOpportunities, semanticSearch, findSimilar — in-process cosine, no pgvector — prod DB image swap deemed too risky, JSONB approach is forward-compatible). New `researchGraph.service.js` (buildRelationships materializes cross_channel_matches into edges; buildTopicGraph assembles a topic tree). `research.controller.js` + routes: `/research/search`, `/research/opportunities/:id/similar`, `/research/topics`, `/research/authors`, `/research/graph/:topic`, `POST /research/embed`. Embedding cron 6:30 AM, graph-build cron 7:30 AM. `AnalysisRun` enum gains `embedding_generation` + `research_graph_build`.
+  - Date: 2026-05-09
+  - Verification: semanticSearch.test.js + researchGraph.test.js. Smoke-run on prod: 239 research opps embedded, semantic search returns 195 matches (top: "MEME: Multi-entity & Evolving Memory Evaluation", sim 0.642), graph build upserted 264 edges across 47 research opps.
+- [x] Phase 4 — research-to-build brief generator. New `oied/researchBuildBrief.service.js` turns a buildable research paper into a concrete build plan (product_idea, target_customers, suggested_architecture, mvp_scope, proposal_angle, confidence) via gpt-4o-mini, stored on `aiAnalysis.build_brief`. Only briefs papers Phase 2.1 flagged `research_summary.buildable === true`; grounds target_customers in the paper's `cross_channel_matches` demand signal. Idempotent batch (skips already-briefed unless force=true). Daily cron 7:45 AM UTC. `POST /research/build-briefs` admin trigger. Frontend OpportunityCard shows a 🧭 Build brief badge. `AnalysisRun` enum gains `research_build_brief`.
+  - Date: 2026-05-14
+  - Verification: 10 new tests (researchBuildBrief.test.js). Full suite 127 suites / 1520 tests pass.
+  - Notes: No migration — `AnalysisRun.type` is a plain varchar (enum enforced in-model only) and `build_brief` lives in the existing `aiAnalysis` JSONB. Prod smoke-test pending deploy.
+
 ## Research Intelligence Expansion — Phase 2 (2.1–2.3: summaries, cross-channel, aggregation)
 
 - [x] Phase 2.1 — AI research summaries. New `oied/researchSummary.service.js` generates a business-oriented summary per research opp (executive_summary, build_recommendation + buildable flag, market_timing one of too_early/emerging/active/saturated, competitive_insight) via gpt-4o-mini, stored on `aiAnalysis.research_summary`. Idempotent batch + single-opp paths, mirrors classification.service. Daily cron 6:45 AM UTC in actionEngine.scheduler. Frontend OpportunityCard ResearchMeta shows market-timing + 🔨 Buildable badges. `AnalysisRun` enum gains `research_summary`.
