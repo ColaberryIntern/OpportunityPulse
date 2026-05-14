@@ -106,9 +106,10 @@ async function getChartData(type, period = '30d') {
   // v9.4 unified-channels chart: bonfire (procurement) + bonfire_strategic
   // (synthesized clusters) join the existing 6 series. Same daily count
   // shape; just two more types in the GROUP BY result.
+  // Research Intelligence Phase 1: + 'research'.
   const types = [
     'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
-    'bonfire', 'bonfire_strategic',
+    'bonfire', 'bonfire_strategic', 'research',
   ];
 
   const results = await Opportunity.findAll({
@@ -158,7 +159,7 @@ async function getChartData(type, period = '30d') {
 async function getTrendSummary() {
   const types = [
     'gov_contract', 'ai_job', 'investment', 'grant', 'ai_news', 'freelance',
-    'bonfire', 'bonfire_strategic',
+    'bonfire', 'bonfire_strategic', 'research',
   ];
   const summaries = {};
 

@@ -20,6 +20,7 @@ const CHANNEL_OPTIONS = [
   { key: 'private-sector', label: '🧠 News' },
   { key: 'freelance',      label: '💼 Freelance' },
   { key: 'capital',        label: '💰 Capital' },
+  { key: 'research',       label: '🔬 Research' },
 ];
 
 // Mirrors backend SORT_OPTIONS in myOpportunities.service.
