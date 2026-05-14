@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 1 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .pipeline .step { flex: 1; min-width: 150px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 4px; font-size: 12.5px; }
+  .pipeline .step b { color: var(--navy); display: block; font-size: 13px; margin-bottom: 3px; }
+  .pipeline .step.ai b::after { content: ' · AI'; color: var(--indigo); font-size: 11px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-foundation { background: var(--indigo-soft); color: #3730a3; }
+  .b-data { background: #ede9fe; color: #5b21b6; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .seam { background: var(--indigo-soft); border: 1px solid #c7d2fe; border-radius: 6px; padding: 10px 14px; margin: 12px 0; font-size: 13.5px; }
+  .seam b { color: #3730a3; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } .pipeline { flex-direction: column; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Business objective</a>
+  <a href="#what-shipped">What shipped in Phase 1</a>
+
+  <h2>How it works</h2>
+  <a href="#pipeline">The synthesis pipeline</a>
+  <a href="#workflow-manual">Workflow: manual research</a>
+  <a href="#workflow-requirements">Workflow: requirements generation</a>
+  <a href="#workflow-daily">Workflow: daily scan</a>
+
+  <h2>Architecture</h2>
+  <a href="#services">The six services</a>
+  <a href="#bridge">The Agent Foundry seam</a>
+  <a href="#schema">Database schema</a>
+  <a href="#routes">API routes</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-button">Deep Research button</a>
+  <a href="#screen-report">The report page</a>
+  <a href="#screen-ideas">Venture ideas</a>
+  <a href="#screen-modal">Requirements modal</a>
+
+  <h2>Details</h2>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations performed</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Future phases</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 1</h1>
+  <p class="subtitle">Foundation · 2026-05-14 · commit <code>3229913</code> · all 1,570 backend tests passing</p>
+  <p>
+    This is Phase 1 of turning Opportunity Pulse from an <em>opportunity aggregator</em> into an
+    <em>AI venture intelligence &amp; execution operating system</em>. The new capability is called
+    <strong>Deep Research</strong>: it reads across every channel — research, news, government, talent,
+    freelance, capital, strategic patterns — and synthesizes them into venture opportunities,
+    commercialization strategies, MVP recommendations, and a bridge to requirements generation.
+  </p>
+  <p>
+    Phase 1 deliberately builds the <strong>foundation</strong>, not the full autonomous system. It
+    establishes the data model, the synthesis pipeline, the report experience, the requirements-generation
+    bridge, the daily-scan infrastructure, and the email briefing foundation — each as a real, working,
+    independently-extensible piece.
+  </p>
+  <p>
+    <span class="badge b-done">4 tables live</span>
+    <span class="badge b-done">6 services</span>
+    <span class="badge b-done">5 API routes</span>
+    <span class="badge b-done">report page + modal</span>
+    <span class="badge b-foundation">Agent Foundry: foundation seam</span>
+  </p>
+</section>
+
+<!-- ========================================================== OBJECTIVE -->
+<section class="block context" id="objective">
+  <h2>The business objective</h2>
+  <p>
+    Every existing channel in Opportunity Pulse answers "what opportunities exist?" Deep Research answers
+    a harder question: <strong>"given everything we can see, what should we build, who would buy it, and
+    how do we ship it?"</strong>
+  </p>
+  <p>
+    The system synthesizes the seven channels into venture opportunities, commercialization strategies,
+    MVP recommendations, monetization plans, and execution recommendations — supporting (1) manual deep
+    research from the My Opportunities search, (2) automated once-per-day strategic scans, (3) daily
+    executive email briefings, (4) an AI Project Architect integration for requirements generation, and
+    (5) long-running generation jobs with progress tracking.
+  </p>
+  <p>
+    Phase 1 lays every one of those tracks. It does <em>not</em> attempt the full autonomous venture
+    generation system — that is a deliberate later phase. The bias here is <strong>architecture quality
+    over feature quantity</strong>: modular services, deterministic behavior, observable jobs, and a
+    single clean seam where the external Agent Foundry integration will plug in.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Your feedback on the objective &amp; Phase 1 scope</h4>
+    <textarea data-fb-id="objective" placeholder="Does the Phase 1 boundary match what you wanted?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WHAT SHIPPED -->
+<section class="block feature" id="what-shipped">
+  <h2>What shipped in Phase 1</h2>
+  <table>
+    <tr><th>Requirement</th><th>Delivered</th></tr>
+    <tr><td>Deep Research button</td><td>On My Opportunities, next to Search — uses the current search term + filtered results</td></tr>
+    <tr><td>4 database tables</td><td><code>deep_research_reports</code>, <code>venture_ideas</code>, <code>project_generation_jobs</code>, <code>daily_research_scans</code> — migrated live on prod</td></tr>
+    <tr><td>6 backend services</td><td>orchestrator, strategic synthesis, venture idea generator, project architect bridge, daily scheduler, email briefing</td></tr>
+    <tr><td>5 API routes</td><td>run, get report, status poll, generate requirements, job status poll</td></tr>
+    <tr><td>Report page</td><td><code>/admin/deep-research/:id</code> — a 10-section executive intelligence dashboard</td></tr>
+    <tr><td>Requirements generation flow</td><td>"Generate Requirements" on each venture idea → job + phase-tracked progress modal</td></tr>
+    <tr><td>Daily scan infrastructure</td><td>opt-in cron, configurable topics, per-topic scan log</td></tr>
+    <tr><td>Email briefing foundation</td><td>executive briefing HTML template + conservative (opt-in) delivery</td></tr>
+  </table>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the shipped scope</h4>
+    <textarea data-fb-id="what-shipped" placeholder="Anything missing or different from expected?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PIPELINE -->
+<section class="block arch" id="pipeline">
+  <h2>The synthesis pipeline</h2>
+  <p>
+    A deep research run is a short, deterministic pipeline. The orchestrator owns the report lifecycle;
+    the two AI steps are isolated, single-responsibility services it delegates to.
+  </p>
+  <div class="pipeline">
+    <div class="step"><b>1 · Aggregate</b>Pull cross-channel opportunity data (by search term or explicit ids), normalize into a compact strategic context grouped by channel.</div>
+    <div class="step ai"><b>2 · Synthesize</b>Strategist AI call: executive summary, market stage, opportunity signals, government alignment, MVP directions, build recommendation.</div>
+    <div class="step ai"><b>3 · Generate ideas</b>Venture architect AI call: a shortlist of concrete venture ideas — monetization, buildability, revenue band, GTM.</div>
+    <div class="step"><b>4 · Persist</b>Report row + venture_ideas rows + an AnalysisRun job record. Status: success / partial / failed.</div>
+  </div>
+  <p class="small">
+    <strong>Failure-first:</strong> step 2 is the hard gate — if synthesis fails the report is marked
+    <code>failed</code> (the row is still persisted — observable, never a half-write). Step 3 is soft —
+    if idea generation fails (e.g. the AI provider 429s) the report degrades to <code>partial</code> and
+    keeps the strategic narrative, which is still useful on its own.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the pipeline design</h4>
+    <textarea data-fb-id="pipeline" placeholder="On the aggregate → synthesize → generate → persist flow…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WORKFLOW MANUAL -->
+<section class="block" id="workflow-manual">
+  <h2>Workflow — manual deep research</h2>
+  <pre>My Opportunities  ──[ search / filter ]──▶  click "Deep Research"
+        │
+        ▼
+POST /api/v1/deep-research/run  { searchTerm, opportunityIds }
+        │
+        ▼
+deepResearch.runDeepResearch()
+   ├─ create AnalysisRun + deep_research_report (status: running)   ← observable immediately
+   ├─ fetchCandidates()  →  aggregateContext()
+   ├─ strategySynthesis.synthesize(context)        [AI · hard gate]
+   ├─ ventureIdeaGenerator.generateVentureIdeas()  [AI · soft]
+   ├─ persist venture_ideas rows
+   └─ update report (status: success | partial | failed)
+        │
+        ▼
+redirect ──▶  /admin/deep-research/:id   (report page)</pre>
+  <p class="small">
+    The report row is created <em>before</em> synthesis runs, so an in-flight run is observable and the
+    report page can poll <code>/:id/status</code> while it completes.
+  </p>
+</section>
+
+<!-- ========================================================== WORKFLOW REQUIREMENTS -->
+<section class="block" id="workflow-requirements">
+  <h2>Workflow — requirements generation</h2>
+  <pre>Venture idea card  ──[ click "Generate Requirements" ]──▶
+        │
+        ▼
+POST /api/v1/deep-research/:id/generate-requirements  { ventureIdeaId }
+        │
+        ▼
+projectArchitectBridge.createJob()
+   ├─ idempotency guard: existing queued/running job?  →  return it
+   ├─ create project_generation_job (status: queued)
+   └─ processJob(id)  ── fire-and-forget ──┐
+        │ (HTTP returns the queued job)    │
+        ▼                                  ▼
+   modal polls GET /jobs/:id/status   processJob walks 5 phases:
+   every 1.2s                           analyzing_venture
+                                        drafting_requirements
+                                        structuring_architecture
+                                        handoff_to_architect   ← the Agent Foundry seam
+                                        finalizing
+                                          │
+                                          ▼
+                                   status: success, progress 100%,
+                                   requirements_json persisted</pre>
+  <p class="small">
+    Polling today, SSE-ready tomorrow: the job model already persists phase + progress, so a future SSE
+    upgrade changes only the modal component — not the data model or the bridge.
+  </p>
+</section>
+
+<!-- ========================================================== WORKFLOW DAILY -->
+<section class="block" id="workflow-daily">
+  <h2>Workflow — daily automated scan</h2>
+  <pre>cron (08:00 UTC, opt-in: DEEP_RESEARCH_SCAN_ENABLED=true)
+        │
+        ▼
+dailyResearchScheduler.runDailyScan()
+   for each topic in DEEP_RESEARCH_SCAN_TOPICS (configurable):
+      ├─ create daily_research_scan row (status: running)
+      ├─ deepResearch.runDeepResearch({ origin: 'daily_scan' })
+      └─ update scan row (status: success | failed)   ← one failing topic never aborts the rest
+        │
+        ▼
+emailBriefing.sendDailyBriefing(reports)
+   └─ conservative: only emails if DEEP_RESEARCH_BRIEFING_TO is set;
+      otherwise renders the briefing and logs { sent: false }</pre>
+  <p class="small">
+    Both the scan cron and email delivery are <strong>opt-in and default OFF</strong> — same posture as
+    every other scheduled job in the codebase. The logic is fully unit-tested regardless of the flags.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the three workflows</h4>
+    <textarea data-fb-id="workflows" placeholder="On the manual / requirements / daily-scan flows…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SERVICES -->
+<section class="block arch" id="services">
+  <h2>Architecture — the six services</h2>
+  <p>
+    Everything lives under <code>backend/src/deepResearch/</code>, following the repo's feature-folder
+    convention. Each service has one responsibility — no God service, no tangled orchestration.
+  </p>
+  <table>
+    <tr><th>Service</th><th>Responsibility</th><th>Touches AI?</th><th>Touches DB?</th></tr>
+    <tr><td><code>deepResearch.service</code></td><td>Orchestrator. Aggregates + normalizes cross-channel data, owns the report lifecycle, delegates the AI work.</td><td>No (delegates)</td><td>Yes</td></tr>
+    <tr><td><code>strategySynthesis.service</code></td><td>The executive narrative — exec summary, market stage, signals, gov alignment, MVP directions. One AI call.</td><td>Yes</td><td>No</td></tr>
+    <tr><td><code>ventureIdeaGenerator.service</code></td><td>The venture-idea shortlist — monetization, buildability, revenue band, GTM. One AI call.</td><td>Yes</td><td>No</td></tr>
+    <tr><td><code>projectArchitectBridge.service</code></td><td>The <code>project_generation_jobs</code> lifecycle — phase walker, progress tracking, the Agent Foundry seam.</td><td>No</td><td>Yes</td></tr>
+    <tr><td><code>dailyResearchScheduler.service</code></td><td>The opt-in once-per-day scan: per-topic runs, scan logging, cron registration.</td><td>No (delegates)</td><td>Yes</td></tr>
+    <tr><td><code>emailBriefing.service</code></td><td>The executive briefing email — HTML template + conservative delivery.</td><td>No</td><td>No</td></tr>
+  </table>
+  <p class="small">
+    The split between <code>strategySynthesis</code> ("what does this mean") and
+    <code>ventureIdeaGenerator</code> ("what would we build") is deliberate — two responsibilities, two
+    prompts, two services. Either can be tuned or swapped without touching the other or the orchestrator.
+  </p>
+</section>
+
+<!-- ========================================================== BRIDGE -->
+<section class="block arch" id="bridge">
+  <h2>The Agent Foundry seam</h2>
+  <p>
+    The spec calls for an "AI Project Architect integration." That system is <strong>Agent Foundry</strong> —
+    a sibling repository with no API contract exposed yet. Rather than fake the integration or block on it,
+    Phase 1 builds the <em>foundation</em>: the entire job lifecycle is real, and the external handoff is a
+    single, clearly-marked seam.
+  </p>
+  <div class="seam">
+    <b>The seam:</b> <code>projectArchitectBridge._dispatchToAgentFoundry(ventureIdea)</code><br/>
+    Phase 1 generates a structured requirements scaffold deterministically from the venture idea — real,
+    useful output (overview, MVP scope, suggested architecture, monetization, functional requirement
+    skeleton), not a fake. When Agent Foundry exposes an API, <strong>only this one function changes</strong> —
+    its return contract (<code>{ projectSlug, architectUrl, requirements }</code>) stays the same, and the
+    job model, phase walker, progress tracking, and polling API are all untouched.
+  </div>
+  <p class="small">
+    This is the "extensibility over feature quantity" principle in practice: the hard part (observable,
+    retry-safe, phase-tracked jobs) is done; the external call is isolated to one swappable function.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the Agent Foundry approach</h4>
+    <textarea data-fb-id="bridge" placeholder="On the foundation-seam approach to the integration…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCHEMA -->
+<section class="block arch" id="schema">
+  <h2>Database schema</h2>
+  <p>Migration <code>20260514000001-create-deep-research-tables.js</code> — four tables, applied live on prod.</p>
+  <pre>deep_research_reports         one synthesized report per search term / scan topic
+  ├─ search_term, status (running|success|partial|failed)
+  ├─ executive_summary, market_stage, confidence_score
+  ├─ report_json (JSONB)      the full structured report
+  ├─ source_count, origin (manual|daily_scan)
+  └─ organization_id, created_by, analysis_run_id
+
+venture_ideas                 one report → many venture ideas
+  ├─ report_id (FK)
+  ├─ title, description, monetization_strategy
+  ├─ market_timing, buildability_score, revenue_potential
+  ├─ mvp_scope, gtm_summary
+  └─ metadata (JSONB)         suggested_architecture, target_customers
+
+project_generation_jobs       a venture idea handed off for requirements generation
+  ├─ venture_idea_id (FK), report_id
+  ├─ status (queued|running|success|failed), progress_percent
+  ├─ current_phase, phases (JSONB)   the phase log
+  ├─ project_slug, architect_url     the Agent Foundry handoff result
+  └─ requirements_json (JSONB)
+
+daily_research_scans          the once-per-day automated scan log
+  ├─ scan_topic, report_id (FK, nullable)
+  └─ status (running|success|failed|skipped)</pre>
+  <p class="small">
+    All four use the repo's standard conventions: integer PKs, JSONB for evolving payloads, underscored
+    columns, indexed on the columns the read paths actually use.
+    <span class="badge b-data">deep_research_reports</span>
+    <span class="badge b-data">venture_ideas</span>
+    <span class="badge b-data">project_generation_jobs</span>
+    <span class="badge b-data">daily_research_scans</span>
+  </p>
+</section>
+
+<!-- ========================================================== ROUTES -->
+<section class="block arch" id="routes">
+  <h2>API routes</h2>
+  <p>
+    All under <code>/api/v1/deep-research</code>, admin-only (same access posture as the other OIED action
+    endpoints). The spec drafted <code>/api/deep-research/...</code>; the repo's consistent convention is
+    <code>/api/v1/*</code>, so the routes follow that.
+  </p>
+  <pre>POST /api/v1/deep-research/run                       run a synthesis  { searchTerm?, opportunityIds? }
+GET  /api/v1/deep-research/:id                       full report + venture ideas + jobs
+GET  /api/v1/deep-research/:id/status                lightweight status poll (loading state)
+POST /api/v1/deep-research/:id/generate-requirements  start a requirements job  { ventureIdeaId }
+GET  /api/v1/deep-research/jobs/:id/status            poll a project generation job's progress</pre>
+  <p class="small">
+    Validated on prod: <code>GET /api/v1/deep-research/1</code> returns <code>401</code> unauthenticated
+    (route mounted + auth-gated, not a 404).
+  </p>
+</section>
+
+<!-- ========================================================== SCREEN BUTTON -->
+<section class="block" id="screen-button">
+  <h2>Screen — the Deep Research button</h2>
+  <p>
+    On My Opportunities, next to Search. It uses the current search term <em>and</em> the currently
+    filtered results — so the synthesis is scoped to exactly what the user is looking at. Disabled until
+    there's a search term or loaded results.
+  </p>
+  <img class="shot" src="deep-research-assets/01-deep-research-button.png" alt="Deep Research button on My Opportunities" />
+  <p class="caption">The indigo <strong>🧠 Deep Research</strong> button, top-right of the search row on My Opportunities.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the entry point</h4>
+    <textarea data-fb-id="screen-button" placeholder="On the button placement / behavior…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCREEN REPORT -->
+<section class="block" id="screen-report">
+  <h2>Screen — the report page</h2>
+  <p>
+    <code>/admin/deep-research/:id</code> — an executive intelligence dashboard. Light theme, editorial
+    readability, ten sections: Executive Summary, Market Timing, Opportunity Signals, Venture Ideas,
+    Revenue Potential, Government Alignment, Research Highlights, Suggested MVPs, Monetization Strategy,
+    Build Recommendation. While a report is still synthesizing it shows a polling loading state.
+  </p>
+  <img class="shot" src="deep-research-assets/02-report-overview.png" alt="Deep Research report page — overview" />
+  <p class="caption">Report header with market-stage + confidence pills, then Executive Summary, Market Timing, Opportunity Signals, and the start of Venture Ideas.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the report page</h4>
+    <textarea data-fb-id="screen-report" placeholder="On the executive dashboard layout / sections…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCREEN IDEAS -->
+<section class="block" id="screen-ideas">
+  <h2>Screen — venture ideas</h2>
+  <p>
+    Each venture idea is a card: revenue band, market timing, buildability %, MVP scope, monetization,
+    go-to-market, suggested architecture, target customers — and a <strong>Generate Requirements</strong>
+    button. Once a job has run, the card shows its latest status inline.
+  </p>
+  <img class="shot" src="deep-research-assets/03-venture-ideas.png" alt="Venture idea cards" />
+  <p class="caption">Three venture ideas from the seeded sample report — each with full commercialization detail and a Generate Requirements action.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the venture idea cards</h4>
+    <textarea data-fb-id="screen-ideas" placeholder="On what each venture idea card surfaces…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCREEN MODAL -->
+<section class="block" id="screen-modal">
+  <h2>Screen — requirements generation modal</h2>
+  <p>
+    Clicking Generate Requirements opens a modal that starts a project generation job and polls its
+    status: a progress bar, a phase tracker (each phase ✅ / ⏳ / ◻️), and — on completion — the generated
+    requirements scaffold plus the Agent Foundry handoff URL.
+  </p>
+  <img class="shot" src="deep-research-assets/05-requirements-modal.png" alt="Requirements generation progress modal" />
+  <p class="caption">The modal at completion — all five phases done, 100%, the generated requirements scaffold, and the honest "Phase 1 foundation" note about the Agent Foundry handoff.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the progress modal</h4>
+    <textarea data-fb-id="screen-modal" placeholder="On the phase tracker / progress experience…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New — backend</h3>
+  <pre>backend/src/migrations/20260514000001-create-deep-research-tables.js
+backend/src/models/{DeepResearchReport,VentureIdea,ProjectGenerationJob,DailyResearchScan}.js
+backend/src/deepResearch/deepResearch.service.js          orchestrator + aggregation
+backend/src/deepResearch/strategySynthesis.service.js     AI: executive narrative
+backend/src/deepResearch/ventureIdeaGenerator.service.js  AI: venture idea shortlist
+backend/src/deepResearch/projectArchitectBridge.service.js  job lifecycle + Agent Foundry seam
+backend/src/deepResearch/dailyResearchScheduler.service.js  opt-in daily scan + cron
+backend/src/deepResearch/emailBriefing.service.js         executive briefing email
+backend/src/deepResearch/deepResearch.controller.js       HTTP controller
+backend/src/deepResearch/deepResearch.routes.js           routes (admin-only)
+backend/scripts/seed-deep-research-sample.js              sample report seeder
+backend/scripts/capture-deep-research-walkthrough.js      screenshot capture
+backend/tests/deepResearch/*.test.js                      6 test files, 53 tests</pre>
+  <h3>New — frontend</h3>
+  <pre>frontend/src/services/deepResearchService.js              API client
+frontend/src/pages/DeepResearchReportPage.jsx             the executive report page
+frontend/src/components/deepResearch/RequirementsProgressModal.jsx  the progress modal</pre>
+  <h3>Modified</h3>
+  <pre>backend/src/models/index.js          register the 4 new models
+backend/src/models/AnalysisRun.js    + deep_research, daily_research_scan job types
+backend/src/server.js                mount /api/v1/deep-research + start the daily scheduler
+frontend/src/pages/MyOpportunitiesPage.jsx  + the Deep Research button + handler
+frontend/src/App.jsx                 + the /admin/deep-research/:id route</pre>
+</section>
+
+<!-- ========================================================== VALIDATION -->
+<section class="block feature" id="validation">
+  <h2>Validations performed</h2>
+  <table>
+    <tr><th>#</th><th>Check</th><th>Result</th></tr>
+    <tr><td>1</td><td>Migration runs clean on prod</td><td>✅ <code>migrated (0.213s)</code></td></tr>
+    <tr><td>2</td><td>All 4 tables created</td><td>✅ verified in <code>pg_tables</code></td></tr>
+    <tr><td>3</td><td>Route mounted + auth-gated</td><td>✅ <code>GET /api/v1/deep-research/1</code> → 401 unauthenticated</td></tr>
+    <tr><td>4</td><td>Server boots with the new route + scheduler wired</td><td>✅ container healthy</td></tr>
+    <tr><td>5</td><td>Sample report persists + reads back</td><td>✅ report id 1, 3 venture ideas, status success, stage emerging</td></tr>
+    <tr><td>6</td><td>Deep Research button visible + scoped to search</td><td>✅ screenshot 01</td></tr>
+    <tr><td>7</td><td>Report page renders all 10 sections</td><td>✅ screenshots 02–04</td></tr>
+    <tr><td>8</td><td>Generate Requirements → job created</td><td>✅ job created queued, returned immediately</td></tr>
+    <tr><td>9</td><td>Job walks all 5 phases to success</td><td>✅ 100%, all phases <code>completed</code>, requirements scaffold persisted</td></tr>
+    <tr><td>10</td><td>Job phases persist correctly (JSONB)</td><td>✅ after a fix — see Known Limitations note on the Sequelize JSONB mutation</td></tr>
+    <tr><td>11</td><td>Full backend test suite</td><td>✅ 133 suites / 1,570 tests passing (53 new)</td></tr>
+    <tr><td>12</td><td>No existing channels / search broken</td><td>✅ full suite green; My Opportunities search + channel breakdown unchanged</td></tr>
+  </table>
+  <p class="small">
+    Test coverage spans the mandatory types per the repo's test framework: happy path, failure path
+    (AI 429s, missing records, non-JSON output), boundary cases (empty input, oversized fields,
+    out-of-range scores), and idempotency (the bridge's duplicate-job guard, the seeder).
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on validation coverage</h4>
+    <textarea data-fb-id="validation" placeholder="Anything you'd want validated that wasn't?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIMITATIONS -->
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Live AI synthesis not validated on prod — OpenAI quota exhausted.</strong> The prod OpenAI
+      account is currently returning <code>429</code> (the same issue affecting the research crons). So a
+      live <code>runDeepResearch()</code> would fail at the synthesis step. The code paths — including the
+      429 failure path — are covered by 50 unit tests, and the report page / venture ideas / requirements
+      flow were validated against a <strong>seeded sample report</strong>. Live end-to-end synthesis
+      validates as soon as the quota is topped up.
+    </li>
+    <li>
+      <strong>Agent Foundry handoff is a foundation seam.</strong> Phase 1 generates a requirements
+      scaffold deterministically; the live Agent Foundry API call is one swappable function
+      (<code>_dispatchToAgentFoundry</code>) — see "The Agent Foundry seam" above.
+    </li>
+    <li>
+      <strong>No reports list page yet.</strong> Reports are reachable by direct URL / redirect after a
+      run. A "past reports" index is a natural Phase 2 addition.
+    </li>
+    <li>
+      <strong>SSE not implemented.</strong> The progress modal polls (1.2s). The job model is already
+      SSE-ready — a future upgrade changes only the modal component.
+    </li>
+    <li>
+      <strong>Daily scan + email delivery default OFF.</strong> Opt-in via <code>DEEP_RESEARCH_SCAN_ENABLED</code>
+      and <code>DEEP_RESEARCH_BRIEFING_TO</code> — deliberately conservative for a foundation phase.
+    </li>
+    <li>
+      <strong>Sequelize JSONB mutation gotcha (fixed).</strong> The phase walker initially mutated the
+      phases array in place; Sequelize saw the same reference and skipped the column write. Fixed by
+      deep-copying the array on every persist (<code>clonePhases</code>) — noted here because it's a
+      non-obvious trap for the next person touching JSONB job state.
+    </li>
+  </ul>
+</section>
+
+<!-- ========================================================== FUTURE -->
+<section class="block summary" id="future">
+  <h2>Future phases</h2>
+  <ul>
+    <li><strong>Phase 2 — live synthesis at scale.</strong> Once OpenAI quota is restored: validate live runs, add a reports list/index page, tune the two prompts against real output, add report re-run.</li>
+    <li><strong>Phase 3 — the real Agent Foundry integration.</strong> Replace <code>_dispatchToAgentFoundry</code> with the live HTTP handoff; the job model and progress tracking are already built for it.</li>
+    <li><strong>Phase 4 — SSE progress.</strong> Swap the modal's polling for server-sent events; no data-model change needed.</li>
+    <li><strong>Phase 5 — autonomous venture generation.</strong> The daily scan already produces reports unattended; the next step is acting on the highest-confidence venture ideas automatically (gated, human-in-the-loop).</li>
+    <li><strong>Phase 6 — productionized briefings.</strong> Move email delivery from opt-in foundation to a real scheduled executive briefing with recipient management.</li>
+  </ul>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the phase roadmap</h4>
+    <textarea data-fb-id="future" placeholder="On sequencing / priorities for the next phases…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    Phase 1 is shipped and deployed. The data model, the synthesis pipeline, the executive report
+    experience, the requirements-generation bridge, the daily-scan infrastructure, and the email briefing
+    foundation are all live on prod. The full backend suite — 1,570 tests — is green.
+  </p>
+  <p>
+    The one thing waiting on the outside world is the OpenAI quota: once it's restored, a live
+    <code>Deep Research</code> run from the My Opportunities button will produce a real synthesized report
+    end-to-end. Everything else — including the requirements-generation flow — is validated and working now.
+  </p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'deep-research-phase-1-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Deep Research Phase 1 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
