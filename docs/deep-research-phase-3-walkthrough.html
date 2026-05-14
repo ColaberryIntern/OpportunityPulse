@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 3 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .pipeline .step { flex: 1; min-width: 130px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 4px; font-size: 12px; }
+  .pipeline .step b { color: var(--navy); display: block; font-size: 12.5px; margin-bottom: 3px; }
+  .pipeline .step.ai b::after { content: ' · AI'; color: var(--indigo); font-size: 10px; }
+  .pipeline .step.det b::after { content: ' · deterministic'; color: var(--accent); font-size: 10px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-ai { background: var(--indigo-soft); color: #3730a3; }
+  .b-data { background: #ede9fe; color: #5b21b6; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .seam { background: var(--indigo-soft); border: 1px solid #c7d2fe; border-radius: 6px; padding: 10px 14px; margin: 12px 0; font-size: 13.5px; }
+  .seam b { color: #3730a3; }
+  .lifecycle { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; align-items: center; }
+  .lifecycle span.st { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; font-size: 11.5px; }
+  .lifecycle span.arrow { color: var(--text-muted); }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } .pipeline { flex-direction: column; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 3 objective</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The lifecycle</h2>
+  <a href="#lifecycle">Venture lifecycle</a>
+  <a href="#pipeline-flow">The opportunity pipeline</a>
+
+  <h2>The engines</h2>
+  <a href="#readiness">Execution readiness</a>
+  <a href="#decision">Build-vs-monitor decision</a>
+  <a href="#deployment">Deployment readiness</a>
+  <a href="#mvp">MVP planning</a>
+  <a href="#launch">Launch strategy</a>
+
+  <h2>Integration</h2>
+  <a href="#architect">AI Project Architect client</a>
+  <a href="#orchestrator">Execution orchestrator</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-dashboard">Execution dashboard</a>
+  <a href="#screen-panel">Venture execution panel</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 4</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<!-- ========================================================== COVER -->
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 3</h1>
+  <p class="subtitle">Execution Intelligence · 2026-05-14 · commit <code>7241590</code> · all 1,691 backend tests passing</p>
+  <p>
+    Phase 1 built the foundation. Phase 2 made it real strategic intelligence. Phase 3 turns it into
+    <strong>execution intelligence</strong> — the platform now answers the operational questions:
+    <em>Should we build this? Can we execute it? How fast? What would the MVP look like? What team and
+    resources? What's the fastest commercialization path?</em>
+  </p>
+  <p>
+    A venture idea now has an explicit <strong>11-state lifecycle</strong>, a deterministic
+    <strong>execution readiness</strong> assessment, an explainable <strong>build-vs-monitor
+    decision</strong>, an AI-generated <strong>MVP plan</strong> and <strong>launch strategy</strong>,
+    a <strong>deployment readiness</strong> classification, and a place in a priority-sorted
+    <strong>execution queue</strong>. The AI Project Architect bridge gained a real, production-shaped
+    HTTP client.
+  </p>
+  <p>
+    <strong>Human-in-the-loop is preserved throughout.</strong> Nothing auto-executes, auto-builds,
+    auto-deploys, or auto-contacts anyone. This is AI venture <em>execution intelligence</em> — not
+    autonomous startups.
+  </p>
+  <p>
+    <span class="badge b-done">6 tables live</span>
+    <span class="badge b-done">9 services</span>
+    <span class="badge b-done">3 deterministic engines</span>
+    <span class="badge b-done">real architect client</span>
+    <span class="badge b-done">execution dashboard</span>
+  </p>
+</section>
+
+<!-- ========================================================== OBJECTIVE -->
+<section class="block context" id="objective">
+  <h2>The Phase 3 objective</h2>
+  <p>
+    Phase 2 could tell you a venture idea was a <code>strong_build</code> in a <code>breakout</code>
+    market with <code>commercial_acceleration</code> convergence. What it couldn't tell you:
+    <em>can Colaberry actually pull it off, how long it would take, what the MVP is, and what the
+    go-to-market looks like.</em>
+  </p>
+  <p>
+    Phase 3 operationalizes the intelligence layer. Every venture idea becomes something you can
+    <em>act on</em>: it has a lifecycle you move it through, an execution-readiness score grounded in
+    technical complexity / AI-dependency risk / market + operational readiness, a build-vs-monitor
+    decision with a fully traceable rationale, a concrete MVP plan and launch strategy, and a
+    deployment-readiness level. The execution dashboard is the venture operations center that ties it
+    all together.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Your feedback on the Phase 3 direction</h4>
+    <textarea data-fb-id="objective" placeholder="Does Phase 3 operationalize the intelligence the way you wanted?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WHAT SHIPPED -->
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <tr><th>#</th><th>Capability</th><th>Delivered</th></tr>
+    <tr><td>1</td><td>Venture Lifecycle Management</td><td><code>ventureLifecycle.service</code> — 11-state machine, transition validation, audit trail</td></tr>
+    <tr><td>2</td><td>Real AI Project Architect Integration</td><td><code>projectArchitectClient.service</code> — production HTTP client; bridge picks real-vs-foundation path</td></tr>
+    <tr><td>3</td><td>Execution Readiness Engine</td><td><code>executionReadiness.service</code> — deterministic 4-dimension scoring + timeline + staffing</td></tr>
+    <tr><td>4</td><td>MVP Planning Engine</td><td><code>mvpPlanning.service</code> — AI plan content + deterministic timeline</td></tr>
+    <tr><td>5</td><td>Build-vs-Monitor Intelligence</td><td><code>ventureDecisionEngine.service</code> — deterministic 7-outcome ordered-rule engine</td></tr>
+    <tr><td>6</td><td>Execution Queue</td><td><code>/admin/deep-research/execution</code> — the venture operations center</td></tr>
+    <tr><td>7</td><td>Opportunity Pipeline Workflow</td><td>visual pipeline flow — ventures grouped by lifecycle stage</td></tr>
+    <tr><td>8</td><td>Launch Strategy Engine</td><td><code>launchStrategy.service</code> — ICP / GTM / pricing / pilot / enterprise / gov</td></tr>
+    <tr><td>9</td><td>Deployment Readiness Intelligence</td><td><code>deploymentReadiness.service</code> — deterministic prototype/mvp/production/enterprise</td></tr>
+    <tr><td>10</td><td>Execution Visual Intelligence</td><td>readiness gauges, lifecycle tracker, decision + deployment badges, sub-score bars</td></tr>
+  </table>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the shipped scope</h4>
+    <textarea data-fb-id="what-shipped" placeholder="Anything missing or different from expected?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIFECYCLE -->
+<section class="block arch" id="lifecycle">
+  <h2>Venture lifecycle</h2>
+  <p>
+    Every venture idea moves through an explicit 11-state lifecycle. <code>ventureLifecycle.service</code>
+    owns the state machine: the allowed transition graph, transition validation, the audit trail
+    (<code>venture_lifecycle_events</code> — one row per change, with from/to/actor/note/timestamp),
+    and keeping the denormalized current state in sync on the venture idea + its queue row.
+  </p>
+  <div class="lifecycle">
+    <span class="st">discovered</span><span class="arrow">→</span>
+    <span class="st">researching</span><span class="arrow">→</span>
+    <span class="st">evaluating</span><span class="arrow">→</span>
+    <span class="st">approved</span><span class="arrow">→</span>
+    <span class="st">generating_requirements</span><span class="arrow">→</span>
+    <span class="st">planning_mvp</span><span class="arrow">→</span>
+    <span class="st">building</span><span class="arrow">→</span>
+    <span class="st">validating</span><span class="arrow">→</span>
+    <span class="st">launching</span><span class="arrow">→</span>
+    <span class="st">monitoring</span>
+  </div>
+  <p class="small">
+    Every state can transition to <code>archived</code> (and back to <code>discovered</code> to
+    revive); a few back-edges allow re-evaluation. Illegal jumps (e.g. <code>discovered → launching</code>)
+    are rejected with a <code>BAD_INPUT</code> error. <span class="badge b-det">deterministic</span>
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the lifecycle model</h4>
+    <textarea data-fb-id="lifecycle" placeholder="On the 11 states / the transition graph…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== PIPELINE FLOW -->
+<section class="block arch" id="pipeline-flow">
+  <h2>The opportunity pipeline</h2>
+  <p>
+    The pipeline is the visual flow of the whole platform — research → strategic intelligence →
+    venture scoring → execution readiness → requirements → MVP planning → build → launch. On the
+    execution dashboard it renders as a column-per-stage flow with every venture in its current stage.
+  </p>
+  <div class="pipeline">
+    <div class="step"><b>Research</b>arXiv / news / gov / talent / capital / freelance</div>
+    <div class="step"><b>Strategic Intelligence</b>synthesis, correlation, timing (Phase 2)</div>
+    <div class="step det"><b>Venture Scoring</b>8-dimension composite (Phase 2)</div>
+    <div class="step det"><b>Execution Readiness</b>can we build it? (Phase 3)</div>
+    <div class="step"><b>Requirements</b>Agent Foundry handoff (Phase 1 + 3)</div>
+    <div class="step ai"><b>MVP Planning</b>scope / stack / staffing (Phase 3)</div>
+    <div class="step"><b>Build Queue</b>priority-sorted execution queue (Phase 3)</div>
+    <div class="step"><b>Launch Queue</b>launch strategy + deployment readiness (Phase 3)</div>
+  </div>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the pipeline view</h4>
+    <textarea data-fb-id="pipeline" placeholder="On the pipeline flow visualization…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== READINESS -->
+<section class="block arch" id="readiness">
+  <h2>Execution readiness engine</h2>
+  <p>
+    Deterministic. Answers "can Colaberry realistically execute this?" — no AI. Four sub-scores
+    (0-100, higher = more ready / lower risk), computed from the venture idea's own fields, its Phase 2
+    venture scores, and the report's strategic signal:
+  </p>
+  <ul>
+    <li><strong>technical_complexity</strong> — buildability + technical feasibility (higher = simpler to build).</li>
+    <li><strong>ai_dependency_risk</strong> — how fragile the AI dependency is (higher = safer).</li>
+    <li><strong>market_readiness</strong> — market stage + correlation strength.</li>
+    <li><strong>operational_readiness</strong> — commercialization + gov alignment + a clear target customer.</li>
+  </ul>
+  <p>
+    These compose via a defined weight model (sum 1.0) into the <code>execution_readiness_score</code>.
+    The engine also derives a concrete <strong>MVP timeline estimate</strong> (weeks), a
+    <strong>staffing profile</strong> (roles + headcount), and an <strong>infrastructure profile</strong>
+    — all deterministic functions of the same inputs.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span> On the seeded sample, the Constituent Triage Agent scored <strong>81.3</strong> — ~10-week MVP, 3 people.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the readiness engine</h4>
+    <textarea data-fb-id="readiness" placeholder="On the 4 dimensions / the timeline + staffing derivation…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== DECISION -->
+<section class="block arch" id="decision">
+  <h2>Build-vs-monitor decision engine</h2>
+  <p>
+    Deterministic + fully explainable. Given the venture's Phase 2 scores, the report's convergence +
+    market timing, the monetization model set, and the Phase 3 execution readiness, it produces
+    <strong>one</strong> decision from a fixed set via an <strong>ordered rule list</strong> — first
+    rule that matches wins, and the rationale is always "the rule that fired + the factor values that
+    triggered it". No hidden weighting; the decision is auditable.
+  </p>
+  <table>
+    <tr><th>Decision</th><th>Fires when</th></tr>
+    <tr><td><code>OVERSATURATED</code></td><td>low competition room in a mature market</td></tr>
+    <tr><td><code>HIGH_RISK</code></td><td>execution readiness &lt; 40</td></tr>
+    <tr><td><code>TOO_EARLY</code></td><td>emerging market + weak correlation</td></tr>
+    <tr><td><code>NEEDS_VALIDATION</code></td><td>low composite, or weak correlation + weak convergence</td></tr>
+    <tr><td><code>BUILD_NOW</code></td><td>strong composite + readiness + acceleration/breakout market</td></tr>
+    <tr><td><code>BUILD_SOON</code></td><td>solid composite + readiness, off-peak timing</td></tr>
+    <tr><td><code>MONITOR</code></td><td>the catch-all — worth watching, not acting yet</td></tr>
+  </table>
+  <p class="small"><span class="badge b-det">deterministic</span> Every decision path is covered by a dedicated test.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the decision engine</h4>
+    <textarea data-fb-id="decision" placeholder="On the 7 outcomes / the ordered-rule approach…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== DEPLOYMENT -->
+<section class="block arch" id="deployment">
+  <h2>Deployment readiness engine</h2>
+  <p>
+    Deterministic. Classifies how far a venture could realistically be deployed:
+    <strong>prototype → mvp → production → enterprise</strong>. It reads five signals — requirements
+    completeness, architecture quality, AI-dependency safety, infrastructure readiness, and compliance
+    exposure. The first four are readiness sub-scores that average into a base; compliance exposure
+    <em>gates</em> the top levels rather than averaging in (a gov-aligned venture carries the most
+    regulatory exposure to clear before "enterprise" is honest).
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span></p>
+</section>
+
+<!-- ========================================================== MVP -->
+<section class="block arch" id="mvp">
+  <h2>MVP planning engine</h2>
+  <p>
+    Hybrid. The plan <em>content</em> — MVP scope, phase-1 features, the ruthless fast-launch subset,
+    future roadmap, suggested architecture + stack, recommended AI components, staffing — is
+    AI-generated (it's inherently creative and venture-specific). The <strong>timeline estimate is
+    deterministic</strong>, taken from the execution readiness engine, so the schedule is auditable
+    rather than a model guess. Goes through the resilient <code>aiProvider</code> layer.
+  </p>
+</section>
+
+<!-- ========================================================== LAUNCH -->
+<section class="block arch" id="launch">
+  <h2>Launch strategy engine</h2>
+  <p>
+    AI-generated go-to-market strategy: ICP, GTM motion, landing-page angle, outreach, acquisition
+    channels, pricing, and the pilot / enterprise / government motions — grounded in the venture's
+    monetization models so it's specific, not generic. The prompt is instructed to be honest: if
+    enterprise or government isn't a fit, it says so plainly.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the MVP + launch engines</h4>
+    <textarea data-fb-id="mvp-launch" placeholder="On the MVP planning + launch strategy engines…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== ARCHITECT -->
+<section class="block arch" id="architect">
+  <h2>AI Project Architect client</h2>
+  <p>
+    Phase 1 + 2's Agent Foundry handoff was a deterministic scaffold. Phase 3 adds
+    <code>projectArchitectClient.service</code> — a <strong>real, production-shaped HTTP client</strong>:
+    timeouts (AbortController), exponential-backoff retry on transient classes, resumable polling
+    (the remote job id is the only state needed), artifact fetching, and typed error classification.
+  </p>
+  <div class="seam">
+    <b>Configured-but-not-pointed-at-anything.</b> Agent Foundry does not expose a public API yet, so
+    on this deployment <code>isConfigured()</code> returns <code>false</code> and every call throws
+    <code>NOT_CONFIGURED</code>. <code>projectArchitectBridge</code> catches that and runs the
+    deterministic foundation walk. The moment <code>AGENT_FOUNDRY_API_URL</code> + <code>API_KEY</code>
+    are set, the bridge switches to the real path — create remote job, resumable polling, artifact
+    fetch — with <strong>no caller change</strong>. The client is decoupled by design: swapping Agent
+    Foundry for a different architect provider is a localized change in one module.
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the architect integration</h4>
+    <textarea data-fb-id="architect" placeholder="On the configurable HTTP client approach…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== ORCHESTRATOR -->
+<section class="block arch" id="orchestrator">
+  <h2>Execution orchestrator</h2>
+  <p>
+    <code>executionQueue.service</code> operationalizes the engines. Two human-triggered actions:
+  </p>
+  <ul>
+    <li><strong>assessVenture()</strong> — runs the deterministic engines (execution readiness +
+      build-vs-monitor decision), persists, refreshes the venture's execution queue row with a
+      recomputed priority score + derived blockers. Cheap, no AI — safe to run often.</li>
+    <li><strong>planMvp()</strong> — runs the AI engines (MVP plan + launch strategy) + the
+      deterministic deployment readiness. Each step is independent: one AI engine failing degrades
+      gracefully and the deterministic deployment readiness still runs.</li>
+  </ul>
+  <p>
+    Plus the read surfaces: <code>getVentureExecution()</code> assembles every execution-intelligence
+    piece for one venture, <code>listQueue()</code> is the priority-sorted queue, and
+    <code>getPipeline()</code> groups ventures by lifecycle stage.
+  </p>
+</section>
+
+<!-- ========================================================== SCREENS -->
+<section class="block" id="screen-dashboard">
+  <h2>Screen — the execution dashboard</h2>
+  <p>
+    <code>/admin/deep-research/execution</code> — the venture operations center. Summary stats, the
+    opportunity pipeline flow (ventures grouped by lifecycle stage), and the priority-sorted execution
+    queue with decisions, scores, priority bars, and blockers.
+  </p>
+  <img class="shot" src="deep-research-assets/p3-01-execution-dashboard.png" alt="Execution intelligence dashboard" />
+  <p class="caption">The execution dashboard — pipeline flow on top, priority-sorted execution queue below.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-dashboard" placeholder="On the execution dashboard…"></textarea>
+  </div>
+</section>
+
+<section class="block" id="screen-panel">
+  <h2>Screen — the venture execution panel</h2>
+  <p>
+    On each venture idea card on the report page, a lazy, collapsible Execution Intelligence panel:
+    the lifecycle tracker + transition controls, the Assess / Plan-MVP actions, the execution readiness
+    gauge + decision + sub-scores, and (once generated) the MVP plan, launch strategy, and deployment
+    readiness. Every action is human-triggered — nothing auto-runs.
+  </p>
+  <img class="shot" src="deep-research-assets/p3-03-venture-execution.png" alt="Venture execution intelligence panel" />
+  <p class="caption">The venture execution panel — lifecycle tracker, the BUILD NOW decision, the readiness gauge (81), and the 4 readiness sub-scores.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-panel" placeholder="On the venture execution panel…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== SCHEMA -->
+<section class="block arch" id="schema">
+  <h2>Database schema</h2>
+  <p>Migration <code>20260514000003-deep-research-phase-3.js</code> — 6 tables + columns, applied live on prod.</p>
+  <pre>venture_lifecycle_events  the audit trail (venture_idea_id, from_state, to_state, actor, note)
+execution_readiness       deterministic readiness (4 sub-scores, mvp_timeline_weeks,
+                          staffing, infrastructure, breakdown — incl. the decision)
+mvp_plans                 MVP scope, phased features, stack, AI components, staffing, timeline
+launch_strategies         ICP / GTM / pricing / pilot / enterprise / gov strategy
+deployment_readiness      prototype/mvp/production/enterprise + 5 sub-scores
+execution_queue_items     one row per venture — lifecycle_state, priority_score, blockers, owner
+
++ venture_ideas            : lifecycle_state, lifecycle_owner
++ project_generation_jobs  : external_job_id, provider ('foundation' | 'agent_foundry')</pre>
+</section>
+
+<!-- ========================================================== ROUTES -->
+<section class="block arch" id="routes">
+  <h2>API routes</h2>
+  <pre>GET    /api/v1/deep-research/ventures/:id/lifecycle    lifecycle + allowed transitions + history
+POST   /api/v1/deep-research/ventures/:id/lifecycle    transition  { toState, note }
+PATCH  /api/v1/deep-research/ventures/:id/owner        set owner
+POST   /api/v1/deep-research/ventures/:id/assess       run the deterministic engines
+POST   /api/v1/deep-research/ventures/:id/mvp-plan     run the AI engines + deployment readiness
+GET    /api/v1/deep-research/ventures/:id/execution    all execution intelligence for a venture
+GET    /api/v1/deep-research/execution/queue           the priority-sorted execution queue
+GET    /api/v1/deep-research/execution/pipeline        ventures grouped by lifecycle stage</pre>
+  <p class="small">Static <code>ventures</code> + <code>execution</code> prefixes — no collision with the <code>/:id</code> param routes.</p>
+</section>
+
+<!-- ========================================================== FILES -->
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New — backend</h3>
+  <pre>backend/src/migrations/20260514000003-deep-research-phase-3.js
+backend/src/models/{VentureLifecycleEvent,ExecutionReadiness,MvpPlan,
+  LaunchStrategy,DeploymentReadiness,ExecutionQueueItem}.js
+backend/src/deepResearch/ventureLifecycle.service.js        lifecycle state machine
+backend/src/deepResearch/projectArchitectClient.service.js  real Agent Foundry HTTP client
+backend/src/deepResearch/executionReadiness.service.js      deterministic readiness engine
+backend/src/deepResearch/ventureDecisionEngine.service.js   deterministic build-vs-monitor
+backend/src/deepResearch/deploymentReadiness.service.js     deterministic deployment readiness
+backend/src/deepResearch/mvpPlanning.service.js             AI MVP plan + deterministic timeline
+backend/src/deepResearch/launchStrategy.service.js          AI launch strategy
+backend/src/deepResearch/executionQueue.service.js          execution orchestrator + queue
+backend/scripts/capture-deep-research-phase-3-walkthrough.js
+backend/tests/deepResearch/{ventureLifecycle,projectArchitectClient,executionReadiness,
+  ventureDecisionEngine,deploymentReadiness,mvpPlanning,launchStrategy,executionQueue}.test.js</pre>
+  <h3>New — frontend</h3>
+  <pre>frontend/src/pages/ExecutionDashboardPage.jsx                   the venture operations center
+frontend/src/components/deepResearch/ExecutionVisuals.jsx       gauges / tracker / badges
+frontend/src/components/deepResearch/VentureExecutionPanel.jsx  per-venture execution panel</pre>
+  <h3>Modified</h3>
+  <pre>backend/src/deepResearch/projectArchitectBridge.service.js  real-vs-foundation path
+backend/src/deepResearch/deepResearch.controller.js + .routes.js  Phase 3 endpoints
+backend/src/models/{index,VentureIdea,ProjectGenerationJob}.js
+backend/scripts/seed-deep-research-sample.js                lifecycle + execution seed
+frontend/src/services/deepResearchService.js · pages/DeepResearchReportPage.jsx
+frontend/src/App.jsx · components/common/Sidebar.jsx</pre>
+  <p class="small">~50 new tests; full suite 147 suites / 1,691 tests passing.</p>
+</section>
+
+<!-- ========================================================== VALIDATION -->
+<section class="block feature" id="validation">
+  <h2>Validations performed</h2>
+  <table>
+    <tr><th>#</th><th>Check</th><th>Result</th></tr>
+    <tr><td>1</td><td>Migration runs clean on prod</td><td>✅ <code>migrated (0.468s)</code></td></tr>
+    <tr><td>2</td><td>All 6 tables + columns created</td><td>✅ verified in <code>pg_tables</code></td></tr>
+    <tr><td>3</td><td>Lifecycle transitions work</td><td>✅ seeded ventures moved discovered→researching→evaluating→approved; illegal jumps rejected (tests)</td></tr>
+    <tr><td>4</td><td>AI Project Architect integration works</td><td>✅ client throws NOT_CONFIGURED unconfigured; mocked-fetch tests cover createJob/pollJob/retry/fail-fast</td></tr>
+    <tr><td>5</td><td>Requirement jobs sync progress</td><td>✅ bridge real-path polls + syncs (tests); foundation path validated in Phase 1</td></tr>
+    <tr><td>6</td><td>Execution readiness scores generate</td><td>✅ seeded sample → 78–81 across 3 ventures, persisted with sub-scores + staffing</td></tr>
+    <tr><td>7</td><td>MVP plans generate</td><td>✅ engine + sanitization tested; on-demand from UI (AI — see limitations)</td></tr>
+    <tr><td>8</td><td>Build-vs-monitor decisions stable</td><td>✅ all 7 decision paths tested; deterministic; seeded ventures → BUILD_NOW</td></tr>
+    <tr><td>9</td><td>Execution dashboard functions</td><td>✅ pipeline flow + priority queue render; screenshot p3-01</td></tr>
+    <tr><td>10</td><td>Launch strategy generation works</td><td>✅ engine + sanitization tested; on-demand from UI (AI)</td></tr>
+    <tr><td>11</td><td>Deployment readiness works</td><td>✅ deterministic; prototype/mvp/production/enterprise classification tested</td></tr>
+    <tr><td>12</td><td>Existing reports / scoring / scheduler unaffected</td><td>✅ full suite 147 suites / 1,691 tests green</td></tr>
+    <tr><td>13</td><td>Existing requirements flows preserved</td><td>✅ foundation path unchanged; projectArchitectBridge tests pass</td></tr>
+  </table>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on validation coverage</h4>
+    <textarea data-fb-id="validation" placeholder="Anything you'd want validated that wasn't?"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== LIMITATIONS -->
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>The AI engines (MVP planning + launch strategy) are not validated against live AI —
+      OpenAI quota exhausted.</strong> They go through the resilient <code>aiProvider</code> layer and
+      are covered by unit tests including the failure paths. The <em>deterministic</em> engines
+      (execution readiness, build-vs-monitor decision, deployment readiness) were validated by running
+      the real engine code on prod via the seeder. <code>planMvp</code> degrades gracefully — if both
+      AI engines 429, deployment readiness still runs and the result reports the errors.
+    </li>
+    <li>
+      <strong>The Agent Foundry endpoint isn't live.</strong> The client is real and fully tested
+      (mocked fetch); it's just not pointed at anything yet. Set <code>AGENT_FOUNDRY_API_URL</code> +
+      <code>AGENT_FOUNDRY_API_KEY</code> and the bridge switches to the real path with no code change.
+    </li>
+    <li>
+      <strong>The execution queue is unpaginated.</strong> Fine at current venture volume; a pager is
+      a small future addition.
+    </li>
+    <li>
+      <strong>Confidence decay over time is not yet implemented.</strong> Phase 7's spec mentioned
+      "confidence decay" on the pipeline — Phase 3 ships the pipeline + lifecycle; decay is a natural
+      Phase 4 addition (re-assess stale ventures, fade their priority).
+    </li>
+    <li>
+      <strong>Lifecycle transitions are manual.</strong> By design — human-in-the-loop. A future phase
+      could <em>suggest</em> transitions (e.g. "this venture is BUILD_NOW + assessed — ready to
+      approve?") but never auto-transition.
+    </li>
+  </ul>
+</section>
+
+<!-- ========================================================== FUTURE -->
+<section class="block summary" id="future">
+  <h2>Recommended Phase 4</h2>
+  <ul>
+    <li><strong>Wire a healthy AI provider (Anthropic fallback).</strong> Still the highest-leverage step — it unblocks live validation of the Phase 2 + 3 AI engines. The <code>aiProvider</code> seam is built and waiting.</li>
+    <li><strong>Live Agent Foundry integration.</strong> Once Agent Foundry exposes its API, set the env vars — the real client + bridge path are already built and tested.</li>
+    <li><strong>Confidence decay + auto-re-assessment.</strong> Stale ventures should fade in priority; a scheduled re-assessment keeps the queue honest as signals shift.</li>
+    <li><strong>Suggested lifecycle transitions.</strong> The decision engine already knows a venture is BUILD_NOW — surface a "ready to approve?" nudge (human still clicks).</li>
+    <li><strong>Execution analytics.</strong> Cycle-time per lifecycle stage, decision-accuracy tracking once real ventures complete, queue throughput.</li>
+    <li><strong>Resource + capacity modelling.</strong> The execution readiness engine derives staffing per venture; aggregate it into "can we actually staff everything in the BUILD_NOW queue?"</li>
+  </ul>
+  <div class="feedback-block">
+    <h4 class="small">Feedback on the Phase 4 roadmap</h4>
+    <textarea data-fb-id="future" placeholder="On sequencing / priorities…"></textarea>
+  </div>
+</section>
+
+<!-- ========================================================== WRAP -->
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    Phase 3 is shipped and deployed. The venture lifecycle, the three deterministic engines (execution
+    readiness, build-vs-monitor decision, deployment readiness), the two AI engines (MVP planning,
+    launch strategy), the real Agent Foundry HTTP client, the execution orchestrator, and the
+    execution dashboard are all live on prod. The full backend suite — 1,691 tests — is green.
+  </p>
+  <p>
+    The deterministic engines were validated by running the real engine code against the seeded
+    sample on prod: three venture ideas moved through their lifecycles, were assessed, and landed in
+    the execution queue with <strong>BUILD_NOW</strong> decisions, execution readiness scores of
+    <strong>78–81</strong>, and correctly-derived blockers. Human-in-the-loop is preserved end to end
+    — nothing in Phase 3 auto-executes.
+  </p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'deep-research-phase-3-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Deep Research Phase 3 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
