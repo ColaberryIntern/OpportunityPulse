@@ -81,6 +81,8 @@ const ExecutionPlan = require('./ExecutionPlan')(sequelize);
 // Research Intelligence Phase 2.3 — author + topic aggregation tables.
 const ResearchAuthor = require('./ResearchAuthor')(sequelize);
 const ResearchTopic = require('./ResearchTopic')(sequelize);
+// Phase 3c — research relationship graph edges.
+const ResearchRelationship = require('./ResearchRelationship')(sequelize);
 
 const models = {
   UserRole,
@@ -141,6 +143,7 @@ const models = {
   ExecutionPlan,
   ResearchAuthor,
   ResearchTopic,
+  ResearchRelationship,
 };
 
 // Set up associations

@@ -110,6 +110,22 @@ module.exports = (sequelize) => {
       field: 'data_source_id',
       references: { model: 'data_sources', key: 'id' },
     },
+    // Research Intelligence Phase 3a — text embedding stored as a JSONB float
+    // array (not pgvector — see migration 20260510000010 for the rationale).
+    embedding: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    embeddingModel: {
+      type: DataTypes.STRING(60),
+      allowNull: true,
+      field: 'embedding_model',
+    },
+    embeddedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'embedded_at',
+    },
   }, {
     tableName: 'opportunities',
     timestamps: true,

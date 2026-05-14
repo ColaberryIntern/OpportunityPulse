@@ -76,6 +76,30 @@ class AIClient {
     }
   }
 
+  // Research Intelligence Phase 3 — text embeddings for semantic search.
+  // text-embedding-3-small: 1536-dim, cheap (~$0.00002 / 1K tokens).
+  // Accepts a single string or an array of strings (batched in one call).
+  async embed(input, options = {}) {
+    const { model = 'text-embedding-3-small' } = options;
+    const texts = Array.isArray(input) ? input : [input];
+    const cleaned = texts.map((t) => String(t || '').slice(0, 8000));
+    try {
+      const response = await this.client.embeddings.create({
+        model,
+        input: cleaned,
+      });
+      const vectors = response.data
+        .sort((a, b) => a.index - b.index)
+        .map((d) => d.embedding);
+      const tokensUsed = response.usage?.total_tokens || 0;
+      logger.info('OpenAI embedding call completed', { model, count: vectors.length, tokensUsed });
+      return { vectors, model, tokensUsed };
+    } catch (error) {
+      logger.error('OpenAI embedding API error', { error: error.message, status: error.status });
+      throw error;
+    }
+  }
+
   async chat(systemPrompt, userPrompt, options = {}) {
     const { temperature = 0.3, maxTokens = 2000, responseFormat } = options;
 

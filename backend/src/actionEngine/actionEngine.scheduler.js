@@ -29,6 +29,11 @@ function startActionEngineScheduler() {
   const crossChannelSchedule = process.env.CROSS_CHANNEL_SCHEDULE || '0 7 * * *';
   // Phase 2.3 — author + topic aggregation rebuild, daily after matching.
   const researchAggSchedule = process.env.RESEARCH_AGG_SCHEDULE || '15 7 * * *';
+  // Phase 3 — embedding generation for semantic search, daily before
+  // aggregation so new research is searchable same-day.
+  const embeddingSchedule = process.env.EMBEDDING_SCHEDULE || '30 6 * * *';
+  // Phase 3c — research graph build, daily after cross-channel + aggregation.
+  const researchGraphSchedule = process.env.RESEARCH_GRAPH_SCHEDULE || '30 7 * * *';
 
   // Trend Detection: daily at 4:30 AM UTC — detect trends for all opportunity types
   cron.schedule(trendDetectionSchedule, async () => {
@@ -146,6 +151,22 @@ function startActionEngineScheduler() {
     }
   });
 
+  // Embedding Generation: daily at 6:30 AM UTC — embed research opps that
+  // don't have a vector yet, so semantic search stays current.
+  cron.schedule(embeddingSchedule, async () => {
+    logger.info('Scheduled: Embedding generation starting');
+    try {
+      const { embedOpportunities } = require('../oied/semanticSearch.service');
+      const run = await embedOpportunities({ type: 'research', limit: 200 });
+      logger.info('Scheduled: Embedding generation complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Embedding generation failed', { error: error.message });
+    }
+  });
+
   // Research Aggregation: daily at 7:15 AM UTC — rebuild research_authors +
   // research_topics from the research opps (who's publishing, what's hot).
   cron.schedule(researchAggSchedule, async () => {
@@ -162,7 +183,24 @@ function startActionEngineScheduler() {
     }
   });
 
-  logger.info('Action Engine scheduler started — 8 jobs registered');
+  // Research Graph Build: daily at 7:30 AM UTC — materialize the Phase 2.2
+  // cross-channel matches into the research_relationships edge table (runs
+  // after cross-channel matching at 7:00 + aggregation at 7:15).
+  cron.schedule(researchGraphSchedule, async () => {
+    logger.info('Scheduled: Research graph build starting');
+    try {
+      const { buildRelationships } = require('../oied/researchGraph.service');
+      const run = await buildRelationships();
+      logger.info('Scheduled: Research graph build complete', {
+        input: run.inputCount,
+        output: run.outputCount,
+      });
+    } catch (error) {
+      logger.error('Scheduled: Research graph build failed', { error: error.message });
+    }
+  });
+
+  logger.info('Action Engine scheduler started — 10 jobs registered');
 }
 
 module.exports = { startActionEngineScheduler };

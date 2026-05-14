@@ -6,6 +6,7 @@ const { ROLES } = require('../config/constants');
 const c = require('./oied.controller');
 const intel = require('./intelligence.controller');
 const partner = require('./partner.controller');
+const research = require('./research.controller');
 
 const router = express.Router();
 
@@ -32,6 +33,17 @@ router.get('/keywords/related-tools',   BRIDGE, intel.getRelatedToolsHandler);
 router.post(
   '/keywords/recompute',
   verifyToken, checkPermissions(ROLES.ADMIN), intel.recomputeKeywordTrendsHandler,
+);
+
+// ---- Research Intelligence (Phase 2-3) --------------------------------
+router.get('/research/search',                       BRIDGE, research.search);
+router.get('/research/opportunities/:id/similar',    BRIDGE, research.similar);
+router.get('/research/topics',                       BRIDGE, research.topTopics);
+router.get('/research/authors',                      BRIDGE, research.topAuthors);
+router.get('/research/graph/:topic',                 BRIDGE, research.topicGraph);
+router.post(
+  '/research/embed',
+  verifyToken, checkPermissions(ROLES.ADMIN), express.json({ limit: '4kb' }), research.runEmbedding,
 );
 router.get('/profile',                  BRIDGE, c.getMyProfile);
 
