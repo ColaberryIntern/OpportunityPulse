@@ -314,6 +314,11 @@ async function startServer() {
       const { startScheduler } = require('./ingestion/scheduler');
       startScheduler();
 
+      // Research Intelligence Phase 2.4 — per-source ingestion tick loop
+      // (higher-cadence runs for sources with ingest_interval_minutes set).
+      const { startResearchScheduler } = require('./ingestion/research.scheduler');
+      startResearchScheduler();
+
       // Start AI Tools trend analysis scheduler
       const { startAiToolsScheduler } = require('./aiTools/scheduler');
       startAiToolsScheduler();

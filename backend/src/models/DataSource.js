@@ -24,6 +24,14 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    // Research Intelligence Phase 2.4 — when set, the research tick loop runs
+    // this source every N minutes (independent of the daily cron). NULL =
+    // daily-cron-only, unchanged behavior.
+    ingestIntervalMinutes: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'ingest_interval_minutes',
+    },
     enabled: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
