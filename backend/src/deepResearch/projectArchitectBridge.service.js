@@ -48,6 +48,14 @@ function scaffoldPhases() {
   }));
 }
 
+// Deep-copy the phase array before persisting. Sequelize does not detect
+// in-place mutation of a JSONB array (same reference → "unchanged" → the
+// column write is skipped), so every job.update that carries phases must
+// hand it a fresh object.
+function clonePhases(phases) {
+  return phases.map((p) => ({ ...p }));
+}
+
 // ---------------------------------------------------------------------------
 // THE SEAM — Agent Foundry handoff.
 // ---------------------------------------------------------------------------
@@ -129,7 +137,7 @@ async function processJob(jobId) {
       phase.started_at = new Date().toISOString();
       await job.update({
         currentPhase: phase.label,
-        phases,
+        phases: clonePhases(phases),
         progressPercent: Math.round((i / phases.length) * 100),
       });
 
@@ -146,7 +154,7 @@ async function processJob(jobId) {
       phase.completed_at = new Date().toISOString();
       // eslint-disable-next-line no-await-in-loop
       await job.update({
-        phases,
+        phases: clonePhases(phases),
         progressPercent: Math.round(((i + 1) / phases.length) * 100),
       });
     }
@@ -155,6 +163,7 @@ async function processJob(jobId) {
       status: 'success',
       currentPhase: 'Complete',
       progressPercent: 100,
+      phases: clonePhases(phases),
       projectSlug: architectResult ? architectResult.projectSlug : slugify(ventureIdea.title),
       architectUrl: architectResult ? architectResult.architectUrl : null,
       requirementsJson: architectResult ? architectResult.requirements : null,
