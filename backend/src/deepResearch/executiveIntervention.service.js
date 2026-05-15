@@ -151,8 +151,9 @@ async function findSequencingRec() {
 }
 
 async function findEcosystemDiversificationRec(ventures) {
-  // Read the latest ecosystem snapshot.
-  const latestPerEcosystem = await EcosystemMetric.findAll({ order: [['captured_at', 'DESC']] });
+  // Read the latest ecosystem snapshot. EcosystemMetric uses ecosystemKey
+  // (column: ecosystem_key) + computedAt (column: computed_at).
+  const latestPerEcosystem = await EcosystemMetric.findAll({ order: [['computed_at', 'DESC']] });
   if (latestPerEcosystem.length === 0) return null;
   const totalActive = ventures.filter(
     (v) => v.lifecycleState !== 'archived' && v.lifecycleState !== 'monitoring',
@@ -160,12 +161,12 @@ async function findEcosystemDiversificationRec(ventures) {
   if (totalActive < 4) return null;
   const seen = new Map();
   for (const r of latestPerEcosystem) {
-    if (!seen.has(r.ecosystem)) seen.set(r.ecosystem, r);
+    if (!seen.has(r.ecosystemKey)) seen.set(r.ecosystemKey, r);
   }
   let top = null;
   for (const row of seen.values()) {
     const count = Number(row.ventureCount || 0);
-    if (!top || count > top.count) top = { ecosystem: row.ecosystem, count };
+    if (!top || count > top.count) top = { ecosystem: row.ecosystemKey, count };
   }
   if (!top || top.count === 0) return null;
   const fraction = top.count / totalActive;

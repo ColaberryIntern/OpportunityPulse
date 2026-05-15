@@ -28,10 +28,10 @@ async function latestPortfolioScores() {
 }
 
 async function ecosystemConcentration() {
-  const rows = await EcosystemMetric.findAll({ order: [['captured_at', 'DESC']] });
+  const rows = await EcosystemMetric.findAll({ order: [['computed_at', 'DESC']] });
   if (rows.length === 0) return { ecosystems: [], top_concentration: null };
   const seen = new Map();
-  for (const r of rows) if (!seen.has(r.ecosystem)) seen.set(r.ecosystem, r.toJSON());
+  for (const r of rows) if (!seen.has(r.ecosystemKey)) seen.set(r.ecosystemKey, r.toJSON());
   const ecosystems = [...seen.values()];
   const totalVentures = ecosystems.reduce((acc, e) => acc + Number(e.ventureCount || 0), 0) || 0;
   const withFractions = ecosystems.map((e) => ({
