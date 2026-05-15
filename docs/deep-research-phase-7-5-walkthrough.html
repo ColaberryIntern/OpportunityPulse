@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 7.5 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.governance { border-left-color: var(--violet); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#problem">The problem</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#flow">Contextual flow</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Mechanics</h2>
+  <a href="#query-state">Query state</a>
+  <a href="#additive-filter">Additive filter</a>
+  <a href="#banner">Strategic banner</a>
+  <a href="#trace-panel">Trace panel</a>
+  <a href="#deep-links">Deep links</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-action">Action → links</a>
+  <a href="#screen-agency">Agency context</a>
+  <a href="#screen-banner">Banner</a>
+  <a href="#screen-trace">Trace panel</a>
+  <a href="#screen-run">Research run context</a>
+  <a href="#screen-pursuit-ctx">Pursuit context</a>
+  <a href="#screen-default">Default mode</a>
+  <a href="#screen-cluster">Cluster CTA</a>
+  <a href="#screen-pursuit">Pursuit CTA</a>
+
+  <h2>Details</h2>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#performance">Performance</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 8</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 7.5</h1>
+  <p class="subtitle">Contextual Opportunity Integration · 2026-05-15 · commit <code>b3500dd</code> · all 1,882 backend tests passing</p>
+  <p>
+    Phases 1–7 built two excellent surfaces that didn't talk to each other:
+    <strong>Deep Research</strong> (strategic intelligence overlay) and
+    <strong>My Opportunities</strong> (operational execution surface). Phase 7.5
+    fixes that without building a third system. A single <em>strategic context</em>
+    query param is the bridge: every Deep Research entity (cluster, pattern,
+    recurring agency, research run, pursuit) exposes
+    <strong>Open in My Opportunities →</strong>; My Opportunities reads the
+    context, scopes the existing pipeline, and renders a banner + per-row
+    traceability panel. <strong>Zero new tables</strong>, zero parallel UI.
+  </p>
+  <p>
+    On the seeded prod run: agency context "Dallas Area Rapid Transit (dart)"
+    resolved to <strong>25 Bonfire opportunities</strong> totaling
+    <strong>$2,905,000 disclosed value</strong>; research-run context
+    "AI for federal contracts" resolved to 19 opportunities (1 ai_news + 18 ai_job).
+    Default My Opportunities behavior is byte-for-byte unchanged when no
+    context param is present — verified against the full 1,882-test suite.
+  </p>
+  <p>
+    <span class="badge b-done">0 new tables</span>
+    <span class="badge b-done">8 new tests</span>
+    <span class="badge b-done">1882 / 1882 passing</span>
+    <span class="badge b-cyan">Backward compatible</span>
+    <span class="badge b-gov">No new opportunity system</span>
+    <span class="badge b-warn">No auto-submission</span>
+  </p>
+</section>
+
+<section class="block context" id="problem">
+  <h2>The problem this phase solves</h2>
+  <p>
+    Before Phase 7.5, the user journey was broken:
+  </p>
+  <ol>
+    <li>User reviews a cluster on Action Intelligence.</li>
+    <li>User wants to pursue the underlying opportunities.</li>
+    <li>User navigates to My Opportunities — <strong>and loses every piece of strategic context.</strong></li>
+    <li>User has to manually filter / search / remember which 25 of 5,000 active opps were the relevant ones.</li>
+  </ol>
+  <p>
+    The fix isn't a new dashboard. It's <strong>contextual continuity</strong>: the
+    user lands in My Opportunities <em>with</em> the cluster's opportunities pre-scoped,
+    the strategic banner explaining why they're seeing this view, and one click to
+    open or create the pursuit workspace.
+  </p>
+</section>
+
+<section class="block arch" id="architecture">
+  <h2>Architecture — one resolver, one filter, two surfaces</h2>
+  <div class="arrow-diagram">┌─────────────────────────┐         ┌──────────────────────────────┐
+│   Deep Research pages   │         │      My Opportunities        │
+│   (strategic overlay)   │         │   (operational execution)    │
+│                         │         │                              │
+│  Cluster Drilldown      │         │  /admin/opportunities/my     │
+│  Action Intelligence    │         │    ?clusterId=9              │
+│  Pursuit Workspace      │  ───→   │    or ?agencyValue=DOD       │
+│  Research Runs          │         │    or ?researchRunId=12      │
+│  Recurring Agencies     │         │    or ?pursuitId=4           │
+│                         │         │    ...                       │
+│  every entity →         │         │                              │
+│  [Open in My Opps →]    │         │  ┌────────────────────────┐  │
+└─────────────────────────┘         │  │ StrategicContextBanner │  │
+                                    │  │   (title, channels,    │  │
+                                    │  │    disclosed value,    │  │
+                                    │  │    return-to-source,   │  │
+                                    │  │    create pursuit)     │  │
+                                    │  └────────────────────────┘  │
+                                    │                              │
+                                    │  Existing pipeline           │
+                                    │  (channels, q, sort, etc)    │
+                                    │                              │
+                                    │  Per-row traceability panel  │
+                                    └──────────────────────────────┘
+
+       ┌─────────────────────────────────────────────────────┐
+       │       deepResearchContext.service                   │
+       │       (single resolver — 10 insight kinds →         │
+       │        opportunity-id set + summary metadata)       │
+       │       Re-uses Phase 7 traceability +                │
+       │       opportunity_classifications +                 │
+       │       opportunity_relationships +                   │
+       │       DeepResearchReport.reportJson                 │
+       └─────────────────────────────────────────────────────┘</div>
+  <p>
+    The backend resolver maps a (kind, id) tuple to an opportunity-id set and a
+    summary payload. The My Opportunities controller picks up the context query
+    param, hands it to the resolver, and passes the resulting id set into
+    <code>listMyOpportunities</code> as an additive filter. <strong>When no
+    context param is present, behavior is identical to pre-Phase-7.5.</strong>
+  </p>
+</section>
+
+<section class="block arch" id="flow">
+  <h2>Contextual navigation flow</h2>
+  <div class="arrow-diagram">User on Action Intelligence
+  │
+  ├─ clicks "Open in My Opportunities →" under a cluster card
+  │
+  │  ┌──────────────────────────────────────────────────────────┐
+  │  │  GET /admin/opportunities/my?clusterId=9                 │
+  │  │                                                          │
+  │  │  ① MyOpportunitiesPage detects strategicCtxRef from URL  │
+  │  │  ② Page fetches /api/v1/deep-research/context/cluster/9  │
+  │  │     (banner read — title, channels, disclosed value)     │
+  │  │  ③ Page calls GET /api/v1/oied/opportunities/my          │
+  │  │     ?clusterId=9 (existing endpoint, same params)        │
+  │  │  ④ Controller picks up the context param, resolves to    │
+  │  │     opportunity-id set via deepResearchContext.service   │
+  │  │  ⑤ listMyOpportunities scopes the candidate pool to that │
+  │  │     id set (additive filter), preserves channels/q/sort  │
+  │  │  ⑥ Banner renders with channel breakdown + create-       │
+  │  │     pursuit CTA + return-to-cluster link                 │
+  │  │  ⑦ Per-row traceability panel offers "Why this appears"  │
+  │  │     (lazy fetch via /context/opportunity/:id/trace)      │
+  │  └──────────────────────────────────────────────────────────┘
+  │
+  ├─ User triages, generates proposals, marks submitted — all
+  │  existing operational actions stay available
+  │
+  └─ User clicks "Return to Cluster" or "Open Pursuit Workspace"</div>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Deep Research → My Opportunities Bridge</td><td><code>deepResearchContext.service.js</code> (10 resolvers)</td></tr>
+      <tr><td>2</td><td>Contextual My Opportunities Mode</td><td>Extended <code>oied.controller.listMy</code> + <code>myOpportunities.service.listMyOpportunities</code></td></tr>
+      <tr><td>3</td><td>Strategic Context Banner</td><td><code>StrategicContextBanner.jsx</code> component</td></tr>
+      <tr><td>4</td><td>"Open in My Opportunities" Actions</td><td>Cluster cards · agency rows · pursuit pages · research-run focus panels</td></tr>
+      <tr><td>5</td><td>Evidence-Aware Filtering</td><td>Context id set is intersected with existing channel / q / sort filters</td></tr>
+      <tr><td>6</td><td>Strategic Workspace Tabs</td><td>Banner KPIs surface channel/value totals (full tab UI deferred — see limitations)</td></tr>
+      <tr><td>7</td><td>Opportunity Traceability Panel</td><td><code>OpportunityTraceabilityPanel.jsx</code> per row</td></tr>
+      <tr><td>8</td><td>Operational Action Continuity</td><td>Every existing button (Generate Proposal / Add to Pursuit / mark-submitted / ...) stays live in context mode</td></tr>
+      <tr><td>9</td><td>Strategic Pattern Operationalization</td><td>Cluster page exposes Open-in-My-Opps + Create-Pursuit side by side</td></tr>
+      <tr><td>10</td><td>Contextual Search Run Expansion</td><td>Research-run focus panel exposes Open-in-My-Opps; param <code>?researchRunId=N</code> scopes My Opps</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block feature" id="query-state">
+  <h2>Query state — 10 supported context kinds</h2>
+  <table>
+    <thead><tr><th>Param</th><th>Resolves to</th><th>Mapping</th></tr></thead>
+    <tbody>
+      <tr><td><code>deepResearchId</code></td><td>DeepResearchReport.id</td><td><code>reportJson.opportunity_ids</code></td></tr>
+      <tr><td><code>clusterId</code></td><td>StrategicCluster.id</td><td><code>opportunity_classifications.cluster_id</code></td></tr>
+      <tr><td><code>strategicPatternId</code> / <code>patternId</code></td><td>VentureTemplate.id</td><td><code>applicableTo</code> → ventures → reports → opps</td></tr>
+      <tr><td><code>ventureId</code></td><td>VentureIdea.id</td><td>via report</td></tr>
+      <tr><td><code>recommendationId</code></td><td>StrategicRecommendation.id</td><td>related ventures → reports</td></tr>
+      <tr><td><code>interventionId</code></td><td>InterventionRecommendation.id</td><td>related ventures → reports</td></tr>
+      <tr><td><code>pursuitId</code></td><td>PursuitWorkspace.id</td><td><code>linkedOpportunityIds</code></td></tr>
+      <tr><td><code>researchRunId</code></td><td>CustomResearchRun.id</td><td><code>lastResults</code></td></tr>
+      <tr><td><code>agencyValue</code></td><td>recurring agency name</td><td><code>opportunity_relationships.opportunity_ids</code></td></tr>
+      <tr><td><code>technologyValue</code></td><td>recurring technology keyword</td><td><code>opportunity_relationships.opportunity_ids</code></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Context is detected per-request from URL query params. Multiple context
+    params are not combined — the first present param in declaration order wins,
+    keeping query semantics deterministic.
+  </p>
+</section>
+
+<section class="block feature" id="additive-filter">
+  <h2>Additive filter — backward compatibility by construction</h2>
+  <p>
+    The new parameter on <code>listMyOpportunities</code> is
+    <code>restrictToOpportunityIds</code>:
+  </p>
+  <ul>
+    <li><strong>null / undefined</strong> → identical to pre-Phase-7.5. No code path changes.</li>
+    <li><strong>empty array</strong> → short-circuits to <code>{ rows: [], total: 0 }</code>. A resolved context with no matching opportunities is a legitimate state, not an error.</li>
+    <li><strong>non-empty array</strong> → adds <code>where.id IN (...)</code> + drops the $1k value floor (when a context narrows the set, every opp in it is relevant by definition).</li>
+  </ul>
+  <p>
+    All other behavior — channel filter, keyword search, sort, scoring,
+    fit-score cache, channel buckets — is unchanged. The 1,882-test suite is
+    the regression gate.
+  </p>
+</section>
+
+<section class="block feature" id="banner">
+  <h2>Strategic Context Banner</h2>
+  <p>
+    Sits above the existing search bar when a context param is present. Shows:
+  </p>
+  <ul>
+    <li>kind label + classification chip</li>
+    <li>insight title + first 2 lines of description</li>
+    <li>channel breakdown (one chip per Opportunity.type with count)</li>
+    <li>disclosed value rollup (sum of <code>value</code> across the context set)</li>
+    <li>"Return to source" link (back to the originating Deep Research page)</li>
+    <li>"Open Pursuit Workspace" (if a pursuit already exists for this anchor) OR "Create Pursuit Workspace" (if none does)</li>
+  </ul>
+  <p>
+    Renders nothing when no context param is present — exists only in
+    strategic mode.
+  </p>
+</section>
+
+<section class="block feature" id="trace-panel">
+  <h2>Opportunity Traceability Panel</h2>
+  <p>
+    A lazy-loaded "Why this opportunity appears" expandable panel under each
+    My Opportunities row in strategic mode. On expand, fetches
+    <code>GET /api/v1/deep-research/context/opportunity/:id/trace</code>,
+    which returns the persisted Phase 7 traceability rows for that opportunity
+    with the active-context insight pinned to the top.
+  </p>
+  <p>
+    Re-uses Phase 7's <code>opportunity_traceability</code> table — no new
+    storage. Renders rows like:
+  </p>
+  <pre>Strategic cluster #9 · relevance 75 · Cluster classification
+   "Opportunity classified into this cluster by the deterministic
+    clustering engine."
+Venture #41 · relevance 70 · Report source
+   "Sourced from deep research report 'AI for federal contracts'."
+...</pre>
+</section>
+
+<section class="block feature" id="deep-links">
+  <h2>"Open in My Opportunities" deep links</h2>
+  <p>
+    Surfaced in four places on the Deep Research overlay:
+  </p>
+  <ul>
+    <li><strong>Action Intelligence dashboard</strong> — under each top cluster card AND each recurring-agency row</li>
+    <li><strong>Cluster Drilldown header</strong> — alongside the Create-Pursuit button</li>
+    <li><strong>Pursuit Workspace header</strong> — between the status select and Delete</li>
+    <li><strong>Research Run focus panel</strong> — leftmost button in the action row</li>
+  </ul>
+  <p>
+    Every link uses the shared <code>myOpportunitiesContextUrl(kind, id)</code>
+    helper, which produces a URL like
+    <code>/admin/opportunities/my?clusterId=9</code> — guaranteeing all
+    callers stay aligned with the backend parameter map.
+  </p>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-action">
+  <h2>Screen: Action Intelligence with "Open in My Opportunities" CTAs</h2>
+  <img class="shot" src="deep-research-assets/p75-01-action-intelligence-open-links.png" alt="action intelligence with open links" />
+  <p class="caption">Every cluster card and recurring-agency row now has an Open-in-My-Opps CTA. Existing sections unchanged.</p>
+</section>
+
+<section class="block" id="screen-agency">
+  <h2>Screen: My Opportunities via agency context</h2>
+  <img class="shot" src="deep-research-assets/p75-02-myopps-agency-context.png" alt="myopps agency context" />
+  <p class="caption">Entered via <code>?agencyValue=Dallas Area Rapid Transit (dart)</code>. Banner shows 25 Bonfire opps, $2.9M disclosed value. Existing search bar + filters preserved underneath.</p>
+</section>
+
+<section class="block" id="screen-banner">
+  <h2>Screen: Strategic Context Banner</h2>
+  <img class="shot" src="deep-research-assets/p75-03-strategic-banner.png" alt="strategic banner" />
+  <p class="caption">Kind label, classification chip, title, channel breakdown, disclosed value, return-link, create-pursuit CTA. Explicit "No auto-submission" footer.</p>
+</section>
+
+<section class="block" id="screen-trace">
+  <h2>Screen: Per-row traceability panel</h2>
+  <img class="shot" src="deep-research-assets/p75-04-traceability-panel.png" alt="trace panel" />
+  <p class="caption">Click "Why this opportunity appears" on any row to expand the evidence. Lazy-loaded.</p>
+</section>
+
+<section class="block" id="screen-run">
+  <h2>Screen: My Opportunities via research-run context</h2>
+  <img class="shot" src="deep-research-assets/p75-05-myopps-run-context.png" alt="myopps run context" />
+  <p class="caption">Entered via <code>?researchRunId=1</code>. Banner classifies as <code>custom_search</code>; channels show 1 ai_news + 18 ai_job.</p>
+</section>
+
+<section class="block" id="screen-pursuit-ctx">
+  <h2>Screen: My Opportunities via pursuit context</h2>
+  <img class="shot" src="deep-research-assets/p75-06-myopps-pursuit-context.png" alt="myopps pursuit context" />
+  <p class="caption">Entered via <code>?pursuitId=1</code>. Banner offers "Open Pursuit" since one exists; the return link goes back to the pursuit page.</p>
+</section>
+
+<section class="block" id="screen-default">
+  <h2>Screen: Default My Opportunities (no context — backward compat)</h2>
+  <img class="shot" src="deep-research-assets/p75-07-myopps-no-context.png" alt="myopps default" />
+  <p class="caption">No banner. No traceability panels. Identical to pre-Phase-7.5. This is the regression check.</p>
+</section>
+
+<section class="block" id="screen-cluster">
+  <h2>Screen: Cluster Drilldown with new CTA</h2>
+  <img class="shot" src="deep-research-assets/p75-08-cluster-open-cta.png" alt="cluster cta" />
+  <p class="caption">Header now has Open-in-My-Opps next to the existing Create-Pursuit button.</p>
+</section>
+
+<section class="block" id="screen-pursuit">
+  <h2>Screen: Pursuit page with new CTA</h2>
+  <img class="shot" src="deep-research-assets/p75-09-pursuit-open-cta.png" alt="pursuit cta" />
+  <p class="caption">Header now has Open-in-My-Opps so users can pivot from pursuit planning back into operational triage in one click.</p>
+</section>
+
+<hr/>
+
+<section class="block arch" id="routes">
+  <h2>API routes (Phase 7.5)</h2>
+  <ul>
+    <li><code>GET /api/v1/deep-research/context/:kind/:id</code> — banner read (channel summary + linked pursuits + return-link)</li>
+    <li><code>GET /api/v1/deep-research/context/opportunity/:id/trace?kind=&amp;id=</code> — per-opportunity traceability rows for the expandable panel</li>
+    <li><code>GET /api/v1/oied/opportunities/my</code> — <strong>extended</strong> to accept 10 new optional context params. Echoes the resolved <code>strategicContext</code> back on <code>pagination.strategicContext</code> so the banner doesn't need a second roundtrip in the common path.</li>
+  </ul>
+</section>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend</h3>
+  <ul>
+    <li><code>backend/src/deepResearch/deepResearchContext.service.js</code> (10 resolvers + summary composer)</li>
+    <li><code>backend/tests/deepResearch/deepResearchContext.test.js</code> (8 tests)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-7-5-walkthrough.js</code> (9-shot capture)</li>
+  </ul>
+  <h3>Added — frontend</h3>
+  <ul>
+    <li><code>frontend/src/components/deepResearch/StrategicContextBanner.jsx</code></li>
+    <li><code>frontend/src/components/deepResearch/OpportunityTraceabilityPanel.jsx</code></li>
+  </ul>
+  <h3>Modified — additive only (no behavior changes outside context mode)</h3>
+  <ul>
+    <li><code>backend/src/oied/myOpportunities.service.js</code> — added <code>restrictToOpportunityIds</code> param, intersects with existing where</li>
+    <li><code>backend/src/oied/oied.controller.js</code> — <code>listMy</code> resolves context from query, echoes <code>strategicContext</code> on response</li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> — 2 new handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> — 2 new routes</li>
+    <li><code>frontend/src/services/deepResearchService.js</code> — 2 new API client functions + <code>CONTEXT_PARAM_MAP</code> + <code>myOpportunitiesContextUrl</code></li>
+    <li><code>frontend/src/pages/MyOpportunitiesPage.jsx</code> — detects context param, fetches summary, renders banner + traceability panel</li>
+    <li><code>frontend/src/pages/ActionIntelligencePage.jsx</code> — Open-in-My-Opps CTAs on clusters + agencies</li>
+    <li><code>frontend/src/pages/ClusterDrilldownPage.jsx</code> — Open-in-My-Opps CTA in header</li>
+    <li><code>frontend/src/pages/PursuitWorkspacePage.jsx</code> — Open-in-My-Opps CTA in header</li>
+    <li><code>frontend/src/pages/ResearchRunsPage.jsx</code> — Open-in-My-Opps CTA in focus panel</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Test suite:</strong> 8 new pure-logic tests; <strong>1882/1882 jest tests pass</strong> (+8 on top of Phase 7's 1874). No regressions in any of the 177 suites.</li>
+    <li><strong>Backend resolver on prod:</strong> agency context "Dallas Area Rapid Transit (dart)" → 25 opportunities, channel breakdown <code>{bonfire: 25}</code>, disclosed value $2,905,000.</li>
+    <li><strong>Research-run context on prod:</strong> run id 1 ("AI for federal contracts") → 19 opportunities split <code>{ai_news: 1, ai_job: 18}</code>.</li>
+    <li><strong>End-to-end backend test on prod:</strong> <code>listMyOpportunities</code> called with the 25-id agency set returned 25 total / 10 rows on page 1 with all titles from the correct agency.</li>
+    <li><strong>Backward compatibility:</strong> default My Opportunities (no context) screenshot is visually identical to pre-Phase-7.5; <code>restrictToOpportunityIds=null</code> takes the same code path as before.</li>
+    <li><strong>9 screenshots captured</strong> from the live prod system.</li>
+  </ul>
+</section>
+
+<section class="block arch" id="performance">
+  <h2>Performance</h2>
+  <ul>
+    <li><strong>Context resolution is one indexed read.</strong> Each kind maps to a single <code>findByPk</code> or <code>findAll where indexed</code> — sub-millisecond on the seeded prod corpus.</li>
+    <li><strong>Channel summary is one batched read.</strong> Single <code>SELECT id, type, value WHERE id IN (...)</code> aggregated in-memory; ~10-20ms for the largest seen context (25 opps).</li>
+    <li><strong>No N+1 in the My Opps pipeline.</strong> The id set is passed as a single <code>where.id IN (...)</code> — Postgres uses the existing PK index.</li>
+    <li><strong>Banner read is free in the common path.</strong> The controller echoes <code>pagination.strategicContext</code> on the same response, so the page renders the banner without a second API call. The dedicated <code>/context/:kind/:id</code> endpoint is the fallback for direct URL hits / refreshes.</li>
+    <li><strong>Traceability panel is lazy.</strong> Per-row fetch fires only when the user clicks "Why this opportunity appears". Zero cost on initial render.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Strategic Workspace Tabs are not yet inside the page.</strong> The
+      prompt specified Opportunities / Research / Relationships / Signals / Assets /
+      Pursuits as tabs <em>within</em> My Opportunities. v0 surfaces these via the
+      banner's "Return to source" link + the Action Intelligence page; an in-page
+      tab strip is a clean Phase 8 add (no backend changes needed — the data is
+      already there per insight).
+    </li>
+    <li>
+      <strong>Some seeded clusters resolve to 0 opportunities.</strong> The Phase
+      6/7 seed clusters in prod aren't linked via <code>opportunity_classifications</code>
+      to opportunities (cluster_id is null on the 17,877 classified rows). Real
+      classified clusters will resolve normally. This is a data state, not a
+      Phase 7.5 bug.
+    </li>
+    <li>
+      <strong>Multiple context params are not combined.</strong> A URL with both
+      <code>?clusterId=9&amp;agencyValue=DOD</code> takes the first match
+      (deepResearchId &gt; clusterId &gt; ...). Combining contexts (an AND across
+      multiple dimensions) is a future extension; the resolver is structured to
+      support it without schema changes.
+    </li>
+    <li>
+      <strong>Cluster-anchored traceability isn't pre-built for new clusters.</strong>
+      The Phase 7 lazy-derivation path is used; first inspection of a fresh
+      cluster derives links inline (worst case +200ms). Eager rebuild on
+      classification is a Phase 8 add.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended next phase (Phase 8)</h2>
+  <ul>
+    <li>
+      <strong>In-page Strategic Workspace Tabs.</strong> Inside My Opportunities
+      strategic mode, add tab navigation: Opportunities / Research / Relationships /
+      Signals / Proposal Assets / Related Pursuits. Each tab scopes existing data
+      to the active context — no new endpoints, just composition.
+    </li>
+    <li>
+      <strong>Pursuit-to-Review-Queue handoff.</strong> "Generate proposal draft"
+      button on a pursuit pre-fills the existing actionGenerator with the
+      pursuit's linked opps + suggested assets + positioning. Lands a draft in
+      the Review Queue. Still human-submitted.
+    </li>
+    <li>
+      <strong>Multi-context combination.</strong> Allow
+      <code>?clusterId=9&amp;agencyValue=DOD</code> to mean "intersect both
+      contexts" so users can drill from "Education AI cluster" + "Department of
+      Energy" to the intersection.
+    </li>
+    <li>
+      <strong>Eager traceability rebuild.</strong> When a new classification or
+      report lands, write traceability rows immediately instead of deriving on
+      first read.
+    </li>
+    <li>
+      <strong>Submission Readiness Engine.</strong> Separate track (plan file
+      <code>staged-spinning-parasol.md</code>) — evergreen document vault, RFP
+      attachment locker, compliance matrix, submission package assembler.
+      <strong>Still no auto-submission.</strong>
+    </li>
+  </ul>
+</section>
+
+<div class="actions">
+  <button class="copy-btn" id="copyAll">Copy all feedback</button>
+  <span class="small" id="copyStatus" style="align-self:center;color:var(--text-muted);"></span>
+</div>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+})();
+</script>
+
+</body>
+</html>
