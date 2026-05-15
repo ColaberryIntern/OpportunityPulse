@@ -59,7 +59,6 @@ function ResearchRunsPage() {
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || 'Failed to load runs');
     } finally { setLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
   useEffect(() => { load(); }, [load]);
 
