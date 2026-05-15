@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 7 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.governance { border-left-color: var(--violet); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 7 objective</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The engines</h2>
+  <a href="#traceability">Traceability layer</a>
+  <a href="#evidence">Evidence explorer</a>
+  <a href="#cluster">Cluster drilldown</a>
+  <a href="#patterns">Actionable patterns</a>
+  <a href="#runs">Custom search runs</a>
+  <a href="#graph">Opportunity graph</a>
+  <a href="#pursuit">Pursuit workspace</a>
+  <a href="#justification">Justification engine</a>
+  <a href="#relationships">Relationship mapping</a>
+  <a href="#action-dash">Action dashboard</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-dash">Action intelligence</a>
+  <a href="#screen-kpis">KPIs</a>
+  <a href="#screen-clusters">Top clusters</a>
+  <a href="#screen-acceleration">Acceleration</a>
+  <a href="#screen-agencies">Recurring agencies</a>
+  <a href="#screen-cluster">Cluster drilldown</a>
+  <a href="#screen-justify">Justification</a>
+  <a href="#screen-runs">Research runs</a>
+  <a href="#screen-pursuit">Pursuit workspace</a>
+  <a href="#screen-full">Full dashboard</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 8</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 7</h1>
+  <p class="subtitle">Traceability + Opportunity Action Intelligence · 2026-05-15 · commit <code>fb83c06</code> · all 1,874 backend tests passing</p>
+  <p>
+    Phases 1–6 built strategic, execution, portfolio, temporal, and adaptive intelligence. Phase 7
+    closes the operational trust gap: <strong>every insight in the system is now linked back to
+    the underlying opportunities</strong>. Clusters, ventures, recommendations, interventions,
+    patterns, and pursuits all expose "View Supporting Opportunities" — and the platform composes
+    a deterministic, auditable rationale for each one.
+  </p>
+  <p>
+    On the seeded prod run the engine ingested 5,000 active opportunities, detected <strong>1,259
+    recurring relationships</strong> across agency / technology / vendor / NAICS / keyword,
+    constructed an <strong>8,641-edge opportunity graph</strong>, mined <strong>3 reusable
+    proposal acceleration assets</strong> from approved past wins, and surfaced <strong>10
+    proposal-acceleration candidates</strong> + 10 recurring agencies + 6 top actionable clusters
+    on the new dashboard. Drilldowns + justification + evidence panels all render end-to-end.
+  </p>
+  <p>
+    <span class="badge b-done">8 tables live</span>
+    <span class="badge b-done">10 services</span>
+    <span class="badge b-done">46 new tests</span>
+    <span class="badge b-done">1874 / 1874 passing</span>
+    <span class="badge b-cyan">Evidence-backed</span>
+    <span class="badge b-gov">No autonomous bidding</span>
+    <span class="badge b-det">Deterministic + explainable</span>
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance Contract — what this phase is allowed to do, and what it is NOT</h2>
+  <h3>The engines are ALLOWED to</h3>
+  <ul>
+    <li>Read every opportunity, classification, report, and Phase 1–6 persisted analytic.</li>
+    <li>Persist traceability links, justification snapshots, relationships, graph edges,
+        drilldown caches, and pursuit workspaces.</li>
+    <li>Compose explainable narratives ("WHY this matters" / "WHICH opportunities support it" /
+        "WHICH signals contributed") deterministically.</li>
+    <li>Generate proposal-acceleration assets from <em>approved</em> past OpportunityOutputs and
+        org-profile capability text.</li>
+    <li>Manage pursuit workspaces (create / update / delete / status transitions) when an
+        authenticated admin explicitly acts.</li>
+  </ul>
+  <h3>The engines are NEVER allowed to</h3>
+  <ul>
+    <li><strong>Auto-submit proposals</strong> — every submit click stays a human action.</li>
+    <li><strong>Auto-execute bidding</strong> on Bonfire, SAM.gov, grants.gov, or any portal.</li>
+    <li><strong>Auto-modify scoring weights</strong> — Phase 7 is observation-only on Phase 1–6
+        analytics; it never re-tunes anything upstream.</li>
+    <li><strong>Hide traceability</strong> — every recommendation MUST link to its evidence.</li>
+    <li><strong>Generate opaque recommendations</strong> — every persisted insight carries its
+        contributing channels and factors.</li>
+    <li><strong>Skip the audit trail</strong> — traceability + justification rows are
+        first-class artifacts, persisted and inspectable.</li>
+  </ul>
+</section>
+
+<section class="block context" id="objective">
+  <h2>Phase 7 objective</h2>
+  <p>
+    Phase 6 brought the platform to a place where it could say "here is a strategic cluster of 31
+    opportunities; here is the recommendation". Phase 7 makes the platform answer the follow-up
+    question every executive asks next: <strong>"prove it to me — which 31?"</strong>
+  </p>
+  <p>
+    Concretely, three things needed to change:
+  </p>
+  <ol>
+    <li>
+      <strong>Underlying opportunities had to be one click away from every insight</strong> —
+      not an unrelated tab. The Evidence Drawer + traceability layer makes this universal.
+    </li>
+    <li>
+      <strong>The system had to justify its conclusions</strong> with a deterministic
+      composition over channels + signals + supporting opportunities — not an opaque AI summary.
+    </li>
+    <li>
+      <strong>Operational pursuit had to flow naturally out of intelligence</strong> — clicking
+      "Create Pursuit Workspace" on a cluster should bring forward the evidence, the
+      justification, the reusable proposal components, and the staffing recommendation. Without
+      auto-submitting anything.
+    </li>
+  </ol>
+</section>
+
+<section class="block arch" id="architecture">
+  <h2>Traceability Architecture</h2>
+  <p>
+    Every <em>insight kind</em> resolves to a set of supporting opportunities through a typed
+    contribution channel. The traceability service knows how to walk from any insight back to its
+    evidence by following the existing data graph (no new joins required upstream).
+  </p>
+  <div class="arrow-diagram">venture        →  DeepResearchReport.reportJson.opportunity_ids     (channel: report_source)
+cluster        →  OpportunityClassification.cluster_id              (channel: cluster_classification)
+recommendation →  relatedVentureIds → reports → opp ids              (channel: pattern_match)
+intervention   →  relatedVentureIds → reports → opp ids              (channel: pattern_match)
+research_run   →  CustomResearchRun.lastResults                      (channel: direct_link)
+pursuit        →  PursuitWorkspace.linkedOpportunityIds              (channel: manual)
+pattern        →  VentureTemplate.applicableTo → ventures → opps     (channel: pattern_match)</div>
+  <p>
+    Each link writes one row in <code>opportunity_traceability</code> with a relevance score, a
+    contribution kind, and human-readable reasoning. The reverse lookup is supported as well —
+    given an opportunity, you can ask "which insights reference this?".
+  </p>
+  <p>
+    The justification engine sits on top of traceability: for any insight, it composes a
+    deterministic narrative with a confidence score, a per-channel breakdown, factor weights, and
+    the top supporting opportunity IDs.
+  </p>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped (10 features)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Engine</th><th>Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Opportunity Traceability Layer</td><td><code>opportunityTraceability.service.js</code></td><td>traceability table + evidence API</td></tr>
+      <tr><td>2</td><td>Strategic Evidence Explorer</td><td><code>EvidenceDrawer</code> component</td><td>drawer overlay everywhere</td></tr>
+      <tr><td>3</td><td>Cluster Drilldown Workspace</td><td><code>clusterDrilldown.service.js</code></td><td><code>/admin/deep-research/clusters/:id</code></td></tr>
+      <tr><td>4</td><td>Actionable Strategic Patterns</td><td>pursuit creation + justification</td><td>Action Intelligence + Pursuit pages</td></tr>
+      <tr><td>5</td><td>Custom Strategic Search Runs</td><td><code>customResearchRun.service.js</code></td><td><code>/admin/deep-research/research-runs</code></td></tr>
+      <tr><td>6</td><td>Opportunity Graph Navigation</td><td><code>opportunityGraph.service.js</code></td><td>graph edges + neighborhood API</td></tr>
+      <tr><td>7</td><td>Proposal Acceleration Workspace</td><td><code>pursuitWorkspace.service.js</code></td><td><code>/admin/deep-research/pursuits/:id</code></td></tr>
+      <tr><td>8</td><td>Opportunity Justification Engine</td><td><code>opportunityJustification.service.js</code></td><td>JustificationCard everywhere</td></tr>
+      <tr><td>9</td><td>Opportunity Relationship Mapping</td><td><code>opportunityRelationships.service.js</code></td><td>recurring agencies / tech / vendor</td></tr>
+      <tr><td>10</td><td>Action Intelligence Dashboard</td><td><code>actionIntelligence.service.js</code></td><td><code>/admin/deep-research/action-intelligence</code></td></tr>
+    </tbody>
+  </table>
+  <div class="feedback-block"><label class="small">Feedback on the feature list:</label><textarea data-fb="what-shipped"></textarea></div>
+</section>
+
+<section class="block feature" id="traceability">
+  <h2>1. Opportunity Traceability Layer</h2>
+  <p>
+    The <code>opportunity_traceability</code> table is keyed by (<code>insight_kind</code>,
+    <code>insight_id</code>, <code>opportunity_id</code>) with a relevance score, a contribution
+    type, and human reasoning. Eight insight kinds are supported in v1; the resolver knows how
+    to derive the supporting opportunities from each one's existing data without any new
+    upstream joins.
+  </p>
+  <p>
+    The read API has two modes: persisted (<code>GET /evidence/:kind/:id</code> returns the
+    cached rows) and derived (if no rows exist, it computes the links inline so the UI always
+    works on first hit). Rebuild is a typed action: <code>POST /evidence/:kind/:id/rebuild</code>
+    clears existing rows for that insight and writes a fresh set.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="traceability"></textarea></div>
+</section>
+
+<section class="block feature" id="evidence">
+  <h2>2. Strategic Evidence Explorer</h2>
+  <p>
+    A drawer overlay (the <code>EvidenceDrawer</code> component) opens from the right with the
+    supporting opportunities grouped by channel. Each row carries its channel badge, source,
+    relevance pill, AI score, and the contribution reasoning that connected it to the insight.
+    The drawer is re-used everywhere: cluster pages, pursuit pages, the action dashboard,
+    justification cards. One pattern, one mental model.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="evidence"></textarea></div>
+</section>
+
+<section class="block feature" id="cluster">
+  <h2>3. Cluster Drilldown Workspace</h2>
+  <p>
+    Click any cluster from the action dashboard or sidebar and land on a per-cluster workspace:
+    every classified opportunity, plus a drilldown showing the recurring themes, agencies,
+    technologies, vendors, NAICS codes, and strategic phrases <em>within that cluster</em>. The
+    drilldown is cached in <code>cluster_drilldowns</code> and refreshable inline.
+  </p>
+  <p>
+    A "Create Pursuit Workspace" button takes the cluster's top opportunities and seeds a pursuit
+    anchored to the cluster — operationalizing strategic intelligence in one click.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="cluster"></textarea></div>
+</section>
+
+<section class="block feature" id="patterns">
+  <h2>4. Actionable Strategic Patterns</h2>
+  <p>
+    Strategic patterns (the Phase 4 venture templates + Phase 6 strategic recommendations) now
+    expose three actions: <strong>View Opportunities</strong> (via the Evidence Drawer),
+    <strong>Create Pursuit Workspace</strong> (with the linked opportunities pre-seeded),
+    <strong>Generate Proposal Strategy</strong> (composed in the pursuit's positioning + suggested
+    assets). All deterministic; no AI hallucinations.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="patterns"></textarea></div>
+</section>
+
+<section class="block feature" id="runs">
+  <h2>5. Custom Strategic Search Runs</h2>
+  <p>
+    User-defined searches across every channel. Tokenize a query like "rag, healthcare, defense"
+    and the engine AND-joins each token against title + description, then bins the results by
+    channel. Save the run with a name + pinned flag; rerun on demand and the history captures the
+    match-count delta per channel so movement over time is visible without manual diff-ing.
+  </p>
+  <p>
+    Preview mode lets you dry-run a query before committing to saving it. Pinned runs surface on
+    the action dashboard.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="runs"></textarea></div>
+</section>
+
+<section class="block feature" id="graph">
+  <h2>6. Opportunity Graph Navigation</h2>
+  <p>
+    An entity graph linking opportunities to agencies, technologies, vendors, NAICS codes,
+    keywords, ventures, and clusters. Built from the persisted relationship aggregate +
+    classifications + report-source data. The neighborhood API returns the N-hop subgraph
+    around any entity for graph-style exploration; nodes are hydrated with opportunity titles
+    for nicer rendering.
+  </p>
+  <p>
+    On the seeded prod corpus: 8,641 edges across 5 entity kinds. The summary surface drives the
+    "Graph Edges" KPI on the dashboard.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="graph"></textarea></div>
+</section>
+
+<section class="block feature" id="pursuit">
+  <h2>7. Proposal Acceleration Workspace</h2>
+  <p>
+    The pursuit page at <code>/admin/deep-research/pursuits/:id</code> is the operational
+    surface where strategic intelligence becomes proposal work. It composes:
+  </p>
+  <ul>
+    <li>linked opportunities (manually or from the anchor)</li>
+    <li>the anchor's justification card (with an "View Supporting Opportunities" button)</li>
+    <li>suggested reusable proposal assets (matched on NAICS / agency / tech to the linked opps)</li>
+    <li>a staffing recommendation heuristic (lean for small pursuits, full crew for large)</li>
+    <li>a readiness summary (mean AI score across linked opps)</li>
+    <li>an editable positioning text and an append-only notes journal</li>
+  </ul>
+  <p>
+    At the bottom of every pursuit page sits a prominent banner: <strong>"No auto-submission.
+    Generate the final proposal in the Review Queue and submit through the agency portal
+    manually."</strong>
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="pursuit"></textarea></div>
+</section>
+
+<section class="block feature" id="justification">
+  <h2>8. Opportunity Justification Engine</h2>
+  <p>
+    Deterministic narrative composer. For any insight, the engine:
+  </p>
+  <ol>
+    <li>fetches the supporting opportunities via traceability;</li>
+    <li>derives factors (channel weights + mean AI score across supporting opps);</li>
+    <li>composes a headline ("N supporting opportunities; top channel: X × M") and a narrative;</li>
+    <li>computes a confidence score from volume × mean relevance;</li>
+    <li>persists a snapshot in <code>justification_records</code> for audit.</li>
+  </ol>
+  <p>
+    No AI dependency. Every claim is traceable to a numeric input.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="justification"></textarea></div>
+</section>
+
+<section class="block feature" id="relationships">
+  <h2>9. Opportunity Relationship Mapping</h2>
+  <p>
+    The recurring-detection engine scans the opportunity corpus and emits one row per recurring
+    agency / technology / vendor / NAICS code / keyword. Tunable minimum-occurrence threshold
+    (default 2) so transient signals don't pollute the dashboard. Tech recognition uses a curated
+    50-term vocabulary; NAICS pulls from both <code>sourceData.naics_codes</code> and any 6-digit
+    code embedded in the title/description.
+  </p>
+  <p>
+    The action dashboard surfaces the top-10 recurring agencies as "Recurring Agency Ecosystems" —
+    these are the highest-leverage proposal targets (one capability statement, many bids).
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="relationships"></textarea></div>
+</section>
+
+<section class="block action" id="action-dash">
+  <h2>10. Action Intelligence Dashboard</h2>
+  <p>
+    The top-level surface at <code>/admin/deep-research/action-intelligence</code>. Read-only
+    composite of every Phase 7 read into one operationally-actionable page:
+  </p>
+  <ul>
+    <li>4 KPI cards (clusters, evidence-backed opps, recurring agencies, graph edges)</li>
+    <li>Top Actionable Clusters — click any to drill down</li>
+    <li>Strongest Evidence-Backed Opportunities — by aggregate traceability count × mean relevance</li>
+    <li>Proposal Acceleration Candidates — live opps with multiple reusable assets matched</li>
+    <li>Recurring Agency Ecosystems — high-leverage proposal targets</li>
+    <li>Pursuit Readiness — open + in_progress workspaces</li>
+    <li>Custom Strategic Research Runs — pinned + recent saved searches</li>
+  </ul>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="action-dash"></textarea></div>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-dash">
+  <h2>Screen: Action Intelligence dashboard</h2>
+  <img class="shot" src="deep-research-assets/p7-01-action-intelligence.png" alt="action intelligence dashboard" />
+  <p class="caption">Header with the three Refresh buttons + the four-up KPI strip + the first section.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-dash"></textarea></div>
+</section>
+
+<section class="block" id="screen-kpis">
+  <h2>Screen: KPI strip</h2>
+  <img class="shot" src="deep-research-assets/p7-02-kpis.png" alt="kpi strip" />
+  <p class="caption">Active clusters · evidence-backed opps · recurring agencies · graph edges.</p>
+</section>
+
+<section class="block" id="screen-clusters">
+  <h2>Screen: top actionable clusters</h2>
+  <img class="shot" src="deep-research-assets/p7-03-top-clusters.png" alt="top clusters" />
+  <p class="caption">Click any cluster card to open the drilldown workspace.</p>
+</section>
+
+<section class="block" id="screen-acceleration">
+  <h2>Screen: proposal acceleration candidates</h2>
+  <img class="shot" src="deep-research-assets/p7-04-acceleration.png" alt="acceleration candidates" />
+  <p class="caption">Live opportunities where multiple reusable assets match. "Create Pursuit" inline.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-acceleration"></textarea></div>
+</section>
+
+<section class="block" id="screen-agencies">
+  <h2>Screen: recurring agency ecosystems</h2>
+  <img class="shot" src="deep-research-assets/p7-05-recurring-agencies.png" alt="recurring agencies" />
+  <p class="caption">High-leverage proposal targets — one capability statement, many bids.</p>
+</section>
+
+<section class="block" id="screen-cluster">
+  <h2>Screen: cluster drilldown workspace</h2>
+  <img class="shot" src="deep-research-assets/p7-06-cluster-drilldown.png" alt="cluster drilldown" />
+  <p class="caption">Per-cluster: justification, recurring themes/agencies/tech/NAICS, underlying opportunities.</p>
+  <img class="shot" src="deep-research-assets/p7-07-cluster-opportunities.png" alt="cluster opportunities" />
+  <p class="caption">Underlying opportunities are searchable + filterable + sortable inline.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-cluster"></textarea></div>
+</section>
+
+<section class="block" id="screen-justify">
+  <h2>Screen: justification card</h2>
+  <img class="shot" src="deep-research-assets/p7-08-justification.png" alt="justification" />
+  <p class="caption">Composed deterministically. Confidence + headline + narrative + factor weights.</p>
+</section>
+
+<section class="block" id="screen-runs">
+  <h2>Screen: custom strategic search runs</h2>
+  <img class="shot" src="deep-research-assets/p7-09-research-runs.png" alt="research runs" />
+  <p class="caption">Save / pin / rerun / diff over time. Preview mode for dry-runs before saving.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-runs"></textarea></div>
+</section>
+
+<section class="block" id="screen-pursuit">
+  <h2>Screen: proposal pursuit workspace</h2>
+  <img class="shot" src="deep-research-assets/p7-10-pursuit-workspace.png" alt="pursuit workspace" />
+  <p class="caption">Anchor metadata + justification + linked opps + reusable assets + staffing + notes + submission reminder.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-pursuit"></textarea></div>
+</section>
+
+<section class="block" id="screen-full">
+  <h2>Full action intelligence dashboard</h2>
+  <img class="shot" src="deep-research-assets/p7-11-action-intelligence-full.png" alt="full dashboard" />
+</section>
+
+<hr/>
+
+<section class="block arch" id="schema">
+  <h2>Database schema (Phase 7)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>opportunity_traceability</code></td><td>Links (insight_kind, insight_id) → opportunity_id with relevance + contribution + reasoning.</td></tr>
+      <tr><td><code>custom_research_runs</code></td><td>User-saved strategic searches + per-run history.</td></tr>
+      <tr><td><code>pursuit_workspaces</code></td><td>Pursuit planning surfaces anchored to a venture / cluster / pattern / custom set.</td></tr>
+      <tr><td><code>opportunity_relationships</code></td><td>Recurring agencies / tech / vendor / NAICS / keyword aggregate.</td></tr>
+      <tr><td><code>justification_records</code></td><td>Composed rationale snapshots per insight.</td></tr>
+      <tr><td><code>opportunity_graph_edges</code></td><td>Edges between entities (opp ↔ agency ↔ tech ↔ ...).</td></tr>
+      <tr><td><code>proposal_acceleration_assets</code></td><td>Reusable proposal components from approved past wins + capability blurbs.</td></tr>
+      <tr><td><code>cluster_drilldowns</code></td><td>Cached drilldown view per cluster (themes/agencies/tech/etc).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes (Phase 7)</h2>
+  <p>All admin-only, mounted under <code>/api/v1/deep-research</code>:</p>
+  <ul>
+    <li><code>GET /action-intelligence</code> — top-level dashboard payload</li>
+    <li><code>GET /evidence/:kind/:id</code> + <code>POST .../rebuild</code></li>
+    <li><code>GET /opportunities/:id/insights</code> — reverse lookup</li>
+    <li><code>GET /justification/:kind/:id?rebuild=true</code></li>
+    <li><code>GET /clusters/:id/drilldown</code> + <code>POST .../refresh</code></li>
+    <li><code>GET|POST /research-runs</code> + <code>POST /research-runs/preview</code> + per-id GET/PATCH/DELETE + <code>POST .../rerun</code></li>
+    <li><code>GET /graph/summary</code> + <code>GET /graph/neighborhood?kind=X&value=Y</code> + <code>POST /graph/refresh</code></li>
+    <li><code>GET /relationships/recurring?type=agency&summary=true</code> + <code>POST /relationships/refresh</code></li>
+    <li><code>GET /acceleration/assets</code> + <code>POST /acceleration/refresh</code> + <code>GET /acceleration/suggest/:id</code></li>
+    <li><code>GET|POST /pursuits</code> + per-id GET/PATCH/DELETE</li>
+  </ul>
+</section>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend services (10)</h3>
+  <ul>
+    <li><code>backend/src/deepResearch/opportunityTraceability.service.js</code></li>
+    <li><code>backend/src/deepResearch/opportunityRelationships.service.js</code></li>
+    <li><code>backend/src/deepResearch/opportunityGraph.service.js</code></li>
+    <li><code>backend/src/deepResearch/clusterDrilldown.service.js</code></li>
+    <li><code>backend/src/deepResearch/opportunityJustification.service.js</code></li>
+    <li><code>backend/src/deepResearch/customResearchRun.service.js</code></li>
+    <li><code>backend/src/deepResearch/proposalAcceleration.service.js</code></li>
+    <li><code>backend/src/deepResearch/pursuitWorkspace.service.js</code></li>
+    <li><code>backend/src/deepResearch/actionIntelligence.service.js</code></li>
+  </ul>
+  <h3>Added — models + migration</h3>
+  <ul>
+    <li><code>backend/src/migrations/20260515000004-deep-research-phase-7.js</code> (8 tables)</li>
+    <li>8 new Sequelize models in <code>backend/src/models/</code></li>
+  </ul>
+  <h3>Added — frontend</h3>
+  <ul>
+    <li><code>frontend/src/pages/ActionIntelligencePage.jsx</code></li>
+    <li><code>frontend/src/pages/ClusterDrilldownPage.jsx</code></li>
+    <li><code>frontend/src/pages/PursuitWorkspacePage.jsx</code></li>
+    <li><code>frontend/src/pages/ResearchRunsPage.jsx</code></li>
+    <li><code>frontend/src/components/deepResearch/ActionVisuals.jsx</code> (EvidenceDrawer + badges)</li>
+  </ul>
+  <h3>Added — tests + scripts</h3>
+  <ul>
+    <li>7 new test files in <code>backend/tests/deepResearch/</code></li>
+    <li><code>backend/scripts/capture-deep-research-phase-7-walkthrough.js</code></li>
+  </ul>
+  <h3>Modified</h3>
+  <ul>
+    <li><code>backend/src/models/index.js</code> — register 8 new models</li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> — 24 new handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> — 24 new routes</li>
+    <li><code>frontend/src/App.jsx</code> — 4 new routes</li>
+    <li><code>frontend/src/components/common/Sidebar.jsx</code> — 2 new sidebar links</li>
+    <li><code>frontend/src/services/deepResearchService.js</code> — 24 new API client functions</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Unit + integration:</strong> 46 new tests across 7 files; full suite at 1,874 / 1,874 passing.</li>
+    <li><strong>Migration runs clean on prod</strong> (<code>migrated 0.409s</code>). All 8 tables verified.</li>
+    <li><strong>Recurring-relationship refresh on prod:</strong> 1,259 relationships across 5,000 active opportunities.</li>
+    <li><strong>Graph refresh on prod:</strong> 8,641 edges across 5 entity kinds.</li>
+    <li><strong>Acceleration assets refresh on prod:</strong> 3 past-win assets surfaced from approved OpportunityOutputs.</li>
+    <li><strong>Action intelligence read on prod:</strong> 6 active clusters, 10 acceleration candidates, 10 recurring agencies returned.</li>
+    <li><strong>Cluster drilldown:</strong> 5 cached drilldowns persisted via <code>refreshDrilldown</code>.</li>
+    <li><strong>Custom research runs:</strong> 2 sample runs created end-to-end (create + tokenize + query + persist).</li>
+    <li><strong>Pursuit workspace:</strong> 1 sample pursuit created anchored to a cluster, with justification persisted.</li>
+    <li><strong>11 screenshots captured</strong> from the live prod pages.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Traceability is built lazily.</strong> If a venture or cluster has never had its
+      evidence inspected, the first request derives links on-the-fly and returns them but does not
+      persist (unless rebuild is called). Worst case is +200ms latency on first hit.
+    </li>
+    <li>
+      <strong>Justification confidence is a heuristic.</strong> It combines volume + mean
+      relevance — useful as a relative ranking signal, not as a calibrated probability.
+    </li>
+    <li>
+      <strong>Graph rendering is tabular, not visual.</strong> The data layer supports a
+      force-directed graph view; the current UI uses tables + recurring-relationship rows.
+      A canvas-rendered graph is a clean Phase 8 add.
+    </li>
+    <li>
+      <strong>Acceleration assets depend on approved OpportunityOutputs.</strong> Until the
+      Review Queue accumulates enough approved past wins, the assets table is small (3 on the
+      current seeded prod corpus).
+    </li>
+    <li>
+      <strong>Research-run tokenization is AND-only.</strong> No OR-of-tokens syntax yet. Users
+      who want OR semantics can save two runs.
+    </li>
+    <li>
+      <strong>Recurring detection is corpus-wide, not per-org.</strong> Single-tenant assumption
+      holds; multi-tenant filtering is a future concern.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 8</h2>
+  <ul>
+    <li>
+      <strong>Force-directed opportunity graph viewer.</strong> The data is in place; a small
+      canvas component (≤200 lines) renders nodes + edges + a "drill into" interaction.
+      Centerpiece of an executive-grade graph explorer.
+    </li>
+    <li>
+      <strong>Pursuit-to-Review-Queue handoff.</strong> "Generate proposal draft" button on
+      a pursuit pre-fills the existing actionGenerator with the linked opps + suggested assets
+      + the pursuit's positioning text. Lands a draft in the Review Queue. Still human-submitted.
+    </li>
+    <li>
+      <strong>Backfill traceability eagerly on insight write.</strong> When a new
+      recommendation / intervention / venture is created, immediately rebuild its
+      traceability row. Removes the "first-hit derivation" latency.
+    </li>
+    <li>
+      <strong>Recurring outcomes loop.</strong> Phase 6 acknowledged recommendations + Phase 7
+      pursuit outcomes (won/lost) should feed a measure-only retrospective: which recurring
+      agencies, technologies, and clusters actually produced wins?
+    </li>
+    <li>
+      <strong>External-source ecosystem signal ingestion.</strong> Ecosystems today are derived
+      from our portfolio + opportunity corpus. Pulling external signals (funding rounds,
+      research-paper velocity, talent flows) would make ecosystem classifications independent of
+      our own footprint.
+    </li>
+    <li>
+      <strong>Submission Readiness Engine.</strong> A parallel track (separate plan file
+      <code>staged-spinning-parasol.md</code> already drafted) — take a shortlisted opportunity
+      from "selected" to "ready-to-upload bid package" with evergreen document vault, attachment
+      locker, compliance matrix, and submission package assembler. <strong>Still no
+      auto-submission</strong> — that hard constraint remains.
+    </li>
+  </ul>
+</section>
+
+<div class="actions">
+  <button class="copy-btn" id="copyAll">Copy all feedback</button>
+  <span class="small" id="copyStatus" style="align-self:center;color:var(--text-muted);"></span>
+</div>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.querySelectorAll('textarea[data-fb]').forEach(function(t) {
+    var key = 'p7-fb-' + t.getAttribute('data-fb');
+    var saved = localStorage.getItem(key);
+    if (saved) t.value = saved;
+    t.addEventListener('input', function() { localStorage.setItem(key, t.value); });
+  });
+  var btn = document.getElementById('copyAll');
+  var status = document.getElementById('copyStatus');
+  btn.addEventListener('click', function() {
+    var out = [];
+    document.querySelectorAll('textarea[data-fb]').forEach(function(t) {
+      if (t.value.trim()) out.push('# ' + t.getAttribute('data-fb') + '\n' + t.value.trim());
+    });
+    if (out.length === 0) { status.textContent = 'No feedback yet.'; return; }
+    var text = out.join('\n\n');
+    navigator.clipboard.writeText(text).then(function() {
+      btn.classList.add('ok'); btn.textContent = 'Copied!';
+      status.textContent = out.length + ' sections copied.';
+      setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback'; }, 2500);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
