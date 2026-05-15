@@ -138,3 +138,54 @@ export async function getOpportunityPipeline() {
   const res = await api.get(`${base}/execution/pipeline`);
   return res.data?.data;
 }
+
+// ---- Phase 4 — portfolio intelligence ------------------------------------
+
+export async function refreshPortfolio() {
+  const res = await api.post(`${base}/portfolio/refresh`);
+  return res.data?.data;
+}
+export async function getPortfolioDashboard() {
+  const res = await api.get(`${base}/portfolio`);
+  return res.data?.data;
+}
+export async function getPortfolioCapacity() {
+  const res = await api.get(`${base}/portfolio/capacity`);
+  return res.data?.data;
+}
+export async function getPortfolioRanking() {
+  const res = await api.get(`${base}/portfolio/ranking`);
+  return res.data?.data;
+}
+export async function getPortfolioForecasts() {
+  const res = await api.get(`${base}/portfolio/forecasts`);
+  return res.data?.data;
+}
+export async function getPortfolioDependencies() {
+  const res = await api.get(`${base}/portfolio/dependencies`);
+  return res.data?.data;
+}
+export async function getPortfolioPlan() {
+  const res = await api.get(`${base}/portfolio/plan`);
+  return res.data?.data;
+}
+export async function getPortfolioTemplates() {
+  const res = await api.get(`${base}/portfolio/templates`);
+  return res.data?.data?.templates || [];
+}
+export async function getPortfolioRecommendations() {
+  const res = await api.get(`${base}/portfolio/recommendations`);
+  return res.data?.data?.recommendations || [];
+}
+export async function acknowledgeRecommendation(id) {
+  const res = await api.post(`${base}/portfolio/recommendations/${id}/acknowledge`);
+  return res.data?.data;
+}
+export async function dismissRecommendation(id) {
+  const res = await api.post(`${base}/portfolio/recommendations/${id}/dismiss`);
+  return res.data?.data;
+}
+export async function getPortfolioOperations() {
+  const res = await api.get(`${base}/portfolio/operations`);
+  return res.data?.data;
+}

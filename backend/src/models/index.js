@@ -101,6 +101,15 @@ const MvpPlan = require('./MvpPlan')(sequelize);
 const LaunchStrategy = require('./LaunchStrategy')(sequelize);
 const DeploymentReadiness = require('./DeploymentReadiness')(sequelize);
 const ExecutionQueueItem = require('./ExecutionQueueItem')(sequelize);
+// Deep Research Phase 4 — portfolio + capacity intelligence.
+const PortfolioScore = require('./PortfolioScore')(sequelize);
+const ResourceCapacitySnapshot = require('./ResourceCapacitySnapshot')(sequelize);
+const VentureDependency = require('./VentureDependency')(sequelize);
+const InfrastructureOverlap = require('./InfrastructureOverlap')(sequelize);
+const RoiForecast = require('./RoiForecast')(sequelize);
+const ConfidenceHistory = require('./ConfidenceHistory')(sequelize);
+const ReassessmentEvent = require('./ReassessmentEvent')(sequelize);
+const VentureTemplate = require('./VentureTemplate')(sequelize);
 
 const models = {
   UserRole,
@@ -177,6 +186,14 @@ const models = {
   LaunchStrategy,
   DeploymentReadiness,
   ExecutionQueueItem,
+  PortfolioScore,
+  ResourceCapacitySnapshot,
+  VentureDependency,
+  InfrastructureOverlap,
+  RoiForecast,
+  ConfidenceHistory,
+  ReassessmentEvent,
+  VentureTemplate,
 };
 
 // Set up associations

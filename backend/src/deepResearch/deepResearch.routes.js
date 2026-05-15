@@ -50,6 +50,21 @@ router.get('/ventures/:id/execution', ...admin, c.getVentureExecution);
 router.get('/execution/queue', ...admin, c.getExecutionQueue);
 router.get('/execution/pipeline', ...admin, c.getPipeline);
 
+// ---- Phase 4 — portfolio intelligence -------------------------------------
+router.post('/portfolio/refresh', ...admin, c.refreshPortfolio);
+router.get('/portfolio', ...admin, c.getPortfolioDashboard);
+router.get('/portfolio/capacity', ...admin, c.getCapacity);
+router.get('/portfolio/ranking', ...admin, c.getPortfolioRanking);
+router.get('/portfolio/forecasts', ...admin, c.getForecasts);
+router.get('/portfolio/overlaps', ...admin, c.getOverlaps);
+router.get('/portfolio/dependencies', ...admin, c.getDependencies);
+router.get('/portfolio/plan', ...admin, c.getCapacityPlan);
+router.get('/portfolio/templates', ...admin, c.getTemplates);
+router.get('/portfolio/recommendations', ...admin, c.getRecommendations);
+router.post('/portfolio/recommendations/:id/acknowledge', ...admin, c.acknowledgeRecommendation);
+router.post('/portfolio/recommendations/:id/dismiss', ...admin, c.dismissRecommendation);
+router.get('/portfolio/operations', ...admin, c.getOperationalMetrics);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

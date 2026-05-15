@@ -10,6 +10,15 @@ const projectArchitectBridge = require('./projectArchitectBridge.service');
 const briefingSubscription = require('./briefingSubscription.service');
 const ventureLifecycle = require('./ventureLifecycle.service');
 const executionQueue = require('./executionQueue.service');
+const portfolioIntelligence = require('./portfolioIntelligence.service');
+const resourceCapacity = require('./resourceCapacity.service');
+const portfolioPrioritization = require('./portfolioPrioritization.service');
+const portfolioForecasting = require('./portfolioForecasting.service');
+const sharedInfrastructure = require('./sharedInfrastructure.service');
+const ventureDependency = require('./ventureDependency.service');
+const executionCapacityPlanner = require('./executionCapacityPlanner.service');
+const ventureTemplate = require('./ventureTemplate.service');
+const confidenceDecay = require('./confidenceDecay.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -296,6 +305,67 @@ async function getPipeline(req, res) {
   }
 }
 
+// ---- Phase 4 — portfolio intelligence ------------------------------------
+
+async function refreshPortfolio(req, res) {
+  try {
+    const out = await portfolioIntelligence.refreshPortfolio();
+    return successResponse(res, out, out.ok ? 'Portfolio refreshed' : 'Portfolio refreshed with errors');
+  } catch (e) { return mapError(res, e, 'refreshPortfolio', 'Portfolio refresh failed'); }
+}
+async function getPortfolioDashboard(req, res) {
+  try { return successResponse(res, await portfolioIntelligence.getPortfolioDashboard()); }
+  catch (e) { return mapError(res, e, 'getPortfolioDashboard', 'Failed to load portfolio dashboard'); }
+}
+async function getCapacity(req, res) {
+  try { return successResponse(res, await resourceCapacity.getLatestSnapshot()); }
+  catch (e) { return mapError(res, e, 'getCapacity', 'Failed to load capacity snapshot'); }
+}
+async function getPortfolioRanking(req, res) {
+  try { return successResponse(res, await portfolioPrioritization.getLatestRanking()); }
+  catch (e) { return mapError(res, e, 'getPortfolioRanking', 'Failed to load portfolio ranking'); }
+}
+async function getForecasts(req, res) {
+  try { return successResponse(res, await portfolioForecasting.getLatestForecast()); }
+  catch (e) { return mapError(res, e, 'getForecasts', 'Failed to load ROI forecasts'); }
+}
+async function getOverlaps(req, res) {
+  try { return successResponse(res, { overlaps: await sharedInfrastructure.listOverlaps() }); }
+  catch (e) { return mapError(res, e, 'getOverlaps', 'Failed to load infrastructure overlaps'); }
+}
+async function getDependencies(req, res) {
+  try { return successResponse(res, await ventureDependency.getDependencyGraph()); }
+  catch (e) { return mapError(res, e, 'getDependencies', 'Failed to load dependency graph'); }
+}
+async function getCapacityPlan(req, res) {
+  try { return successResponse(res, await executionCapacityPlanner.planCapacity()); }
+  catch (e) { return mapError(res, e, 'getCapacityPlan', 'Failed to load capacity plan'); }
+}
+async function getTemplates(req, res) {
+  try { return successResponse(res, { templates: await ventureTemplate.listTemplates() }); }
+  catch (e) { return mapError(res, e, 'getTemplates', 'Failed to load venture templates'); }
+}
+async function getRecommendations(req, res) {
+  try { return successResponse(res, { recommendations: await confidenceDecay.listPendingRecommendations() }); }
+  catch (e) { return mapError(res, e, 'getRecommendations', 'Failed to load recommendations'); }
+}
+async function acknowledgeRecommendation(req, res) {
+  try {
+    const actor = req.user ? (req.user.email || `user:${req.user.id}`) : null;
+    return successResponse(res, await confidenceDecay.acknowledgeRecommendation(req.params.id, actor), 'Acknowledged');
+  } catch (e) { return mapError(res, e, 'acknowledgeRecommendation', 'Failed to acknowledge'); }
+}
+async function dismissRecommendation(req, res) {
+  try {
+    const actor = req.user ? (req.user.email || `user:${req.user.id}`) : null;
+    return successResponse(res, await confidenceDecay.dismissRecommendation(req.params.id, actor), 'Dismissed');
+  } catch (e) { return mapError(res, e, 'dismissRecommendation', 'Failed to dismiss'); }
+}
+async function getOperationalMetrics(req, res) {
+  try { return successResponse(res, await portfolioIntelligence.computeOperationalMetrics()); }
+  catch (e) { return mapError(res, e, 'getOperationalMetrics', 'Failed to load operational metrics'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -321,4 +391,18 @@ module.exports = {
   getVentureExecution,
   getExecutionQueue,
   getPipeline,
+  // Phase 4
+  refreshPortfolio,
+  getPortfolioDashboard,
+  getCapacity,
+  getPortfolioRanking,
+  getForecasts,
+  getOverlaps,
+  getDependencies,
+  getCapacityPlan,
+  getTemplates,
+  getRecommendations,
+  acknowledgeRecommendation,
+  dismissRecommendation,
+  getOperationalMetrics,
 };
