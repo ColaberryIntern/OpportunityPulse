@@ -128,6 +128,15 @@ const VentureHealthHistory = require('./VentureHealthHistory')(sequelize);
 const ForecastAccuracy = require('./ForecastAccuracy')(sequelize);
 const OperationalDrift = require('./OperationalDrift')(sequelize);
 const DependencyReview = require('./DependencyReview')(sequelize);
+// Deep Research Phase 7 — traceability + opportunity action intelligence.
+const OpportunityTraceability = require('./OpportunityTraceability')(sequelize);
+const CustomResearchRun = require('./CustomResearchRun')(sequelize);
+const PursuitWorkspace = require('./PursuitWorkspace')(sequelize);
+const OpportunityRelationship = require('./OpportunityRelationship')(sequelize);
+const JustificationRecord = require('./JustificationRecord')(sequelize);
+const OpportunityGraphEdge = require('./OpportunityGraphEdge')(sequelize);
+const ProposalAccelerationAsset = require('./ProposalAccelerationAsset')(sequelize);
+const ClusterDrilldown = require('./ClusterDrilldown')(sequelize);
 
 const models = {
   UserRole,
@@ -228,6 +237,14 @@ const models = {
   ForecastAccuracy,
   OperationalDrift,
   DependencyReview,
+  OpportunityTraceability,
+  CustomResearchRun,
+  PursuitWorkspace,
+  OpportunityRelationship,
+  JustificationRecord,
+  OpportunityGraphEdge,
+  ProposalAccelerationAsset,
+  ClusterDrilldown,
 };
 
 // Set up associations

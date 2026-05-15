@@ -295,3 +295,122 @@ export async function recordDependencyAction(id, { action, owner, note }) {
   const res = await api.post(`${base}/planning/dependency-review/${id}/actions`, { action, owner, note });
   return res.data?.data;
 }
+
+// ---- Phase 7 — traceability + opportunity action intelligence ------------
+
+export async function getActionIntelligence() {
+  const res = await api.get(`${base}/action-intelligence`);
+  return res.data?.data;
+}
+
+export async function getEvidence(kind, id, params = {}) {
+  const res = await api.get(`${base}/evidence/${kind}/${id}`, { params });
+  return res.data?.data;
+}
+export async function rebuildEvidence(kind, id) {
+  const res = await api.post(`${base}/evidence/${kind}/${id}/rebuild`);
+  return res.data?.data;
+}
+export async function getOpportunityInsights(opportunityId) {
+  const res = await api.get(`${base}/opportunities/${opportunityId}/insights`);
+  return res.data?.data;
+}
+
+export async function getJustification(kind, id, { rebuild = false } = {}) {
+  const res = await api.get(`${base}/justification/${kind}/${id}`, { params: { rebuild } });
+  return res.data?.data;
+}
+
+export async function getClusterDrilldown(id, params = {}) {
+  const res = await api.get(`${base}/clusters/${id}/drilldown`, { params });
+  return res.data?.data;
+}
+export async function refreshClusterDrilldown(id) {
+  const res = await api.post(`${base}/clusters/${id}/drilldown/refresh`);
+  return res.data?.data;
+}
+
+export async function listResearchRuns(params = {}) {
+  const res = await api.get(`${base}/research-runs`, { params });
+  return res.data?.data;
+}
+export async function createResearchRun(body) {
+  const res = await api.post(`${base}/research-runs`, body);
+  return res.data?.data;
+}
+export async function previewResearchQuery(body) {
+  const res = await api.post(`${base}/research-runs/preview`, body);
+  return res.data?.data;
+}
+export async function getResearchRun(id) {
+  const res = await api.get(`${base}/research-runs/${id}`);
+  return res.data?.data;
+}
+export async function updateResearchRun(id, body) {
+  const res = await api.patch(`${base}/research-runs/${id}`, body);
+  return res.data?.data;
+}
+export async function rerunResearchRun(id) {
+  const res = await api.post(`${base}/research-runs/${id}/rerun`);
+  return res.data?.data;
+}
+export async function deleteResearchRun(id) {
+  const res = await api.delete(`${base}/research-runs/${id}`);
+  return res.data?.data;
+}
+
+export async function getGraphSummary() {
+  const res = await api.get(`${base}/graph/summary`);
+  return res.data?.data;
+}
+export async function getGraphNeighborhood(params) {
+  const res = await api.get(`${base}/graph/neighborhood`, { params });
+  return res.data?.data;
+}
+export async function refreshGraph() {
+  const res = await api.post(`${base}/graph/refresh`);
+  return res.data?.data;
+}
+
+export async function listRecurringRelationships(params = {}) {
+  const res = await api.get(`${base}/relationships/recurring`, { params });
+  return res.data?.data;
+}
+export async function refreshRelationships(body = {}) {
+  const res = await api.post(`${base}/relationships/refresh`, body);
+  return res.data?.data;
+}
+
+export async function listAccelerationAssets(params = {}) {
+  const res = await api.get(`${base}/acceleration/assets`, { params });
+  return res.data?.data;
+}
+export async function refreshAccelerationAssets() {
+  const res = await api.post(`${base}/acceleration/refresh`);
+  return res.data?.data;
+}
+export async function suggestAcceleration(opportunityId) {
+  const res = await api.get(`${base}/acceleration/suggest/${opportunityId}`);
+  return res.data?.data;
+}
+
+export async function listPursuits(params = {}) {
+  const res = await api.get(`${base}/pursuits`, { params });
+  return res.data?.data;
+}
+export async function createPursuit(body) {
+  const res = await api.post(`${base}/pursuits`, body);
+  return res.data?.data;
+}
+export async function getPursuit(id) {
+  const res = await api.get(`${base}/pursuits/${id}`);
+  return res.data?.data;
+}
+export async function updatePursuit(id, body) {
+  const res = await api.patch(`${base}/pursuits/${id}`, body);
+  return res.data?.data;
+}
+export async function deletePursuit(id) {
+  const res = await api.delete(`${base}/pursuits/${id}`);
+  return res.data?.data;
+}

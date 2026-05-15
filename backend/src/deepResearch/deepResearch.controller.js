@@ -38,6 +38,16 @@ const forecastReality = require('./forecastReality.service');
 const operationalDrift = require('./operationalDrift.service');
 const dependencyReview = require('./dependencyReview.service');
 const planningWorkspace = require('./planningWorkspace.service');
+// Phase 7 — traceability + opportunity action intelligence.
+const opportunityTraceability = require('./opportunityTraceability.service');
+const opportunityRelationships = require('./opportunityRelationships.service');
+const opportunityGraph = require('./opportunityGraph.service');
+const clusterDrilldown = require('./clusterDrilldown.service');
+const opportunityJustification = require('./opportunityJustification.service');
+const customResearchRun = require('./customResearchRun.service');
+const proposalAcceleration = require('./proposalAcceleration.service');
+const pursuitWorkspace = require('./pursuitWorkspace.service');
+const actionIntelligence = require('./actionIntelligence.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -652,6 +662,247 @@ async function getDependencyReviews(req, res) {
   } catch (e) { return mapError(res, e, 'getDependencyReviews', 'Failed to load dependency reviews'); }
 }
 
+// ---- Phase 7 — traceability + opportunity action intelligence -----------
+
+// Evidence / traceability — generic lookup for any insight.
+async function getEvidence(req, res) {
+  try {
+    const { kind, id } = req.params;
+    if (!opportunityTraceability.VALID_KINDS.includes(kind)) {
+      return errorResponse(res, `Invalid insight kind ${kind}`, 400);
+    }
+    return successResponse(res, await opportunityTraceability.getSupportingOpportunities(
+      kind, Number(id), { limit: Number(req.query.limit) || 50 },
+    ));
+  } catch (e) { return mapError(res, e, 'getEvidence', 'Failed to load evidence'); }
+}
+
+async function rebuildEvidence(req, res) {
+  try {
+    const { kind, id } = req.params;
+    return successResponse(res,
+      await opportunityTraceability.rebuildTraceability(kind, Number(id)),
+      'Traceability rebuilt');
+  } catch (e) { return mapError(res, e, 'rebuildEvidence', 'Failed to rebuild evidence'); }
+}
+
+async function getOpportunityInsights(req, res) {
+  try {
+    return successResponse(res, await opportunityTraceability.getInsightsForOpportunity(
+      Number(req.params.id), { limit: Number(req.query.limit) || 100 },
+    ));
+  } catch (e) { return mapError(res, e, 'getOpportunityInsights', 'Failed to load insights for opportunity'); }
+}
+
+// Justification — explainable narrative for any insight.
+async function getJustification(req, res) {
+  try {
+    const { kind, id } = req.params;
+    return successResponse(res, await opportunityJustification.getJustification(
+      kind, Number(id), { rebuild: req.query.rebuild === 'true' },
+    ));
+  } catch (e) { return mapError(res, e, 'getJustification', 'Failed to load justification'); }
+}
+
+// Cluster drilldown.
+async function getClusterDrilldown(req, res) {
+  try {
+    return successResponse(res, await clusterDrilldown.getDrilldown(
+      Number(req.params.id), { limit: Number(req.query.limit) || 200 },
+    ));
+  } catch (e) { return mapError(res, e, 'getClusterDrilldown', 'Failed to load cluster drilldown'); }
+}
+
+async function refreshClusterDrilldown(req, res) {
+  try {
+    return successResponse(res,
+      await clusterDrilldown.refreshDrilldown(Number(req.params.id)),
+      'Cluster drilldown refreshed');
+  } catch (e) { return mapError(res, e, 'refreshClusterDrilldown', 'Failed to refresh cluster drilldown'); }
+}
+
+// Custom research runs.
+async function listResearchRuns(req, res) {
+  try {
+    return successResponse(res, await customResearchRun.listRuns({
+      limit: Number(req.query.limit) || 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listResearchRuns', 'Failed to list research runs'); }
+}
+
+async function createResearchRun(req, res) {
+  try {
+    const { name, query, filters, pinned } = req.body || {};
+    return successResponse(res, await customResearchRun.createRun({
+      name, query, filters, pinned,
+      createdBy: req.user ? req.user.email : null,
+    }), 'Research run created', 201);
+  } catch (e) { return mapError(res, e, 'createResearchRun', 'Failed to create research run'); }
+}
+
+async function getResearchRun(req, res) {
+  try {
+    const row = await customResearchRun.getRun(Number(req.params.id));
+    if (!row) return errorResponse(res, 'Research run not found', 404);
+    return successResponse(res, row);
+  } catch (e) { return mapError(res, e, 'getResearchRun', 'Failed to load research run'); }
+}
+
+async function updateResearchRun(req, res) {
+  try {
+    return successResponse(res, await customResearchRun.updateRun(
+      Number(req.params.id), req.body || {},
+    ), 'Research run updated');
+  } catch (e) { return mapError(res, e, 'updateResearchRun', 'Failed to update research run'); }
+}
+
+async function rerunResearchRun(req, res) {
+  try {
+    return successResponse(res, await customResearchRun.rerunRun(Number(req.params.id)),
+      'Research run executed');
+  } catch (e) { return mapError(res, e, 'rerunResearchRun', 'Research run failed'); }
+}
+
+async function deleteResearchRun(req, res) {
+  try {
+    return successResponse(res, await customResearchRun.deleteRun(Number(req.params.id)),
+      'Research run deleted');
+  } catch (e) { return mapError(res, e, 'deleteResearchRun', 'Failed to delete research run'); }
+}
+
+async function previewResearchQuery(req, res) {
+  try {
+    const { query, filters } = req.body || {};
+    if (!query) return errorResponse(res, 'query is required', 400);
+    return successResponse(res, await customResearchRun.runQuery({
+      query, filters, limit: Number((req.body && req.body.limit) || 100),
+    }));
+  } catch (e) { return mapError(res, e, 'previewResearchQuery', 'Failed to preview research query'); }
+}
+
+// Opportunity graph.
+async function getGraphNeighborhood(req, res) {
+  try {
+    return successResponse(res, await opportunityGraph.getNeighborhood({
+      kind: req.query.kind,
+      value: req.query.value,
+      depth: Number(req.query.depth) || 1,
+      maxEdges: Number(req.query.maxEdges) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'getGraphNeighborhood', 'Failed to load graph neighborhood'); }
+}
+
+async function getGraphSummary(req, res) {
+  try {
+    return successResponse(res, await opportunityGraph.getGraphSummary());
+  } catch (e) { return mapError(res, e, 'getGraphSummary', 'Failed to load graph summary'); }
+}
+
+async function refreshGraph(req, res) {
+  try {
+    return successResponse(res, await opportunityGraph.refreshGraph(),
+      'Opportunity graph refreshed');
+  } catch (e) { return mapError(res, e, 'refreshGraph', 'Failed to refresh graph'); }
+}
+
+// Relationships.
+async function listRecurringRelationships(req, res) {
+  try {
+    if (req.query.summary === 'true') {
+      return successResponse(res, await opportunityRelationships.summarizeRecurring({
+        limit: Number(req.query.limit) || 10,
+      }));
+    }
+    return successResponse(res, await opportunityRelationships.listRecurring({
+      relationshipType: req.query.type,
+      limit: Number(req.query.limit) || 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listRecurringRelationships', 'Failed to list recurring relationships'); }
+}
+
+async function refreshRelationships(req, res) {
+  try {
+    return successResponse(res, await opportunityRelationships.refreshRelationships({
+      minOccurrence: Number((req.body && req.body.minOccurrence) || 2),
+    }), 'Recurring relationships refreshed');
+  } catch (e) { return mapError(res, e, 'refreshRelationships', 'Failed to refresh relationships'); }
+}
+
+// Proposal acceleration.
+async function listAccelerationAssets(req, res) {
+  try {
+    return successResponse(res, await proposalAcceleration.listAssets({
+      assetKind: req.query.kind,
+      limit: Number(req.query.limit) || 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listAccelerationAssets', 'Failed to list acceleration assets'); }
+}
+
+async function refreshAccelerationAssets(req, res) {
+  try {
+    return successResponse(res, await proposalAcceleration.refreshAssets(),
+      'Acceleration assets refreshed');
+  } catch (e) { return mapError(res, e, 'refreshAccelerationAssets', 'Failed to refresh acceleration assets'); }
+}
+
+async function suggestAccelerationForOpportunity(req, res) {
+  try {
+    return successResponse(res, await proposalAcceleration.suggestForOpportunity(
+      Number(req.params.id),
+    ));
+  } catch (e) { return mapError(res, e, 'suggestAccelerationForOpportunity', 'Failed to suggest acceleration assets'); }
+}
+
+// Pursuit workspaces.
+async function listPursuits(req, res) {
+  try {
+    return successResponse(res, await pursuitWorkspace.listPursuits({
+      status: req.query.status,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listPursuits', 'Failed to list pursuits'); }
+}
+
+async function createPursuit(req, res) {
+  try {
+    const { name, anchorKind, anchorId, summary, positioning, linkedOpportunityIds } = req.body || {};
+    return successResponse(res, await pursuitWorkspace.createPursuit({
+      name, anchorKind, anchorId, summary, positioning, linkedOpportunityIds,
+      createdBy: req.user ? req.user.email : null,
+    }), 'Pursuit created', 201);
+  } catch (e) { return mapError(res, e, 'createPursuit', 'Failed to create pursuit'); }
+}
+
+async function getPursuit(req, res) {
+  try {
+    const out = await pursuitWorkspace.getPursuit(Number(req.params.id));
+    if (!out) return errorResponse(res, 'Pursuit not found', 404);
+    return successResponse(res, out);
+  } catch (e) { return mapError(res, e, 'getPursuit', 'Failed to load pursuit'); }
+}
+
+async function updatePursuit(req, res) {
+  try {
+    return successResponse(res, await pursuitWorkspace.updatePursuit(
+      Number(req.params.id), req.body || {},
+    ), 'Pursuit updated');
+  } catch (e) { return mapError(res, e, 'updatePursuit', 'Failed to update pursuit'); }
+}
+
+async function deletePursuit(req, res) {
+  try {
+    return successResponse(res, await pursuitWorkspace.deletePursuit(Number(req.params.id)),
+      'Pursuit deleted');
+  } catch (e) { return mapError(res, e, 'deletePursuit', 'Failed to delete pursuit'); }
+}
+
+// Action intelligence (top-level dashboard).
+async function getActionIntelligence(req, res) {
+  try {
+    return successResponse(res, await actionIntelligence.getActionIntelligence());
+  } catch (e) { return mapError(res, e, 'getActionIntelligence', 'Failed to load action intelligence'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -726,4 +977,32 @@ module.exports = {
   listOpenDependencyEdges,
   recordDependencyAction,
   getDependencyReviews,
+  // Phase 7
+  getEvidence,
+  rebuildEvidence,
+  getOpportunityInsights,
+  getJustification,
+  getClusterDrilldown,
+  refreshClusterDrilldown,
+  listResearchRuns,
+  createResearchRun,
+  getResearchRun,
+  updateResearchRun,
+  rerunResearchRun,
+  deleteResearchRun,
+  previewResearchQuery,
+  getGraphNeighborhood,
+  getGraphSummary,
+  refreshGraph,
+  listRecurringRelationships,
+  refreshRelationships,
+  listAccelerationAssets,
+  refreshAccelerationAssets,
+  suggestAccelerationForOpportunity,
+  listPursuits,
+  createPursuit,
+  getPursuit,
+  updatePursuit,
+  deletePursuit,
+  getActionIntelligence,
 };

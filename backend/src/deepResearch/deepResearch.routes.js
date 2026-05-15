@@ -107,6 +107,52 @@ router.get('/planning/dependency-review', ...admin, c.listOpenDependencyEdges);
 router.get('/planning/dependency-review/:id', ...admin, c.getDependencyReviews);
 router.post('/planning/dependency-review/:id/actions', ...admin, jsonSmall, c.recordDependencyAction);
 
+// ---- Phase 7 — traceability + opportunity action intelligence --------------
+// Action intelligence dashboard (top-level).
+router.get('/action-intelligence', ...admin, c.getActionIntelligence);
+
+// Evidence / traceability.
+router.get('/evidence/:kind/:id', ...admin, c.getEvidence);
+router.post('/evidence/:kind/:id/rebuild', ...admin, c.rebuildEvidence);
+router.get('/opportunities/:id/insights', ...admin, c.getOpportunityInsights);
+
+// Justification.
+router.get('/justification/:kind/:id', ...admin, c.getJustification);
+
+// Cluster drilldown.
+router.get('/clusters/:id/drilldown', ...admin, c.getClusterDrilldown);
+router.post('/clusters/:id/drilldown/refresh', ...admin, c.refreshClusterDrilldown);
+
+// Custom research runs.
+router.get('/research-runs', ...admin, c.listResearchRuns);
+router.post('/research-runs', ...admin, jsonSmall, c.createResearchRun);
+router.post('/research-runs/preview', ...admin, jsonSmall, c.previewResearchQuery);
+router.get('/research-runs/:id', ...admin, c.getResearchRun);
+router.patch('/research-runs/:id', ...admin, jsonSmall, c.updateResearchRun);
+router.post('/research-runs/:id/rerun', ...admin, c.rerunResearchRun);
+router.delete('/research-runs/:id', ...admin, c.deleteResearchRun);
+
+// Opportunity graph.
+router.get('/graph/summary', ...admin, c.getGraphSummary);
+router.get('/graph/neighborhood', ...admin, c.getGraphNeighborhood);
+router.post('/graph/refresh', ...admin, c.refreshGraph);
+
+// Relationships.
+router.get('/relationships/recurring', ...admin, c.listRecurringRelationships);
+router.post('/relationships/refresh', ...admin, jsonSmall, c.refreshRelationships);
+
+// Proposal acceleration.
+router.get('/acceleration/assets', ...admin, c.listAccelerationAssets);
+router.post('/acceleration/refresh', ...admin, c.refreshAccelerationAssets);
+router.get('/acceleration/suggest/:id', ...admin, c.suggestAccelerationForOpportunity);
+
+// Pursuit workspaces.
+router.get('/pursuits', ...admin, c.listPursuits);
+router.post('/pursuits', ...admin, jsonSmall, c.createPursuit);
+router.get('/pursuits/:id', ...admin, c.getPursuit);
+router.patch('/pursuits/:id', ...admin, jsonSmall, c.updatePursuit);
+router.delete('/pursuits/:id', ...admin, c.deletePursuit);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

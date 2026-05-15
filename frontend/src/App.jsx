@@ -39,6 +39,10 @@ import ExecutionDashboardPage from './pages/ExecutionDashboardPage';
 import PortfolioDashboardPage from './pages/PortfolioDashboardPage';
 import EcosystemObservatoryPage from './pages/EcosystemObservatoryPage';
 import ExecutivePlanningPage from './pages/ExecutivePlanningPage';
+import ActionIntelligencePage from './pages/ActionIntelligencePage';
+import ClusterDrilldownPage from './pages/ClusterDrilldownPage';
+import PursuitWorkspacePage from './pages/PursuitWorkspacePage';
+import ResearchRunsPage from './pages/ResearchRunsPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -412,6 +416,38 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <ExecutivePlanningPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/action-intelligence"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ActionIntelligencePage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/clusters/:id"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ClusterDrilldownPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/pursuits/:id"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <PursuitWorkspacePage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/research-runs"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ResearchRunsPage />
             </ProtectedLayout>
           }
         />
