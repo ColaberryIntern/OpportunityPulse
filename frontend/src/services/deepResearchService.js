@@ -212,3 +212,86 @@ export async function setDependencyEdgeStatus(id, status) {
   const res = await api.patch(`${base}/observatory/dependencies/${id}`, { status });
   return res.data?.data;
 }
+
+// ---- Phase 6 — adaptive strategic operations -----------------------------
+
+export async function getPlanningWorkspace(params = {}) {
+  const res = await api.get(`${base}/planning`, { params });
+  return res.data?.data;
+}
+export async function runAdaptiveRefresh(runType = 'full') {
+  const res = await api.post(`${base}/planning/refresh`, { runType });
+  return res.data?.data;
+}
+export async function listRefreshRuns(params = {}) {
+  const res = await api.get(`${base}/planning/refresh-runs`, { params });
+  return res.data?.data;
+}
+export async function getRefreshRun(id) {
+  const res = await api.get(`${base}/planning/refresh-runs/${id}`);
+  return res.data?.data;
+}
+export async function getAdaptiveAnalytics(params = {}) {
+  const res = await api.get(`${base}/planning/analytics`, { params });
+  return res.data?.data;
+}
+export async function getForecastAccuracy(params = {}) {
+  const res = await api.get(`${base}/planning/forecast-accuracy`, { params });
+  return res.data?.data;
+}
+export async function listInterventions(pendingOnly = false) {
+  const res = await api.get(`${base}/planning/interventions`, { params: { pendingOnly } });
+  return res.data?.data;
+}
+export async function acknowledgeIntervention(id) {
+  const res = await api.post(`${base}/planning/interventions/${id}/acknowledge`);
+  return res.data?.data;
+}
+export async function dismissIntervention(id) {
+  const res = await api.post(`${base}/planning/interventions/${id}/dismiss`);
+  return res.data?.data;
+}
+export async function listStrategicRecommendations(pendingOnly = false) {
+  const res = await api.get(`${base}/planning/strategic-recommendations`, { params: { pendingOnly } });
+  return res.data?.data;
+}
+export async function acknowledgeStrategicRecommendation(id) {
+  const res = await api.post(`${base}/planning/strategic-recommendations/${id}/acknowledge`);
+  return res.data?.data;
+}
+export async function dismissStrategicRecommendation(id) {
+  const res = await api.post(`${base}/planning/strategic-recommendations/${id}/dismiss`);
+  return res.data?.data;
+}
+export async function getVentureHealth() {
+  const res = await api.get(`${base}/planning/venture-health`);
+  return res.data?.data;
+}
+export async function getVentureHealthHistory(ventureId, params = {}) {
+  const res = await api.get(`${base}/planning/venture-health/${ventureId}`, { params });
+  return res.data?.data;
+}
+export async function listOperationalDrift(pendingOnly = false) {
+  const res = await api.get(`${base}/planning/operational-drift`, { params: { pendingOnly } });
+  return res.data?.data;
+}
+export async function acknowledgeDriftItem(id) {
+  const res = await api.post(`${base}/planning/operational-drift/${id}/acknowledge`);
+  return res.data?.data;
+}
+export async function dismissDriftItem(id) {
+  const res = await api.post(`${base}/planning/operational-drift/${id}/dismiss`);
+  return res.data?.data;
+}
+export async function listOpenDependencyEdges(params = {}) {
+  const res = await api.get(`${base}/planning/dependency-review`, { params });
+  return res.data?.data;
+}
+export async function getDependencyReviews(id) {
+  const res = await api.get(`${base}/planning/dependency-review/${id}`);
+  return res.data?.data;
+}
+export async function recordDependencyAction(id, { action, owner, note }) {
+  const res = await api.post(`${base}/planning/dependency-review/${id}/actions`, { action, owner, note });
+  return res.data?.data;
+}

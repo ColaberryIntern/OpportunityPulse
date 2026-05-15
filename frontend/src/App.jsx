@@ -38,6 +38,7 @@ import BriefingCenterPage from './pages/BriefingCenterPage';
 import ExecutionDashboardPage from './pages/ExecutionDashboardPage';
 import PortfolioDashboardPage from './pages/PortfolioDashboardPage';
 import EcosystemObservatoryPage from './pages/EcosystemObservatoryPage';
+import ExecutivePlanningPage from './pages/ExecutivePlanningPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -403,6 +404,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <EcosystemObservatoryPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/planning"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <ExecutivePlanningPage />
             </ProtectedLayout>
           }
         />

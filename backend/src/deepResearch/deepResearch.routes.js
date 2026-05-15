@@ -80,6 +80,33 @@ router.patch('/observatory/dependencies/:id', ...admin, jsonSmall, c.setDependen
 router.get('/observatory/history', ...admin, c.getHistoricalAnalytics);
 router.get('/observatory/signals', ...admin, c.getSignalTimelines);
 
+// ---- Phase 6 — adaptive strategic operations ------------------------------
+router.get('/planning', ...admin, c.getPlanningWorkspace);
+router.post('/planning/refresh', ...admin, jsonSmall, c.runAdaptiveRefresh);
+router.get('/planning/refresh-runs', ...admin, c.listRefreshRuns);
+router.get('/planning/refresh-runs/:id', ...admin, c.getRefreshRun);
+router.get('/planning/analytics', ...admin, c.getAdaptiveAnalytics);
+router.get('/planning/forecast-accuracy', ...admin, c.getForecastAccuracy);
+
+router.get('/planning/interventions', ...admin, c.listInterventions);
+router.post('/planning/interventions/:id/acknowledge', ...admin, c.acknowledgeIntervention);
+router.post('/planning/interventions/:id/dismiss', ...admin, c.dismissIntervention);
+
+router.get('/planning/strategic-recommendations', ...admin, c.listStrategicRecommendations);
+router.post('/planning/strategic-recommendations/:id/acknowledge', ...admin, c.acknowledgeStrategicRecommendation);
+router.post('/planning/strategic-recommendations/:id/dismiss', ...admin, c.dismissStrategicRecommendation);
+
+router.get('/planning/venture-health', ...admin, c.getVentureHealth);
+router.get('/planning/venture-health/:id', ...admin, c.getVentureHealthHistory);
+
+router.get('/planning/operational-drift', ...admin, c.listOperationalDrift);
+router.post('/planning/operational-drift/:id/acknowledge', ...admin, c.acknowledgeDriftItem);
+router.post('/planning/operational-drift/:id/dismiss', ...admin, c.dismissDriftItem);
+
+router.get('/planning/dependency-review', ...admin, c.listOpenDependencyEdges);
+router.get('/planning/dependency-review/:id', ...admin, c.getDependencyReviews);
+router.post('/planning/dependency-review/:id/actions', ...admin, jsonSmall, c.recordDependencyAction);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

@@ -27,6 +27,17 @@ const predictiveCapacity = require('./predictiveCapacity.service');
 const strategicDrift = require('./strategicDrift.service');
 const signalHistory = require('./signalHistory.service');
 const historicalPortfolio = require('./historicalPortfolio.service');
+// Phase 6 — adaptive strategic operations.
+const adaptiveRefresh = require('./adaptiveRefresh.service');
+const refreshHistory = require('./refreshHistory.service');
+const executiveIntervention = require('./executiveIntervention.service');
+const strategicRecommendation = require('./strategicRecommendation.service');
+const adaptiveAnalytics = require('./adaptiveAnalytics.service');
+const ventureHealth = require('./ventureHealth.service');
+const forecastReality = require('./forecastReality.service');
+const operationalDrift = require('./operationalDrift.service');
+const dependencyReview = require('./dependencyReview.service');
+const planningWorkspace = require('./planningWorkspace.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -448,6 +459,199 @@ async function getSignalTimelines(req, res) {
   } catch (e) { return mapError(res, e, 'getSignalTimelines', 'Failed to load signal timelines'); }
 }
 
+// ---- Phase 6 — adaptive strategic operations ------------------------------
+
+// Planning workspace — read-only dashboard payload.
+async function getPlanningWorkspace(req, res) {
+  try {
+    return successResponse(res, await planningWorkspace.getPlanningWorkspace({
+      days: Number(req.query.days) || 30,
+      accuracyDays: Number(req.query.accuracyDays) || 90,
+    }));
+  } catch (e) { return mapError(res, e, 'getPlanningWorkspace', 'Failed to load planning workspace'); }
+}
+
+// Adaptive refresh — manual trigger.
+async function runAdaptiveRefresh(req, res) {
+  try {
+    const { runType } = req.body || {};
+    const allowed = ['full', 'portfolio', 'observatory', 'decay'];
+    const safeType = allowed.includes(runType) ? runType : 'full';
+    const result = await adaptiveRefresh.runRefresh({ runType: safeType, trigger: 'manual' });
+    return successResponse(res, result, 'Adaptive refresh complete');
+  } catch (e) { return mapError(res, e, 'runAdaptiveRefresh', 'Adaptive refresh failed'); }
+}
+
+async function listRefreshRuns(req, res) {
+  try {
+    return successResponse(res, await refreshHistory.listRecentRuns({
+      limit: Number(req.query.limit) || 25,
+    }));
+  } catch (e) { return mapError(res, e, 'listRefreshRuns', 'Failed to list refresh runs'); }
+}
+
+async function getRefreshRun(req, res) {
+  try {
+    const detail = await refreshHistory.getRunDetail(Number(req.params.id));
+    if (!detail) return errorResponse(res, 'Refresh run not found', 404);
+    return successResponse(res, detail);
+  } catch (e) { return mapError(res, e, 'getRefreshRun', 'Failed to load refresh run'); }
+}
+
+// Executive interventions.
+async function listInterventions(req, res) {
+  try {
+    const pendingOnly = req.query.pendingOnly === 'true';
+    const rows = pendingOnly
+      ? await executiveIntervention.listPending()
+      : await executiveIntervention.listAll({ limit: Number(req.query.limit) || 200 });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listInterventions', 'Failed to list interventions'); }
+}
+
+async function acknowledgeIntervention(req, res) {
+  try {
+    const row = await executiveIntervention.updateStatus(
+      Number(req.params.id), 'acknowledged',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Intervention acknowledged');
+  } catch (e) { return mapError(res, e, 'acknowledgeIntervention', 'Failed to acknowledge intervention'); }
+}
+
+async function dismissIntervention(req, res) {
+  try {
+    const row = await executiveIntervention.updateStatus(
+      Number(req.params.id), 'dismissed',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Intervention dismissed');
+  } catch (e) { return mapError(res, e, 'dismissIntervention', 'Failed to dismiss intervention'); }
+}
+
+// Strategic recommendations.
+async function listStrategicRecommendations(req, res) {
+  try {
+    const pendingOnly = req.query.pendingOnly === 'true';
+    const rows = pendingOnly
+      ? await strategicRecommendation.listPending()
+      : await strategicRecommendation.listAll({ limit: Number(req.query.limit) || 200 });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listStrategicRecommendations', 'Failed to list strategic recommendations'); }
+}
+
+async function acknowledgeStrategicRecommendation(req, res) {
+  try {
+    const row = await strategicRecommendation.updateStatus(
+      Number(req.params.id), 'acknowledged',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Strategic recommendation acknowledged');
+  } catch (e) { return mapError(res, e, 'acknowledgeStrategicRecommendation', 'Failed to acknowledge strategic recommendation'); }
+}
+
+async function dismissStrategicRecommendation(req, res) {
+  try {
+    const row = await strategicRecommendation.updateStatus(
+      Number(req.params.id), 'dismissed',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Strategic recommendation dismissed');
+  } catch (e) { return mapError(res, e, 'dismissStrategicRecommendation', 'Failed to dismiss strategic recommendation'); }
+}
+
+// Venture health.
+async function getVentureHealth(req, res) {
+  try {
+    return successResponse(res, await ventureHealth.getLatestHealth());
+  } catch (e) { return mapError(res, e, 'getVentureHealth', 'Failed to load venture health'); }
+}
+
+async function getVentureHealthHistory(req, res) {
+  try {
+    const rows = await ventureHealth.getHealthHistory(
+      Number(req.params.id),
+      { limit: Number(req.query.limit) || 50 },
+    );
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'getVentureHealthHistory', 'Failed to load venture health history'); }
+}
+
+// Adaptive analytics.
+async function getAdaptiveAnalytics(req, res) {
+  try {
+    return successResponse(res, await adaptiveAnalytics.getAdaptiveAnalytics({
+      days: Number(req.query.days) || 30,
+    }));
+  } catch (e) { return mapError(res, e, 'getAdaptiveAnalytics', 'Failed to load adaptive analytics'); }
+}
+
+// Forecast accuracy.
+async function getForecastAccuracy(req, res) {
+  try {
+    return successResponse(res, await forecastReality.getLatestAccuracy({
+      days: Number(req.query.days) || 90,
+    }));
+  } catch (e) { return mapError(res, e, 'getForecastAccuracy', 'Failed to load forecast accuracy'); }
+}
+
+// Operational drift.
+async function listOperationalDrift(req, res) {
+  try {
+    const pendingOnly = req.query.pendingOnly === 'true';
+    const rows = pendingOnly
+      ? await operationalDrift.listPending()
+      : await operationalDrift.listAll({ limit: Number(req.query.limit) || 200 });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listOperationalDrift', 'Failed to list operational drift'); }
+}
+
+async function acknowledgeDriftItem(req, res) {
+  try {
+    const row = await operationalDrift.updateStatus(
+      Number(req.params.id), 'acknowledged',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Operational drift acknowledged');
+  } catch (e) { return mapError(res, e, 'acknowledgeDriftItem', 'Failed to acknowledge operational drift'); }
+}
+
+async function dismissDriftItem(req, res) {
+  try {
+    const row = await operationalDrift.updateStatus(
+      Number(req.params.id), 'dismissed',
+      req.user ? req.user.email : null,
+    );
+    return successResponse(res, row, 'Operational drift dismissed');
+  } catch (e) { return mapError(res, e, 'dismissDriftItem', 'Failed to dismiss operational drift'); }
+}
+
+// Dependency review workflow.
+async function listOpenDependencyEdges(req, res) {
+  try {
+    return successResponse(res, await dependencyReview.listOpenForReview({
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listOpenDependencyEdges', 'Failed to list open dependency edges'); }
+}
+
+async function recordDependencyAction(req, res) {
+  try {
+    const { action, owner, note } = req.body || {};
+    const result = await dependencyReview.recordAction(Number(req.params.id), {
+      action, owner, note,
+      actor: req.user ? req.user.email : null,
+    });
+    return successResponse(res, result, 'Dependency action recorded');
+  } catch (e) { return mapError(res, e, 'recordDependencyAction', 'Failed to record dependency action'); }
+}
+
+async function getDependencyReviews(req, res) {
+  try {
+    return successResponse(res, await dependencyReview.getReviewsForEdge(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'getDependencyReviews', 'Failed to load dependency reviews'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -501,4 +705,25 @@ module.exports = {
   setDependencyEdgeStatus,
   getHistoricalAnalytics,
   getSignalTimelines,
+  // Phase 6
+  getPlanningWorkspace,
+  runAdaptiveRefresh,
+  listRefreshRuns,
+  getRefreshRun,
+  listInterventions,
+  acknowledgeIntervention,
+  dismissIntervention,
+  listStrategicRecommendations,
+  acknowledgeStrategicRecommendation,
+  dismissStrategicRecommendation,
+  getVentureHealth,
+  getVentureHealthHistory,
+  getAdaptiveAnalytics,
+  getForecastAccuracy,
+  listOperationalDrift,
+  acknowledgeDriftItem,
+  dismissDriftItem,
+  listOpenDependencyEdges,
+  recordDependencyAction,
+  getDependencyReviews,
 };

@@ -386,6 +386,11 @@ async function startServer() {
       // Default OFF — enable with DEEP_RESEARCH_SCAN_ENABLED=true.
       const { startDailyResearchScheduler } = require('./deepResearch/dailyResearchScheduler.service');
       startDailyResearchScheduler();
+
+      // Deep Research Phase 6 — automated safe refresh framework. Default OFF
+      // — enable with DEEP_RESEARCH_ADAPTIVE_REFRESH_ENABLED=true.
+      const adaptiveRefresh = require('./deepResearch/adaptiveRefresh.service');
+      adaptiveRefresh.startScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

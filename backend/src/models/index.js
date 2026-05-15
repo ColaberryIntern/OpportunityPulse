@@ -119,6 +119,15 @@ const PredictiveCapacity = require('./PredictiveCapacity')(sequelize);
 const DriftAlert = require('./DriftAlert')(sequelize);
 const SignalHistory = require('./SignalHistory')(sequelize);
 const DependencyEdge = require('./DependencyEdge')(sequelize);
+// Deep Research Phase 6 — adaptive strategic operations.
+const AdaptiveRefreshRun = require('./AdaptiveRefreshRun')(sequelize);
+const RefreshHistory = require('./RefreshHistory')(sequelize);
+const InterventionRecommendation = require('./InterventionRecommendation')(sequelize);
+const StrategicRecommendation = require('./StrategicRecommendation')(sequelize);
+const VentureHealthHistory = require('./VentureHealthHistory')(sequelize);
+const ForecastAccuracy = require('./ForecastAccuracy')(sequelize);
+const OperationalDrift = require('./OperationalDrift')(sequelize);
+const DependencyReview = require('./DependencyReview')(sequelize);
 
 const models = {
   UserRole,
@@ -211,6 +220,14 @@ const models = {
   DriftAlert,
   SignalHistory,
   DependencyEdge,
+  AdaptiveRefreshRun,
+  RefreshHistory,
+  InterventionRecommendation,
+  StrategicRecommendation,
+  VentureHealthHistory,
+  ForecastAccuracy,
+  OperationalDrift,
+  DependencyReview,
 };
 
 // Set up associations
