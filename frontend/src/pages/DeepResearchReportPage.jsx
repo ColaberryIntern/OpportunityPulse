@@ -44,6 +44,98 @@ function Section({ title, children, testId, right }) {
   );
 }
 
+// Phase 7.6 — competitive landscape section. Renders the AI's narrative +
+// the matched AiTool registry rows so the user can audit the
+// market_stage / build_recommendation against actual products.
+const SATURATION_META = {
+  empty:     { label: 'Empty space',    cls: 'bg-blue-100 text-blue-700',     hint: 'No active AI tools match this topic in our registry.' },
+  emerging:  { label: 'Emerging',       cls: 'bg-emerald-100 text-emerald-800', hint: '1-3 tools — early. Window may still be open.' },
+  active:    { label: 'Active market',  cls: 'bg-amber-100 text-amber-800',   hint: '4+ tools — momentum is real. Differentiation matters.' },
+  crowded:   { label: 'Crowded',        cls: 'bg-red-100 text-red-700',       hint: '6+ tools with multiple dominant/explosive products. Pass or strongly differentiate.' },
+};
+const MOMENTUM_META = {
+  emerging:     'bg-gray-100 text-gray-700',
+  accelerating: 'bg-blue-100 text-blue-700',
+  dominant:     'bg-violet-100 text-violet-800',
+  explosive:    'bg-red-100 text-red-700',
+  declining:    'bg-gray-200 text-gray-500',
+};
+
+function CompetingToolsSection({ data, narrative }) {
+  const tools = Array.isArray(data && data.tools) ? data.tools : [];
+  const sat = SATURATION_META[data.saturation_signal] || SATURATION_META.empty;
+  return (
+    <Section
+      title={`Competitive Landscape (${tools.length} tool${tools.length === 1 ? '' : 's'})`}
+      testId="section-competing-tools"
+      right={
+        <span className={`text-xs font-semibold rounded px-2 py-0.5 ${sat.cls}`} title={sat.hint}>
+          {sat.label}
+        </span>
+      }
+    >
+      {narrative && (
+        <p className="text-sm text-gray-700 mb-3 leading-relaxed">{narrative}</p>
+      )}
+      <p className="text-xs text-gray-500 italic mb-3">{data.rationale}</p>
+      {tools.length === 0 ? (
+        <p className="text-sm text-gray-400">
+          No matching AI tools in the registry. The market_stage call leans on opportunity volume alone for this report.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {tools.slice(0, 10).map((t) => (
+            <li
+              key={t.id}
+              className="border border-gray-200 rounded-lg p-3"
+              data-testid={`competing-tool-${t.id}`}
+            >
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-900">{t.name}</span>
+                  {t.vendor && <span className="text-xs text-gray-500">· {t.vendor}</span>}
+                  {t.category && (
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                      {t.category}
+                    </span>
+                  )}
+                  {t.momentum_stage && (
+                    <span className={`text-[11px] px-2 py-0.5 rounded ${MOMENTUM_META[t.momentum_stage] || MOMENTUM_META.emerging}`}>
+                      {t.momentum_stage}
+                    </span>
+                  )}
+                  {t.open_source && (
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-cyan-100 text-cyan-700">
+                      open-source
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                  {t.trending_score > 0 && <span>trending {Math.round(t.trending_score)}</span>}
+                  {t.composite_momentum_score > 0 && <span>momentum {Math.round(t.composite_momentum_score)}</span>}
+                  {t.website && (
+                    <a
+                      href={t.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      site ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+              {t.description && (
+                <p className="text-xs text-gray-600 line-clamp-2">{t.description}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 function VentureIdeaCard({ idea, onGenerate }) {
   const revenueCls = REVENUE_META[idea.revenuePotential] || REVENUE_META.medium;
   const arch = idea.metadata && idea.metadata.suggested_architecture;
@@ -442,6 +534,14 @@ function DeepResearchReportPage() {
             </ul>
           ) : <p className="text-gray-400">No MVP directions identified.</p>}
         </Section>
+
+        {/* Competing Tools — Phase 7.6 */}
+        {rj.competing_tools && (
+          <CompetingToolsSection
+            data={rj.competing_tools}
+            narrative={rj.competitive_landscape_summary}
+          />
+        )}
 
         {/* Build Recommendation */}
         <Section title="Build Recommendation" testId="section-build-recommendation">

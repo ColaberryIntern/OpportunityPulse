@@ -27,6 +27,8 @@ const {
 const channelsSvc = require('../oied/channels.service');
 const logger = require('../logging/logger');
 const strategySynthesis = require('./strategySynthesis.service');
+// Phase 7.6 — competing-tools enrichment from the AiTool registry.
+const competingTools = require('./competingTools.service');
 const ventureIdeaGenerator = require('./ventureIdeaGenerator.service');
 const crossChannelCorrelation = require('./crossChannelCorrelation.service');
 const marketTiming = require('./marketTiming.service');
@@ -147,7 +149,7 @@ function aggregateContext(searchTerm, opps) {
 
 // Assemble the structured report_json from every engine's output.
 function assembleReportJson(context, synthesis, intel) {
-  const { correlation, timing, monetizationModels } = intel;
+  const { correlation, timing, monetizationModels, competingToolsContext } = intel;
   return {
     search_term: context.searchTerm,
     totals: context.totals,
@@ -164,6 +166,9 @@ function assembleReportJson(context, synthesis, intel) {
     monetization_strategy: synthesis.monetization_strategy || '',
     build_recommendation: synthesis.build_recommendation || '',
     trend_summary: synthesis.trend_summary || '',
+    // Phase 7.6 — competitive landscape (AI narrative + the registry list).
+    competitive_landscape_summary: synthesis.competitive_landscape_summary || '',
+    competing_tools: competingToolsContext || null,
     // Phase 2 — the intelligence engines.
     correlation,
     market_timing: timing,
@@ -186,8 +191,24 @@ async function runPipeline(report, run, { searchTerm, opportunityIds }) {
     let tokensUsed = 0;
     let degraded = false;
 
-    // Step 1 — strategic narrative. AI hard gate.
-    const synthOut = await strategySynthesis.synthesize(context);
+    // Phase 7.6 — competing-tools enrichment. Soft: failure does not block
+    // synthesis (we still want a report even if the AiTool registry is empty
+    // or the table is unavailable). Persisted into report_json regardless.
+    let competingToolsContext = null;
+    try {
+      competingToolsContext = await competingTools.findCompetingTools({
+        searchTerm: report.searchTerm, context,
+      });
+    } catch (e) {
+      logger.warn('deepResearch: competing-tools enrichment failed — continuing without it', {
+        reportId: report.id, error: e.message,
+      });
+      competingToolsContext = null;
+    }
+
+    // Step 1 — strategic narrative. AI hard gate. Now grounds market_stage
+    // against the competing-tools context as well.
+    const synthOut = await strategySynthesis.synthesize(context, competingToolsContext);
     const synthesis = synthOut.synthesis;
     tokensUsed += synthOut.tokensUsed || 0;
 
@@ -278,7 +299,7 @@ async function runPipeline(report, run, { searchTerm, opportunityIds }) {
       : null;
 
     const reportJson = assembleReportJson(context, synthesis, {
-      correlation, timing, monetizationModels,
+      correlation, timing, monetizationModels, competingToolsContext,
     });
     const status = degraded ? 'partial' : 'success';
     await report.update({
