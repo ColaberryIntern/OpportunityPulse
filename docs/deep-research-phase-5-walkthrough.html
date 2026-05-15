@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 5 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 5 objective</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The engines</h2>
+  <a href="#temporal">Temporal intelligence</a>
+  <a href="#historical">Historical portfolio</a>
+  <a href="#ecosystems">Ecosystem evolution</a>
+  <a href="#trajectories">Venture trajectories</a>
+  <a href="#accuracy">Decision accuracy</a>
+  <a href="#directional">Directional dependencies</a>
+  <a href="#predictive">Predictive capacity</a>
+  <a href="#drift">Strategic drift</a>
+  <a href="#signals">Signal history</a>
+
+  <h2>Orchestration</h2>
+  <a href="#orchestrator">Observatory orchestrator</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-observatory">Observatory dashboard</a>
+  <a href="#screen-ecosystems">Ecosystem evolution</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 6</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 5</h1>
+  <p class="subtitle">Temporal + Ecosystem Intelligence · 2026-05-15 · commit <code>8f32b97</code> · all 1,785 backend tests passing</p>
+  <p>
+    Phase 4 made the portfolio answer "should this venture consume capacity right now?" — but only
+    at a point in time. Phase 5 adds <strong>temporal reasoning</strong>: trends, trajectories,
+    ecosystem evolution, directional dependencies + critical-path analysis, predictive capacity
+    forecasting, decision-accuracy measurement, and strategic-drift detection — all wired into one
+    new dashboard, the <strong>Ecosystem Observatory</strong>.
+  </p>
+  <p>
+    On the seeded prod run the observatory captured 8 signal-history points, classified 4
+    ecosystems (all <code>converging</code>, correctly — the seeded ventures span multiple
+    templates), computed 3 venture trajectories, auto-proposed 3 directional dependency edges from
+    the existing overlap pairs, generated 9 predictive-capacity forecasts (3 horizons × 3 scenarios),
+    and emitted 2 drift alerts: <code>ecosystem_overcommitment</code> + <code>execution_overload</code>
+    — exactly the signal Phase 5 is built to surface.
+  </p>
+  <p>
+    <span class="badge b-done">8 tables live</span>
+    <span class="badge b-done">10 services</span>
+    <span class="badge b-done">all deterministic</span>
+    <span class="badge b-done">human-in-the-loop preserved</span>
+  </p>
+</section>
+
+<section class="block context" id="objective">
+  <h2>The Phase 5 objective</h2>
+  <p>
+    Phase 4's portfolio dashboard answered current-state questions. Phase 5 answers questions only
+    time can answer:
+  </p>
+  <ul>
+    <li><em>Is this venture strengthening or weakening?</em></li>
+    <li><em>Which ecosystem is accelerating? Which is dying?</em></li>
+    <li><em>How accurate have our build-vs-monitor decisions actually been?</em></li>
+    <li><em>Where will capacity pressure be in 30 / 90 / 180 days?</em></li>
+    <li><em>What's blocking what, in actual order?</em></li>
+    <li><em>Is the portfolio drifting from strategy?</em></li>
+  </ul>
+  <p>
+    Every answer is a deterministic computation over existing time-series tables + the new Phase 5
+    snapshot tables. No AI. No autonomous changes. Drift alerts surface for human acknowledgment.
+  </p>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <tr><th>#</th><th>Capability</th><th>Delivered</th></tr>
+    <tr><td>1</td><td>Temporal Intelligence Engine</td><td><code>temporalIntelligence.service</code> — generic metric time series + 6-class movement classification</td></tr>
+    <tr><td>2</td><td>Historical Portfolio Analytics</td><td><code>historicalPortfolio.service</code> — capacity timeline, venture velocity, readiness aging, confidence trend, ranking trend</td></tr>
+    <tr><td>3</td><td>Ecosystem Evolution Tracking</td><td><code>ecosystemEvolution.service</code> — per-ecosystem health/maturity/momentum + 6-class classification</td></tr>
+    <tr><td>4</td><td>Venture Trajectory Intelligence</td><td><code>ventureTrajectory.service</code> — per-venture trajectory classification from history</td></tr>
+    <tr><td>5</td><td>Decision Accuracy Analytics</td><td><code>decisionAccuracy.service</code> — measure-only; lifecycle progression vs decision recommendation</td></tr>
+    <tr><td>6</td><td>Directional Dependency Intelligence</td><td><code>ventureDependency.service</code> upgraded — directional edges + critical path + bottleneck identification</td></tr>
+    <tr><td>7</td><td>Predictive Capacity Forecasting</td><td><code>predictiveCapacity.service</code> — 30/90/180-day forecasts × 3 scenarios</td></tr>
+    <tr><td>8</td><td>Strategic Drift Detection</td><td><code>strategicDrift.service</code> — 5 deterministic checks → drift_alerts as recommendations</td></tr>
+    <tr><td>9</td><td>Historical Signal Timelines</td><td><code>signalHistory.service</code> — per-signal time series for charting</td></tr>
+    <tr><td>10</td><td>Ecosystem Observatory Dashboard</td><td><code>/admin/deep-research/observatory</code> — all engines surfaced as one read view</td></tr>
+  </table>
+</section>
+
+<section class="block arch" id="temporal">
+  <h2>Temporal intelligence engine</h2>
+  <p>
+    Deterministic. Captures any metric into <code>temporal_snapshots</code> (generic key/value
+    timeline) and answers "is this strengthening or weakening?" by computing deltas across a
+    configurable lookback window. Classifications: <code>accelerating</code> /
+    <code>strengthening</code> / <code>stable</code> / <code>weakening</code> /
+    <code>decelerating</code> / <code>insufficient_data</code>. Thresholds env-overridable.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span></p>
+</section>
+
+<section class="block arch" id="historical">
+  <h2>Historical portfolio analytics</h2>
+  <p>
+    Deterministic. Reads the time-series tables Phases 3 + 4 already populate (confidence_history,
+    resource_capacity_snapshots, venture_lifecycle_events, portfolio_scores) and assembles
+    capacity-over-time, venture velocity by day, readiness aging, confidence trends, and portfolio
+    ranking changes across runs. No new computation — pure aggregation.
+  </p>
+</section>
+
+<section class="block arch" id="ecosystems">
+  <h2>Ecosystem evolution tracking</h2>
+  <p>
+    Deterministic. Uses Phase 4 <code>venture_templates</code> as ecosystem keys. For each
+    ecosystem with matching ventures:
+  </p>
+  <ul>
+    <li><strong>health_score</strong> — average execution readiness across matching ventures.</li>
+    <li><strong>maturity_score</strong> — average lifecycle progress (an explicit lookup table maps lifecycle states to 0-100 progress).</li>
+    <li><strong>momentum_score</strong> — mean confidence delta over a window, mapped to 0-100.</li>
+  </ul>
+  <p>
+    Classification:
+    <code>emerging</code> / <code>accelerating</code> / <code>saturated</code> /
+    <code>declining</code> / <code>dying</code> / <code>converging</code> (when 60%+ of an
+    ecosystem's ventures are also tagged by another ecosystem). Persisted to
+    <code>ecosystem_metrics</code> over time, so the trend is itself plottable.
+  </p>
+</section>
+
+<section class="block arch" id="trajectories">
+  <h2>Venture trajectory intelligence</h2>
+  <p>
+    Deterministic. For each venture, computes deltas over the window:
+  </p>
+  <ul>
+    <li>confidence delta from <code>confidence_history</code></li>
+    <li>portfolio score delta from <code>portfolio_scores</code></li>
+    <li>lifecycle velocity (transitions per day) from <code>venture_lifecycle_events</code></li>
+  </ul>
+  <p>
+    Classifies into <code>strengthening</code> / <code>accelerating</code> / <code>stable</code> /
+    <code>weakening</code> / <code>stagnating</code> / <code>unknown</code>. Stagnating fires only
+    when a venture has had zero movement AND zero lifecycle transitions for the entire window — a
+    real "stuck" signal, not just a quiet week.
+  </p>
+</section>
+
+<section class="block arch" id="accuracy">
+  <h2>Decision accuracy analytics</h2>
+  <p>
+    Deterministic. <strong>Measure-only</strong> — never modifies scoring. For each decision class
+    (BUILD_NOW / BUILD_SOON / MONITOR / etc.), buckets recently-assessed ventures + classifies how
+    each one actually played out:
+  </p>
+  <ul>
+    <li><code>progressed</code> — moved forward in the lifecycle.</li>
+    <li><code>stalled</code> — no movement.</li>
+    <li><code>reversed</code> — moved backward, or got archived. Archived is always reversed (it shows up at the end of the lifecycle index but going to it is failure, not progress).</li>
+  </ul>
+  <p>
+    Then asks "was the decision correct?" — BUILD_NOW is correct when progressed; MONITOR is
+    correct when NOT progressed; HIGH_RISK / OVERSATURATED is correct when stalled or reversed.
+    Accuracy = correct / total.
+  </p>
+  <p class="small"><span class="badge b-warn">measure-only</span></p>
+</section>
+
+<section class="block arch" id="directional">
+  <h2>Directional dependency intelligence</h2>
+  <p>
+    Deterministic. Adds true directional edges to the Phase 4 dependency model: a row in
+    <code>dependency_edges</code> represents <strong>A → B</strong> meaning A blocks B until A
+    ships something concrete. Three flavors: <code>shared_component</code> / <code>shared_data</code>
+    / <code>sequencing</code>.
+  </p>
+  <p>
+    Auto-proposal: for every overlap pair from <code>infrastructure_overlap</code>, the engine
+    picks the more-advanced venture (further along the lifecycle) as the blocker — its shared
+    components must ship first. Edges land in status <code>proposed</code>; a human confirms or
+    dismisses.
+  </p>
+  <p>
+    Critical path: longest directional chain through the graph (cycle-safe DFS). Bottlenecks:
+    ventures blocking 2+ others (top blockers) or blocked by 2+ others (most blocked).
+  </p>
+</section>
+
+<section class="block arch" id="predictive">
+  <h2>Predictive capacity forecasting</h2>
+  <p>
+    Deterministic. Walks the Phase 4 execution capacity plan (which already schedules each venture
+    into a concurrency slot with start/end weeks) forward to three horizons (30 / 90 / 180 days)
+    under three scenarios:
+  </p>
+  <table>
+    <tr><th>Scenario</th><th>Slippage</th><th>New arrivals</th></tr>
+    <tr><td>Optimistic</td><td>×1.0</td><td>0</td></tr>
+    <tr><td>Realistic</td><td>×1.15</td><td>1</td></tr>
+    <tr><td>Conservative</td><td>×1.5</td><td>2</td></tr>
+  </table>
+  <p>
+    For each (horizon, scenario), computes projected staffing pressure, queue pressure, concurrency
+    demand, and a bottleneck-risk list (lifted forward from the current capacity snapshot). 9 rows
+    per refresh, persisted to <code>predictive_capacity</code>.
+  </p>
+</section>
+
+<section class="block arch" id="drift">
+  <h2>Strategic drift detection</h2>
+  <p>Deterministic. Five checks run on every observatory refresh:</p>
+  <table>
+    <tr><th>Drift type</th><th>Trips when</th></tr>
+    <tr><td><code>ecosystem_overcommitment</code></td><td>one ecosystem captures &gt;50% of active ventures</td></tr>
+    <tr><td><code>risk_concentration</code></td><td>&gt;40% of active ventures are HIGH_RISK / OVERSATURATED / TOO_EARLY</td></tr>
+    <tr><td><code>execution_overload</code></td><td>staffing pressure ≥85</td></tr>
+    <tr><td><code>portfolio_imbalance</code></td><td>3+ active ventures clustered in &lt;2 ecosystems</td></tr>
+    <tr><td><code>strategy_drift</code></td><td>ventures stuck in evaluating/approved/planning_mvp for 45+ days</td></tr>
+  </table>
+  <p>
+    Each tripping check creates or updates a pending <code>drift_alerts</code> row with severity,
+    description, recommendation, and the affected venture/ecosystem ids. <strong>Always a
+    recommendation</strong> — a human acknowledges or dismisses; the engine never auto-rebalances.
+  </p>
+</section>
+
+<section class="block arch" id="signals">
+  <h2>Historical signal timelines</h2>
+  <p>
+    Generic per-signal time series, captured into <code>signal_history</code> on every observatory
+    refresh: staffing pressure, infra pressure, build_now count, active ventures, mean correlation
+    strength, mean acceleration, mean execution readiness. Drives the sparklines on the dashboard.
+  </p>
+</section>
+
+<section class="block arch" id="orchestrator">
+  <h2>Observatory orchestrator</h2>
+  <p>
+    <code>observatoryIntelligence.service</code> runs every Phase 5 engine on
+    <code>POST /observatory/refresh</code> with per-step error isolation:
+    signal-history snapshot → temporal-snapshot capture → ecosystems → trajectories →
+    decision accuracy → directional edge auto-propose → predictive capacity → drift alerts.
+    Each step failure is captured + the run continues — fault-tolerant orchestration over fragile
+    coupling.
+  </p>
+</section>
+
+<section class="block" id="screen-observatory">
+  <h2>Screen — the observatory dashboard</h2>
+  <img class="shot" src="deep-research-assets/p5-01-observatory-dashboard.png" alt="Ecosystem Observatory dashboard" />
+  <p class="caption">The full Observatory — temporal movements, ecosystem evolution, venture trajectories, decision accuracy, predictive capacity (30/90/180 day), directional dependencies + critical path, strategic drift alerts, historical signal timelines.</p>
+</section>
+
+<section class="block" id="screen-ecosystems">
+  <h2>Screen — ecosystem evolution</h2>
+  <img class="shot" src="deep-research-assets/p5-02-ecosystems.png" alt="Ecosystem evolution cards" />
+  <p class="caption">Per-ecosystem health/maturity/momentum 3-bar gauges + classification badges. All four ecosystems on the seeded sample classified as <strong>Converging</strong> — correct, because the seeded ventures span multiple templates (a Government Triage Agent is both <em>gov_intelligence</em> + <em>ai_assistant</em>).</p>
+</section>
+
+<section class="block arch" id="schema">
+  <h2>Database schema</h2>
+  <p>Migration <code>20260515000002-deep-research-phase-5.js</code> — 8 tables, applied live on prod.</p>
+  <pre>temporal_snapshots      generic key/value metric time series
+ecosystem_metrics       per-ecosystem health/maturity/momentum over time
+venture_trajectories    per-venture trajectory classification
+decision_accuracy       per-decision-type accuracy over windows (measure-only)
+predictive_capacity     30/90/180-day forecasts × 3 scenarios
+drift_alerts            strategic-drift recommendations (pending / ack / dismissed)
+signal_history          historical portfolio signals for sparklines
+dependency_edges        DIRECTIONAL prerequisites (separate from Phase 4 symmetric edges)</pre>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes</h2>
+  <pre>POST   /api/v1/deep-research/observatory/refresh         run every Phase 5 engine
+GET    /api/v1/deep-research/observatory                 the assembled observatory dashboard
+GET    /api/v1/deep-research/observatory/ecosystems      latest ecosystem snapshots
+GET    /api/v1/deep-research/observatory/trajectories    latest per-venture trajectories
+GET    /api/v1/deep-research/observatory/decision-accuracy
+GET    /api/v1/deep-research/observatory/predictive-capacity
+GET    /api/v1/deep-research/observatory/drift           pending drift alerts
+POST   /api/v1/deep-research/observatory/drift/:id/acknowledge
+POST   /api/v1/deep-research/observatory/drift/:id/dismiss
+GET    /api/v1/deep-research/observatory/dependencies    directional graph + critical path
+PATCH  /api/v1/deep-research/observatory/dependencies/:id  edge status (proposed/confirmed/resolved/dismissed)
+GET    /api/v1/deep-research/observatory/history         historical analytics
+GET    /api/v1/deep-research/observatory/signals         portfolio signal timelines</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New — backend</h3>
+  <pre>backend/src/migrations/20260515000002-deep-research-phase-5.js
+backend/src/models/{TemporalSnapshot,EcosystemMetric,VentureTrajectory,DecisionAccuracy,
+  PredictiveCapacity,DriftAlert,SignalHistory,DependencyEdge}.js
+backend/src/deepResearch/temporalIntelligence.service.js
+backend/src/deepResearch/historicalPortfolio.service.js
+backend/src/deepResearch/ecosystemEvolution.service.js
+backend/src/deepResearch/ventureTrajectory.service.js
+backend/src/deepResearch/decisionAccuracy.service.js
+backend/src/deepResearch/predictiveCapacity.service.js
+backend/src/deepResearch/strategicDrift.service.js
+backend/src/deepResearch/signalHistory.service.js
+backend/src/deepResearch/observatoryIntelligence.service.js
+backend/scripts/capture-deep-research-phase-5-walkthrough.js
+backend/tests/deepResearch/{temporalIntelligence,ecosystemEvolution,ventureTrajectory,
+  decisionAccuracy,predictiveCapacity,strategicDrift,directionalDependency}.test.js</pre>
+  <h3>New — frontend</h3>
+  <pre>frontend/src/pages/EcosystemObservatoryPage.jsx                the observatory dashboard
+frontend/src/components/deepResearch/TemporalVisuals.jsx       badges + sparklines + drift rows</pre>
+  <h3>Modified</h3>
+  <pre>backend/src/deepResearch/ventureDependency.service.js       + directional edges + critical path
+backend/src/deepResearch/deepResearch.controller.js + .routes.js  Phase 5 endpoints
+backend/src/models/index.js
+frontend/src/services/deepResearchService.js · App.jsx · components/common/Sidebar.jsx</pre>
+  <p class="small">~50 new tests; full suite 162 suites / 1,785 tests passing.</p>
+</section>
+
+<section class="block feature" id="validation">
+  <h2>Validations performed</h2>
+  <table>
+    <tr><th>#</th><th>Check</th><th>Result</th></tr>
+    <tr><td>1</td><td>Temporal movement calculations stable</td><td>✅ classifyDelta covers all 6 classes + insufficient_data; deterministic test asserts repeatability</td></tr>
+    <tr><td>2</td><td>Historical analytics work</td><td>✅ assembled from existing time-series tables; pure aggregation</td></tr>
+    <tr><td>3</td><td>Ecosystem tracking works</td><td>✅ 4 ecosystems classified on prod (all "converging" — correct given the seeded venture overlap)</td></tr>
+    <tr><td>4</td><td>Venture trajectories generate correctly</td><td>✅ 3 trajectories on prod (all "stable" — correct for fresh history; classifier handles insufficient_data gracefully)</td></tr>
+    <tr><td>5</td><td>Decision analytics accurate</td><td>✅ 1 decision-type result; classifyOutcome correctly maps archived → reversed (mid-build fix)</td></tr>
+    <tr><td>6</td><td>Directional dependencies work</td><td>✅ 3 edges auto-proposed on prod from existing overlap pairs + lifecycle precedence</td></tr>
+    <tr><td>7</td><td>Predictive forecasting works</td><td>✅ 9 forecast rows on prod (3 horizons × 3 scenarios)</td></tr>
+    <tr><td>8</td><td>Drift detection works</td><td>✅ 2 alerts on prod: ecosystem_overcommitment + execution_overload — both correctly identified</td></tr>
+    <tr><td>9</td><td>Historical timelines work</td><td>✅ 8 signal points captured; sparklines render</td></tr>
+    <tr><td>10</td><td>Observatory dashboard works</td><td>✅ screenshots p5-01..04, all sections render</td></tr>
+    <tr><td>11</td><td>Existing portfolio systems preserved</td><td>✅ no schema changes to Phase 4 tables; portfolio dashboard still works</td></tr>
+    <tr><td>12</td><td>Existing execution systems preserved</td><td>✅ no Phase 3 changes; execution dashboard still works</td></tr>
+    <tr><td>13</td><td>Existing deterministic scoring preserved</td><td>✅ all Phase 2 + 3 + 4 scoring engines unchanged; decision-accuracy is measure-only</td></tr>
+  </table>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Trends need history.</strong> Most engines (temporal movements, trajectories,
+      ecosystem momentum) become meaningful as the system accumulates snapshots over weeks. On a
+      fresh deploy with one or two refreshes, the classifications correctly return
+      <code>insufficient_data</code> / <code>stable</code> / <code>unknown</code> rather than
+      misleading numbers.
+    </li>
+    <li>
+      <strong>Decision-accuracy windows are wide.</strong> Default 90-day lookback. With short
+      ramp data, the per-decision sample size is small; the engine reports the raw counts so the
+      reader can judge confidence.
+    </li>
+    <li>
+      <strong>Directional edges are heuristically proposed.</strong> Auto-proposal uses overlap +
+      lifecycle precedence as the heuristic. A human still confirms each edge before it counts
+      toward critical-path planning.
+    </li>
+    <li>
+      <strong>Drift thresholds are env-overridable defaults.</strong> Different deployments will
+      want different sensitivity.
+    </li>
+    <li>
+      <strong>The observatory refresh is manual.</strong> Triggered from the dashboard's Refresh
+      button or <code>POST /observatory/refresh</code>. A nightly cron is a natural Phase 6 add.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 6</h2>
+  <ul>
+    <li>
+      <strong>Schedule daily Observatory + Portfolio refreshes.</strong> Both engines are
+      deterministic, cheap, and idempotent — safe to run unattended on a cron. Lets the temporal
+      engines accumulate the history they need to be useful.
+    </li>
+    <li>
+      <strong>Anthropic fallback provider.</strong> Still the highest-leverage unlock —
+      Phases 1-5 are deterministic but the Phase 2 + 3 AI steps (synthesis, MVP plan, launch
+      strategy) need a healthy provider for live validation. The aiProvider seam is built.
+    </li>
+    <li>
+      <strong>Confirm directional edges UX.</strong> Surface proposed edges on a dedicated review
+      surface (currently visible on the observatory but no per-edge approve/dismiss UI yet — the
+      API supports it).
+    </li>
+    <li>
+      <strong>Drift → suggested actions.</strong> Pair each drift alert with concrete suggested
+      next steps ("hire 2 tech leads", "archive these 3 ventures") — still human-approved.
+    </li>
+    <li>
+      <strong>Decision-accuracy → human review loop.</strong> Surface low-accuracy decision classes
+      as a periodic review — humans tune the deterministic scoring weights based on measured
+      outcomes (the engine remains untouched; the weights are what change).
+    </li>
+    <li>
+      <strong>Live ecosystem signals from external sources.</strong> Today ecosystems are derived
+      from the portfolio's own ventures. A future phase could pull ecosystem-level signals (research
+      paper velocity, funding rounds, talent flows) from the Phase 1 channels to make ecosystem
+      classifications independent of our own portfolio composition.
+    </li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+})();
+</script>
+
+</body>
+</html>
