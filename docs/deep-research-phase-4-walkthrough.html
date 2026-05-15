@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 4 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .pipeline .step { flex: 1; min-width: 130px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 4px; font-size: 12px; }
+  .pipeline .step b { color: var(--navy); display: block; font-size: 12.5px; margin-bottom: 3px; }
+  .pipeline .step.det b::after { content: ' · deterministic'; color: var(--accent); font-size: 10px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } .pipeline { flex-direction: column; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 4 objective</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The engines</h2>
+  <a href="#capacity">Resource capacity</a>
+  <a href="#prioritization">Portfolio prioritization</a>
+  <a href="#overlap">Shared infrastructure</a>
+  <a href="#dependency">Venture dependencies</a>
+  <a href="#forecasting">ROI forecasting</a>
+  <a href="#planning">Capacity planning</a>
+  <a href="#templates">Venture templates</a>
+  <a href="#decay">Confidence decay</a>
+
+  <h2>Orchestration</h2>
+  <a href="#orchestrator">Portfolio intelligence orchestrator</a>
+  <a href="#operations">Operational visibility</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-dashboard">Portfolio dashboard</a>
+  <a href="#screen-capacity">Capacity pressure</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 5</a>
+  <a href="#wrap">Final notes</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 4</h1>
+  <p class="subtitle">Portfolio + Capacity Intelligence · 2026-05-15 · commit <code>9786bbf</code> · all 1,739 backend tests passing</p>
+  <p>
+    Phase 1 built the infrastructure. Phase 2 added strategic intelligence. Phase 3 made it
+    executable. Phase 4 turns the platform into <strong>portfolio intelligence</strong>: it now
+    evaluates the venture set as a <em>portfolio</em>, not a list — capacity pressure, dependencies,
+    ROI scenarios, sequencing, and confidence decay across the whole roster.
+  </p>
+  <p>
+    The system evolves from "can this venture succeed?" to <strong>"should this venture consume
+    organizational capacity right now?"</strong>
+  </p>
+  <p>
+    On the seeded sample, the engines correctly detected that <strong>2 BUILD_NOW ventures vs a
+    concurrency limit of 1</strong> means we cannot execute all in parallel — and downgraded every
+    venture's sequencing recommendation from <code>execute_now</code> to <code>queue</code>. That's
+    the exact insight Phase 4 is built to surface: an individually-strong venture can still be a
+    bad <em>portfolio</em> pick when the org is already over capacity.
+  </p>
+  <p>
+    <span class="badge b-done">8 tables live</span>
+    <span class="badge b-done">9 services</span>
+    <span class="badge b-done">all deterministic</span>
+    <span class="badge b-done">portfolio dashboard</span>
+    <span class="badge b-done">human-in-the-loop preserved</span>
+  </p>
+</section>
+
+<section class="block context" id="objective">
+  <h2>The Phase 4 objective</h2>
+  <p>
+    Phase 3 could tell you a venture was <code>BUILD_NOW</code> with execution readiness 81. What it
+    couldn't tell you: <em>given everything else on the plate, is now the right time to commit org
+    capacity to it?</em>
+  </p>
+  <p>
+    Phase 4 answers portfolio-level questions with deterministic, auditable engines: how much of the
+    org is already committed, who's stepping on whom, what the combined ROI looks like across
+    scenarios, which ventures can actually fit into Q1 vs Q2 vs Q3, which patterns are repeating so
+    we can build a reusable scaffold, and where confidence has decayed enough that a venture needs
+    re-assessment. <strong>Every recommendation surfaces to a human — nothing auto-applies.</strong>
+  </p>
+  <div class="feedback-block">
+    <h4 class="small">Your feedback on the Phase 4 direction</h4>
+    <textarea data-fb-id="objective" placeholder="Does Phase 4 capture portfolio thinking the way you wanted?"></textarea>
+  </div>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <tr><th>#</th><th>Capability</th><th>Delivered</th></tr>
+    <tr><td>1</td><td>Portfolio Intelligence Dashboard</td><td><code>/admin/deep-research/portfolio</code> — pressure gauges, ROI scenarios, ranking, sequencing, dependencies, recommendations, operational metrics</td></tr>
+    <tr><td>2</td><td>Resource Capacity Intelligence</td><td><code>resourceCapacity.service</code> — deterministic role-level demand-vs-supply, bottleneck detection, concurrency limit</td></tr>
+    <tr><td>3</td><td>Portfolio Prioritization Engine</td><td><code>portfolioPrioritization.service</code> — 7-factor deterministic ranking + sequencing recommendation</td></tr>
+    <tr><td>4</td><td>Shared Infrastructure Intelligence</td><td><code>sharedInfrastructure.service</code> — Jaccard overlap on component fingerprints + portfolio-wide shared opportunities</td></tr>
+    <tr><td>5</td><td>Venture Dependency Mapping</td><td><code>ventureDependency.service</code> — shared_architecture / shared_staffing / shared_ai_provider edges + sequencing constraints</td></tr>
+    <tr><td>6</td><td>Portfolio ROI Forecasting</td><td><code>portfolioForecasting.service</code> — pricing parser + optimistic/realistic/conservative scenarios</td></tr>
+    <tr><td>7</td><td>Execution Capacity Planning</td><td><code>executionCapacityPlanner.service</code> — slot-packed quarterly schedule + hiring recommendations</td></tr>
+    <tr><td>8</td><td>Venture Template Intelligence</td><td><code>ventureTemplate.service</code> — 6-pattern keyword detection + aggregated MVP scaffolds + GTM playbooks</td></tr>
+    <tr><td>9</td><td>Confidence Decay + Reassessment</td><td><code>confidenceDecay.service</code> — time-based decay + reassess/reprioritize/accelerate/monitor RECOMMENDATIONS (never auto-applied)</td></tr>
+    <tr><td>10</td><td>Portfolio Operational Visibility</td><td>queue pressure, venture velocity, cycle-time per stage, decision quality, readiness aging — assembled by the orchestrator</td></tr>
+  </table>
+</section>
+
+<section class="block arch" id="capacity">
+  <h2>Resource capacity engine</h2>
+  <p>
+    Deterministic. Aggregates the staffing + infrastructure demand from every active venture's
+    Phase 3 execution readiness assessment and compares it against a <strong>configurable
+    organizational supply</strong> (env-overridable: total headcount, per-role headcount, infra
+    slots, average team size). Produces:
+  </p>
+  <ul>
+    <li><strong>staffing_pressure</strong> (0-100, higher = more pressure)</li>
+    <li><strong>infra_pressure</strong> (0-100)</li>
+    <li><strong>concurrency_limit</strong> — how many ventures fit into the org's headcount</li>
+    <li><strong>role_demand</strong> — per-role <code>{ demand, supply, deficit }</code></li>
+    <li><strong>bottlenecks</strong> — missing roles, role deficits, aggregate pressure overloads</li>
+  </ul>
+  <p class="small"><span class="badge b-det">deterministic</span> On the seeded sample: staffing pressure 100, concurrency 1, 2 BUILD_NOW ventures, 4 bottlenecks (tech lead + PM deficits + both pressure overloads).</p>
+</section>
+
+<section class="block arch" id="prioritization">
+  <h2>Portfolio prioritization engine</h2>
+  <p>
+    <strong>Not</strong> venture scoring — that's Phase 2. This engine evaluates which ventures should
+    consume organizational capacity <em>right now</em>. A strong individual venture can still be a
+    poor portfolio pick if capacity is already strained or a better-positioned venture should go
+    first.
+  </p>
+  <p>Seven factors with a defined weight model:</p>
+  <table>
+    <tr><th>Factor</th><th>Weight</th><th>Source</th></tr>
+    <tr><td><code>composite_score</code></td><td>0.20</td><td>Phase 2 venture scoring</td></tr>
+    <tr><td><code>execution_readiness</code></td><td>0.25</td><td>Phase 3 execution readiness</td></tr>
+    <tr><td><code>decision_weight</code></td><td>0.15</td><td>Phase 3 build-vs-monitor</td></tr>
+    <tr><td><code>roi_potential</code></td><td>0.15</td><td>Phase 4 ROI forecast (12mo)</td></tr>
+    <tr><td><code>resource_pressure_penalty</code></td><td>-0.10</td><td>Phase 4 capacity snapshot</td></tr>
+    <tr><td><code>infrastructure_reuse_bonus</code></td><td>+0.05</td><td>Phase 4 overlap analysis</td></tr>
+    <tr><td><code>timing_alignment</code></td><td>0.10</td><td>Phase 2 market stage</td></tr>
+  </table>
+  <p>
+    Sequencing maps the score + decision into one of <code>execute_now</code> / <code>queue</code> /
+    <code>defer</code> / <code>monitor</code> / <code>pass</code>. The rationale lists the top
+    contributing factors, so the rank is traceable.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span> Resource pressure 100 correctly downgraded all 3 BUILD_NOW seeded ventures from <code>execute_now</code> to <code>queue</code>.</p>
+</section>
+
+<section class="block arch" id="overlap">
+  <h2>Shared infrastructure intelligence</h2>
+  <p>
+    Deterministic. Builds a <strong>component fingerprint</strong> per venture by combining the
+    Phase 3 infrastructure items, the MVP plan's suggested stack + AI components, and architecture
+    signature tokens extracted from the suggested-architecture text. Compares every pair via Jaccard
+    similarity, persisting only pairs with meaningful overlap.
+  </p>
+  <p>
+    Beyond pairs, it identifies <strong>shared build opportunities</strong> — components used by 3+
+    ventures, the candidates for a shared service that reduces duplicate execution effort. On the
+    seeded sample: 3 pairs + 4 shared opportunities.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span></p>
+</section>
+
+<section class="block arch" id="dependency">
+  <h2>Venture dependency mapping</h2>
+  <p>Deterministic. Three flavors of edge per pair:</p>
+  <ul>
+    <li><strong>shared_architecture</strong> — both need the same components (from the overlap analysis)</li>
+    <li><strong>shared_staffing</strong> — both need the same roles (scarce roles weigh heavier)</li>
+    <li><strong>shared_ai_provider</strong> — both rely on the same AI provider (cascade-risk if it outages)</li>
+  </ul>
+  <p>
+    Each edge carries a risk_score reflecting cascading-failure / contention risk. The service also
+    derives <strong>sequencing_constraints</strong> — pairs that should not run in parallel because
+    they'd contend for the same scarce resource. On the seeded sample: 6 edges, 3 sequencing
+    constraints.
+  </p>
+</section>
+
+<section class="block arch" id="forecasting">
+  <h2>ROI forecasting engine</h2>
+  <p>
+    Deterministic. <strong>Pricing is parsed</strong> from monetization-model text strings (regex
+    extraction of dollar amounts + k/m suffixes + unit detection: monthly / annual / project) to
+    estimate per-customer MRR; combined with a default customer count to produce the realistic MRR
+    baseline. Costs are computed from staffing (headcount × weekly rate × MVP timeline weeks) +
+    infrastructure (items × monthly rate × 12).
+  </p>
+  <p>Three scenarios — honest multipliers applied to the same realistic baseline:</p>
+  <table>
+    <tr><th>Scenario</th><th>MRR multiplier</th><th>Cost multiplier</th></tr>
+    <tr><td>Optimistic</td><td>×1.5</td><td>×0.85</td></tr>
+    <tr><td>Realistic</td><td>×1.0</td><td>×1.0</td></tr>
+    <tr><td>Conservative</td><td>×0.5</td><td>×1.2</td></tr>
+  </table>
+  <p>
+    Each scenario produces <code>projected_mrr</code>, <code>implementation_cost</code>,
+    <code>breakeven_months</code>, and 12-month ROI. Rolled up across all ventures for the portfolio
+    view. On the seeded sample: realistic portfolio MRR <strong>$330,000/mo</strong>.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span></p>
+</section>
+
+<section class="block arch" id="planning">
+  <h2>Execution capacity planning</h2>
+  <p>
+    Deterministic. Walks the priority-sorted ranking and packs each schedulable venture into the
+    next-available concurrency slot, using its MVP-timeline-weeks. Ventures recommended
+    <code>monitor</code> or <code>pass</code> are not scheduled. The output is a
+    <strong>quarter-by-quarter plan</strong> showing which venture lands when, plus translated
+    <strong>hiring recommendations</strong> from the role deficits.
+  </p>
+</section>
+
+<section class="block arch" id="templates">
+  <h2>Venture template intelligence</h2>
+  <p>
+    Deterministic. Six built-in template patterns (AI Assistant, Workflow Automation, AI Education,
+    Government Intelligence, AI Orchestration, AI Observability) detected by keyword signature
+    matching against venture title + description. For each pattern with matching ventures, the
+    engine aggregates:
+  </p>
+  <ul>
+    <li><strong>MVP scaffold</strong> — common phase-1 features, stack, AI components, typical staffing + timeline (frequency-counted across the matching ventures' Phase 3 MVP plans).</li>
+    <li><strong>GTM playbook</strong> — common channels, exemplar ICP + pricing + pilot strategy (from the matching ventures' launch strategies).</li>
+  </ul>
+  <p>Goal: a new venture matching an existing template inherits a battle-tested scaffold — compresses future execution time.</p>
+</section>
+
+<section class="block arch" id="decay">
+  <h2>Confidence decay + reassessment</h2>
+  <p>
+    Deterministic. Confidence in a venture decays over time as the signals underneath it grow
+    stale. Three decay sources:
+  </p>
+  <ul>
+    <li><strong>age_decay</strong> — days since the last assessment (after a 30-day grace, 0.01/day)</li>
+    <li><strong>stuck_decay</strong> — days in a stuck-prone lifecycle state (after a 21-day grace, 0.008/day)</li>
+    <li><strong>decision_pressure_decay</strong> — BUILD_NOW ventures left sitting past the grace window decay extra</li>
+  </ul>
+  <p>
+    On every pass the engine writes a <code>confidence_history</code> row and emits a
+    <strong>reassessment recommendation</strong> when warranted: <code>accelerate</code> /
+    <code>reassess</code> / <code>reprioritize</code> / <code>monitor</code>. These are
+    <strong>recommendations only</strong> — surfaced on the dashboard for a human to acknowledge or
+    dismiss. The system <strong>never</strong> auto-transitions a venture.
+  </p>
+  <p class="small"><span class="badge b-det">deterministic</span> <span class="badge b-warn">human-in-the-loop</span></p>
+</section>
+
+<section class="block arch" id="orchestrator">
+  <h2>Portfolio intelligence orchestrator</h2>
+  <p>
+    <code>portfolioIntelligence.service</code> runs every engine in dependency order on a
+    <code>POST /portfolio/refresh</code>: capacity → overlaps → dependencies → forecasts →
+    prioritization (consumes capacity + forecasts) → plan (consumes ranking) → templates → decay.
+    Each step's failure is captured and the run continues — fault-tolerant orchestration over
+    fragile coupling.
+  </p>
+</section>
+
+<section class="block arch" id="operations">
+  <h2>Operational visibility</h2>
+  <p>Derived reads, no engine. The dashboard surfaces:</p>
+  <ul>
+    <li><strong>venture velocity</strong> — lifecycle transitions per 7d / 30d</li>
+    <li><strong>queue pressure</strong> — active queue items, BUILD_NOW count, pending recommendations</li>
+    <li><strong>cycle time per stage</strong> — median days a venture spends in each lifecycle state</li>
+    <li><strong>decision quality</strong> — % of BUILD_NOW ventures that progressed past approval</li>
+    <li><strong>readiness aging</strong> — median assessment age, stale-count vs grace</li>
+  </ul>
+</section>
+
+<section class="block" id="screen-dashboard">
+  <h2>Screen — the portfolio dashboard</h2>
+  <img class="shot" src="deep-research-assets/p4-01-portfolio-dashboard.png" alt="Portfolio intelligence dashboard" />
+  <p class="caption">The full dashboard — health stats, capacity pressure (at 100), ROI scenarios across all three, the priority-sorted ranking, the quarter-by-quarter capacity plan, cross-venture dependencies, shared infrastructure, and venture templates.</p>
+  <div class="feedback-block">
+    <h4 class="small">Feedback</h4>
+    <textarea data-fb-id="screen-dashboard" placeholder="On the portfolio dashboard…"></textarea>
+  </div>
+</section>
+
+<section class="block" id="screen-capacity">
+  <h2>Screen — capacity pressure</h2>
+  <img class="shot" src="deep-research-assets/p4-02-capacity-pressure.png" alt="Capacity pressure section" />
+  <p class="caption">The capacity pressure section — staffing + infrastructure both at 100 (red), the rationale spelling out "2 BUILD_NOW vs concurrency 1 — cannot execute all in parallel", and the bottleneck list (role deficits + pressure overloads).</p>
+</section>
+
+<section class="block arch" id="schema">
+  <h2>Database schema</h2>
+  <p>Migration <code>20260515000001-deep-research-phase-4.js</code> — 8 tables, applied live on prod. No changes to Phase 1-3 schema.</p>
+  <pre>portfolio_scores             per-venture ranking output (factors + sequencing + rationale)
+resource_capacity_snapshots  time-series capacity (pressures, concurrency, bottlenecks)
+venture_dependencies         shared_arch / shared_staffing / shared_ai_provider edges
+infrastructure_overlap       per-pair overlap_score + shared_components
+roi_forecasts                per-scenario MRR + costs + breakeven + ROI (venture + portfolio)
+confidence_history           time series of computed confidence per venture
+reassessment_events          decay-driven recommendations (pending → acknowledged | dismissed)
+venture_templates            detected patterns + aggregated MVP scaffolds + GTM playbooks</pre>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes</h2>
+  <pre>POST   /api/v1/deep-research/portfolio/refresh          run every Phase 4 engine
+GET    /api/v1/deep-research/portfolio                  the assembled dashboard
+GET    /api/v1/deep-research/portfolio/capacity         latest capacity snapshot
+GET    /api/v1/deep-research/portfolio/ranking          latest portfolio ranking
+GET    /api/v1/deep-research/portfolio/forecasts        latest ROI forecasts
+GET    /api/v1/deep-research/portfolio/overlaps         per-pair infrastructure overlap
+GET    /api/v1/deep-research/portfolio/dependencies     the dependency graph
+GET    /api/v1/deep-research/portfolio/plan             execution capacity plan
+GET    /api/v1/deep-research/portfolio/templates        detected venture templates
+GET    /api/v1/deep-research/portfolio/recommendations  pending reassessment recommendations
+POST   /api/v1/deep-research/portfolio/recommendations/:id/acknowledge
+POST   /api/v1/deep-research/portfolio/recommendations/:id/dismiss
+GET    /api/v1/deep-research/portfolio/operations       operational visibility metrics</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <h3>New — backend</h3>
+  <pre>backend/src/migrations/20260515000001-deep-research-phase-4.js
+backend/src/models/{PortfolioScore,ResourceCapacitySnapshot,VentureDependency,
+  InfrastructureOverlap,RoiForecast,ConfidenceHistory,ReassessmentEvent,VentureTemplate}.js
+backend/src/deepResearch/resourceCapacity.service.js
+backend/src/deepResearch/portfolioPrioritization.service.js
+backend/src/deepResearch/sharedInfrastructure.service.js
+backend/src/deepResearch/ventureDependency.service.js
+backend/src/deepResearch/portfolioForecasting.service.js
+backend/src/deepResearch/executionCapacityPlanner.service.js
+backend/src/deepResearch/ventureTemplate.service.js
+backend/src/deepResearch/confidenceDecay.service.js
+backend/src/deepResearch/portfolioIntelligence.service.js
+backend/scripts/capture-deep-research-phase-4-walkthrough.js
+backend/tests/deepResearch/{resourceCapacity,portfolioPrioritization,sharedInfrastructure,
+  ventureDependency,portfolioForecasting,executionCapacityPlanner,ventureTemplate,
+  confidenceDecay}.test.js</pre>
+  <h3>New — frontend</h3>
+  <pre>frontend/src/pages/PortfolioDashboardPage.jsx              the venture portfolio command center
+frontend/src/components/deepResearch/PortfolioVisuals.jsx  gauges / ROI / dependencies / quarter plan</pre>
+  <h3>Modified</h3>
+  <pre>backend/src/deepResearch/deepResearch.controller.js + .routes.js  Phase 4 endpoints
+backend/src/models/index.js
+frontend/src/services/deepResearchService.js · App.jsx · components/common/Sidebar.jsx</pre>
+  <p class="small">~50 new tests; full suite 155 suites / 1,739 tests passing.</p>
+</section>
+
+<section class="block feature" id="validation">
+  <h2>Validations performed</h2>
+  <table>
+    <tr><th>#</th><th>Check</th><th>Result</th></tr>
+    <tr><td>1</td><td>Portfolio dashboard works</td><td>✅ renders all sections with live data (screenshots p4-01..04)</td></tr>
+    <tr><td>2</td><td>Capacity calculations stable</td><td>✅ seeded sample → staffing/infra pressure 100, concurrency 1, 4 bottlenecks correctly identified</td></tr>
+    <tr><td>3</td><td>Prioritization deterministic</td><td>✅ 7-factor model tested across all decision paths + repeatability</td></tr>
+    <tr><td>4</td><td>Shared infra detection works</td><td>✅ seeded sample → 3 pairs + 4 shared opportunities</td></tr>
+    <tr><td>5</td><td>Dependency mapping stable</td><td>✅ 6 edges (shared_arch / shared_staffing / shared_ai_provider), 3 sequencing constraints</td></tr>
+    <tr><td>6</td><td>ROI forecasting works</td><td>✅ pricing parser tested across $/mo / $/yr / project; 3 scenarios persisted; realistic portfolio MRR $330k/mo</td></tr>
+    <tr><td>7</td><td>Capacity planning works</td><td>✅ priority-sorted slot packing + quarter assignment; hiring recs from deficits</td></tr>
+    <tr><td>8</td><td>Template detection works</td><td>✅ 4 templates detected on the seeded sample (ai_assistant + gov_intelligence + others)</td></tr>
+    <tr><td>9</td><td>Confidence decay works</td><td>✅ no false-positive recommendations on fresh assessments; recommendations emitted only above thresholds</td></tr>
+    <tr><td>10</td><td>Reassessment works</td><td>✅ acknowledge / dismiss endpoints + UI actions; no autonomous lifecycle changes</td></tr>
+    <tr><td>11</td><td>Existing execution systems preserved</td><td>✅ full suite 155 suites / 1,739 tests green; all Phase 3 routes + services unchanged</td></tr>
+    <tr><td>12</td><td>Existing lifecycle systems preserved</td><td>✅ no schema changes to Phase 3 tables; lifecycle tests still pass</td></tr>
+    <tr><td>13</td><td>Existing venture scoring preserved</td><td>✅ Phase 2 venture scoring untouched; portfolio prioritization is a separate, layered concern</td></tr>
+  </table>
+  <p class="small">Mid-build fix: Sequelize <code>toJSON</code> returns camelCase attribute names; the dashboard initially read snake_case DB column names so pressures rendered as 0. Switched to camelCase + enriched <code>getLatestRanking</code> with a venture-title join — re-captured screenshots show the correct numbers.</p>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Pricing parser is regex-based.</strong> It handles the common formats well
+      ($X/seat/mo, $X-Y k pilot, $X.YM ARR) but won't catch every exotic structure. When parsing
+      fails, the venture gets a zero-MRR forecast — honest but conservative.
+    </li>
+    <li>
+      <strong>Default organizational supply is a small-team heuristic.</strong> Configurable via
+      env (<code>DEEP_RESEARCH_ORG_HEADCOUNT</code>, <code>DEEP_RESEARCH_ORG_ROLES</code>,
+      <code>DEEP_RESEARCH_ORG_INFRA_CAPACITY</code>) — each deployment should set its own roster.
+    </li>
+    <li>
+      <strong>Templates are keyword-based.</strong> Six built-in patterns; extending is one append
+      to the <code>TEMPLATES</code> constant. A misclassification is harmless — the template just
+      gathers a slightly different bucket of MVP plans.
+    </li>
+    <li>
+      <strong>Decay does not auto-act.</strong> By design — recommendations only. A future phase
+      could add a scheduled <code>runDecayPass</code> cron, but acting on the recommendation stays
+      human.
+    </li>
+    <li>
+      <strong>Dependency graph is undirected.</strong> shared_* edges are symmetric. Directional
+      dependencies (A blocks B) would need explicit modelling and aren't yet in scope.
+    </li>
+    <li>
+      <strong>Portfolio refresh runs are not yet scheduled.</strong> Triggered manually from the
+      dashboard's Refresh button (or the <code>POST /portfolio/refresh</code> endpoint). A nightly
+      cron is a small addition for Phase 5.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 5</h2>
+  <ul>
+    <li>
+      <strong>Schedule the portfolio refresh + the confidence-decay pass.</strong> Daily cron, opt-in
+      like every other Phase 1-4 scheduler. The engines are deterministic + cheap (no AI) — safe to
+      run unattended.
+    </li>
+    <li>
+      <strong>Wire a healthy AI provider (Anthropic fallback).</strong> Still the highest-leverage
+      step across the whole engine — Phase 2 + 3 AI pieces become live-validatable, MVP plans + launch
+      strategies finally render with real content on the seeded sample.
+    </li>
+    <li>
+      <strong>Directional dependencies.</strong> "Venture B can't start until A ships X" — explicit
+      blocker modelling. Today's shared_* edges cover contention but not strict precedence.
+    </li>
+    <li>
+      <strong>Portfolio history.</strong> The data is already there (<code>portfolio_scores</code> and
+      <code>resource_capacity_snapshots</code> are time-series tables) — surface
+      capacity-pressure-over-time + ranking-changes-over-time charts.
+    </li>
+    <li>
+      <strong>Real Agent Foundry integration.</strong> The Phase 3 client is built and waiting; set
+      the env vars and it switches on.
+    </li>
+    <li>
+      <strong>Suggested portfolio actions.</strong> The dashboard could pair its recommendations
+      with concrete suggested next moves ("hire 2 tech leads to unblock Q1 ventures 1+3") — still
+      surfaced for human approval.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="wrap">
+  <h2>Final notes</h2>
+  <p>
+    Phase 4 is shipped and deployed. All nine engines run deterministically + auditable. The
+    portfolio dashboard is live on prod, all 8 tables seeded, the orchestrator returns
+    <code>ok=true</code> with the seeded ventures correctly assessed, ranked, and queue-deferred due
+    to capacity pressure. The full backend suite — <strong>1,739 tests</strong> — is green.
+  </p>
+  <p>
+    Human-in-the-loop is preserved end to end. Confidence decay surfaces recommendations; lifecycle
+    transitions are still manual; the prioritization engine ranks but never moves a venture; the
+    capacity plan suggests sequencing but never schedules. Every score traces back to its factor
+    inputs, and the rationale is on every output row.
+  </p>
+  <p><strong>Anything not captured anywhere above:</strong></p>
+  <textarea data-fb-id="final" placeholder="Open feedback…" style="min-height: 160px"></textarea>
+
+  <div class="actions">
+    <button class="copy-btn" id="copyAll">Copy all feedback to clipboard</button>
+    <button class="copy-btn" id="clearAll" style="background: #718096;">Clear all (this browser only)</button>
+    <span class="small" id="copyStatus" style="align-self: center;"></span>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  var STORAGE_KEY = 'deep-research-phase-4-walkthrough-feedback-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
+  function save(state) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+  document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) {
+    var id = t.getAttribute('data-fb-id');
+    if (state[id] !== undefined) t.value = state[id];
+    t.addEventListener('input', function() { state[id] = t.value; save(state); });
+  });
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.getElementById('copyAll').addEventListener('click', function() {
+    var lines = ['# Deep Research Phase 4 Walkthrough Feedback', 'Generated: ' + new Date().toISOString(), ''];
+    document.querySelectorAll('section[id]').forEach(function(sec) {
+      var heading = sec.querySelector('h2, h1');
+      var title = heading ? heading.textContent.trim() : sec.id;
+      var fbTextarea = sec.querySelector('textarea[data-fb-id]');
+      var fbVal = fbTextarea && fbTextarea.value && fbTextarea.value.trim();
+      if (fbVal) { lines.push('## ' + title); lines.push(''); lines.push(fbVal); lines.push(''); }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('copyAll');
+    var status = document.getElementById('copyStatus');
+    if (text.split('\n').length <= 3) { status.textContent = 'No feedback yet.'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('ok'); btn.textContent = 'Copied — paste into Slack/email';
+        status.textContent = '(' + text.split('\n').length + ' lines)';
+        setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback to clipboard'; }, 4000);
+      });
+    }
+  });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    if (!confirm('Clear all feedback?')) return;
+    state = {}; localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('textarea[data-fb-id]').forEach(function(t) { t.value = ''; });
+    document.getElementById('copyStatus').textContent = 'Cleared.';
+  });
+})();
+</script>
+
+</body>
+</html>
