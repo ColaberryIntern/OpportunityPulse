@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 6 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  h4 { color: var(--navy); font-size: 16px; margin: 14px 0 4px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.governance { border-left-color: var(--violet); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  textarea { width: 100%; min-height: 80px; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; resize: vertical; background: #fffef7; }
+  textarea:focus { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .feedback-block { background: #fffaf0; border-top: 1px dashed var(--warn); padding: 10px 0 0 0; margin-top: 14px; }
+  .small { font-size: 12.5px; color: var(--text-muted); }
+  .actions { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0; display: flex; gap: 10px; margin-top: 22px; }
+  button.copy-btn { background: var(--navy); color: #ffffff; border: none; padding: 9px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.copy-btn:hover { background: var(--navy-light); }
+  button.copy-btn.ok { background: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-det { background: var(--accent-soft); color: #1f5132; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+  @media print { nav.toc { display: none; } .layout { grid-template-columns: 1fr; } main { padding: 16px; max-width: none; } section.block { box-shadow: none; page-break-inside: avoid; } .actions { display: none; } textarea { background: #ffffff; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#objective">Phase 6 objective</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>The engines</h2>
+  <a href="#refresh">Safe refresh framework</a>
+  <a href="#intervention">Executive intervention</a>
+  <a href="#strategic">Strategic recommendations</a>
+  <a href="#analytics">Adaptive analytics</a>
+  <a href="#health">Venture health</a>
+  <a href="#forecast">Forecast vs reality</a>
+  <a href="#drift">Operational drift</a>
+  <a href="#deps">Dependency review</a>
+  <a href="#workspace">Planning workspace</a>
+  <a href="#refresh-history">Continuous refresh</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-workspace">Workspace overview</a>
+  <a href="#screen-kpis">Top KPIs</a>
+  <a href="#screen-health">Venture health</a>
+  <a href="#screen-interventions">Interventions</a>
+  <a href="#screen-strategic">Strategic recs</a>
+  <a href="#screen-forecast">Forecast accuracy</a>
+  <a href="#screen-drift">Operational drift</a>
+  <a href="#screen-deps">Dependency review</a>
+  <a href="#screen-refresh">Refresh history</a>
+  <a href="#screen-full">Full page</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 7</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 6</h1>
+  <p class="subtitle">Adaptive Strategic Operations · 2026-05-15 · commit <code>70897fd</code> · all 1,828 backend tests passing</p>
+  <p>
+    Phase 5 added <em>temporal awareness</em>. Phase 6 closes the loop:
+    <strong>Adaptive Strategic Operations</strong>. The portfolio now refreshes itself on a
+    schedule, watches its own health, and surfaces concrete recommendations to the executive — but
+    crucially, it <em>never</em> moves a venture's lifecycle state, never mutates a score, never
+    auto-executes anything. The system observes, measures, and recommends. Humans decide and act.
+  </p>
+  <p>
+    On the seeded prod run the engine ran a full refresh in <code>~600ms</code>, classified 3
+    ventures as healthy, generated 4 executive interventions + 2 strategic recommendations,
+    identified 1 operational drift signal, and surfaced 3 directional dependency edges awaiting
+    review. All recommendations carry typed metadata so a future analyst can audit the math.
+  </p>
+  <p>
+    <span class="badge b-done">8 tables live</span>
+    <span class="badge b-done">10 services</span>
+    <span class="badge b-done">43 new tests</span>
+    <span class="badge b-done">1828 / 1828 passing</span>
+    <span class="badge b-gov">Recommend-only</span>
+    <span class="badge b-gov">Human-in-the-loop</span>
+    <span class="badge b-det">Deterministic + explainable</span>
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance Contract — what this phase is allowed to do, and what it is NOT</h2>
+  <h3>The engines are ALLOWED to</h3>
+  <ul>
+    <li>Read every Phase 1-5 persisted analytic.</li>
+    <li>Run on a schedule (opt-in via <code>DEEP_RESEARCH_ADAPTIVE_REFRESH_ENABLED=true</code>).</li>
+    <li>Persist recommendations, health classifications, drift signals, forecast comparisons,
+        refresh runs and step audit rows.</li>
+    <li>Update existing pending recommendations with refreshed metrics so the latest numbers are
+        reflected (the row's identity stays stable, status stays <code>pending</code>).</li>
+    <li>Mark dependency edges as <code>confirmed</code> / <code>dismissed</code> / <code>resolved</code>
+        only when a human explicitly requests an action via the dependency-review workflow.</li>
+  </ul>
+  <h3>The engines are NEVER allowed to</h3>
+  <ul>
+    <li><strong>Move a venture between lifecycle states.</strong></li>
+    <li><strong>Mutate any score</strong> (composite score, readiness score, portfolio score, etc.).</li>
+    <li><strong>Auto-tune scoring weights.</strong> Forecast-vs-reality is measure-only —
+        humans interpret the data.</li>
+    <li><strong>Auto-execute</strong> any intervention, recommendation, or drift mitigation.</li>
+    <li><strong>Auto-launch</strong> a project generation job, an MVP build, or a deployment.</li>
+    <li><strong>Skip writing the audit trail.</strong> Every refresh persists a run + per-step row.</li>
+  </ul>
+  <p class="small">
+    The governance contract is enforced in code: every service is read-then-recommend; the only
+    write surfaces are the recommendation, drift, health, accuracy, and run-history tables. No
+    Phase 6 service imports anything from <code>ventureLifecycle</code>'s <em>write</em> path or
+    from any of the engines that update scores.
+  </p>
+</section>
+
+<section class="block context" id="objective">
+  <h2>Phase 6 objective</h2>
+  <p>
+    Phase 5 surfaced strategic state but left the actual <em>act of looking</em> to a human pressing
+    the Refresh button. Three problems showed up in practice:
+  </p>
+  <ol>
+    <li>
+      <strong>Refresh hygiene</strong>: nobody remembers to refresh every day, so a snapshot from
+      a week ago becomes the basis of a today decision.
+    </li>
+    <li>
+      <strong>Synthesis fatigue</strong>: even after a refresh, the executive still has to look at
+      eight panels and synthesize "what should I actually do?" The signals are visible; the
+      <em>recommendations</em> are implicit.
+    </li>
+    <li>
+      <strong>No closed loop on forecasts</strong>: Phase 4/5 made forecasts, but nothing measured
+      whether they were correct. The system had no opinion on its own accuracy.
+    </li>
+  </ol>
+  <p>Phase 6's job is to close all three.</p>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped (10 features)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Engine</th><th>Output</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Automated Safe Refresh Framework</td><td><code>adaptiveRefresh.service.js</code></td><td>cron-driven full + scoped refreshes</td></tr>
+      <tr><td>2</td><td>Executive Intervention Engine</td><td><code>executiveIntervention.service.js</code></td><td>6 intervention types</td></tr>
+      <tr><td>3</td><td>Strategic Recommendation Engine</td><td><code>strategicRecommendation.service.js</code></td><td>5 portfolio-level types</td></tr>
+      <tr><td>4</td><td>Adaptive Operational Analytics</td><td><code>adaptiveAnalytics.service.js</code></td><td>composite analytics payload</td></tr>
+      <tr><td>5</td><td>Venture Health Intelligence</td><td><code>ventureHealth.service.js</code></td><td>6 health classes per venture</td></tr>
+      <tr><td>6</td><td>Forecast-vs-Reality Analytics</td><td><code>forecastReality.service.js</code></td><td>4 forecast kinds × accuracy</td></tr>
+      <tr><td>7</td><td>Operational Drift Monitoring</td><td><code>operationalDrift.service.js</code></td><td>5 drift types</td></tr>
+      <tr><td>8</td><td>Dependency Review Workflow</td><td><code>dependencyReview.service.js</code></td><td>5 actions on edges</td></tr>
+      <tr><td>9</td><td>Executive Planning Workspace</td><td><code>planningWorkspace.service.js</code> + page</td><td>single dashboard</td></tr>
+      <tr><td>10</td><td>Continuous Observatory Refresh</td><td><code>refreshHistory.service.js</code></td><td>per-step audit log</td></tr>
+    </tbody>
+  </table>
+  <div class="feedback-block"><label class="small">Feedback on the feature list:</label><textarea data-fb="what-shipped"></textarea></div>
+</section>
+
+<section class="block feature" id="refresh">
+  <h2>1. Automated Safe Refresh Framework</h2>
+  <p>
+    A <code>node-cron</code> job runs a configurable step-set every night (default <code>30 3 * * *</code>)
+    when <code>DEEP_RESEARCH_ADAPTIVE_REFRESH_ENABLED=true</code>. Each step is independently
+    failable so one bad input doesn't abort the run — the orchestrator captures the error, writes
+    a <code>refresh_history</code> row, and continues.
+  </p>
+  <p>The framework supports four <em>run types</em>:</p>
+  <ul>
+    <li><code>full</code> — every Phase 4/5/6 engine.</li>
+    <li><code>portfolio</code> — Phase 4 + venture health + recommendations.</li>
+    <li><code>observatory</code> — Phase 5 observatory + operational drift.</li>
+    <li><code>decay</code> — confidence decay only (cheap, useful between full runs).</li>
+  </ul>
+  <p>
+    Every run produces one <code>adaptive_refresh_runs</code> row carrying status, duration,
+    step + error counts, results JSONB, and errors JSONB. Step-level detail lives in
+    <code>refresh_history</code> so partial failures are auditable.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="refresh"></textarea></div>
+</section>
+
+<section class="block feature" id="intervention">
+  <h2>2. Executive Intervention Engine</h2>
+  <p>
+    Reads the latest <code>resource_capacity_snapshots</code>, <code>ecosystem_metrics</code>,
+    <code>dependency_edges</code>, and <code>venture_lifecycle_events</code>; emits one of six
+    typed recommendations:
+  </p>
+  <ul>
+    <li><code>hire</code> — role deficit > 0 in the latest capacity snapshot.</li>
+    <li><code>queue_pressure</code> — BUILD_NOW count > concurrency limit.</li>
+    <li><code>redistribute</code> — staffing skew (max headcount > 1.5× median).</li>
+    <li><code>venture_pause</code> — ventures stuck > <code>DEEP_RESEARCH_STALL_DAYS</code> days.</li>
+    <li><code>sequencing</code> — 2+ inbound proposed dependency edges on one downstream.</li>
+    <li><code>ecosystem_diversification</code> — one ecosystem ≥ 50% of active ventures.</li>
+  </ul>
+  <p>
+    Each rec carries severity (0-100), title, rationale, supporting metrics (the data points that
+    drove it), and related venture IDs. <strong>Recommendations are idempotent</strong> — re-runs
+    update the metrics on an existing pending row rather than creating duplicates.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="intervention"></textarea></div>
+</section>
+
+<section class="block feature" id="strategic">
+  <h2>3. Strategic Recommendation Engine</h2>
+  <p>Portfolio-level moves that span ventures. Five types:</p>
+  <ul>
+    <li><code>portfolio_rebalance</code> — > 70% of active ventures are BUILD_NOW/BUILD_SOON.</li>
+    <li><code>execution_pacing</code> — last-7d transitions are < 60% of the 30d baseline.</li>
+    <li><code>infrastructure_consolidation</code> — ≥ 3 ventures share an overlap cluster.</li>
+    <li><code>venture_acceleration</code> — high-readiness ventures (≥75) still in evaluating/approved.</li>
+    <li><code>monitoring</code> — > 40% of evaluated ventures have readiness ≤ 40.</li>
+  </ul>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="strategic"></textarea></div>
+</section>
+
+<section class="block feature" id="analytics">
+  <h2>4. Adaptive Operational Analytics</h2>
+  <p>
+    Read-only join of every Phase 4/5/6 latest persisted snapshot into one
+    <code>getAdaptiveAnalytics</code> payload. Surfaces transition flow, readiness distribution,
+    refresh health, ecosystem concentration with computed fractions, and total/active/archived/monitoring
+    venture counts. No writes — pure shape-and-join.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="analytics"></textarea></div>
+</section>
+
+<section class="block feature" id="health">
+  <h2>5. Venture Health Intelligence</h2>
+  <p>
+    Per-venture health classification from a composite of: lifecycle state, latest readiness,
+    confidence delta, stall days, trajectory, and overlap-cluster count. Six mutually-exclusive
+    classes (<code>healthy</code>, <code>strengthening</code>, <code>at_risk</code>,
+    <code>overloaded</code>, <code>stagnating</code>, <code>declining</code>) with a 0-100
+    informational score and a <em>suggested intervention</em> string.
+  </p>
+  <p>
+    Append-only: every refresh writes a new row in <code>venture_health_history</code>, so the
+    history of a venture's health is queryable over time. The latest-per-venture view is what the
+    dashboard renders.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="health"></textarea></div>
+</section>
+
+<section class="block feature" id="forecast">
+  <h2>6. Forecast-vs-Reality Analytics</h2>
+  <p>
+    Compares old forecast rows against observed reality and classifies each pair as
+    <code>accurate</code>, <code>optimistic</code>, <code>pessimistic</code>, or
+    <code>unknown</code>. Four forecast kinds:
+  </p>
+  <ul>
+    <li><code>readiness</code> — first vs latest readiness score per venture.</li>
+    <li><code>timeline</code> — predicted breakeven months vs. lifecycle progression.</li>
+    <li><code>staffing</code> — Phase 5 30-day capacity forecast vs. current snapshot.</li>
+    <li><code>roi</code> — projected ROI vs. revenue-stage progression (proxy: progressed?).</li>
+  </ul>
+  <p>
+    <strong>No automatic model tuning.</strong> The accuracy data is for human review of the
+    deterministic scoring weights — the engine itself is never modified.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="forecast"></textarea></div>
+</section>
+
+<section class="block feature" id="drift">
+  <h2>7. Operational Drift Monitoring</h2>
+  <p>
+    Distinct from Phase 5 <em>strategic</em> drift (ecosystem overcommitment, risk concentration).
+    This is <em>operational</em>: queue accumulation, transition slowdowns, role imbalances,
+    dependency backlog, lifecycle bottlenecks. Five detectors, each comparing rolling-window deltas
+    against a baseline.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="drift"></textarea></div>
+</section>
+
+<section class="block feature" id="deps">
+  <h2>8. Dependency Review Workflow</h2>
+  <p>
+    Append-only action log on Phase 5 <code>dependency_edges</code>. Five actions:
+    <code>approve</code> (→ confirmed), <code>reject</code> (→ dismissed),
+    <code>annotate</code> (status unchanged, note added),
+    <code>assign_owner</code> (status unchanged, owner set),
+    <code>resolve</code> (→ resolved). Every action writes a <code>dependency_reviews</code> row
+    so the workflow history is auditable.
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="deps"></textarea></div>
+</section>
+
+<section class="block feature" id="workspace">
+  <h2>9. Executive Planning Workspace</h2>
+  <p>
+    The single page that brings every Phase 6 read into one view at
+    <code>/admin/deep-research/planning</code>. Read-only aggregation; the only writes happen on
+    explicit user actions (acknowledge, dismiss, dependency-review action, run-refresh).
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="workspace"></textarea></div>
+</section>
+
+<section class="block feature" id="refresh-history">
+  <h2>10. Continuous Observatory Refresh</h2>
+  <p>
+    The <code>adaptive_refresh_runs</code> + <code>refresh_history</code> tables make every
+    automated run a first-class audit object. The dashboard surfaces the most recent runs with
+    status pills + duration so operators can see "did the system look at itself today?"
+  </p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="refresh-history"></textarea></div>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-workspace">
+  <h2>Screen: workspace overview</h2>
+  <img class="shot" src="deep-research-assets/p6-01-planning-workspace.png" alt="planning workspace" />
+  <p class="caption">Header with Run Refresh button, last-run status pill, and the four-up KPI strip.</p>
+  <div class="feedback-block"><label class="small">Feedback on overview:</label><textarea data-fb="screen-workspace"></textarea></div>
+</section>
+
+<section class="block" id="screen-kpis">
+  <h2>Screen: top KPIs</h2>
+  <img class="shot" src="deep-research-assets/p6-02-kpis.png" alt="kpis" />
+  <p class="caption">Active ventures, pending interventions, operational drift, open dependencies.</p>
+</section>
+
+<section class="block" id="screen-health">
+  <h2>Screen: venture health intelligence</h2>
+  <img class="shot" src="deep-research-assets/p6-03-venture-health.png" alt="venture health" />
+  <p class="caption">Bucket strip (% of ventures per classification) + per-venture table with rationale.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-health"></textarea></div>
+</section>
+
+<section class="block" id="screen-interventions">
+  <h2>Screen: executive interventions</h2>
+  <img class="shot" src="deep-research-assets/p6-04-interventions.png" alt="interventions" />
+  <p class="caption">Color-coded by severity. Acknowledge or dismiss — never auto-applied.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-interventions"></textarea></div>
+</section>
+
+<section class="block" id="screen-strategic">
+  <h2>Screen: strategic recommendations</h2>
+  <img class="shot" src="deep-research-assets/p6-05-strategic-recs.png" alt="strategic recommendations" />
+  <p class="caption">Portfolio-level moves that span ventures.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-strategic"></textarea></div>
+</section>
+
+<section class="block" id="screen-forecast">
+  <h2>Screen: forecast-vs-reality</h2>
+  <img class="shot" src="deep-research-assets/p6-06-forecast-accuracy.png" alt="forecast accuracy" />
+  <p class="caption">Stacked bars per forecast kind: accurate / optimistic / pessimistic / unknown.</p>
+</section>
+
+<section class="block" id="screen-drift">
+  <h2>Screen: operational drift</h2>
+  <img class="shot" src="deep-research-assets/p6-07-operational-drift.png" alt="operational drift" />
+  <p class="caption">Queue, slowdowns, staffing imbalance, dependency backlog, bottlenecks.</p>
+</section>
+
+<section class="block" id="screen-deps">
+  <h2>Screen: dependency review workflow</h2>
+  <img class="shot" src="deep-research-assets/p6-08-dependency-review.png" alt="dependency review" />
+  <p class="caption">Per-edge: owner + note + 5 action buttons. Every action lands in <code>dependency_reviews</code>.</p>
+  <div class="feedback-block"><label class="small">Feedback:</label><textarea data-fb="screen-deps"></textarea></div>
+</section>
+
+<section class="block" id="screen-refresh">
+  <h2>Screen: continuous refresh history</h2>
+  <img class="shot" src="deep-research-assets/p6-09-refresh-history.png" alt="refresh history" />
+  <p class="caption">Status pill + step count + error count + duration per run.</p>
+</section>
+
+<section class="block" id="screen-full">
+  <h2>Full planning page</h2>
+  <img class="shot" src="deep-research-assets/p6-10-planning-full.png" alt="planning full page" />
+</section>
+
+<hr/>
+
+<section class="block arch" id="schema">
+  <h2>Database schema (Phase 6)</h2>
+  <p>One migration adds eight new tables. Nothing in Phases 1-5 is touched.</p>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>adaptive_refresh_runs</code></td><td>One row per refresh run: type, status, duration, error count, results JSONB.</td></tr>
+      <tr><td><code>refresh_history</code></td><td>Per-step audit log; FK to refresh runs.</td></tr>
+      <tr><td><code>intervention_recommendations</code></td><td>Executive intervention rows with severity, supporting metrics, related venture IDs.</td></tr>
+      <tr><td><code>strategic_recommendations</code></td><td>Portfolio-level recommendation rows (same shape, different scope).</td></tr>
+      <tr><td><code>venture_health_history</code></td><td>Append-only per-venture health classifications over time.</td></tr>
+      <tr><td><code>forecast_accuracy</code></td><td>Predicted-vs-actual rows: kind, scope, delta, classification.</td></tr>
+      <tr><td><code>operational_drift</code></td><td>Operational drift alerts (distinct from Phase 5 strategic drift).</td></tr>
+      <tr><td><code>dependency_reviews</code></td><td>Workflow log on dependency_edges: action, owner, note, actor.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes (Phase 6)</h2>
+  <p>All mounted at <code>/api/v1/deep-research/planning/*</code>, admin-only:</p>
+  <ul>
+    <li><code>GET /planning</code> — full workspace payload.</li>
+    <li><code>POST /planning/refresh</code> — manual refresh (body: <code>{ runType }</code>).</li>
+    <li><code>GET /planning/refresh-runs</code> + <code>GET /planning/refresh-runs/:id</code></li>
+    <li><code>GET /planning/analytics</code>, <code>GET /planning/forecast-accuracy</code></li>
+    <li><code>GET /planning/interventions</code> + <code>POST .../:id/acknowledge</code> + <code>POST .../:id/dismiss</code></li>
+    <li><code>GET /planning/strategic-recommendations</code> + acknowledge/dismiss</li>
+    <li><code>GET /planning/venture-health</code> + <code>GET /planning/venture-health/:id</code> (history)</li>
+    <li><code>GET /planning/operational-drift</code> + acknowledge/dismiss</li>
+    <li><code>GET /planning/dependency-review</code> + <code>GET .../:id</code> + <code>POST .../:id/actions</code></li>
+  </ul>
+</section>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend services (10)</h3>
+  <ul>
+    <li><code>backend/src/deepResearch/adaptiveRefresh.service.js</code></li>
+    <li><code>backend/src/deepResearch/refreshHistory.service.js</code></li>
+    <li><code>backend/src/deepResearch/executiveIntervention.service.js</code></li>
+    <li><code>backend/src/deepResearch/strategicRecommendation.service.js</code></li>
+    <li><code>backend/src/deepResearch/adaptiveAnalytics.service.js</code></li>
+    <li><code>backend/src/deepResearch/ventureHealth.service.js</code></li>
+    <li><code>backend/src/deepResearch/forecastReality.service.js</code></li>
+    <li><code>backend/src/deepResearch/operationalDrift.service.js</code></li>
+    <li><code>backend/src/deepResearch/dependencyReview.service.js</code></li>
+    <li><code>backend/src/deepResearch/planningWorkspace.service.js</code></li>
+  </ul>
+  <h3>Added — models + migration</h3>
+  <ul>
+    <li><code>backend/src/migrations/20260515000003-deep-research-phase-6.js</code></li>
+    <li><code>backend/src/models/AdaptiveRefreshRun.js</code></li>
+    <li><code>backend/src/models/RefreshHistory.js</code></li>
+    <li><code>backend/src/models/InterventionRecommendation.js</code></li>
+    <li><code>backend/src/models/StrategicRecommendation.js</code></li>
+    <li><code>backend/src/models/VentureHealthHistory.js</code></li>
+    <li><code>backend/src/models/ForecastAccuracy.js</code></li>
+    <li><code>backend/src/models/OperationalDrift.js</code></li>
+    <li><code>backend/src/models/DependencyReview.js</code></li>
+  </ul>
+  <h3>Added — frontend</h3>
+  <ul>
+    <li><code>frontend/src/pages/ExecutivePlanningPage.jsx</code></li>
+    <li><code>frontend/src/components/deepResearch/PlanningVisuals.jsx</code></li>
+  </ul>
+  <h3>Added — tests + scripts</h3>
+  <ul>
+    <li><code>backend/tests/deepResearch/{adaptiveRefresh,ventureHealth,forecastReality,executiveIntervention,strategicRecommendation,operationalDrift,dependencyReview}.test.js</code></li>
+    <li><code>backend/scripts/capture-deep-research-phase-6-walkthrough.js</code></li>
+  </ul>
+  <h3>Modified</h3>
+  <ul>
+    <li><code>backend/src/models/index.js</code> — register 8 new models</li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> — 18 new handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> — 18 new routes</li>
+    <li><code>backend/src/server.js</code> — opt-in cron scheduler wiring</li>
+    <li><code>frontend/src/App.jsx</code> — new <code>/admin/deep-research/planning</code> route</li>
+    <li><code>frontend/src/components/common/Sidebar.jsx</code> — new "Executive Planning" link</li>
+    <li><code>frontend/src/services/deepResearchService.js</code> — 20 new API client functions</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Unit + integration:</strong> 43 new tests added; full suite at 1,828 / 1,828 passing.</li>
+    <li><strong>Migration runs clean on prod</strong> (<code>== migrated (0.374s) ==</code>).</li>
+    <li><strong>All 8 Phase 6 tables exist on prod</strong> (verified via <code>information_schema.tables</code>).</li>
+    <li><strong>Full refresh on prod returned <code>status: success</code> with 0 errors</strong> on
+        the second run (the first surfaced a column-name bug — fixed in commit <code>70897fd</code>
+        and re-validated).</li>
+    <li><strong>Planning workspace endpoint returns valid data:</strong> 4 interventions, 2 strategic
+        recs, 3 venture health rows, 1 operational drift, 3 open dependency edges, 2 refresh runs
+        in history.</li>
+    <li><strong>10 screenshots captured</strong> from the live prod planning page.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Cron is opt-in.</strong> The scheduler doesn't start until
+      <code>DEEP_RESEARCH_ADAPTIVE_REFRESH_ENABLED=true</code> is set. Default off in prod so that
+      enabling automation is an explicit operator decision.
+    </li>
+    <li>
+      <strong>Idempotency is by (type, title) tuple.</strong> If a recommendation's title varies
+      across runs (e.g. "Hire ai/ml engineer (deficit 2)" vs "(deficit 3)") the new variant
+      becomes a separate row. Intentional — the title encodes the magnitude.
+    </li>
+    <li>
+      <strong>Health classification is rules-based, not ML.</strong> Tunable thresholds via env
+      (<code>DEEP_RESEARCH_STALL_DAYS</code>). Phase 7 could add an ML head once enough
+      <code>venture_health_history</code> has accumulated.
+    </li>
+    <li>
+      <strong>Forecast accuracy uses proxies for "actual".</strong> True ground truth (e.g.
+      "did this venture actually earn the projected revenue?") would require an external source.
+      The current implementation classifies against lifecycle progression as a stand-in.
+    </li>
+    <li>
+      <strong>No email digest yet.</strong> A natural Phase 7 add: include the top 3 pending
+      interventions in the existing daily briefing.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 7</h2>
+  <ul>
+    <li>
+      <strong>Email briefing integration.</strong> Include the top 3 pending interventions + any
+      severity-≥75 operational drift in the existing morning briefing. The briefing template
+      already supports modular sections.
+    </li>
+    <li>
+      <strong>Health-trend visualization.</strong> Once the <code>venture_health_history</code>
+      table has ≥ 30 days of data, render per-venture health sparklines so users can see "this
+      venture has been at_risk for 12 days now."
+    </li>
+    <li>
+      <strong>Forecast-tuning UI.</strong> A read-only "calibration" panel that shows the user the
+      forecast vs reality summary AND surfaces a recommended weight adjustment <em>as text</em> —
+      humans copy/paste the new weight into the env. Still no auto-tuning.
+    </li>
+    <li>
+      <strong>Anthropic fallback provider.</strong> Still the highest-leverage unlock for Phase 2/3
+      AI steps.
+    </li>
+    <li>
+      <strong>Recommendation outcomes loop.</strong> When a human acknowledges + acts on a
+      recommendation, record the outcome (did it work?). Over time, the system surfaces "this
+      intervention type has been historically effective."
+    </li>
+    <li>
+      <strong>Submission Readiness Engine.</strong> A new track: take the proposal-drafting work
+      from idea → ready-to-upload package. Separate from the Deep Research track but reuses the
+      health + recommendation patterns.
+    </li>
+  </ul>
+</section>
+
+<div class="actions">
+  <button class="copy-btn" id="copyAll">Copy all feedback</button>
+  <span class="small" id="copyStatus" style="align-self:center;color:var(--text-muted);"></span>
+</div>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+  document.querySelectorAll('textarea[data-fb]').forEach(function(t) {
+    var key = 'p6-fb-' + t.getAttribute('data-fb');
+    var saved = localStorage.getItem(key);
+    if (saved) t.value = saved;
+    t.addEventListener('input', function() { localStorage.setItem(key, t.value); });
+  });
+  var btn = document.getElementById('copyAll');
+  var status = document.getElementById('copyStatus');
+  btn.addEventListener('click', function() {
+    var out = [];
+    document.querySelectorAll('textarea[data-fb]').forEach(function(t) {
+      if (t.value.trim()) out.push('# ' + t.getAttribute('data-fb') + '\n' + t.value.trim());
+    });
+    if (out.length === 0) { status.textContent = 'No feedback yet.'; return; }
+    var text = out.join('\n\n');
+    navigator.clipboard.writeText(text).then(function() {
+      btn.classList.add('ok'); btn.textContent = 'Copied!';
+      status.textContent = out.length + ' sections copied.';
+      setTimeout(function() { btn.classList.remove('ok'); btn.textContent = 'Copy all feedback'; }, 2500);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
