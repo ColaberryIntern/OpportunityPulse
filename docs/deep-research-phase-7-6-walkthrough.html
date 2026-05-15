@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 7.6 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#problem">The gap this closes</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Mechanics</h2>
+  <a href="#tokenization">Tokenization</a>
+  <a href="#scoring">Tool scoring</a>
+  <a href="#saturation">Saturation classification</a>
+  <a href="#decision-rules">New decision rules</a>
+  <a href="#prompt">Synthesis prompt</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Report (full)</a>
+  <a href="#screen-landscape">Competitive landscape</a>
+  <a href="#screen-build">Build recommendation</a>
+
+  <h2>Details</h2>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 8</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 7.6</h1>
+  <p class="subtitle">Competing-tools awareness · 2026-05-15 · commit <code>43582f4</code> · all 1,902 backend tests passing</p>
+  <p>
+    Phase 1–7.5 reasoned from <em>opportunity volume</em> (gov contracts, jobs, news, research papers
+    mentioning a topic) but never asked the most basic strategic question:
+    <strong>"what's already shipping?"</strong> Phase 7.6 closes that gap by mining the existing
+    <code>AiTool</code> registry — Cursor, Claude, Databricks, LangChain, Automation Anywhere, etc.,
+    each with momentum scores, trend direction, mention counts, and category metadata — and feeding
+    it into the synthesis pipeline. The AI now grounds <code>market_stage</code> against actual
+    products on the market, not just opportunity noise. The venture-decision engine consumes a
+    deterministic <code>saturation_signal</code> and escalates to <code>OVERSATURATED</code> when
+    the space is crowded but the venture's composite isn't dominant.
+  </p>
+  <p>
+    On the seeded prod run, report 4 ("Reporting") re-synthesized cleanly: <strong>12 competing tools
+    matched, saturation classified as <code>active</code></strong>, and the AI produced a competitive
+    landscape narrative that explicitly named Databricks and DataRobot — exactly the kind of grounded
+    insight that was missing before.
+  </p>
+  <p>
+    <span class="badge b-done">0 new tables</span>
+    <span class="badge b-done">1 new service</span>
+    <span class="badge b-done">20 new tests</span>
+    <span class="badge b-done">1902 / 1902 passing</span>
+    <span class="badge b-cyan">Deterministic + explainable</span>
+    <span class="badge b-gov">Backward compatible</span>
+    <span class="badge b-warn">No new AI calls</span>
+  </p>
+</section>
+
+<section class="block context" id="problem">
+  <h2>The gap this phase closes</h2>
+  <p>
+    Before Phase 7.6, when Deep Research said "this market is emerging — build now," it was reading
+    from opportunity volume alone. If a junior engineer pitched "build a Claude wrapper for legal
+    contract review," the right first question is <em>"what's already shipping?"</em> — not "how many
+    gov contracts mention legal AI?". The system answered question 2 but skipped question 1.
+  </p>
+  <p>
+    The data was already there — the <code>aiTools/</code> subsystem maintains hundreds of curated
+    products with composite momentum scores, trending direction, vendor info, category, industries,
+    and 7-day mention counts. Deep Research just never queried it. Phase 7.6 wires that registry
+    into the synthesis pipeline as a measure-only enrichment.
+  </p>
+</section>
+
+<section class="block arch" id="architecture">
+  <h2>Architecture</h2>
+  <div class="arrow-diagram">┌─────────────────────────────────────────────────────────────────┐
+│                  Deep Research synthesis pipeline               │
+│                                                                 │
+│  fetchCandidates()  →  aggregateContext()                       │
+│                              │                                  │
+│                              ▼                                  │
+│  Phase 7.6 NEW: competingTools.findCompetingTools({             │
+│                              │   searchTerm, context })         │
+│                              │                                  │
+│              ┌───────────────┴──────────────┐                   │
+│              ▼                              ▼                   │
+│      tokenize(searchTerm)         tokensFromContext(opps)       │
+│              │                              │                   │
+│              └──────────────┬───────────────┘                   │
+│                             ▼                                   │
+│                  AiTool.findAll(OR-of-ILIKEs)                   │
+│                             │                                   │
+│                             ▼                                   │
+│                  scoreTool() + sort + cap=12                    │
+│                             │                                   │
+│                             ▼                                   │
+│              { tools, saturation_signal, rationale }            │
+│                             │                                   │
+│                             ▼                                   │
+│  strategySynthesis.synthesize(context, competingTools)          │
+│      → prompt now includes "## Existing AI Tools in This Space" │
+│      → AI returns new `competitive_landscape_summary` field     │
+│                             │                                   │
+│                             ▼                                   │
+│  ventureDecisionEngine.decideForVenture(...)                    │
+│      → reads competing_tools.saturation_signal                  │
+│      → new rule: signal=crowded AND composite<75 → OVERSATURATED│
+│      → new rationale flair: signal=empty + emerging → TOO_EARLY │
+│                             │                                   │
+│                             ▼                                   │
+│            report.reportJson.competing_tools (persisted)        │
+│            report.reportJson.competitive_landscape_summary      │
+└─────────────────────────────────────────────────────────────────┘</div>
+  <p>
+    The enrichment runs <strong>once per synthesis</strong> (one indexed SQL query against
+    <code>ai_tools</code>), is bounded at 12 tools, and is soft-failure: if the AiTool table is
+    empty or unreachable, the pipeline continues with <code>competing_tools=null</code> and the
+    report renders normally (the new UI panel just doesn't appear).
+  </p>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <table>
+    <thead><tr><th>Piece</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td><code>competingTools.service.js</code> (new)</td><td>Deterministic tokenizer + tool scorer + saturation classifier. Single export <code>findCompetingTools</code> returns <code>{tokens, tools, saturation_signal, rationale}</code>.</td></tr>
+      <tr><td><code>strategySynthesis.service.js</code></td><td>System prompt explicitly tells the AI to ground <code>market_stage</code> against the tools list. User prompt adds a "## Existing AI Tools in This Space" section. Sanitized output gains <code>competitive_landscape_summary</code> field.</td></tr>
+      <tr><td><code>deepResearch.service.js</code></td><td>Pipeline calls <code>findCompetingTools</code> before synthesis (soft-failure), passes the result into <code>synthesize</code>, persists into <code>reportJson.competing_tools</code> + <code>reportJson.competitive_landscape_summary</code>.</td></tr>
+      <tr><td><code>ventureDecisionEngine.service.js</code></td><td>New optional inputs <code>competingToolsSignal</code> + <code>competingToolsCount</code>. New rule: <code>signal==='crowded' AND compositeScore&lt;75 → OVERSATURATED</code>. Rationale enrichment when signal is 'empty' for emerging markets. <strong>Pre-7.6 behavior preserved exactly when inputs are null.</strong></td></tr>
+      <tr><td><code>DeepResearchReportPage.jsx</code></td><td>New <code>CompetingToolsSection</code> rendered above Build Recommendation: saturation pill, rationale, AI narrative, per-tool cards (name, vendor, category, momentum, trending, open-source flag, website link).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block feature" id="tokenization">
+  <h2>Tokenization — how the registry query gets built</h2>
+  <p>
+    Search tokens come from two sources, merged dedup:
+  </p>
+  <ol>
+    <li><strong>The user's search term</strong> — split on whitespace/comma/slash, lowercased, stopwords + sub-3-char tokens dropped. A curated stopword set strips boilerplate ("the", "and", "consulting", "services", "platform", "agency", "department", etc).</li>
+    <li><strong>Top-frequency tokens from the opportunity titles</strong> in the aggregated context. This catches adjacent vocabulary — e.g. a thin search term "rag" still picks up "compliance", "government", "healthcare" from the opps, which matches tool tags far more reliably than the raw term alone.</li>
+  </ol>
+  <p>
+    Final token list is capped at 8. The query is a single
+    <code>WHERE status='active' AND (OR of name ILIKE / description ILIKE / tags @&gt; [token])</code>
+    against <code>ai_tools</code>, candidate pool capped at 200 rows.
+  </p>
+</section>
+
+<section class="block feature" id="scoring">
+  <h2>Tool scoring — deterministic relevance ranking</h2>
+  <p>
+    Each candidate tool is scored against the token list with explicit weights:
+  </p>
+  <ul>
+    <li><strong>+3 per token that hits the tool name</strong> — highest signal (the product literally has this word in its name)</li>
+    <li><strong>+1 per token that hits the description</strong></li>
+    <li><strong>+1 per token that hits the tags / industries / category</strong></li>
+    <li>+ composite_momentum_score / 20 (max +5)</li>
+    <li>+ trending_score / 30 (max +3.3)</li>
+    <li>+ mention_count_7d (capped 30) / 10 (max +3)</li>
+  </ul>
+  <p>
+    A tool with zero token matches is discarded outright (no scoring floor — irrelevant tools never appear). Sorted descending, capped at 12.
+  </p>
+</section>
+
+<section class="block feature" id="saturation">
+  <h2>Saturation classification</h2>
+  <p>
+    Deterministic, derived from matched-tool count + momentum stages:
+  </p>
+  <table>
+    <thead><tr><th>Signal</th><th>Trigger</th><th>Implication</th></tr></thead>
+    <tbody>
+      <tr><td><code>empty</code></td><td>0 tools matched</td><td>Space appears unserved by curated registry — strong "too_early" reinforcement.</td></tr>
+      <tr><td><code>emerging</code></td><td>1-3 tools matched</td><td>Early but real activity. Window likely open.</td></tr>
+      <tr><td><code>active</code></td><td>4-5 tools matched (or 6+ without 2 dominant)</td><td>Multiple products shipping. Differentiation matters.</td></tr>
+      <tr><td><code>crowded</code></td><td>6+ tools AND &gt;= 2 dominant/explosive</td><td>Heavy competition with funded leaders. Decision engine escalates to OVERSATURATED.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block feature" id="decision-rules">
+  <h2>New decision rules — venture engine</h2>
+  <p>
+    The <code>ventureDecisionEngine.decide</code> rule list got two additions, both ordered to fire
+    BEFORE the existing rules so the new signals always have priority:
+  </p>
+  <ul>
+    <li>
+      <strong>Crowded-market guard:</strong> if <code>competingToolsSignal === 'crowded'</code> AND
+      <code>compositeScore &lt; 75</code> → decision = <code>OVERSATURATED</code> with rationale that
+      cites the tool count explicitly ("8 active AI tools already serve this space (saturation signal:
+      crowded) and the venture's composite score (62) is not dominant enough to differentiate").
+    </li>
+    <li>
+      <strong>Empty-market reinforcement:</strong> the existing <code>TOO_EARLY</code> rule
+      (emerging + low correlation) gains a rationale tail when
+      <code>competingToolsSignal === 'empty'</code>: "No AI tools yet ship in this space —
+      reinforces the 'too early' call."
+    </li>
+  </ul>
+  <p>
+    <strong>When <code>competingToolsSignal</code> is <code>null</code> (e.g. an older report
+    without the field), the engine produces output bit-identical to pre-7.6.</strong> This is
+    proven by the regression suite — every Phase 1-7 decision test continues to pass.
+  </p>
+</section>
+
+<section class="block feature" id="prompt">
+  <h2>Synthesis prompt — the new section</h2>
+  <p>
+    Appended to the user prompt right after the channel breakdown:
+  </p>
+  <pre>## Existing AI Tools in This Space (saturation_signal: active)
+- Databricks [Databricks · Analytics · momentum:dominant · trend:rising · enterprise]
+  Unified analytics platform — collaborative notebooks, data lakehouse, ML.
+- DataRobot [DataRobot · Analytics · momentum:dominant · trend:stable · enterprise]
+  Enterprise AutoML platform for predictive models and decision intelligence.
+- gemini-cli [Google · Code Assistant · momentum:emerging · trend:rising · paid]
+  ...</pre>
+  <p>
+    System prompt was tightened: "For market_stage: if dominant/explosive tools are listed, you
+    cannot call the market 'emerging' without justifying it. If the tool list is empty AND
+    opportunity signal is thin, lean 'too_early'. An 'active' or 'saturated' call must be supported
+    either by tool count or by cross-channel demand volume."
+  </p>
+  <p>
+    Sanitized output gains one new field: <code>competitive_landscape_summary</code> (string, max
+    800 chars). When the AI omits it, defaults to empty string — never breaks legacy callers.
+  </p>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-full">
+  <h2>Screen: Deep Research report (full page)</h2>
+  <img class="shot" src="deep-research-assets/p76-01-report-full.png" alt="report full" />
+  <p class="caption">The new Competitive Landscape section sits right above Build Recommendation, so the executive reads "who's already shipping" before "should we build".</p>
+</section>
+
+<section class="block" id="screen-landscape">
+  <h2>Screen: Competitive Landscape section</h2>
+  <img class="shot" src="deep-research-assets/p76-02-competitive-landscape.png" alt="competitive landscape" />
+  <p class="caption">Saturation pill (active / crowded / emerging / empty) in the section header. AI narrative on top, deterministic rationale (italics) below it. Per-tool cards: name, vendor, category, momentum stage, trending score, momentum score, open-source flag, deep-link to the vendor site.</p>
+</section>
+
+<section class="block" id="screen-build">
+  <h2>Screen: Build Recommendation in context</h2>
+  <img class="shot" src="deep-research-assets/p76-03-build-recommendation.png" alt="build recommendation" />
+  <p class="caption">The Build Recommendation now reads in immediate context of the competing tools — the executive can audit whether the AI's call is grounded against actual products.</p>
+</section>
+
+<hr/>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend</h3>
+  <ul>
+    <li><code>backend/src/deepResearch/competingTools.service.js</code> (engine — tokenize, score, classify saturation)</li>
+    <li><code>backend/tests/deepResearch/competingTools.test.js</code> (14 tests)</li>
+    <li><code>backend/tests/deepResearch/ventureDecisionEngine.phase76.test.js</code> (6 tests for the new rules)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-7-6-walkthrough.js</code> (3-shot capture)</li>
+  </ul>
+  <h3>Modified — backend (additive only)</h3>
+  <ul>
+    <li><code>backend/src/deepResearch/strategySynthesis.service.js</code> — system + user prompt extended, new <code>competitive_landscape_summary</code> in sanitized output</li>
+    <li><code>backend/src/deepResearch/deepResearch.service.js</code> — runPipeline queries competingTools soft-failure, threads through to synthesis + report_json</li>
+    <li><code>backend/src/deepResearch/ventureDecisionEngine.service.js</code> — new optional inputs, two new rules, factors expanded</li>
+  </ul>
+  <h3>Modified — frontend</h3>
+  <ul>
+    <li><code>frontend/src/pages/DeepResearchReportPage.jsx</code> — new <code>CompetingToolsSection</code> component rendered above Build Recommendation</li>
+  </ul>
+  <h3>Database</h3>
+  <ul>
+    <li><strong>Zero new tables.</strong> Reuses <code>ai_tools</code> + persists into <code>deep_research_reports.report_json.competing_tools</code>.</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Unit + integration:</strong> 20 new pure-logic tests across 2 files; <strong>1902/1902 jest tests pass</strong> (+20 net new on top of Phase 7.5's 1882). Zero regressions in any of the 179 suites.</li>
+    <li><strong>Backend engine on prod:</strong> <code>findCompetingTools</code> with searchTerm "workflow automation healthcare" against the live AiTool registry returned 12 matched tools, top-3 being gemini-cli (8.20), Automation Anywhere (8.15), awesome-claude-skills (8.13). Classified as <code>active</code>.</li>
+    <li><strong>End-to-end synthesis on prod:</strong> Re-ran report id 4 ("Reporting") via the normal <code>deepResearch.reRunReport</code> path. Result: <code>status: success, has_competing_tools: true, competing_tools_count: 12, saturation_signal: active</code>, and the AI produced a real competitive-landscape narrative explicitly naming Databricks and DataRobot.</li>
+    <li><strong>UI on prod:</strong> 3 screenshots captured from the live report page showing the new Competitive Landscape section with the matched tools rendered as per-tool cards.</li>
+    <li><strong>Backward compatibility:</strong> Reports created pre-7.6 have <code>competing_tools=null</code> in their <code>report_json</code>; the UI section renders only when the field exists. The decision engine's pre-7.6 behavior is identical when no <code>competingToolsSignal</code> input is provided.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Token-match is ILIKE, not semantic.</strong> A search for "RAG" won't catch a tool
+      whose description says "retrieval-augmented generation" without the acronym. Future
+      enhancement: use the existing embedding column on Opportunity / extend to AiTool.
+    </li>
+    <li>
+      <strong>Tool ranking is heuristic.</strong> The match score is interpretable but not
+      ML-calibrated. A tool with strong momentum and a partial token match can outrank a tool with
+      a perfect name match and zero momentum. Intentional — momentum and recency matter — but
+      surprising sometimes.
+    </li>
+    <li>
+      <strong>Saturation thresholds are coarse.</strong> 6+ tools with 2 dominant = crowded; 4 tools
+      = active. These are reasonable defaults but env-overridable thresholds are a clean future add
+      if the registry grows beyond ~500 tools.
+    </li>
+    <li>
+      <strong>The decision-rule escalation fires only for ventures, not at the report level.</strong>
+      The report's <code>market_stage</code> stays whatever the AI returned (now better-grounded);
+      the OVERSATURATED escalation lives in the per-venture decision engine that runs on
+      <code>VentureIdea</code> rows. By design — the report describes the landscape; the venture
+      decides what Colaberry should do.
+    </li>
+    <li>
+      <strong>Old reports do not auto-rebuild.</strong> Pre-7.6 reports have
+      <code>competing_tools=null</code> until they are re-run via the existing "Re-run" button on
+      the report page. A bulk-rebuild script could be added; intentionally not auto-running on
+      deploy to avoid burning unexpected AI tokens.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 8</h2>
+  <ul>
+    <li>
+      <strong>Semantic tool matching via embeddings.</strong> Add an <code>embedding</code> column to
+      <code>ai_tools</code> (mirroring Opportunity), match search tokens via cosine similarity in
+      addition to ILIKE.
+    </li>
+    <li>
+      <strong>In-page Strategic Workspace Tabs (carry-over from 7.5).</strong> Opportunities /
+      Research / Relationships / Signals / Assets / Pursuits as tab navigation inside the
+      strategic-mode My Opportunities.
+    </li>
+    <li>
+      <strong>Pursuit-to-Review-Queue handoff.</strong> Generate a proposal draft from a pursuit
+      with one click; pre-fill from linked opps + suggested assets + positioning.
+    </li>
+    <li>
+      <strong>Tool-vs-venture overlap detection.</strong> When a generated VentureIdea closely
+      matches an existing tool (by name + description), flag it explicitly so the user sees the
+      conflict before commissioning a build.
+    </li>
+    <li>
+      <strong>Submission Readiness Engine.</strong> Separate track, plan already drafted.
+    </li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+})();
+</script>
+
+</body>
+</html>
