@@ -356,8 +356,7 @@ function MyOpportunitiesPage() {
       go();
     }
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strategicCtxRef]);
+  }, [strategicCtxRef, strategicContext]);
 
   async function handleCreatePursuit() {
     if (!strategicContext) return;
