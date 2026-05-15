@@ -111,7 +111,7 @@ function ActionIntelligencePage() {
   const evidenceOpps = data?.strongest_evidence_opportunities || [];
   const candidates = data?.proposal_acceleration_candidates || [];
   const agencies = data?.recurring_agency_ecosystems || [];
-  const graph = data?.opportunity_graph || {};
+  const graphSummary = data?.opportunity_graph || {};
   const runs = data?.recent_research_runs || [];
   const pursuits = data?.pursuit_readiness || [];
 
@@ -167,7 +167,7 @@ function ActionIntelligencePage() {
           <StatCard label="Top Clusters" value={clusters.length} sub="actionable today" />
           <StatCard label="Evidence-Backed Opps" value={evidenceOpps.length} sub="strongest signals" />
           <StatCard label="Recurring Agencies" value={agencies.length} sub="ecosystem signal" />
-          <StatCard label="Graph Edges" value={graph.total_edges || 0} sub="across all entities" />
+          <StatCard label="Graph Edges" value={graphSummary.total_edges || 0} sub="across all entities" />
         </div>
 
         <Section

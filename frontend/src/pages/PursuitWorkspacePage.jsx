@@ -203,7 +203,7 @@ function PursuitWorkspacePage() {
   const evidence = data.evidence_opportunities || [];
   const justification = data.justification;
   const staffing = data.staffing_recommendation || {};
-  const readiness = data.readiness_summary || {};
+  const readinessSummary = data.readiness_summary || {};
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -279,8 +279,8 @@ function PursuitWorkspacePage() {
           <StatCard label="Linked Opps" value={linkedOpps.length} />
           <StatCard
             label="Mean AI Score"
-            value={readiness.mean_score != null ? Number(readiness.mean_score).toFixed(0) : '—'}
-            sub={`${readiness.with_score || 0} of ${readiness.count || 0} scored`}
+            value={readinessSummary.mean_score != null ? Number(readinessSummary.mean_score).toFixed(0) : '—'}
+            sub={`${readinessSummary.with_score || 0} of ${readinessSummary.count || 0} scored`}
           />
           <StatCard label="Reusable Assets" value={assets.length} sub="suggested" />
           <StatCard label="Draft Outputs" value={outputs.length} sub="proposal/offer/analysis" />
