@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   getActionIntelligence, getEvidence,
   refreshRelationships, refreshGraph, refreshAccelerationAssets,
+  myOpportunitiesContextUrl,
 } from '../services/deepResearchService';
 import {
   StatCard, ChannelBadge, RecurringRow, OpportunityRow,
@@ -142,20 +143,27 @@ function ActionIntelligencePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {clusters.map((c) => (
-                <Link
+                <div
                   key={c.id}
-                  to={`/admin/deep-research/clusters/${c.id}`}
                   className="block rounded-lg border border-gray-200 p-4 hover:border-cyan-400 transition-colors"
                   data-testid={`cluster-${c.id}`}
                 >
-                  <div className="flex items-start justify-between gap-3 mb-1">
-                    <h3 className="text-sm font-semibold text-gray-900">{c.name}</h3>
-                    <span className="text-xs font-semibold text-gray-500">
-                      {c.opportunityCount || 0} opps
-                    </span>
-                  </div>
-                  {c.description && <p className="text-xs text-gray-600">{c.description}</p>}
-                </Link>
+                  <Link to={`/admin/deep-research/clusters/${c.id}`} className="block">
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                      <h3 className="text-sm font-semibold text-gray-900">{c.name}</h3>
+                      <span className="text-xs font-semibold text-gray-500">
+                        {c.opportunityCount || 0} opps
+                      </span>
+                    </div>
+                    {c.description && <p className="text-xs text-gray-600">{c.description}</p>}
+                  </Link>
+                  <Link
+                    to={myOpportunitiesContextUrl('cluster', c.id)}
+                    className="inline-block mt-2 text-[11px] px-2 py-1 rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+                  >
+                    Open in My Opportunities →
+                  </Link>
+                </div>
               ))}
             </div>
           )}
@@ -250,7 +258,25 @@ function ActionIntelligencePage() {
             </div>
           ) : (
             <div className="border border-gray-100 rounded-lg overflow-hidden">
-              {agencies.map((a) => <RecurringRow key={a.id} row={a} />)}
+              {agencies.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between py-2 px-3 border-b border-gray-100 text-xs"
+                >
+                  <div className="flex-1 truncate">
+                    <span className="text-gray-900 font-medium">{a.value}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-500">
+                    <span className="font-semibold text-gray-700">{a.occurrenceCount}</span>
+                    <Link
+                      to={myOpportunitiesContextUrl('agency', a.value)}
+                      className="px-2 py-0.5 rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+                    >
+                      Open in My Opportunities →
+                    </Link>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </Section>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   getPursuit, updatePursuit, deletePursuit, createPursuit, listPursuits,
+  myOpportunitiesContextUrl,
 } from '../services/deepResearchService';
 import {
   OpportunityRow, JustificationCard, PursuitStatusPill, StatCard, EvidenceDrawer,
@@ -206,7 +207,14 @@ function PursuitWorkspacePage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to={myOpportunitiesContextUrl('pursuit', data.id)}
+              className="px-3 py-2 rounded-md bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-700"
+              data-testid="pursuit-open-in-my-opps"
+            >
+              Open in My Opportunities →
+            </Link>
             <select
               value={data.status}
               onChange={(e) => withBusy(

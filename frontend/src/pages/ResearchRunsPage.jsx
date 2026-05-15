@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   listResearchRuns, createResearchRun, getResearchRun, updateResearchRun,
   rerunResearchRun, deleteResearchRun, previewResearchQuery,
+  myOpportunitiesContextUrl,
 } from '../services/deepResearchService';
 import {
   StatCard, ChannelBadge, OpportunityRow,
@@ -245,7 +246,14 @@ function ResearchRunsPage() {
                 subtitle={focused.query}
                 testId="section-focused"
                 right={
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-wrap">
+                    <Link
+                      to={myOpportunitiesContextUrl('researchRun', focused.id)}
+                      className="text-[11px] px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700"
+                      data-testid="run-open-in-my-opps"
+                    >
+                      Open in My Opportunities →
+                    </Link>
                     <button
                       type="button"
                       onClick={() => handleTogglePin(focused)}

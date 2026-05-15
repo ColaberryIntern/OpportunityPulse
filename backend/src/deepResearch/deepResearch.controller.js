@@ -48,6 +48,8 @@ const customResearchRun = require('./customResearchRun.service');
 const proposalAcceleration = require('./proposalAcceleration.service');
 const pursuitWorkspace = require('./pursuitWorkspace.service');
 const actionIntelligence = require('./actionIntelligence.service');
+// Phase 7.5 — strategic context bridge into My Opportunities.
+const deepResearchContext = require('./deepResearchContext.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -903,6 +905,37 @@ async function getActionIntelligence(req, res) {
   } catch (e) { return mapError(res, e, 'getActionIntelligence', 'Failed to load action intelligence'); }
 }
 
+// ---- Phase 7.5 — strategic context bridge ----------------------------------
+
+async function getStrategicContext(req, res) {
+  try {
+    const { kind, id } = req.params;
+    if (!deepResearchContext.VALID_KINDS.includes(kind)) {
+      return errorResponse(res, `Invalid context kind ${kind}`, 400);
+    }
+    const summary = await deepResearchContext.getContextSummary(kind, id);
+    if (!summary) return errorResponse(res, 'Context not found', 404);
+    return successResponse(res, summary);
+  } catch (e) { return mapError(res, e, 'getStrategicContext', 'Failed to load strategic context'); }
+}
+
+async function getOpportunityContextTrace(req, res) {
+  try {
+    const { kind, id } = req.query;
+    const opportunityId = Number(req.params.id);
+    if (!Number.isInteger(opportunityId)) {
+      return errorResponse(res, 'Invalid opportunity id', 400);
+    }
+    if (kind && !deepResearchContext.VALID_KINDS.includes(kind)) {
+      return errorResponse(res, `Invalid context kind ${kind}`, 400);
+    }
+    const trace = await deepResearchContext.getOpportunityTraceWithinContext(
+      opportunityId, kind, id,
+    );
+    return successResponse(res, trace);
+  } catch (e) { return mapError(res, e, 'getOpportunityContextTrace', 'Failed to load opportunity context trace'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -1005,4 +1038,7 @@ module.exports = {
   updatePursuit,
   deletePursuit,
   getActionIntelligence,
+  // Phase 7.5
+  getStrategicContext,
+  getOpportunityContextTrace,
 };

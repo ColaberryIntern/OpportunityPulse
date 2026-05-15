@@ -14,6 +14,8 @@ const feedbackSvc = require('./feedback.service');
 const executionPlannerSvc = require('./executionPlanner.service');
 const billingSvc = require('./billing.service');
 const velocitySvc = require('./velocity.service');
+// Phase 7.5 — strategic context resolver bridge into My Opportunities.
+const deepResearchContext = require('../deepResearch/deepResearchContext.service');
 
 // v6: helper that maps PlanLimitExceededError → 402 Payment Required.
 // Other errors fall through to the caller's existing handler.
@@ -29,6 +31,31 @@ function handlePlanLimit(res, e) {
 // GET /api/v1/oied/opportunities/my
 async function listMy(req, res) {
   try {
+    // Phase 7.5: if a strategic-context query param is present, resolve it
+    // to an opportunity-id set and pass it into listMyOpportunities as an
+    // additive filter. When no context param is present, behavior is
+    // identical to pre-Phase-7.5.
+    const contextRef = deepResearchContext.pickContextFromQuery(req.query);
+    let restrictToOpportunityIds = null;
+    let strategicContext = null;
+    if (contextRef) {
+      try {
+        strategicContext = await deepResearchContext.getContextSummary(
+          contextRef.kind, contextRef.id,
+        );
+        if (strategicContext) {
+          restrictToOpportunityIds = Array.isArray(strategicContext.opportunity_ids)
+            ? strategicContext.opportunity_ids : [];
+        } else {
+          restrictToOpportunityIds = [];
+        }
+      } catch (ctxErr) {
+        logger.warn('OIED listMy: context resolution failed', {
+          kind: contextRef.kind, id: contextRef.id, error: ctxErr.message,
+        });
+      }
+    }
+
     const { rows, total, profileWasDefault, organizationId, channelBuckets } = await myOpps.listMyOpportunities({
       limit: req.query.limit,
       offset: req.query.offset,
@@ -38,6 +65,7 @@ async function listMy(req, res) {
       q: req.query.q,
       minScore: req.query.minScore,
       userId: (req.user && req.user.id) || null,
+      restrictToOpportunityIds,
     });
     // v7: attach intelligence context per row (additive — existing fields stay).
     // v9: load profile + approvedAssets once and share across rows so the
@@ -55,6 +83,9 @@ async function listMy(req, res) {
       offset: Number(req.query.offset) || 0,
       profileWasDefault,
       channelBuckets: channelBuckets || null,
+      // Phase 7.5: when present, the banner uses this to render the
+      // strategic context. Absent for default (no-context) calls.
+      strategicContext: strategicContext || null,
     });
   } catch (e) {
     logger.error('OIED listMy failed', { error: e.message });

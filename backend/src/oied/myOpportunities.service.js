@@ -33,6 +33,11 @@ async function listMyOpportunities({
   minScore,
   userId,           // who's asking — resolved to org via profile.service
   organizationId,   // explicit org override (multi-tenant callers)
+  // Phase 7.5: strategic context — when set, restricts the candidate pool
+  // to the intersection of the normal filter and this id set. Additive,
+  // never changes behavior when null/undefined. Empty array short-circuits
+  // to "no matches".
+  restrictToOpportunityIds = null,
 } = {}) {
   const orgId = organizationId || await profileSvc.resolveOrgId(userId);
   const userProfile = await profileSvc.getOrDefaultByOrg(orgId);
@@ -61,6 +66,32 @@ async function listMyOpportunities({
     ];
   }
   if (type) where.type = type;
+
+  // Phase 7.5 strategic context: restrict candidates to a known opp id set.
+  // Empty array → short-circuit to no results (the calling context resolved
+  // to zero opportunities, which is a legitimate state).
+  if (Array.isArray(restrictToOpportunityIds)) {
+    if (restrictToOpportunityIds.length === 0) {
+      return {
+        rows: [], total: 0, profileWasDefault: false,
+        organizationId: organizationId || await profileSvc.resolveOrgId(userId),
+        channelBuckets: null,
+      };
+    }
+    const idSet = restrictToOpportunityIds
+      .map((x) => Number(x)).filter(Number.isInteger);
+    if (idSet.length === 0) {
+      return {
+        rows: [], total: 0, profileWasDefault: false,
+        organizationId: organizationId || await profileSvc.resolveOrgId(userId),
+        channelBuckets: null,
+      };
+    }
+    where.id = { [Op.in]: idSet };
+    // Drop the value floor — when a strategic context narrows the set,
+    // every opportunity in it is relevant by definition.
+    delete where[Op.or];
+  }
 
   // v9.4 channel filter: when supplied, restrict candidates to that
   // channel's (type) set at SQL time. Without this, the candidate pool

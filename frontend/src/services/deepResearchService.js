@@ -414,3 +414,40 @@ export async function deletePursuit(id) {
   const res = await api.delete(`${base}/pursuits/${id}`);
   return res.data?.data;
 }
+
+// ---- Phase 7.5 — strategic context bridge --------------------------------
+
+export async function getStrategicContext(kind, id) {
+  const res = await api.get(`${base}/context/${kind}/${encodeURIComponent(id)}`);
+  return res.data?.data;
+}
+
+export async function getOpportunityContextTrace(opportunityId, { kind, id } = {}) {
+  const params = {};
+  if (kind) params.kind = kind;
+  if (id != null) params.id = id;
+  const res = await api.get(`${base}/context/opportunity/${opportunityId}/trace`, { params });
+  return res.data?.data;
+}
+
+// Map a context kind to the My Opportunities query param name. Used by
+// "Open in My Opportunities" buttons throughout the Deep Research surfaces.
+export const CONTEXT_PARAM_MAP = {
+  deepResearch: 'deepResearchId',
+  cluster: 'clusterId',
+  pattern: 'strategicPatternId',
+  venture: 'ventureId',
+  recommendation: 'recommendationId',
+  intervention: 'interventionId',
+  pursuit: 'pursuitId',
+  researchRun: 'researchRunId',
+  agency: 'agencyValue',
+  technology: 'technologyValue',
+};
+
+export function myOpportunitiesContextUrl(kind, id, extras = {}) {
+  const param = CONTEXT_PARAM_MAP[kind];
+  if (!param) return '/admin/opportunities/my';
+  const qs = new URLSearchParams({ [param]: String(id), ...extras }).toString();
+  return `/admin/opportunities/my?${qs}`;
+}

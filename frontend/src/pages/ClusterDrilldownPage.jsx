@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   getClusterDrilldown, refreshClusterDrilldown, getJustification,
-  rebuildEvidence, createPursuit,
+  rebuildEvidence, createPursuit, myOpportunitiesContextUrl,
 } from '../services/deepResearchService';
 import {
   StatCard, OpportunityRow, EvidenceDrawer, JustificationCard,
@@ -136,11 +136,18 @@ function ClusterDrilldownPage() {
             >
               Rebuild Evidence
             </button>
+            <Link
+              to={myOpportunitiesContextUrl('cluster', id)}
+              className="px-3 py-2 rounded-md bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-700"
+              data-testid="cluster-open-in-my-opps"
+            >
+              Open in My Opportunities →
+            </Link>
             <button
               type="button"
               onClick={handleCreatePursuit}
               disabled={busy || opportunities.length === 0}
-              className="px-3 py-2 rounded-md bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-700 disabled:opacity-40"
+              className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40"
             >
               Create Pursuit Workspace
             </button>

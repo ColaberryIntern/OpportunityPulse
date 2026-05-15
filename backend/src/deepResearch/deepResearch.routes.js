@@ -153,6 +153,14 @@ router.get('/pursuits/:id', ...admin, c.getPursuit);
 router.patch('/pursuits/:id', ...admin, jsonSmall, c.updatePursuit);
 router.delete('/pursuits/:id', ...admin, c.deletePursuit);
 
+// ---- Phase 7.5 — strategic context bridge ---------------------------------
+// Returns the full strategic context summary (banner + channel breakdown +
+// linked pursuits + opportunity ids) for any insight kind.
+router.get('/context/:kind/:id', ...admin, c.getStrategicContext);
+// Per-opportunity traceability within an active context (for the
+// expandable traceability panel on My Opportunities rows).
+router.get('/context/opportunity/:id/trace', ...admin, c.getOpportunityContextTrace);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

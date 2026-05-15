@@ -2,13 +2,33 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { listMyOpportunities, recordEvent } from '../services/oiedService';
-import { runDeepResearch } from '../services/deepResearchService';
+import {
+  runDeepResearch, getStrategicContext, createPursuit, CONTEXT_PARAM_MAP,
+} from '../services/deepResearchService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
 import ChannelChip from '../components/oied/ChannelChip';
 import RelatedToolsRow from '../components/oied/RelatedToolsRow';
 import KeywordDrillCloud from '../components/oied/KeywordDrillCloud';
 import { emojiForTitle } from '../components/oied/titleEmoji';
+import StrategicContextBanner from '../components/deepResearch/StrategicContextBanner';
+import OpportunityTraceabilityPanel from '../components/deepResearch/OpportunityTraceabilityPanel';
+
+// Reverse of CONTEXT_PARAM_MAP — given a query param key, return the
+// context kind. Used to detect Phase 7.5 strategic-mode entry.
+const PARAM_TO_KIND = Object.fromEntries(
+  Object.entries(CONTEXT_PARAM_MAP).map(([k, v]) => [v, k]),
+);
+
+function detectStrategicContext(searchParams) {
+  for (const [paramKey, kind] of Object.entries(PARAM_TO_KIND)) {
+    const value = searchParams.get(paramKey);
+    if (value != null && String(value).length > 0) {
+      return { kind, id: value, paramKey };
+    }
+  }
+  return null;
+}
 
 // Mirrors backend channels.service.CHANNELS — used by the filter
 // dropdown and the page header. Order is canonical.
@@ -62,7 +82,7 @@ function ScoreBadge({ priority, fit }) {
   );
 }
 
-function OppRow({ opp, onGenerated, onOpenDetail }) {
+function OppRow({ opp, onGenerated, onOpenDetail, strategicContext }) {
   useEffect(() => {
     // 'viewed' event — best-effort. Fires once per row mount.
     recordEvent(opp.id, 'viewed', { source: 'my_opportunities_list' });
@@ -122,6 +142,13 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
             onGenerated={onGenerated}
             recommendedAction={opp.context && opp.context.recommended_action}
           />
+          {strategicContext && strategicContext.kind && strategicContext.id != null && (
+            <OpportunityTraceabilityPanel
+              opportunityId={opp.id}
+              contextKind={strategicContext.kind}
+              contextId={strategicContext.id}
+            />
+          )}
         </div>
         {opp.sourceUrl && (
           <a
@@ -141,7 +168,7 @@ function OppRow({ opp, onGenerated, onOpenDetail }) {
 // One of the priority sections at the top of the page (Act Now / High Value
 // / Quick Wins). Collapses gracefully when it has zero matching rows so the
 // admin doesn't see empty placeholders.
-function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail }) {
+function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail, strategicContext }) {
   if (!rows || rows.length === 0) return null;
   const toneMap = {
     red: 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/40 text-red-700 dark:text-red-300',
@@ -159,7 +186,14 @@ function BucketSection({ title, hint, rows, tone = 'blue', testId, onOpenDetail 
         <span className="text-xs font-mono">{rows.length}</span>
       </div>
       <ul className="list-none p-0">
-        {rows.slice(0, 8).map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={onOpenDetail} />)}
+        {rows.slice(0, 8).map((opp) => (
+          <OppRow
+            key={opp.id}
+            opp={opp}
+            onOpenDetail={onOpenDetail}
+            strategicContext={strategicContext}
+          />
+        ))}
       </ul>
     </section>
   );
@@ -243,6 +277,12 @@ function MyOpportunitiesPage() {
   const channelFromUrl = searchParams.get('channel') || '';
   const sortFromUrl = searchParams.get('sort') || 'priority';
   const qFromUrl = searchParams.get('q') || '';
+  // Phase 7.5 — strategic context entry. Detected from query params
+  // (deepResearchId / clusterId / strategicPatternId / etc).
+  const strategicCtxRef = useMemo(() => detectStrategicContext(searchParams), [searchParams]);
+  const [strategicContext, setStrategicContext] = useState(null);
+  const [contextErr, setContextErr] = useState(null);
+  const [creatingPursuit, setCreatingPursuit] = useState(false);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [channelBuckets, setChannelBuckets] = useState(null);
@@ -272,18 +312,71 @@ function MyOpportunitiesPage() {
       if (channelFromUrl) params.channel = channelFromUrl;
       if (sortFromUrl && sortFromUrl !== 'priority') params.sort = sortFromUrl;
       if (qFromUrl) params.q = qFromUrl;
+      // Phase 7.5 — pass the strategic-context query param straight through
+      // so the backend can resolve it to an opportunity-id set additively.
+      if (strategicCtxRef) {
+        params[strategicCtxRef.paramKey] = strategicCtxRef.id;
+      }
       const res = await listMyOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
       setChannelBuckets(res.pagination?.channelBuckets || null);
+      // The backend echoes the resolved context summary on the response so
+      // we don't need a second roundtrip. Fall back to a dedicated fetch
+      // below if it's absent (e.g. older response shape).
+      if (res.pagination?.strategicContext) {
+        setStrategicContext(res.pagination.strategicContext);
+      }
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl, qFromUrl]);
+  }, [page, pageSize, minScore, channelFromUrl, sortFromUrl, qFromUrl, strategicCtxRef]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Phase 7.5 — fetch strategic context summary for the banner. If the
+  // listMy response already echoed it (the common path), this is a no-op.
+  useEffect(() => {
+    let cancelled = false;
+    async function go() {
+      if (!strategicCtxRef) { setStrategicContext(null); setContextErr(null); return; }
+      try {
+        const out = await getStrategicContext(strategicCtxRef.kind, strategicCtxRef.id);
+        if (!cancelled) { setStrategicContext(out); setContextErr(null); }
+      } catch (e) {
+        if (!cancelled) setContextErr(e?.response?.data?.message || e.message || 'Context load failed');
+      }
+    }
+    // Only fetch if we don't already have the matching context from listMy.
+    if (!strategicContext
+        || strategicContext.kind !== strategicCtxRef?.kind
+        || String(strategicContext.id) !== String(strategicCtxRef?.id)) {
+      go();
+    }
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategicCtxRef]);
+
+  async function handleCreatePursuit() {
+    if (!strategicContext) return;
+    setCreatingPursuit(true);
+    try {
+      const created = await createPursuit({
+        name: `${strategicContext.title} — pursuit`,
+        anchorKind: strategicContext.kind,
+        anchorId: strategicContext.id,
+        summary: strategicContext.description,
+        linkedOpportunityIds: rows.slice(0, 25).map((r) => r.id),
+      });
+      if (created && created.id) {
+        navigate(`/admin/deep-research/pursuits/${created.id}`);
+      }
+    } catch (e) {
+      setContextErr(e?.response?.data?.message || e.message || 'Pursuit creation failed');
+    } finally { setCreatingPursuit(false); }
+  }
 
   // Server now does the channel filtering, but keep a client-side guard
   // against any rows that might slip through (e.g. cross-channel mixing
@@ -377,6 +470,11 @@ function MyOpportunitiesPage() {
             <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium">
               OIED
             </span>
+            {strategicCtxRef && (
+              <span className="text-xs px-2 py-0.5 rounded bg-cyan-100 text-cyan-800 font-medium">
+                Strategic Context Mode
+              </span>
+            )}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Active opportunities ≥ $1,000, scored against your business profile
@@ -384,6 +482,22 @@ function MyOpportunitiesPage() {
             full list below.
           </p>
         </header>
+
+        {/* Phase 7.5: strategic context banner — surfaces when entering My
+            Opportunities via a Deep Research insight (cluster / pattern /
+            recommendation / etc). All operational actions stay available. */}
+        {strategicCtxRef && (
+          <StrategicContextBanner
+            context={strategicContext}
+            onCreatePursuit={handleCreatePursuit}
+            busy={creatingPursuit}
+          />
+        )}
+        {contextErr && (
+          <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {contextErr}
+          </div>
+        )}
 
         {/* Cross-channel keyword search box. Submitting sets ?q= and triggers
             the search across all channels (or scoped to the active channel). */}
@@ -556,6 +670,7 @@ function MyOpportunitiesPage() {
               rows={grouped.act_now}
               testId="bucket-act-now"
               onOpenDetail={setDetailOppId}
+              strategicContext={strategicCtxRef}
             />
             <BucketSection
               title="💰 High Value"
@@ -564,6 +679,7 @@ function MyOpportunitiesPage() {
               rows={grouped.high_value}
               testId="bucket-high-value"
               onOpenDetail={setDetailOppId}
+              strategicContext={strategicCtxRef}
             />
             <BucketSection
               title="⚡ Quick Wins"
@@ -572,6 +688,7 @@ function MyOpportunitiesPage() {
               rows={grouped.quick_win}
               testId="bucket-quick-wins"
               onOpenDetail={setDetailOppId}
+              strategicContext={strategicCtxRef}
             />
             <BucketSection
               title="🎯 Strategic Patterns"
@@ -580,6 +697,7 @@ function MyOpportunitiesPage() {
               rows={grouped.strategic_pattern}
               testId="bucket-strategic-pattern"
               onOpenDetail={setDetailOppId}
+              strategicContext={strategicCtxRef}
             />
               </>
             )}
@@ -594,7 +712,14 @@ function MyOpportunitiesPage() {
                     : `All matching (${displayRows.length})`}
             </h2>
             <ul className="list-none p-0" data-testid="my-opportunities-list">
-              {displayRows.map((opp) => <OppRow key={opp.id} opp={opp} onOpenDetail={setDetailOppId} />)}
+              {displayRows.map((opp) => (
+                <OppRow
+                  key={opp.id}
+                  opp={opp}
+                  onOpenDetail={setDetailOppId}
+                  strategicContext={strategicCtxRef}
+                />
+              ))}
             </ul>
           </>
         )}
