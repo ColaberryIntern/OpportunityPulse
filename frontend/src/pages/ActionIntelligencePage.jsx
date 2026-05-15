@@ -4,11 +4,13 @@ import {
   getActionIntelligence, getEvidence,
   refreshRelationships, refreshGraph, refreshAccelerationAssets,
   myOpportunitiesContextUrl,
+  activatePursuit, getGraphNeighborhood,
 } from '../services/deepResearchService';
 import {
   StatCard, ChannelBadge, RecurringRow, OpportunityRow,
   EvidenceDrawer, RelevancePill, PursuitStatusPill,
 } from '../components/deepResearch/ActionVisuals';
+import OpportunityGraphCanvas from '../components/deepResearch/OpportunityGraphCanvas';
 
 // Deep Research Phase 7 — Action Intelligence Dashboard.
 // Top-level surface for evidence-backed venture execution intelligence.
@@ -37,6 +39,9 @@ function ActionIntelligencePage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [drawer, setDrawer] = useState(null);
+  // Phase 8 — graph state.
+  const [graphCenter, setGraphCenter] = useState(null);
+  const [graph, setGraph] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -63,6 +68,38 @@ function ActionIntelligencePage() {
         opportunities: (data && data.opportunities) || [],
       });
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  // Phase 8 — graph + activation helpers.
+  async function loadGraphCenter(kind, value) {
+    setBusy(true); setErr(null);
+    try {
+      const out = await getGraphNeighborhood({ kind, value, depth: 1, maxEdges: 60 });
+      setGraphCenter({ kind, value });
+      setGraph(out);
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || 'Failed to load graph');
+    } finally { setBusy(false); }
+  }
+  async function handleActivateAgency(agencyValue) {
+    setBusy(true); setErr(null);
+    try {
+      const out = await activatePursuit({ sourceKind: 'agency', sourceId: agencyValue });
+      if (out && out.pursuit && out.pursuit.id) {
+        window.location.assign(`/admin/deep-research/pursuits/${out.pursuit.id}`);
+      }
+    } catch (e) { setErr(e?.response?.data?.message || e.message); }
+    finally { setBusy(false); }
+  }
+  async function handleActivateCluster(clusterId) {
+    setBusy(true); setErr(null);
+    try {
+      const out = await activatePursuit({ sourceKind: 'cluster', sourceId: clusterId });
+      if (out && out.pursuit && out.pursuit.id) {
+        window.location.assign(`/admin/deep-research/pursuits/${out.pursuit.id}`);
+      }
+    } catch (e) { setErr(e?.response?.data?.message || e.message); }
     finally { setBusy(false); }
   }
 
@@ -157,12 +194,23 @@ function ActionIntelligencePage() {
                     </div>
                     {c.description && <p className="text-xs text-gray-600">{c.description}</p>}
                   </Link>
-                  <Link
-                    to={myOpportunitiesContextUrl('cluster', c.id)}
-                    className="inline-block mt-2 text-[11px] px-2 py-1 rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
-                  >
-                    Open in My Opportunities →
-                  </Link>
+                  <div className="flex gap-1 mt-2 flex-wrap">
+                    <Link
+                      to={myOpportunitiesContextUrl('cluster', c.id)}
+                      className="text-[11px] px-2 py-1 rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+                    >
+                      Open in My Opps →
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); handleActivateCluster(c.id); }}
+                      disabled={busy}
+                      className="text-[11px] px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-40"
+                      data-testid={`activate-cluster-${c.id}`}
+                    >
+                      + Activate Pursuit
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -266,14 +314,31 @@ function ActionIntelligencePage() {
                   <div className="flex-1 truncate">
                     <span className="text-gray-900 font-medium">{a.value}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-gray-500">
+                  <div className="flex items-center gap-1.5 text-gray-500">
                     <span className="font-semibold text-gray-700">{a.occurrenceCount}</span>
                     <Link
                       to={myOpportunitiesContextUrl('agency', a.value)}
                       className="px-2 py-0.5 rounded bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
                     >
-                      Open in My Opportunities →
+                      Open in My Opps →
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleActivateAgency(a.value)}
+                      disabled={busy}
+                      className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-40"
+                      data-testid={`activate-agency-${a.id}`}
+                    >
+                      + Activate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadGraphCenter('agency', a.value)}
+                      disabled={busy}
+                      className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 hover:bg-violet-200 disabled:opacity-40"
+                    >
+                      Graph
+                    </button>
                   </div>
                 </div>
               ))}
@@ -314,6 +379,42 @@ function ActionIntelligencePage() {
                 </Link>
               ))}
             </div>
+          )}
+        </Section>
+
+        {/* Phase 8 — Force-directed opportunity graph. */}
+        <Section
+          title="Opportunity Graph"
+          subtitle={graphCenter
+            ? `Centered on ${graphCenter.kind} "${graphCenter.value}". Click any node to recenter or open evidence.`
+            : 'Click the "Graph" button next to any recurring agency above to render the neighborhood.'}
+          testId="section-graph"
+          right={graphCenter && (
+            <button
+              type="button"
+              onClick={() => { setGraphCenter(null); setGraph(null); }}
+              className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          )}
+        >
+          {graphCenter && graph ? (
+            <OpportunityGraphCanvas
+              nodes={graph.nodes || []}
+              edges={graph.edges || []}
+              width={900}
+              height={500}
+              onNodeClick={(n) => {
+                if (n.kind === 'opportunity') {
+                  openOpportunityEvidence(Number(n.value));
+                } else {
+                  loadGraphCenter(n.kind, n.value);
+                }
+              }}
+            />
+          ) : (
+            <p className="text-xs text-gray-500 italic">No graph rendered yet.</p>
           )}
         </Section>
 

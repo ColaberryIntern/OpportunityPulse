@@ -3,6 +3,11 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   getPursuit, updatePursuit, deletePursuit, createPursuit, listPursuits,
   myOpportunitiesContextUrl,
+  generatePursuitDrafts, listPursuitHandoffs,
+  scorePursuitReadiness, getPursuitReadiness,
+  buildCaptureStrategy, getCaptureStrategy,
+  listSubmissionArtifacts, addSubmissionArtifact,
+  applySubmissionTemplate, updateSubmissionArtifact,
 } from '../services/deepResearchService';
 import {
   OpportunityRow, JustificationCard, PursuitStatusPill, StatCard, EvidenceDrawer,
@@ -150,11 +155,26 @@ function PursuitWorkspacePage() {
 
   const isNew = id === 'new';
 
+  // Phase 8 panel state.
+  const [readiness, setReadiness] = useState(null);
+  const [capture, setCapture] = useState(null);
+  const [submission, setSubmission] = useState(null);
+  const [handoffs, setHandoffs] = useState([]);
+  const [handoffResult, setHandoffResult] = useState(null);
+
   const load = useCallback(async () => {
     if (isNew) return;
     setLoading(true); setErr(null);
-    try { setData(await getPursuit(id)); }
-    catch (e) { setErr(e?.response?.data?.message || e.message || 'Failed to load pursuit'); }
+    try {
+      const [main, r, cap, sub, h] = await Promise.all([
+        getPursuit(id),
+        getPursuitReadiness(id).catch(() => null),
+        getCaptureStrategy(id).catch(() => null),
+        listSubmissionArtifacts(id).catch(() => null),
+        listPursuitHandoffs(id).catch(() => []),
+      ]);
+      setData(main); setReadiness(r); setCapture(cap); setSubmission(sub); setHandoffs(h || []);
+    } catch (e) { setErr(e?.response?.data?.message || e.message || 'Failed to load pursuit'); }
     finally { setLoading(false); }
   }, [id, isNew]);
   useEffect(() => { load(); }, [load]);
@@ -392,6 +412,292 @@ function PursuitWorkspacePage() {
               </li>
             ))}
           </ul>
+        </Section>
+
+        {/* Phase 8 — Generate Proposal Drafts (Review Queue handoff). */}
+        <Section
+          title="Generate Proposal Drafts"
+          subtitle="One click runs the existing actionGenerator for every linked opportunity and drops drafts in the Review Queue. Human review + human submission still required."
+          testId="section-generate-drafts"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(async () => {
+                const out = await generatePursuitDrafts(data.id);
+                setHandoffResult(out);
+              }, 'Draft generation failed')}
+              disabled={busy || linkedOpps.length === 0}
+              className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40"
+              data-testid="generate-drafts-btn"
+            >
+              {busy ? 'Generating…' : 'Generate Drafts'}
+            </button>
+          }
+        >
+          {handoffResult && (
+            <div className="mb-3 text-xs text-gray-700">
+              Latest run — requested {handoffResult.requested},
+              <span className="text-emerald-700 font-semibold"> {handoffResult.succeeded} succeeded</span>,
+              {handoffResult.failed > 0 && (
+                <span className="text-red-700 font-semibold"> {handoffResult.failed} failed,</span>
+              )}
+              <span className="text-gray-500"> {handoffResult.skipped} skipped</span>.
+            </div>
+          )}
+          {handoffs.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">
+              No drafts generated yet. Click "Generate Drafts" above to start one.
+            </p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-200">
+                  <th className="text-left py-1 px-2">When</th>
+                  <th className="text-left py-1 px-2">Opportunity</th>
+                  <th className="text-left py-1 px-2">Type</th>
+                  <th className="text-left py-1 px-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {handoffs.slice(0, 20).map((h) => (
+                  <tr key={h.id} className="border-b border-gray-100" data-testid={`handoff-${h.id}`}>
+                    <td className="py-1 px-2 text-gray-700">
+                      {new Date(h.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-1 px-2">opp #{h.opportunityId}</td>
+                    <td className="py-1 px-2">{h.outputType}</td>
+                    <td className="py-1 px-2">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                        h.status === 'success' ? 'bg-emerald-100 text-emerald-800'
+                          : h.status === 'failed' ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-600'
+                      }`}>{h.status}</span>
+                      {h.errorMessage && (
+                        <span className="ml-2 text-[11px] text-red-700">{h.errorMessage.slice(0, 80)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Section>
+
+        {/* Phase 8 — Proposal Readiness scoring. */}
+        <Section
+          title="Proposal Readiness"
+          subtitle="Composite 0-100 readiness score across staffing / capability / compliance / assets / dependency / acceleration."
+          testId="section-readiness"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => scorePursuitReadiness(data.id), 'Readiness scoring failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              {readiness ? 'Re-score' : 'Score Readiness'}
+            </button>
+          }
+        >
+          {!readiness ? (
+            <p className="text-xs text-gray-500 italic">
+              No readiness score yet — click the button to compute one.
+            </p>
+          ) : (
+            <div>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className="text-3xl font-bold text-gray-900">
+                  {Number(readiness.compositeScore).toFixed(0)}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                  readiness.classification === 'ready' ? 'bg-emerald-100 text-emerald-800'
+                    : readiness.classification === 'needs_prep' ? 'bg-amber-100 text-amber-800'
+                      : 'bg-red-100 text-red-700'
+                }`}>{readiness.classification}</span>
+                <span className="text-xs text-gray-500">
+                  expected effort ~{Number(readiness.expectedEffortHours || 0).toFixed(0)}h
+                </span>
+                <span className="text-xs text-gray-500">
+                  submission risk {Number(readiness.submissionRisk || 0).toFixed(0)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs mb-3">
+                {[
+                  ['Staffing', readiness.staffingReadiness],
+                  ['Capability', readiness.capabilityReadiness],
+                  ['Compliance', readiness.complianceReadiness],
+                  ['Assets', readiness.assetReadiness],
+                  ['Dependency', readiness.dependencyReadiness],
+                  ['Acceleration', readiness.accelerationPct],
+                ].map(([label, score]) => (
+                  <div key={label} className="rounded border border-gray-200 p-2">
+                    <div className="flex justify-between mb-0.5">
+                      <span className="text-gray-600">{label}</span>
+                      <span className="text-gray-900 font-semibold">{Number(score).toFixed(0)}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-cyan-500" style={{ width: `${Math.min(100, Number(score))}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {Array.isArray(readiness.blockers) && readiness.blockers.length > 0 && (
+                <div className="mb-2">
+                  <h4 className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Blockers</h4>
+                  <ul className="space-y-0.5 text-xs">
+                    {readiness.blockers.map((b, i) => <li key={i} className="text-red-700">• {b}</li>)}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(readiness.accelerators) && readiness.accelerators.length > 0 && (
+                <div className="mb-2">
+                  <h4 className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Accelerators</h4>
+                  <ul className="space-y-0.5 text-xs">
+                    {readiness.accelerators.map((a, i) => <li key={i} className="text-emerald-700">• {a}</li>)}
+                  </ul>
+                </div>
+              )}
+              {readiness.rationale && (
+                <p className="text-[11px] text-gray-500 italic">{readiness.rationale}</p>
+              )}
+            </div>
+          )}
+        </Section>
+
+        {/* Phase 8 — Capture Strategy. */}
+        <Section
+          title="Capture Strategy"
+          subtitle="Capture-plan intelligence: evaluator priorities, agency pain points, differentiators, incumbent risks."
+          testId="section-capture-strategy"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => buildCaptureStrategy(data.id), 'Capture strategy build failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              {capture ? 'Re-build' : 'Build Capture Strategy'}
+            </button>
+          }
+        >
+          {!capture ? (
+            <p className="text-xs text-gray-500 italic">
+              No capture strategy yet — click the button to compose one.
+            </p>
+          ) : (
+            <div>
+              {capture.narrative && (
+                <p className="text-sm text-gray-700 mb-3">{capture.narrative}</p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {[
+                  ['Evaluator priorities', capture.evaluatorPriorities],
+                  ['Agency pain points', capture.agencyPainPoints],
+                  ['Differentiators', capture.differentiators],
+                  ['Positioning', capture.positioningRecommendations],
+                ].map(([title, list]) => (
+                  <section key={title} className="border border-gray-200 rounded-lg p-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">{title}</h4>
+                    {!Array.isArray(list) || list.length === 0 ? (
+                      <p className="text-gray-400 italic">None.</p>
+                    ) : (
+                      <ul className="space-y-0.5">
+                        {list.slice(0, 4).map((row, i) => (
+                          <li key={i} className="text-gray-700">• {row.label}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ))}
+              </div>
+              {Array.isArray(capture.incumbentRisks) && capture.incumbentRisks.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Incumbent Risks</h4>
+                  <ul className="space-y-1 text-xs">
+                    {capture.incumbentRisks.map((r, i) => (
+                      <li key={i} className="rounded border border-amber-200 bg-amber-50 px-2 py-1">
+                        <span className="font-semibold">{r.incumbent}</span> ({r.vendor}) ·
+                        momentum {r.momentum} · severity {r.severity} — {r.notes}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(capture.partnershipOpportunities) && capture.partnershipOpportunities.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Partnership Opportunities</h4>
+                  <ul className="space-y-1 text-xs">
+                    {capture.partnershipOpportunities.map((p, i) => (
+                      <li key={i} className="text-gray-700">• <span className="font-semibold">{p.partner}</span> — {p.rationale}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </Section>
+
+        {/* Phase 8 — Submission Readiness Foundations. */}
+        <Section
+          title="Submission Readiness"
+          subtitle="Track the artifacts every submission needs. Foundations only — Phase 9 will wire RFP attachments + compliance matrix."
+          testId="section-submission"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => applySubmissionTemplate(data.id), 'Template apply failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              Apply Default Template
+            </button>
+          }
+        >
+          {(!submission || !submission.artifacts || submission.artifacts.length === 0) ? (
+            <p className="text-xs text-gray-500 italic">
+              No artifacts tracked yet. Click "Apply Default Template" to seed a punch-list.
+            </p>
+          ) : (
+            <div>
+              <div className="flex items-baseline gap-4 mb-3 text-xs">
+                <span className="font-semibold text-gray-700">
+                  {submission.summary.ready} / {submission.summary.total} ready
+                  ({submission.summary.completion_pct}%)
+                </span>
+                {submission.summary.missing > 0 && (
+                  <span className="text-red-700">{submission.summary.missing} missing</span>
+                )}
+                {submission.summary.in_progress > 0 && (
+                  <span className="text-amber-700">{submission.summary.in_progress} in progress</span>
+                )}
+              </div>
+              <ul className="space-y-1.5 text-xs">
+                {submission.artifacts.map((a) => (
+                  <li key={a.id} className="flex items-center gap-3 border border-gray-200 rounded px-3 py-2">
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                      a.status === 'ready' || a.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800'
+                        : a.status === 'in_progress' ? 'bg-amber-100 text-amber-800'
+                          : 'bg-red-100 text-red-700'
+                    }`}>{a.status}</span>
+                    <span className="flex-1 text-gray-900">{a.label}</span>
+                    <select
+                      value={a.status}
+                      onChange={(e) => withBusy(
+                        () => updateSubmissionArtifact(a.id, { status: e.target.value }),
+                        'Update failed',
+                      )}
+                      disabled={busy}
+                      className="text-[11px] px-2 py-1 rounded border border-gray-300"
+                    >
+                      {['missing', 'in_progress', 'ready', 'reviewed'].map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Section>
 
         <Section title="Submission Reminder" testId="section-submission-reminder">

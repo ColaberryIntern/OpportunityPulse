@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { listMyOpportunities, recordEvent } from '../services/oiedService';
 import {
   runDeepResearch, getStrategicContext, createPursuit, CONTEXT_PARAM_MAP,
+  activatePursuit as activatePursuitApi,
 } from '../services/deepResearchService';
 import OpportunityActionButtons from '../components/oied/OpportunityActionButtons';
 import OpportunityDetailModal from '../components/oied/OpportunityDetailModal';
@@ -13,6 +14,7 @@ import KeywordDrillCloud from '../components/oied/KeywordDrillCloud';
 import { emojiForTitle } from '../components/oied/titleEmoji';
 import StrategicContextBanner from '../components/deepResearch/StrategicContextBanner';
 import OpportunityTraceabilityPanel from '../components/deepResearch/OpportunityTraceabilityPanel';
+import StrategicWorkspaceTabs, { StrategicWorkspaceTabsBody } from '../components/deepResearch/StrategicWorkspaceTabs';
 
 // Reverse of CONTEXT_PARAM_MAP — given a query param key, return the
 // context kind. Used to detect Phase 7.5 strategic-mode entry.
@@ -283,6 +285,10 @@ function MyOpportunitiesPage() {
   const [strategicContext, setStrategicContext] = useState(null);
   const [contextErr, setContextErr] = useState(null);
   const [creatingPursuit, setCreatingPursuit] = useState(false);
+  // Phase 8 — strategic workspace tab state. Defaults to 'opportunities'
+  // so existing list view is the landing tab and is byte-for-byte
+  // unchanged when no strategic context is present.
+  const [workspaceTab, setWorkspaceTab] = useState('opportunities');
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [channelBuckets, setChannelBuckets] = useState(null);
@@ -374,6 +380,31 @@ function MyOpportunitiesPage() {
       }
     } catch (e) {
       setContextErr(e?.response?.data?.message || e.message || 'Pursuit creation failed');
+    } finally { setCreatingPursuit(false); }
+  }
+
+  // Phase 8 — Activate Pursuit. Uses the pursuit-activation engine which
+  // attaches justification + acceleration suggestions in addition to opps.
+  async function handleActivatePursuit() {
+    if (!strategicCtxRef) return;
+    setCreatingPursuit(true); setContextErr(null);
+    try {
+      const sourceKindMap = {
+        deepResearch: 'recommendation',
+        cluster: 'cluster', pattern: 'pattern', venture: 'venture',
+        recommendation: 'recommendation', intervention: 'intervention',
+        pursuit: 'opportunity_group', researchRun: 'research_run',
+        agency: 'agency', technology: 'technology',
+      };
+      const sourceKind = sourceKindMap[strategicCtxRef.kind] || 'manual';
+      const result = await activatePursuitApi({
+        sourceKind, sourceId: strategicCtxRef.id,
+      });
+      if (result && result.pursuit && result.pursuit.id) {
+        navigate(`/admin/deep-research/pursuits/${result.pursuit.id}`);
+      }
+    } catch (e) {
+      setContextErr(e?.response?.data?.message || e.message || 'Pursuit activation failed');
     } finally { setCreatingPursuit(false); }
   }
 
@@ -491,6 +522,32 @@ function MyOpportunitiesPage() {
             onCreatePursuit={handleCreatePursuit}
             busy={creatingPursuit}
           />
+        )}
+
+        {/* Phase 8: Strategic Workspace Tabs — only render in strategic mode. */}
+        {strategicCtxRef && (
+          <>
+            <StrategicWorkspaceTabs
+              active={workspaceTab}
+              onChange={setWorkspaceTab}
+              strategicContext={strategicContext}
+              onActivatePursuit={handleActivatePursuit}
+            />
+            {workspaceTab !== 'opportunities' && (
+              <section
+                className="bg-white border border-gray-200 rounded-lg p-4 mb-4"
+                data-testid="workspace-tab-body"
+              >
+                <StrategicWorkspaceTabsBody
+                  active={workspaceTab}
+                  rows={rows}
+                  strategicContext={strategicContext}
+                  contextKind={strategicCtxRef.kind}
+                  contextId={strategicCtxRef.id}
+                />
+              </section>
+            )}
+          </>
         )}
         {contextErr && (
           <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

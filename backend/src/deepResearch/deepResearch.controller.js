@@ -50,6 +50,15 @@ const pursuitWorkspace = require('./pursuitWorkspace.service');
 const actionIntelligence = require('./actionIntelligence.service');
 // Phase 7.5 — strategic context bridge into My Opportunities.
 const deepResearchContext = require('./deepResearchContext.service');
+// Phase 8 — pursuit activation + strategic capture intelligence.
+const pursuitActivation = require('./pursuitActivation.service');
+const reviewQueueBridge = require('./reviewQueueBridge.service');
+const proposalReadiness = require('./proposalReadiness.service');
+const opportunityExpansion = require('./opportunityExpansion.service');
+const ventureConflict = require('./ventureConflict.service');
+const researchRevenue = require('./researchRevenue.service');
+const captureStrategy = require('./captureStrategy.service');
+const submissionReadiness = require('./submissionReadiness.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -936,6 +945,159 @@ async function getOpportunityContextTrace(req, res) {
   } catch (e) { return mapError(res, e, 'getOpportunityContextTrace', 'Failed to load opportunity context trace'); }
 }
 
+// ---- Phase 8 — pursuit activation + strategic capture intelligence -------
+
+async function activatePursuit(req, res) {
+  try {
+    const { sourceKind, sourceId, name, summary } = req.body || {};
+    const result = await pursuitActivation.activate({
+      sourceKind, sourceId, name, summary,
+      actor: req.user ? req.user.email : null,
+    });
+    return successResponse(res, result, 'Pursuit activated', 201);
+  } catch (e) { return mapError(res, e, 'activatePursuit', 'Failed to activate pursuit'); }
+}
+
+async function listPursuitActivations(req, res) {
+  try {
+    return successResponse(res, await pursuitActivation.listActivations({
+      pursuitId: req.query.pursuitId, limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listPursuitActivations', 'Failed to list pursuit activations'); }
+}
+
+async function generatePursuitDrafts(req, res) {
+  try {
+    const { outputType, skipExisting } = req.body || {};
+    return successResponse(res, await reviewQueueBridge.generateDraftsForPursuit(
+      Number(req.params.id),
+      {
+        outputType: outputType || 'proposal',
+        actor: req.user ? req.user.email : null,
+        generatedBy: req.user ? req.user.id : null,
+        skipExisting: skipExisting !== false,
+      },
+    ), 'Drafts generated');
+  } catch (e) { return mapError(res, e, 'generatePursuitDrafts', 'Failed to generate proposal drafts'); }
+}
+
+async function listPursuitHandoffs(req, res) {
+  try {
+    return successResponse(res,
+      await reviewQueueBridge.listHandoffsForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listPursuitHandoffs', 'Failed to list handoffs'); }
+}
+
+async function scorePursuitReadiness(req, res) {
+  try {
+    return successResponse(res,
+      await proposalReadiness.scorePursuit(Number(req.params.id)),
+      'Readiness scored');
+  } catch (e) { return mapError(res, e, 'scorePursuitReadiness', 'Failed to score readiness'); }
+}
+
+async function getPursuitReadiness(req, res) {
+  try {
+    const row = await proposalReadiness.getLatestForPursuit(Number(req.params.id));
+    return successResponse(res, row);
+  } catch (e) { return mapError(res, e, 'getPursuitReadiness', 'Failed to load readiness'); }
+}
+
+async function getOpportunityExpansion(req, res) {
+  try {
+    const { kind, id } = req.params;
+    return successResponse(res, await opportunityExpansion.getExpansion(
+      kind, id, { rebuild: req.query.rebuild === 'true' },
+    ));
+  } catch (e) { return mapError(res, e, 'getOpportunityExpansion', 'Failed to load expansion'); }
+}
+
+async function computeVentureConflicts(req, res) {
+  try {
+    return successResponse(res, await ventureConflict.computeForVenture(Number(req.params.id)),
+      'Venture conflicts computed');
+  } catch (e) { return mapError(res, e, 'computeVentureConflicts', 'Failed to compute venture conflicts'); }
+}
+
+async function listVentureConflicts(req, res) {
+  try {
+    return successResponse(res, await ventureConflict.listForVenture(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listVentureConflicts', 'Failed to list venture conflicts'); }
+}
+
+async function refreshResearchRevenue(req, res) {
+  try {
+    return successResponse(res, await researchRevenue.refreshFromRecurringRelationships({
+      minOccurrence: Number((req.body && req.body.minOccurrence) || 4),
+    }), 'Research-to-revenue mapping refreshed');
+  } catch (e) { return mapError(res, e, 'refreshResearchRevenue', 'Failed to refresh research-to-revenue'); }
+}
+
+async function listResearchRevenue(req, res) {
+  try {
+    return successResponse(res, await researchRevenue.listLinks({
+      signalKind: req.query.signalKind || null,
+      limit: Number(req.query.limit) || 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listResearchRevenue', 'Failed to list research-revenue links'); }
+}
+
+async function buildCaptureForPursuit(req, res) {
+  try {
+    return successResponse(res, await captureStrategy.buildForPursuit(Number(req.params.id)),
+      'Capture strategy built');
+  } catch (e) { return mapError(res, e, 'buildCaptureForPursuit', 'Failed to build capture strategy'); }
+}
+
+async function getCaptureForPursuit(req, res) {
+  try {
+    return successResponse(res, await captureStrategy.getLatestForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'getCaptureForPursuit', 'Failed to load capture strategy'); }
+}
+
+async function listSubmissionArtifactsForPursuit(req, res) {
+  try {
+    const [list, summary] = await Promise.all([
+      submissionReadiness.listForPursuit(Number(req.params.id)),
+      submissionReadiness.summarizeForPursuit(Number(req.params.id)),
+    ]);
+    return successResponse(res, { summary, artifacts: list });
+  } catch (e) { return mapError(res, e, 'listSubmissionArtifactsForPursuit', 'Failed to load submission artifacts'); }
+}
+
+async function addSubmissionArtifact(req, res) {
+  try {
+    const { artifactKind, label, required, status, contentRef, metadata, opportunityId } = req.body || {};
+    return successResponse(res, await submissionReadiness.addArtifact({
+      pursuitId: Number(req.params.id),
+      opportunityId: opportunityId == null ? null : Number(opportunityId),
+      artifactKind, label, required, status, contentRef, metadata,
+    }), 'Artifact added', 201);
+  } catch (e) { return mapError(res, e, 'addSubmissionArtifact', 'Failed to add submission artifact'); }
+}
+
+async function updateSubmissionArtifact(req, res) {
+  try {
+    return successResponse(res, await submissionReadiness.updateArtifact(
+      Number(req.params.id), req.body || {},
+    ), 'Artifact updated');
+  } catch (e) { return mapError(res, e, 'updateSubmissionArtifact', 'Failed to update submission artifact'); }
+}
+
+async function deleteSubmissionArtifact(req, res) {
+  try {
+    return successResponse(res, await submissionReadiness.deleteArtifact(Number(req.params.id)),
+      'Artifact deleted');
+  } catch (e) { return mapError(res, e, 'deleteSubmissionArtifact', 'Failed to delete submission artifact'); }
+}
+
+async function applySubmissionTemplate(req, res) {
+  try {
+    return successResponse(res, await submissionReadiness.applyDefaultTemplate(Number(req.params.id)),
+      'Default submission template applied');
+  } catch (e) { return mapError(res, e, 'applySubmissionTemplate', 'Failed to apply submission template'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -1041,4 +1203,23 @@ module.exports = {
   // Phase 7.5
   getStrategicContext,
   getOpportunityContextTrace,
+  // Phase 8
+  activatePursuit,
+  listPursuitActivations,
+  generatePursuitDrafts,
+  listPursuitHandoffs,
+  scorePursuitReadiness,
+  getPursuitReadiness,
+  getOpportunityExpansion,
+  computeVentureConflicts,
+  listVentureConflicts,
+  refreshResearchRevenue,
+  listResearchRevenue,
+  buildCaptureForPursuit,
+  getCaptureForPursuit,
+  listSubmissionArtifactsForPursuit,
+  addSubmissionArtifact,
+  updateSubmissionArtifact,
+  deleteSubmissionArtifact,
+  applySubmissionTemplate,
 };

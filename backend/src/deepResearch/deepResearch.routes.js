@@ -161,6 +161,41 @@ router.get('/context/:kind/:id', ...admin, c.getStrategicContext);
 // expandable traceability panel on My Opportunities rows).
 router.get('/context/opportunity/:id/trace', ...admin, c.getOpportunityContextTrace);
 
+// ---- Phase 8 — pursuit activation + capture intelligence ------------------
+// Pursuit activation
+router.post('/pursuits/activate', ...admin, jsonSmall, c.activatePursuit);
+router.get('/pursuits/activations', ...admin, c.listPursuitActivations);
+
+// Review Queue handoff
+router.post('/pursuits/:id/generate-drafts', ...admin, jsonSmall, c.generatePursuitDrafts);
+router.get('/pursuits/:id/handoffs', ...admin, c.listPursuitHandoffs);
+
+// Proposal readiness
+router.post('/pursuits/:id/readiness/score', ...admin, c.scorePursuitReadiness);
+router.get('/pursuits/:id/readiness', ...admin, c.getPursuitReadiness);
+
+// Opportunity expansion
+router.get('/expansion/:kind/:id', ...admin, c.getOpportunityExpansion);
+
+// Venture conflict
+router.post('/ventures/:id/conflicts', ...admin, c.computeVentureConflicts);
+router.get('/ventures/:id/conflicts', ...admin, c.listVentureConflicts);
+
+// Research-to-revenue
+router.post('/research-revenue/refresh', ...admin, jsonSmall, c.refreshResearchRevenue);
+router.get('/research-revenue', ...admin, c.listResearchRevenue);
+
+// Capture strategy
+router.post('/pursuits/:id/capture-strategy', ...admin, c.buildCaptureForPursuit);
+router.get('/pursuits/:id/capture-strategy', ...admin, c.getCaptureForPursuit);
+
+// Submission readiness foundations
+router.get('/pursuits/:id/submission-artifacts', ...admin, c.listSubmissionArtifactsForPursuit);
+router.post('/pursuits/:id/submission-artifacts', ...admin, jsonSmall, c.addSubmissionArtifact);
+router.post('/pursuits/:id/submission-artifacts/template', ...admin, c.applySubmissionTemplate);
+router.patch('/submission-artifacts/:id', ...admin, jsonSmall, c.updateSubmissionArtifact);
+router.delete('/submission-artifacts/:id', ...admin, c.deleteSubmissionArtifact);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

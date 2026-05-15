@@ -451,3 +451,74 @@ export function myOpportunitiesContextUrl(kind, id, extras = {}) {
   const qs = new URLSearchParams({ [param]: String(id), ...extras }).toString();
   return `/admin/opportunities/my?${qs}`;
 }
+
+// ---- Phase 8 — pursuit activation + strategic capture intelligence ------
+
+export async function activatePursuit(body) {
+  const res = await api.post(`${base}/pursuits/activate`, body);
+  return res.data?.data;
+}
+export async function generatePursuitDrafts(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/generate-drafts`, body);
+  return res.data?.data;
+}
+export async function listPursuitHandoffs(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/handoffs`);
+  return res.data?.data;
+}
+export async function scorePursuitReadiness(pursuitId) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/readiness/score`);
+  return res.data?.data;
+}
+export async function getPursuitReadiness(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/readiness`);
+  return res.data?.data;
+}
+export async function getOpportunityExpansion(kind, id, params = {}) {
+  const res = await api.get(`${base}/expansion/${kind}/${encodeURIComponent(id)}`, { params });
+  return res.data?.data;
+}
+export async function computeVentureConflicts(ventureId) {
+  const res = await api.post(`${base}/ventures/${ventureId}/conflicts`);
+  return res.data?.data;
+}
+export async function listVentureConflicts(ventureId) {
+  const res = await api.get(`${base}/ventures/${ventureId}/conflicts`);
+  return res.data?.data;
+}
+export async function refreshResearchRevenue(body = {}) {
+  const res = await api.post(`${base}/research-revenue/refresh`, body);
+  return res.data?.data;
+}
+export async function listResearchRevenue(params = {}) {
+  const res = await api.get(`${base}/research-revenue`, { params });
+  return res.data?.data;
+}
+export async function buildCaptureStrategy(pursuitId) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/capture-strategy`);
+  return res.data?.data;
+}
+export async function getCaptureStrategy(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/capture-strategy`);
+  return res.data?.data;
+}
+export async function listSubmissionArtifacts(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/submission-artifacts`);
+  return res.data?.data;
+}
+export async function addSubmissionArtifact(pursuitId, body) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/submission-artifacts`, body);
+  return res.data?.data;
+}
+export async function applySubmissionTemplate(pursuitId) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/submission-artifacts/template`);
+  return res.data?.data;
+}
+export async function updateSubmissionArtifact(artifactId, body) {
+  const res = await api.patch(`${base}/submission-artifacts/${artifactId}`, body);
+  return res.data?.data;
+}
+export async function deleteSubmissionArtifact(artifactId) {
+  const res = await api.delete(`${base}/submission-artifacts/${artifactId}`);
+  return res.data?.data;
+}

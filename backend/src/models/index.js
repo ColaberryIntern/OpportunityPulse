@@ -137,6 +137,15 @@ const JustificationRecord = require('./JustificationRecord')(sequelize);
 const OpportunityGraphEdge = require('./OpportunityGraphEdge')(sequelize);
 const ProposalAccelerationAsset = require('./ProposalAccelerationAsset')(sequelize);
 const ClusterDrilldown = require('./ClusterDrilldown')(sequelize);
+// Deep Research Phase 8 — pursuit activation + strategic capture intelligence.
+const PursuitActivation = require('./PursuitActivation')(sequelize);
+const ReviewQueueHandoff = require('./ReviewQueueHandoff')(sequelize);
+const ProposalReadinessScore = require('./ProposalReadinessScore')(sequelize);
+const VentureConflict = require('./VentureConflict')(sequelize);
+const CaptureStrategy = require('./CaptureStrategy')(sequelize);
+const OpportunityExpansion = require('./OpportunityExpansion')(sequelize);
+const ResearchRevenueLink = require('./ResearchRevenueLink')(sequelize);
+const SubmissionReadinessArtifact = require('./SubmissionReadinessArtifact')(sequelize);
 
 const models = {
   UserRole,
@@ -245,6 +254,14 @@ const models = {
   OpportunityGraphEdge,
   ProposalAccelerationAsset,
   ClusterDrilldown,
+  PursuitActivation,
+  ReviewQueueHandoff,
+  ProposalReadinessScore,
+  VentureConflict,
+  CaptureStrategy,
+  OpportunityExpansion,
+  ResearchRevenueLink,
+  SubmissionReadinessArtifact,
 };
 
 // Set up associations
