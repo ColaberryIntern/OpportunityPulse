@@ -205,7 +205,8 @@ async function runPrioritization(capacitySnapshot, latestForecast) {
   return { run_id: runId, ranking: ranked };
 }
 
-// Read the latest ranking.
+// Read the latest ranking. Joins venture titles so the dashboard renders
+// readable rows without a second round trip.
 async function getLatestRanking() {
   const latest = await PortfolioScore.findOne({ order: [['created_at', 'DESC']], attributes: ['runId'] });
   if (!latest) return null;
@@ -213,7 +214,19 @@ async function getLatestRanking() {
     where: { runId: latest.runId },
     order: [['portfolio_rank', 'ASC']],
   });
-  return { run_id: latest.runId, ranking: rows.map((r) => r.toJSON()) };
+  const titleMap = new Map();
+  if (rows.length) {
+    const { Op } = require('sequelize');
+    const ventures = await VentureIdea.findAll({
+      where: { id: { [Op.in]: rows.map((r) => r.ventureIdeaId) } },
+      attributes: ['id', 'title'],
+    });
+    for (const v of ventures) titleMap.set(v.id, v.title);
+  }
+  return {
+    run_id: latest.runId,
+    ranking: rows.map((r) => ({ ...r.toJSON(), title: titleMap.get(r.ventureIdeaId) || null })),
+  };
 }
 
 module.exports = {

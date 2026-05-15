@@ -105,11 +105,11 @@ function PortfolioDashboardPage() {
 
         {err && <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">{err}</div>}
 
-        {/* Portfolio health stats */}
+        {/* Portfolio health stats — capacity uses Sequelize toJSON camelCase keys. */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-          <StatTile label="Active ventures" value={capacity ? capacity.active_ventures : '—'} />
-          <StatTile label="BUILD_NOW" value={capacity ? capacity.build_now_ventures : '—'} />
-          <StatTile label="Concurrency limit" value={capacity ? capacity.concurrency_limit : '—'} hint="parallel ventures" />
+          <StatTile label="Active ventures" value={capacity ? capacity.activeVentures : '—'} />
+          <StatTile label="BUILD_NOW" value={capacity ? capacity.buildNowVentures : '—'} />
+          <StatTile label="Concurrency limit" value={capacity ? capacity.concurrencyLimit : '—'} hint="parallel ventures" />
           <StatTile label="Reassessments" value={recommendations.length} hint="pending review" />
           <StatTile label="Templates detected" value={templates.length} />
         </div>
@@ -119,8 +119,8 @@ function PortfolioDashboardPage() {
           right={capacity && <span className="text-xs text-gray-500">{capacity.rationale}</span>}>
           {capacity ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <PressureGauge label="Staffing pressure" value={capacity.staffing_pressure} />
-              <PressureGauge label="Infrastructure pressure" value={capacity.infra_pressure} />
+              <PressureGauge label="Staffing pressure" value={capacity.staffingPressure} />
+              <PressureGauge label="Infrastructure pressure" value={capacity.infraPressure} />
             </div>
           ) : <p className="text-gray-400">Capacity not yet computed. Click <strong>Refresh</strong>.</p>}
           {capacity && (
