@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 8 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Strategic evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Lifecycle</h2>
+  <a href="#activation">Pursuit activation</a>
+  <a href="#handoff">Review Queue handoff</a>
+  <a href="#readiness">Proposal readiness</a>
+  <a href="#expansion">Opportunity expansion</a>
+  <a href="#conflict">Tool-vs-venture conflict</a>
+  <a href="#research-revenue">Research → revenue</a>
+  <a href="#capture">Capture strategy</a>
+  <a href="#submission">Submission foundations</a>
+
+  <h2>UI</h2>
+  <a href="#tabs">Strategic Workspace Tabs</a>
+  <a href="#graph">Opportunity graph</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-action">Action Intelligence</a>
+  <a href="#screen-graph">Graph</a>
+  <a href="#screen-tabs">Workspace tabs</a>
+  <a href="#screen-capture-tab">Capture tab</a>
+  <a href="#screen-rel-tab">Relationships tab</a>
+  <a href="#screen-pursuit">Pursuit full page</a>
+  <a href="#screen-readiness">Readiness panel</a>
+  <a href="#screen-capture">Capture panel</a>
+  <a href="#screen-submission">Submission panel</a>
+  <a href="#screen-generate">Generate drafts</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 9</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 8</h1>
+  <p class="subtitle">Pursuit Activation + Strategic Capture Intelligence · 2026-05-15 · commit <code>793a48f</code> · all 1,931 backend tests passing</p>
+  <p>
+    Phase 1–7.6 built strategic intelligence. Phase 8 makes it
+    <strong>operational</strong>. Every Phase 1-7 surface now ends with an
+    <strong>Activate Pursuit</strong> button; every pursuit gains four new
+    panels (Generate Drafts, Proposal Readiness, Capture Strategy,
+    Submission Readiness); My Opportunities in strategic mode gains
+    8-tab Strategic Workspace navigation; the Action Intelligence dashboard
+    gains a force-directed Opportunity Graph. All measure-only — no
+    auto-submit, no auto-bid, no auto-launch.
+  </p>
+  <p>
+    On the seeded prod run: pursuit #3 was activated from agency
+    "Dallas Area Rapid Transit (dart)", picked up <strong>25 opportunities +
+    15 acceleration suggestions</strong>; readiness scored at composite
+    <strong>55 (needs_prep)</strong>; capture strategy composed
+    <strong>2 evaluator priorities + 1 differentiator</strong>; submission
+    template seeded <strong>5 required artifacts</strong>. Full Phase 8
+    lifecycle exercised end-to-end on real prod data.
+  </p>
+  <p>
+    <span class="badge b-done">8 tables</span>
+    <span class="badge b-done">8 services</span>
+    <span class="badge b-done">29 new tests</span>
+    <span class="badge b-done">1931 / 1931 passing</span>
+    <span class="badge b-cyan">Force-directed graph</span>
+    <span class="badge b-gov">Human-in-the-loop</span>
+    <span class="badge b-warn">No auto-submission</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Strategic evolution</h2>
+  <p>
+    The platform's role-progression so far:
+  </p>
+  <table>
+    <thead><tr><th>Phase</th><th>Identity</th><th>Key question</th></tr></thead>
+    <tbody>
+      <tr><td>1-2</td><td>Strategic opportunity intelligence</td><td>What's out there?</td></tr>
+      <tr><td>3-4</td><td>Execution + portfolio intelligence</td><td>Can we execute?</td></tr>
+      <tr><td>5-6</td><td>Temporal + adaptive operations</td><td>What's changing?</td></tr>
+      <tr><td>7</td><td>Evidence-backed traceability</td><td>Where's the evidence?</td></tr>
+      <tr><td>7.5</td><td>Contextual continuity</td><td>How do I navigate to action?</td></tr>
+      <tr><td>7.6</td><td>Competing-tools awareness</td><td>What's already shipping?</td></tr>
+      <tr><td><strong>8</strong></td><td><strong>Strategic capture intelligence</strong></td><td><strong>Can we win this?</strong></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Phase 8 closes the loop from research → opportunity → pursuit → proposal
+    draft → human review → human submission. The system observes, scores,
+    and recommends. Humans decide and submit.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — what this phase will and will not do</h2>
+  <h3>What Phase 8 IS allowed to do</h3>
+  <ul>
+    <li>Convert any insight (cluster / agency / pattern / etc.) into a fully-loaded PursuitWorkspace + audit row.</li>
+    <li>Invoke the existing <code>actionGenerator.generateOutput</code> pipeline to drop drafts into the Review Queue (status: 'draft').</li>
+    <li>Score readiness, compose capture strategy, build research→revenue links, detect venture↔tool conflicts.</li>
+    <li>Seed a default submission-readiness template + track artifact status.</li>
+    <li>Render a force-directed graph of the persisted opportunity edges.</li>
+  </ul>
+  <h3>What Phase 8 will NEVER do</h3>
+  <ul>
+    <li><strong>Auto-submit proposals.</strong> Every submit is a human click on the agency portal.</li>
+    <li><strong>Auto-bid.</strong> Generated drafts land in the Review Queue with status='draft'.</li>
+    <li><strong>Auto-launch ventures.</strong> The conflict engine flags overlaps; it doesn't kill ideas.</li>
+    <li><strong>Auto-execute capture strategies.</strong> Every recommendation is text the operator can copy or ignore.</li>
+    <li><strong>Hide why.</strong> Every score persists factors. Every recommendation persists rationale.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped (10 features)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Strategic Workspace Tabs</td><td>Inside <code>MyOpportunitiesPage</code> when strategic context is active — 8 tabs</td></tr>
+      <tr><td>2</td><td>Pursuit Activation Engine</td><td><code>pursuitActivation.service</code> + Activate-Pursuit CTAs on Action Intelligence, MyOpps</td></tr>
+      <tr><td>3</td><td>Pursuit → Review Queue Handoff</td><td><code>reviewQueueBridge.service</code> + "Generate Drafts" panel on pursuit</td></tr>
+      <tr><td>4</td><td>Proposal Readiness Intelligence</td><td><code>proposalReadiness.service</code> + Readiness panel on pursuit</td></tr>
+      <tr><td>5</td><td>Opportunity Expansion Engine</td><td><code>opportunityExpansion.service</code> + powers the Relationships tab</td></tr>
+      <tr><td>6</td><td>Force-Directed Opportunity Graph</td><td><code>OpportunityGraphCanvas.jsx</code> — vanilla SVG, no library</td></tr>
+      <tr><td>7</td><td>Tool-vs-Venture Conflict Intelligence</td><td><code>ventureConflict.service</code></td></tr>
+      <tr><td>8</td><td>Research-to-Revenue Mapping</td><td><code>researchRevenue.service</code></td></tr>
+      <tr><td>9</td><td>Capture Strategy Intelligence</td><td><code>captureStrategy.service</code> + Capture panel on pursuit</td></tr>
+      <tr><td>10</td><td>Submission Readiness Foundations</td><td><code>submissionReadiness.service</code> + Submission panel on pursuit. <strong>FOUNDATIONS ONLY — full engine in Phase 9</strong>.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block feature" id="activation">
+  <h2>1. Pursuit Activation Engine</h2>
+  <p>
+    The activation engine takes <strong>11 supported source kinds</strong>
+    (cluster, pattern, agency, technology, opportunity_group, ecosystem,
+    venture, research_run, recommendation, intervention, manual) and
+    produces:
+  </p>
+  <ol>
+    <li>A fresh <code>PursuitWorkspace</code> row with the source title as the default name, the right anchor_kind, and the resolved opportunity-id list.</li>
+    <li>A <code>PursuitActivation</code> audit row recording WHAT was attached (justification snapshot, opportunity count, acceleration suggestions).</li>
+    <li>Phase 7 justification snapshot persisted for the anchor when applicable.</li>
+    <li>Acceleration-suggestion enrichment for the top 5 linked opportunities.</li>
+  </ol>
+  <p>
+    Re-activation against the same source <strong>creates a new pursuit</strong> rather than mutating
+    an existing one — pursuits are the operator's workspace; activation is one-shot.
+  </p>
+</section>
+
+<section class="block feature" id="handoff">
+  <h2>2. Pursuit → Review Queue Handoff</h2>
+  <p>
+    The "Generate Drafts" button on the pursuit page invokes
+    <code>reviewQueueBridge.generateDraftsForPursuit</code>, which:
+  </p>
+  <ol>
+    <li>Iterates every linked opportunity in the pursuit.</li>
+    <li>Calls the existing <code>actionGenerator.generateOutput({ opportunityId, type: 'proposal' })</code> pipeline for each.</li>
+    <li>Records every attempt (success/failure/skipped) in <code>review_queue_handoffs</code> for audit.</li>
+    <li>Idempotency: a successful handoff for the same (pursuit, opportunity, type) tuple is skipped on re-run instead of duplicating.</li>
+    <li>Stamps the pursuit's <code>linkedOutputIds</code> with the resulting <code>OpportunityOutput</code> rows so the Review Queue surface picks them up naturally.</li>
+  </ol>
+  <p>
+    The actionGenerator already runs the Phase 6 grounding + past-wins
+    pipeline per opportunity — the bridge doesn't re-engineer it. Result:
+    drafts land in the Review Queue with full grounding context, and the
+    operator reviews + submits manually.
+  </p>
+</section>
+
+<section class="block feature" id="readiness">
+  <h2>3. Proposal Readiness Intelligence</h2>
+  <p>
+    Six weighted dimensions sum to a 0-100 composite:
+  </p>
+  <table>
+    <thead><tr><th>Dimension</th><th>Weight</th><th>What it measures</th></tr></thead>
+    <tbody>
+      <tr><td>Staffing</td><td>25</td><td>Mean <code>execution_readiness_score</code> across active ventures</td></tr>
+      <tr><td>Capability</td><td>20</td><td>Mean AI score on the linked opportunities</td></tr>
+      <tr><td>Compliance</td><td>15</td><td>Ready / required <code>submission_readiness_artifacts</code></td></tr>
+      <tr><td>Assets</td><td>20</td><td>Reusable proposal acceleration assets matched per opp</td></tr>
+      <tr><td>Dependency</td><td>10</td><td>Resolved / total Phase 5 dependency edges</td></tr>
+      <tr><td>Acceleration</td><td>10</td><td>Already-drafted + approved OpportunityOutputs</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Output classification: <code>ready</code> (≥75 + ≤2 blockers) /
+    <code>needs_prep</code> (≥40) / <code>blocked</code> (≥3 blockers OR low
+    composite + multiple blockers). Plus expected effort hours, submission
+    risk, blockers list, accelerators list, and a deterministic rationale —
+    all persisted in <code>proposal_readiness_scores</code>.
+  </p>
+</section>
+
+<section class="block feature" id="expansion">
+  <h2>4. Opportunity Expansion Engine</h2>
+  <p>
+    Given an anchor (cluster / agency / technology / research_run / pattern /
+    opportunity / venture), expansion:
+  </p>
+  <ol>
+    <li>Collects seed opportunity ids via the Phase 7.5 context resolver.</li>
+    <li>Reads each seed's agency / technology / NAICS vocabulary.</li>
+    <li>Queries <code>opportunity_relationships</code> for adjacent opportunities sharing those entities.</li>
+    <li>Hydrates titles for the UI + extracts future-signal hints.</li>
+  </ol>
+  <p>
+    Cached in <code>opportunity_expansions</code>. The Strategic Workspace
+    Tabs' Relationships tab is powered by this engine.
+  </p>
+</section>
+
+<section class="block feature" id="conflict">
+  <h2>5. Tool-vs-Venture Conflict Intelligence</h2>
+  <p>
+    Detects overlap between a generated <code>VentureIdea</code> and the
+    existing <code>AiTool</code> registry. Per-tool scoring uses:
+  </p>
+  <ul>
+    <li><strong>Feature overlap</strong> — Jaccard similarity on tokenized title+description+mvpScope vs tool name+description+tags.</li>
+    <li><strong>Category overlap</strong> — venture-meta categories vs tool category.</li>
+    <li><strong>Semantic overlap</strong> — same as feature in v1 (Phase 9 will swap to embeddings).</li>
+    <li>Severity boost when the tool's <code>momentum_stage</code> is dominant or explosive.</li>
+  </ul>
+  <p>
+    Differentiation hints are generated deterministically based on the
+    tool's pricing tier, open-source status, and category. Strategic
+    realism, not idea-killer.
+  </p>
+</section>
+
+<section class="block feature" id="research-revenue">
+  <h2>6. Research-to-Revenue Mapping</h2>
+  <p>
+    Bridges signal channels (research / ecosystem / hiring / funding /
+    pattern) to procurement opportunities. For each signal:
+  </p>
+  <ol>
+    <li>Tokenize the signal label.</li>
+    <li>Find opportunities that match the tokens in title or description.</li>
+    <li>Aggregate target agencies + procurement themes from the matched opps.</li>
+    <li>Compute <code>implementation_demand</code> (opps + agency diversity + funded-tool count) and <code>strength</code> (demand × recency).</li>
+  </ol>
+  <p>
+    Persisted in <code>research_revenue_links</code>. A standing
+    <code>POST /research-revenue/refresh</code> endpoint rebuilds the map
+    from the top recurring technologies in
+    <code>opportunity_relationships</code>.
+  </p>
+</section>
+
+<section class="block feature" id="capture">
+  <h2>7. Capture Strategy Intelligence</h2>
+  <p>
+    For a given pursuit, the capture-strategy composer pulls:
+  </p>
+  <ul>
+    <li>Recurring themes + agency history across the pursuit's linked opportunities</li>
+    <li>Competing tools in the same vocabulary (via the Phase 7.6 engine)</li>
+    <li>Top past-win acceleration assets</li>
+  </ul>
+  <p>
+    …and produces seven structured fields: <strong>evaluator priorities,
+    agency pain points, differentiators, positioning recommendations,
+    incumbent risks, partnership opportunities, reusable language</strong> +
+    a composed narrative. No AI call — every recommendation is derived
+    deterministically from the persisted intelligence.
+  </p>
+</section>
+
+<section class="block feature" id="submission">
+  <h2>8. Submission Readiness Foundations</h2>
+  <p>
+    Per the Phase 8 spec, this is foundations only. The
+    <code>submissionReadiness.service</code> exposes:
+  </p>
+  <ul>
+    <li><strong>Asset model</strong> — 7 artifact_kinds (capability_statement, past_performance, staffing_plan, pricing_table, compliance_matrix, attachment, other) × 4 statuses (missing / in_progress / ready / reviewed)</li>
+    <li><strong>Default template</strong> — applies the 5 standard required artifacts to a fresh pursuit on one click</li>
+    <li><strong>Summary read</strong> — total / required / ready / in_progress / missing / completion_pct for the pursuit page header</li>
+    <li><strong>Add / update / delete</strong> CRUD for individual artifacts</li>
+  </ul>
+  <p>
+    What's NOT here: RFP attachment downloading, document storage, compliance
+    matrix generation, package assembly. Those are Phase 9's job.
+  </p>
+</section>
+
+<section class="block feature" id="tabs">
+  <h2>9. Strategic Workspace Tabs</h2>
+  <p>
+    Renders inside <code>MyOpportunitiesPage</code> when a strategic-context
+    query param is present (Phase 7.5 already wires the detection). Eight
+    tabs:
+  </p>
+  <ul>
+    <li><strong>Opportunities</strong> (default) — the existing list view, untouched.</li>
+    <li><strong>Research Sources</strong> — research-channel opps filtered out of the row set.</li>
+    <li><strong>Relationships</strong> — recurring agencies / technologies / NAICS for this context (via opportunityExpansion).</li>
+    <li><strong>Strategic Signals</strong> — per-channel breakdown chips.</li>
+    <li><strong>Proposal Assets</strong> — pointer into the pursuit workspace where assets are managed.</li>
+    <li><strong>Capture Intelligence</strong> — pointer into the pursuit's Capture Strategy panel.</li>
+    <li><strong>Competing Tools</strong> — pointer into the Deep Research report.</li>
+    <li><strong>Related Pursuits</strong> — list of pursuits already anchored to this context.</li>
+  </ul>
+  <p>
+    Tab state is purely client-side; URL doesn't change so refresh keeps
+    the user on the Opportunities tab (the safe default).
+  </p>
+</section>
+
+<section class="block feature" id="graph">
+  <h2>10. Force-Directed Opportunity Graph</h2>
+  <p>
+    Vanilla SVG renderer with a tiny embedded force-simulation —
+    <strong>no graph library</strong>, no bundle bloat. ~200 lines total.
+  </p>
+  <ul>
+    <li>n-body repulsion + spring attraction in 70 lines of math</li>
+    <li>Bounded 180-iteration simulation — runs once on input change, then stops</li>
+    <li>Pan / zoom / hover / click-to-recenter / opportunity-evidence-drawer on click</li>
+    <li>Color-coded node kinds: opportunity / agency / technology / vendor / NAICS / venture / cluster / keyword</li>
+    <li>Renders only when a center node is picked (degrades gracefully when empty)</li>
+  </ul>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-action">
+  <h2>Screen: Action Intelligence with Activate-Pursuit + Graph CTAs</h2>
+  <img class="shot" src="deep-research-assets/p8-01-action-intelligence-cta.png" alt="action intelligence" />
+  <p class="caption">Every cluster card and recurring-agency row gains "+ Activate Pursuit" + "Graph" buttons alongside the existing "Open in My Opps" link.</p>
+</section>
+
+<section class="block" id="screen-graph">
+  <h2>Screen: Force-Directed Opportunity Graph</h2>
+  <img class="shot" src="deep-research-assets/p8-02-opportunity-graph.png" alt="opportunity graph" />
+  <p class="caption">Vanilla SVG, no library. Click any node to recenter (entities) or open the evidence drawer (opportunities).</p>
+</section>
+
+<section class="block" id="screen-tabs">
+  <h2>Screen: Strategic Workspace Tabs</h2>
+  <img class="shot" src="deep-research-assets/p8-03-workspace-tabs.png" alt="workspace tabs" />
+  <p class="caption">Tab strip + "+ Activate Pursuit" CTA appears above the existing search bar in strategic mode. Default tab is Opportunities so the existing flow is unchanged.</p>
+</section>
+
+<section class="block" id="screen-capture-tab">
+  <h2>Screen: Capture Intelligence tab</h2>
+  <img class="shot" src="deep-research-assets/p8-04-capture-tab.png" alt="capture tab" />
+  <p class="caption">Tab body explains capture intelligence lives on the pursuit page, with a one-click path to activate one.</p>
+</section>
+
+<section class="block" id="screen-rel-tab">
+  <h2>Screen: Relationships tab</h2>
+  <img class="shot" src="deep-research-assets/p8-05-relationships-tab.png" alt="relationships tab" />
+  <p class="caption">Per-context recurring agencies / technologies / NAICS, lazy-loaded via the Phase 8 expansion engine.</p>
+</section>
+
+<section class="block" id="screen-pursuit">
+  <h2>Screen: Pursuit workspace — full page</h2>
+  <img class="shot" src="deep-research-assets/p8-06-pursuit-full.png" alt="pursuit full" />
+  <p class="caption">The pursuit page now has 4 new Phase 8 panels in addition to the Phase 7 ones: Generate Drafts, Proposal Readiness, Capture Strategy, Submission Readiness.</p>
+</section>
+
+<section class="block" id="screen-readiness">
+  <h2>Screen: Proposal Readiness panel</h2>
+  <img class="shot" src="deep-research-assets/p8-07-readiness.png" alt="readiness" />
+  <p class="caption">Composite 0-100 + classification pill + 6-dimension breakdown bars + blockers (red) + accelerators (green) + expected-effort hours.</p>
+</section>
+
+<section class="block" id="screen-capture">
+  <h2>Screen: Capture Strategy panel</h2>
+  <img class="shot" src="deep-research-assets/p8-08-capture-strategy.png" alt="capture strategy" />
+  <p class="caption">Evaluator priorities, agency pain points, differentiators, positioning recommendations — composed deterministically.</p>
+</section>
+
+<section class="block" id="screen-submission">
+  <h2>Screen: Submission Readiness panel</h2>
+  <img class="shot" src="deep-research-assets/p8-09-submission-readiness.png" alt="submission readiness" />
+  <p class="caption">"Apply Default Template" seeds a 5-artifact punch-list. Each artifact has an inline status dropdown.</p>
+</section>
+
+<section class="block" id="screen-generate">
+  <h2>Screen: Generate Proposal Drafts panel</h2>
+  <img class="shot" src="deep-research-assets/p8-10-generate-drafts.png" alt="generate drafts" />
+  <p class="caption">One-click pursuit → Review Queue handoff. Every attempt is audited in <code>review_queue_handoffs</code>; idempotent re-runs skip already-successful drafts. <strong>Human review + human submission still required.</strong></p>
+</section>
+
+<hr/>
+
+<section class="block arch" id="schema">
+  <h2>Database schema (Phase 8)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>pursuit_activations</code></td><td>Audit row per pursuit-activation event.</td></tr>
+      <tr><td><code>review_queue_handoffs</code></td><td>Audit row per pursuit → actionGenerator draft attempt.</td></tr>
+      <tr><td><code>proposal_readiness_scores</code></td><td>Snapshot per pursuit/opportunity, composite + 6 dimensions + blockers/accelerators.</td></tr>
+      <tr><td><code>venture_conflicts</code></td><td>VentureIdea ↔ AiTool overlap rows with severity + differentiation hints.</td></tr>
+      <tr><td><code>capture_strategies</code></td><td>Composed capture-plan snapshot per scope.</td></tr>
+      <tr><td><code>opportunity_expansions</code></td><td>Cached expansion view per anchor.</td></tr>
+      <tr><td><code>research_revenue_links</code></td><td>Research/ecosystem signal → procurement opportunity map.</td></tr>
+      <tr><td><code>submission_readiness_artifacts</code></td><td>FOUNDATIONS — artifact model + status tracking per pursuit/opportunity.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes (Phase 8)</h2>
+  <ul>
+    <li><code>POST /pursuits/activate</code> — pursuit activation engine entry</li>
+    <li><code>GET /pursuits/activations</code></li>
+    <li><code>POST /pursuits/:id/generate-drafts</code> — Review Queue handoff</li>
+    <li><code>GET /pursuits/:id/handoffs</code></li>
+    <li><code>POST /pursuits/:id/readiness/score</code> + <code>GET /pursuits/:id/readiness</code></li>
+    <li><code>GET /expansion/:kind/:id</code></li>
+    <li><code>POST /ventures/:id/conflicts</code> + <code>GET /ventures/:id/conflicts</code></li>
+    <li><code>POST /research-revenue/refresh</code> + <code>GET /research-revenue</code></li>
+    <li><code>POST /pursuits/:id/capture-strategy</code> + <code>GET /pursuits/:id/capture-strategy</code></li>
+    <li><code>GET /pursuits/:id/submission-artifacts</code> + add/update/delete + <code>POST /pursuits/:id/submission-artifacts/template</code></li>
+  </ul>
+</section>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend</h3>
+  <ul>
+    <li><code>backend/src/migrations/20260515000005-deep-research-phase-8.js</code> (8 tables)</li>
+    <li>8 new Sequelize models in <code>backend/src/models/</code></li>
+    <li>8 new services in <code>backend/src/deepResearch/</code></li>
+    <li><code>backend/tests/deepResearch/phase8.test.js</code> (29 tests)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-8-walkthrough.js</code></li>
+  </ul>
+  <h3>Added — frontend</h3>
+  <ul>
+    <li><code>frontend/src/components/deepResearch/StrategicWorkspaceTabs.jsx</code></li>
+    <li><code>frontend/src/components/deepResearch/OpportunityGraphCanvas.jsx</code></li>
+  </ul>
+  <h3>Modified — additive only</h3>
+  <ul>
+    <li><code>backend/src/models/index.js</code> — register 8 new models</li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> — 18 new handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> — 18 new routes</li>
+    <li><code>frontend/src/services/deepResearchService.js</code> — 16 new client functions</li>
+    <li><code>frontend/src/pages/MyOpportunitiesPage.jsx</code> — workspace tabs + Activate-Pursuit CTA</li>
+    <li><code>frontend/src/pages/PursuitWorkspacePage.jsx</code> — 4 new panels (Generate Drafts / Readiness / Capture Strategy / Submission Readiness)</li>
+    <li><code>frontend/src/pages/ActionIntelligencePage.jsx</code> — Activate-Pursuit CTAs on every cluster + agency row, + Opportunity Graph section</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Tests:</strong> 29 new pure-logic tests; <strong>1931 / 1931 jest tests pass</strong> (+29 net new on top of Phase 7.6's 1902). Zero regressions across all 180 suites.</li>
+    <li><strong>Migration:</strong> ran clean on prod (<code>migrated 0.362s</code>). All 8 tables verified.</li>
+    <li><strong>End-to-end on prod:</strong> Activated pursuit #3 from agency "Dallas Area Rapid Transit (dart)" → 25 opportunities + 15 acceleration suggestions attached. Scored readiness: composite 55, classification needs_prep, 1 blocker. Built capture strategy: 2 evaluator priorities, 1 differentiator, 0 incumbents (registry has no DART-domain dominant tools). Applied submission template: 5 required artifacts seeded.</li>
+    <li><strong>UI:</strong> 10 screenshots captured from live prod across Action Intelligence, MyOpps strategic mode (3 tabs), and the pursuit workspace (5 panels).</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>Two duplicate-identifier eslint errors caught at the prod build step.</strong>
+      Fixed in commit <code>793a48f</code> (graph → graphSummary, readiness →
+      readinessSummary). Both were local-variable shadow conflicts with the
+      new Phase 8 state hooks. Lesson: run <code>npm run build</code> locally
+      before pushing the first deploy of each phase.
+    </li>
+    <li>
+      <strong>The conflict engine uses Jaccard, not embeddings.</strong> Phase 9
+      will add semantic similarity to the AiTool model.
+    </li>
+    <li>
+      <strong>Submission Readiness is foundations only.</strong> RFP downloading,
+      attachment storage, compliance-matrix generation, and package assembly
+      all live in Phase 9.
+    </li>
+    <li>
+      <strong>The graph viewer is 2D.</strong> No edge labels (would clutter at
+      this scale); no edge directionality (the underlying edges are typed but
+      most are undirected/co-occurrence). Phase 9 could add directional
+      arrows for the typed edges.
+    </li>
+    <li>
+      <strong>Workspace tab state is purely client-side.</strong> Refresh
+      returns to the Opportunities tab by design — strategic context
+      survives via URL, but tab selection is not part of the URL contract.
+    </li>
+    <li>
+      <strong>Generate Drafts is one-at-a-time.</strong> A pursuit with 25
+      linked opportunities will sequentially run 25 actionGenerator calls.
+      That's slow at scale (could be 10+ min for a large pursuit) but
+      acceptable for the current 1-3 linked-opp typical pursuit. Phase 9
+      could parallelize with a small concurrency cap.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 9</h2>
+  <ul>
+    <li>
+      <strong>Submission Readiness Engine (full).</strong> RFP attachment
+      locker, document vault, compliance matrix generator, submission
+      package assembler. Plan file <code>staged-spinning-parasol.md</code>
+      is already drafted.
+    </li>
+    <li>
+      <strong>Semantic conflict detection.</strong> Add an embedding column
+      to <code>ai_tools</code> and use cosine similarity in addition to
+      Jaccard so the conflict engine catches paraphrased descriptions.
+    </li>
+    <li>
+      <strong>Pursuit-aware proposal context injection.</strong> Extend
+      <code>actionGenerator</code> to accept an optional <code>pursuitContext</code>
+      arg containing positioning + capture strategy + recurring-agency notes.
+      The Review Queue draft will read better when the pursuit's strategic
+      wrapper is in the prompt.
+    </li>
+    <li>
+      <strong>Parallel draft generation.</strong> Use a small worker pool
+      (concurrency 3-4) for the Review Queue handoff so a 25-opp pursuit
+      doesn't block for 10 minutes.
+    </li>
+    <li>
+      <strong>Directional graph edges.</strong> The underlying graph stores
+      <code>from/to</code> kinds + values; the canvas could render arrows
+      for typed edges like <code>cluster → classified_as → opportunity</code>.
+    </li>
+    <li>
+      <strong>Pursuit outcomes loop.</strong> When a pursuit moves to
+      <code>won</code> or <code>lost</code>, feed the outcome back to capture
+      strategy: which differentiators / agencies / readiness ranges
+      historically converted? Closes the strategic-learning loop.
+    </li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+})();
+</script>
+
+</body>
+</html>
