@@ -97,6 +97,7 @@ function Sidebar({ open, onClose }) {
         { to: '/admin/deep-research', label: '🧠 Deep Research', icon: ICON.star },
         { to: '/admin/deep-research/execution', label: '🚀 Execution Intelligence', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
         { to: '/admin/deep-research/portfolio', label: '📊 Portfolio Intelligence', icon: 'M3 13a4 4 0 014-4h10a4 4 0 014 4v6H3v-6z' },
+        { to: '/admin/deep-research/observatory', label: '🔭 Ecosystem Observatory', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-9v18m9-9H3' },
         { to: '/admin/deep-research/briefings', label: '📬 Briefing Center', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
       ],
     },

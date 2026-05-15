@@ -237,6 +237,152 @@ async function getDependencyGraph() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 5 — DIRECTIONAL dependency edges. A → B means A blocks B until A
+// ships something concrete. Separate persistence from the symmetric edges
+// above (dependency_edges vs venture_dependencies).
+// ---------------------------------------------------------------------------
+
+const ventureLifecycleSvc = require('./ventureLifecycle.service');
+const _LC_INDEX = new Map(ventureLifecycleSvc.STATES.map((s, i) => [s, i]));
+
+// Heuristic — from an overlap pair, propose the more-advanced venture as
+// the blocker (its shared component must ship first).
+function proposeFromOverlap(overlapPair, ventureMap) {
+  const a = ventureMap.get(overlapPair.venture_a_id || overlapPair.ventureAId);
+  const b = ventureMap.get(overlapPair.venture_b_id || overlapPair.ventureBId);
+  if (!a || !b) return null;
+  const aIdx = _LC_INDEX.get(a.lifecycleState);
+  const bIdx = _LC_INDEX.get(b.lifecycleState);
+  if (aIdx === bIdx) return null; // same lifecycle position = no precedence
+  const blocker = aIdx > bIdx ? a : b;
+  const blocked = aIdx > bIdx ? b : a;
+  const overlap = Number(overlapPair.overlap_score || overlapPair.overlapScore || 0);
+  const sharedComps = overlapPair.shared_components || overlapPair.sharedComponents || [];
+  const cascadeRisk = Math.max(0, Math.min(100,
+    Math.round(overlap * 60 + Math.min(sharedComps.length, 8) * 4 + 10)));
+  const prerequisite = sharedComps.length > 0
+    ? `${blocker.title} ships its shared components first: ${sharedComps.slice(0, 4).join(', ')}.`
+    : `${blocker.title} ships before ${blocked.title} (lifecycle precedence).`;
+  return {
+    blockerVentureId: blocker.id,
+    blockedVentureId: blocked.id,
+    dependencyType: 'shared_component',
+    prerequisite,
+    cascadeRisk,
+    metadata: { overlap_score: overlap, shared_components: sharedComps },
+    status: 'proposed',
+  };
+}
+
+// Auto-propose directional edges from infrastructure_overlap rows. Skips
+// pairs already represented in dependency_edges.
+async function autoProposeDirectionalEdges() {
+  const { InfrastructureOverlap, DependencyEdge } = require('../models');
+  const [overlapRows, ventures, existingEdges] = await Promise.all([
+    InfrastructureOverlap.findAll(),
+    VentureIdea.findAll(),
+    DependencyEdge.findAll(),
+  ]);
+  const ventureMap = new Map(ventures.map((v) => [v.id, v]));
+  const existingKeys = new Set(existingEdges.map(
+    (e) => `${e.blockerVentureId}|${e.blockedVentureId}|${e.dependencyType}`,
+  ));
+  const proposed = [];
+  for (const o of overlapRows) {
+    const edge = proposeFromOverlap(o, ventureMap);
+    if (!edge) continue;
+    const key = `${edge.blockerVentureId}|${edge.blockedVentureId}|${edge.dependencyType}`;
+    if (existingKeys.has(key)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const row = await DependencyEdge.create(edge);
+    proposed.push(row.toJSON());
+    existingKeys.add(key);
+  }
+  return { proposed_count: proposed.length, proposed };
+}
+
+// Critical path — longest directional chain. Pure given the edge list.
+// Cycle-safe (each path tracks its own visited set).
+function computeCriticalPath(edges) {
+  const adj = new Map();
+  const nodes = new Set();
+  for (const e of edges) {
+    const blocker = e.blockerVentureId || e.blocker_venture_id;
+    const blocked = e.blockedVentureId || e.blocked_venture_id;
+    if (!adj.has(blocker)) adj.set(blocker, []);
+    adj.get(blocker).push(blocked);
+    nodes.add(blocker); nodes.add(blocked);
+  }
+  let longest = [];
+  function dfs(node, path, visited) {
+    if (visited.has(node)) return;
+    const newPath = path.concat([node]);
+    if (newPath.length > longest.length) longest = newPath;
+    for (const next of (adj.get(node) || [])) {
+      if (visited.has(next)) continue;
+      const nv = new Set(visited); nv.add(node);
+      dfs(next, newPath, nv);
+    }
+  }
+  for (const n of nodes) dfs(n, [], new Set());
+  return longest;
+}
+
+// Bottlenecks: ventures blocking many others (out-degree >= 2) or blocked
+// by many others (in-degree >= 2).
+function identifyBottlenecksOnGraph(edges) {
+  const outDegree = new Map();
+  const inDegree = new Map();
+  for (const e of edges) {
+    const blocker = e.blockerVentureId || e.blocker_venture_id;
+    const blocked = e.blockedVentureId || e.blocked_venture_id;
+    outDegree.set(blocker, (outDegree.get(blocker) || 0) + 1);
+    inDegree.set(blocked, (inDegree.get(blocked) || 0) + 1);
+  }
+  const blockers = Array.from(outDegree.entries())
+    .filter(([, c]) => c >= 2).map(([id, c]) => ({ venture_id: id, blocks: c }))
+    .sort((a, b) => b.blocks - a.blocks);
+  const blocked = Array.from(inDegree.entries())
+    .filter(([, c]) => c >= 2).map(([id, c]) => ({ venture_id: id, blocked_by: c }))
+    .sort((a, b) => b.blocked_by - a.blocked_by);
+  return { top_blockers: blockers, most_blocked: blocked };
+}
+
+// Read the directional graph with critical path + bottlenecks attached.
+async function getDirectedGraph({ status = ['proposed', 'confirmed'] } = {}) {
+  const { DependencyEdge } = require('../models');
+  const ventures = await VentureIdea.findAll();
+  const edges = await DependencyEdge.findAll({ where: { status: { [Op.in]: status } } });
+  const edgeJsons = edges.map((e) => e.toJSON());
+  const criticalPath = computeCriticalPath(edgeJsons);
+  const bottlenecks = identifyBottlenecksOnGraph(edgeJsons);
+  const titleMap = new Map(ventures.map((v) => [v.id, v.title]));
+  return {
+    nodes: ventures.map((v) => ({
+      venture_idea_id: v.id, title: v.title, lifecycle_state: v.lifecycleState,
+    })),
+    edges: edgeJsons.map((e) => ({
+      ...e,
+      blocker_title: titleMap.get(e.blockerVentureId) || null,
+      blocked_title: titleMap.get(e.blockedVentureId) || null,
+    })),
+    critical_path: criticalPath.map((id) => ({
+      venture_idea_id: id, title: titleMap.get(id) || null,
+    })),
+    bottlenecks,
+  };
+}
+
+// Manual status changes — proposed → confirmed | resolved | dismissed.
+async function setEdgeStatus(id, status, actor = null) {
+  const { DependencyEdge } = require('../models');
+  const row = await DependencyEdge.findByPk(id);
+  if (!row) { const err = new Error(`Dependency edge ${id} not found`); err.code = 'NOT_FOUND'; throw err; }
+  await row.update({ status, metadata: { ...(row.metadata || {}), last_actor: actor } });
+  return row.toJSON();
+}
+
 module.exports = {
   ARCH_DEPENDENCY_THRESHOLD,
   SCARCE_ROLES,
@@ -248,4 +394,11 @@ module.exports = {
   buildGraph,
   buildDependencyGraph,
   getDependencyGraph,
+  // Phase 5 — directional edges + critical path.
+  proposeFromOverlap,
+  autoProposeDirectionalEdges,
+  computeCriticalPath,
+  identifyBottlenecksOnGraph,
+  getDirectedGraph,
+  setEdgeStatus,
 };

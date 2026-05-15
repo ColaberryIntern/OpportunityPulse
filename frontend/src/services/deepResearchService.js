@@ -189,3 +189,26 @@ export async function getPortfolioOperations() {
   const res = await api.get(`${base}/portfolio/operations`);
   return res.data?.data;
 }
+
+// ---- Phase 5 — observatory + temporal intelligence -----------------------
+
+export async function refreshObservatory() {
+  const res = await api.post(`${base}/observatory/refresh`);
+  return res.data?.data;
+}
+export async function getObservatoryDashboard(params = {}) {
+  const res = await api.get(`${base}/observatory`, { params });
+  return res.data?.data;
+}
+export async function acknowledgeDriftAlert(id) {
+  const res = await api.post(`${base}/observatory/drift/${id}/acknowledge`);
+  return res.data?.data;
+}
+export async function dismissDriftAlert(id) {
+  const res = await api.post(`${base}/observatory/drift/${id}/dismiss`);
+  return res.data?.data;
+}
+export async function setDependencyEdgeStatus(id, status) {
+  const res = await api.patch(`${base}/observatory/dependencies/${id}`, { status });
+  return res.data?.data;
+}

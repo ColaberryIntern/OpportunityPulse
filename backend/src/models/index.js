@@ -110,6 +110,15 @@ const RoiForecast = require('./RoiForecast')(sequelize);
 const ConfidenceHistory = require('./ConfidenceHistory')(sequelize);
 const ReassessmentEvent = require('./ReassessmentEvent')(sequelize);
 const VentureTemplate = require('./VentureTemplate')(sequelize);
+// Deep Research Phase 5 — temporal + ecosystem intelligence.
+const TemporalSnapshot = require('./TemporalSnapshot')(sequelize);
+const EcosystemMetric = require('./EcosystemMetric')(sequelize);
+const VentureTrajectory = require('./VentureTrajectory')(sequelize);
+const DecisionAccuracy = require('./DecisionAccuracy')(sequelize);
+const PredictiveCapacity = require('./PredictiveCapacity')(sequelize);
+const DriftAlert = require('./DriftAlert')(sequelize);
+const SignalHistory = require('./SignalHistory')(sequelize);
+const DependencyEdge = require('./DependencyEdge')(sequelize);
 
 const models = {
   UserRole,
@@ -194,6 +203,14 @@ const models = {
   ConfidenceHistory,
   ReassessmentEvent,
   VentureTemplate,
+  TemporalSnapshot,
+  EcosystemMetric,
+  VentureTrajectory,
+  DecisionAccuracy,
+  PredictiveCapacity,
+  DriftAlert,
+  SignalHistory,
+  DependencyEdge,
 };
 
 // Set up associations

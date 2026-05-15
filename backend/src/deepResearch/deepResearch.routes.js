@@ -65,6 +65,21 @@ router.post('/portfolio/recommendations/:id/acknowledge', ...admin, c.acknowledg
 router.post('/portfolio/recommendations/:id/dismiss', ...admin, c.dismissRecommendation);
 router.get('/portfolio/operations', ...admin, c.getOperationalMetrics);
 
+// ---- Phase 5 — observatory + temporal intelligence ------------------------
+router.post('/observatory/refresh', ...admin, c.refreshObservatory);
+router.get('/observatory', ...admin, c.getObservatoryDashboard);
+router.get('/observatory/ecosystems', ...admin, c.getEcosystems);
+router.get('/observatory/trajectories', ...admin, c.getTrajectories);
+router.get('/observatory/decision-accuracy', ...admin, c.getDecisionAccuracy);
+router.get('/observatory/predictive-capacity', ...admin, c.getPredictiveCapacity);
+router.get('/observatory/drift', ...admin, c.getDriftAlerts);
+router.post('/observatory/drift/:id/acknowledge', ...admin, c.acknowledgeDrift);
+router.post('/observatory/drift/:id/dismiss', ...admin, c.dismissDrift);
+router.get('/observatory/dependencies', ...admin, c.getDirectedDependencyGraph);
+router.patch('/observatory/dependencies/:id', ...admin, jsonSmall, c.setDependencyEdgeStatus);
+router.get('/observatory/history', ...admin, c.getHistoricalAnalytics);
+router.get('/observatory/signals', ...admin, c.getSignalTimelines);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

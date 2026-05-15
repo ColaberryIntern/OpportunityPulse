@@ -37,6 +37,7 @@ import DeepResearchIndexPage from './pages/DeepResearchIndexPage';
 import BriefingCenterPage from './pages/BriefingCenterPage';
 import ExecutionDashboardPage from './pages/ExecutionDashboardPage';
 import PortfolioDashboardPage from './pages/PortfolioDashboardPage';
+import EcosystemObservatoryPage from './pages/EcosystemObservatoryPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -394,6 +395,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <PortfolioDashboardPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/observatory"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <EcosystemObservatoryPage />
             </ProtectedLayout>
           }
         />

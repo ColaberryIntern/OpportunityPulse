@@ -19,6 +19,14 @@ const ventureDependency = require('./ventureDependency.service');
 const executionCapacityPlanner = require('./executionCapacityPlanner.service');
 const ventureTemplate = require('./ventureTemplate.service');
 const confidenceDecay = require('./confidenceDecay.service');
+const observatoryIntelligence = require('./observatoryIntelligence.service');
+const ecosystemEvolution = require('./ecosystemEvolution.service');
+const ventureTrajectory = require('./ventureTrajectory.service');
+const decisionAccuracy = require('./decisionAccuracy.service');
+const predictiveCapacity = require('./predictiveCapacity.service');
+const strategicDrift = require('./strategicDrift.service');
+const signalHistory = require('./signalHistory.service');
+const historicalPortfolio = require('./historicalPortfolio.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -366,6 +374,80 @@ async function getOperationalMetrics(req, res) {
   catch (e) { return mapError(res, e, 'getOperationalMetrics', 'Failed to load operational metrics'); }
 }
 
+// ---- Phase 5 — observatory + temporal intelligence -----------------------
+
+async function refreshObservatory(req, res) {
+  try {
+    const out = await observatoryIntelligence.refreshObservatory();
+    return successResponse(res, out, out.ok ? 'Observatory refreshed' : 'Observatory refreshed with errors');
+  } catch (e) { return mapError(res, e, 'refreshObservatory', 'Observatory refresh failed'); }
+}
+async function getObservatoryDashboard(req, res) {
+  try { return successResponse(res, await observatoryIntelligence.getObservatoryDashboard({
+    days: Number(req.query.days) || 90,
+  })); } catch (e) { return mapError(res, e, 'getObservatoryDashboard', 'Failed to load observatory'); }
+}
+async function getEcosystems(req, res) {
+  try { return successResponse(res, { ecosystems: await ecosystemEvolution.getLatestEcosystems() }); }
+  catch (e) { return mapError(res, e, 'getEcosystems', 'Failed to load ecosystems'); }
+}
+async function getTrajectories(req, res) {
+  try { return successResponse(res, { trajectories: await ventureTrajectory.getLatestTrajectories() }); }
+  catch (e) { return mapError(res, e, 'getTrajectories', 'Failed to load trajectories'); }
+}
+async function getDecisionAccuracy(req, res) {
+  try { return successResponse(res, { accuracy: await decisionAccuracy.getLatestAccuracy() }); }
+  catch (e) { return mapError(res, e, 'getDecisionAccuracy', 'Failed to load decision accuracy'); }
+}
+async function getPredictiveCapacity(req, res) {
+  try { return successResponse(res, await predictiveCapacity.getLatestForecasts()); }
+  catch (e) { return mapError(res, e, 'getPredictiveCapacity', 'Failed to load predictive capacity'); }
+}
+async function getDriftAlerts(req, res) {
+  try { return successResponse(res, { alerts: await strategicDrift.listPendingAlerts() }); }
+  catch (e) { return mapError(res, e, 'getDriftAlerts', 'Failed to load drift alerts'); }
+}
+async function acknowledgeDrift(req, res) {
+  try {
+    const actor = req.user ? (req.user.email || `user:${req.user.id}`) : null;
+    return successResponse(res, await strategicDrift.acknowledgeAlert(req.params.id, actor), 'Acknowledged');
+  } catch (e) { return mapError(res, e, 'acknowledgeDrift', 'Failed to acknowledge'); }
+}
+async function dismissDrift(req, res) {
+  try {
+    const actor = req.user ? (req.user.email || `user:${req.user.id}`) : null;
+    return successResponse(res, await strategicDrift.dismissAlert(req.params.id, actor), 'Dismissed');
+  } catch (e) { return mapError(res, e, 'dismissDrift', 'Failed to dismiss'); }
+}
+async function getDirectedDependencyGraph(req, res) {
+  try { return successResponse(res, await ventureDependency.getDirectedGraph()); }
+  catch (e) { return mapError(res, e, 'getDirectedDependencyGraph', 'Failed to load directional dependencies'); }
+}
+async function setDependencyEdgeStatus(req, res) {
+  try {
+    const actor = req.user ? (req.user.email || `user:${req.user.id}`) : null;
+    const status = (req.body || {}).status;
+    if (!['proposed', 'confirmed', 'resolved', 'dismissed'].includes(status)) {
+      return errorResponse(res, 'Invalid status', 400);
+    }
+    return successResponse(res, await ventureDependency.setEdgeStatus(req.params.id, status, actor), 'Updated');
+  } catch (e) { return mapError(res, e, 'setDependencyEdgeStatus', 'Failed to update edge'); }
+}
+async function getHistoricalAnalytics(req, res) {
+  try {
+    return successResponse(res, await historicalPortfolio.getHistoricalAnalytics({
+      days: Number(req.query.days) || 90,
+    }));
+  } catch (e) { return mapError(res, e, 'getHistoricalAnalytics', 'Failed to load historical analytics'); }
+}
+async function getSignalTimelines(req, res) {
+  try {
+    return successResponse(res, await signalHistory.getPortfolioTimelines({
+      days: Number(req.query.days) || 90,
+    }));
+  } catch (e) { return mapError(res, e, 'getSignalTimelines', 'Failed to load signal timelines'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -405,4 +487,18 @@ module.exports = {
   acknowledgeRecommendation,
   dismissRecommendation,
   getOperationalMetrics,
+  // Phase 5
+  refreshObservatory,
+  getObservatoryDashboard,
+  getEcosystems,
+  getTrajectories,
+  getDecisionAccuracy,
+  getPredictiveCapacity,
+  getDriftAlerts,
+  acknowledgeDrift,
+  dismissDrift,
+  getDirectedDependencyGraph,
+  setDependencyEdgeStatus,
+  getHistoricalAnalytics,
+  getSignalTimelines,
 };
