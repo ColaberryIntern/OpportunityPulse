@@ -53,11 +53,15 @@ async function rbacScoreFor() {
 }
 
 async function provenanceScore({ organizationId = null } = {}) {
-  const where = {};
-  if (organizationId != null) where.organizationId = Number(organizationId);
-  const totalOutputs = await OpportunityOutput.count({ where });
+  // NOTE: opportunity_outputs has no organization_id column (legacy table
+  // from Phases 1-9). For multi-tenant analytics across this table we
+  // need the same kind of backfill migration we did for Phase 10 tables.
+  // For v1 of Phase 12, report platform-wide provenance coverage.
+  // eslint-disable-next-line no-unused-vars
+  const _orgId = organizationId;
+  const totalOutputs = await OpportunityOutput.count();
   const withProvenance = await OpportunityOutput.count({
-    where: { ...where, promptProvenanceId: { [Op.ne]: null } },
+    where: { promptProvenanceId: { [Op.ne]: null } },
   });
   if (totalOutputs === 0) return { score: 100, total_outputs: 0, with_provenance: 0 };
   const pct = Math.round((withProvenance / totalOutputs) * 100);
