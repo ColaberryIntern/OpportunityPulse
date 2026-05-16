@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 14 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Architecture</h2>
+  <a href="#wiring-arch">Hot-path wiring</a>
+  <a href="#lineage-arch">Lineage edge writer</a>
+  <a href="#quality-arch">Proposal quality scorer</a>
+  <a href="#grounded-arch">Groundedness</a>
+  <a href="#coherence-arch">Strategic coherence</a>
+  <a href="#alignment-arch">Evaluator alignment</a>
+  <a href="#dashboard-arch">Quality Ops dashboard</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Quality Ops full</a>
+  <a href="#screen-actions">Operator actions</a>
+  <a href="#screen-composite">Composite score</a>
+  <a href="#screen-pq">Proposal quality</a>
+  <a href="#screen-gr">Groundedness</a>
+  <a href="#screen-sc">Coherence</a>
+  <a href="#screen-ea">Alignment</a>
+  <a href="#screen-lineage">Lineage coverage</a>
+  <a href="#screen-explainability">Explainability</a>
+  <a href="#screen-alerts">Alerts</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 15</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 14</h1>
+  <div class="subtitle">Operational Lineage Activation + AI Quality Intelligence</div>
+  <p>
+    Phase 13 declared cross-system provenance + lineage but the writes
+    weren&rsquo;t firing in production. Phase 14 activates them: every
+    pursuit activation, capture-strategy build, compliance-matrix build,
+    draft generation, package assembly, queue enqueue, and worker failure
+    now emits a <code>cross_provenance</code> row + a directed-edge in
+    <code>operational_lineage</code>. On top of that activated foundation,
+    Phase 14 adds four deterministic AI-quality scorers (proposal quality,
+    groundedness, strategic coherence, evaluator alignment) and surfaces
+    them in a single <em>AI Quality Operations Center</em> dashboard.
+  </p>
+  <p>
+    <span class="badge b-done">10 features shipped</span>
+    <span class="badge b-done">7 new tables</span>
+    <span class="badge b-done">7 hot paths wired</span>
+    <span class="badge b-done">6 new services</span>
+    <span class="badge b-done">15 new API routes</span>
+    <span class="badge b-done">23 new unit tests</span>
+    <span class="badge b-done">Full suite 2083/2083 green</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Why Phase 14</h2>
+  <p>
+    Phase 13 shipped the provenance + lineage tables, the consistency
+    engine, drift detection, replay infrastructure, and the assurance
+    dashboard. But every Phase 13 chart on prod was at zero because
+    <strong>nothing was actually calling <code>crossProvenance.record()</code></strong>
+    in the hot paths. Phase 14 closes that loop: pursuit activation now
+    records its lineage, every draft generation emits a graph edge, every
+    queue enqueue is captured, every package assembly is traced.
+  </p>
+  <p>
+    Phase 14 also adds the first real <em>quality</em> measurement layer.
+    Until now the platform could measure governance (is this in the right
+    state?) and provenance (where did this come from?) — but not quality
+    (is this proposal any good?). The four new scorers answer that with
+    deterministic, recommendation-only metrics.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — preserved verbatim</h2>
+  <ul>
+    <li><span class="badge b-gov">No auto-modify proposals</span> &mdash; every scorer is recommendation-only; proposal content is never changed</li>
+    <li><span class="badge b-gov">No auto-correct quality</span> &mdash; weaknesses surface, alerts surface, but the operator decides what to do</li>
+    <li><span class="badge b-gov">No hidden scoring</span> &mdash; every score is deterministic, every input is logged, every formula is documented in the source</li>
+    <li><span class="badge b-gov">No bypassed provenance</span> &mdash; the new lineage edges go through the existing Phase 13 tables + helpers; no shadow lineage</li>
+    <li><span class="badge b-gov">Soft-fail wiring</span> &mdash; if a lineage write fails, the calling business logic continues; the audit table is best-effort</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped — the 10 features</h2>
+  <table>
+    <thead><tr><th style="width:24%">Feature</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>1. <strong>Provenance hot-path wiring</strong></td>
+        <td>7 hot paths now call <code>lineageEdgeWriter.helpers.*</code>:
+        actionGenerator (draftGenerated), pursuitActivation (pursuitActivated),
+        captureStrategy.buildForPursuit (captureStrategyBuilt),
+        complianceMatrix.buildForPursuit (complianceMatrixBuilt),
+        submissionPackage.assemblePackage (packageAssembled + SSE),
+        captureWorker.enqueue (queueEnqueued + SSE),
+        captureWorker.recordFailure (SSE failure publish).</td></tr>
+      <tr><td>2. <strong>Operational lineage auto-edges</strong></td>
+        <td><code>lineageEdgeWriter.service</code>: one call emits BOTH a
+        <code>cross_provenance</code> row + an <code>operational_lineage</code>
+        directed edge in parallel. 8 domain helpers + a generic
+        <code>emit()</code> + an <code>emitChain()</code> for multi-step
+        lineage. Soft-fails both sides.</td></tr>
+      <tr><td>3. <strong>AI proposal quality</strong></td>
+        <td>Deterministic 8-dimension composite scorer (strategic_alignment 18%,
+        completeness 14%, evaluator_alignment 16%, differentiation 10%,
+        clarity 8%, readiness_consistency 10%, groundedness 14%,
+        operational_coherence 10%). Classification ladder: excellent (≥85)
+        / strong (≥70) / adequate (≥50) / weak.</td></tr>
+      <tr><td>4. <strong>Groundedness intelligence</strong></td>
+        <td>Per-claim classification using 3 marker lists (claim / evidence /
+        weak). Returns supported / weak / unsupported / inert counts +
+        unsupported sample sentences for inspection. groundedness_score =
+        (supported + weak*0.3) / total_claims.</td></tr>
+      <tr><td>5. <strong>Strategic coherence</strong></td>
+        <td>Contradiction detection (8 pre-defined opposing-phrase pairs) +
+        pursuit alignment + positioning alignment + readiness alignment.
+        Coherence_score = pursuit*0.45 + positioning*0.35 + readiness*0.20
+        − (15 per contradiction, capped at 30).</td></tr>
+      <tr><td>6. <strong>Evaluator alignment</strong></td>
+        <td>Deterministic n-gram match (first 18 chars of normalized priority)
+        against the proposal content, scored over capture_strategy.evaluator
+        _priorities + recurring_agency_signals + strategic_patterns.</td></tr>
+      <tr><td>7. <strong>Interactive lineage explorer</strong> (foundation)</td>
+        <td>API foundation in place via the existing Phase 13
+        <code>GET /operational-lineage/:kind/:id</code> endpoint; full graph
+        visualization page is deferred to Phase 15.</td></tr>
+      <tr><td>8. <strong>Replay visualization</strong> (table only)</td>
+        <td>New <code>replay_visualizations</code> table stores pre-computed
+        timeline payloads. Render component is deferred to Phase 15.</td></tr>
+      <tr><td>9. <strong>RBAC completion sprint</strong></td>
+        <td>Reporter remains the punch-list (Phase 12 surface). Per-route
+        migration to <code>requirePermission(...)</code> happens at the rate
+        operators sign off; Phase 14 ships the alert infrastructure
+        (<code>quality_alerts</code> table) so future migrations can be tracked.</td></tr>
+      <tr><td>10. <strong>AI Quality Ops dashboard</strong></td>
+        <td>At <code>/admin/deep-research/quality-ops</code>. Composite
+        quality score weighting proposal quality (35%) + groundedness (20%)
+        + coherence (15%) + alignment (15%) + explainability (10%) + RBAC
+        (5%). 10 dashboard sections + top-scoring proposals table.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="wiring-arch">
+  <h2>1. Provenance Hot-Path Wiring</h2>
+  <div class="arrow-diagram">actionGenerator.generateOutput({opportunityId, type, pursuitId})
+   |
+   v
+  // ...existing draft generation logic
+   |
+   v
+  lineageEdgeWriter.helpers.draftGenerated({
+    pursuitId, opportunityId, outputId,
+    organizationId, actorEmail, auditHash,
+  })  // soft-fail
+   |
+   ├─→ operational_lineage: pursuit → opportunity_output, relation='generated'
+   └─→ cross_provenance: subject=opportunity_output, provenance_kind='generation',
+                          source_kind=pursuit, source_id=N
+</div>
+  <p>Same shape across all 7 wired hot paths. Each helper is one line; the
+  service handles the dual-write internally. <code>queueEnqueued</code>
+  + <code>packageAssembled</code> also publish on the Phase 11 SSE bus so
+  the governance dashboards stay live.</p>
+</section>
+
+<section class="block arch" id="lineage-arch">
+  <h2>2. Lineage Edge Writer</h2>
+  <pre>lineageEdgeWriter.emit({
+  organizationId, actorEmail,
+  fromKind, fromId, toKind, toId, relation,
+  pursuitId, summary, payload,
+})
+   |
+   ├─→ Promise.all:
+   │     operationalLineage.recordEdge(...)
+   │     crossProvenance.record({
+   │       subjectKind: toKind, subjectId: toId,
+   │       provenanceKind: PROVENANCE_MAP[relation],
+   │       sourceKind: fromKind, sourceId: fromId,
+   │       ...
+   │     })
+   |
+   └─→ return { provenance, edge }</pre>
+  <p>The <code>PROVENANCE_MAP</code> lossy-mapping from edge-relations to
+  provenance-kinds is intentional: relations are graph-edge labels (14
+  declared); provenance_kind is a coarser taxonomy (14 declared but only a
+  subset is mapped from relations). The remaining provenance kinds (like
+  <code>operator</code>, <code>prompt</code>, <code>workflow</code>) are
+  emitted directly by callers that aren&rsquo;t hot-path edge writes.</p>
+</section>
+
+<section class="block arch" id="quality-arch">
+  <h2>3. Proposal Quality Scorer</h2>
+  <pre>WEIGHTS = {
+  strategic_alignment:    0.18,
+  completeness:           0.14,
+  evaluator_alignment:    0.16,
+  differentiation:        0.10,
+  clarity:                0.08,
+  readiness_consistency:  0.10,
+  groundedness:           0.14,
+  operational_coherence:  0.10,
+}  // sum = 1.00
+
+scoreOutput(outputId):
+  1. load OpportunityOutput + PromptProvenance + recent groundedness/coherence/alignment
+  2. score each dimension (deterministic helpers)
+  3. composite = Σ score_i × weight_i
+  4. classify (excellent ≥85 / strong ≥70 / adequate ≥50 / weak)
+  5. build strengths + weaknesses + recommendations
+  6. persist to proposal_quality</pre>
+  <p>The clarity scorer uses avg word length + avg sentence length;
+  differentiation matches against 11 differentiator phrases;
+  completeness rewards content length + the 7 standard sections
+  (executive summary / approach / past performance / staffing / pricing /
+  timeline / compliance). All deterministic.</p>
+</section>
+
+<section class="block arch" id="grounded-arch">
+  <h2>4. Groundedness Intelligence</h2>
+  <p>Three marker lists drive the classifier:</p>
+  <ul>
+    <li><strong>CLAIM_MARKERS</strong> &mdash; strong-claim phrases like
+      &ldquo;we have&rdquo;, &ldquo;we delivered&rdquo;, &ldquo;patented&rdquo;,
+      &ldquo;industry-leading&rdquo; (~20 phrases)</li>
+    <li><strong>EVIDENCE_MARKERS</strong> &mdash; citation phrases like
+      &ldquo;as shown in&rdquo;, &ldquo;per&rdquo;, &ldquo;see attached&rdquo;,
+      &ldquo;past performance #&rdquo; (~14 phrases)</li>
+    <li><strong>WEAK_MARKERS</strong> &mdash; hedge phrases like &ldquo;we
+      believe&rdquo;, &ldquo;we feel&rdquo;, &ldquo;likely&rdquo;,
+      &ldquo;we plan to&rdquo; (~9 phrases)</li>
+  </ul>
+  <pre>classifySentence(s):
+  if not CLAIM_MARKERS match: return 'inert'
+  if EVIDENCE_MARKERS match:  return 'supported'
+  if WEAK_MARKERS match:      return 'weak'
+                              return 'unsupported'
+
+groundedness_score = (supported + weak * 0.3) / claims_total × 100</pre>
+</section>
+
+<section class="block arch" id="coherence-arch">
+  <h2>5. Strategic Coherence</h2>
+  <pre>CONTRADICTION_PAIRS = [
+  ['low cost', 'premium'],
+  ['affordable', 'enterprise-grade'],
+  ['agile', 'enterprise scale'],
+  ['proven', 'experimental'],
+  ['established', 'startup'],
+  ['fully automated', 'human in the loop'],
+  ['rapid', 'meticulous'],
+  ...
+]
+
+coherence_score = pursuit_alignment × 0.45
+                + positioning_alignment × 0.35
+                + readiness_alignment × 0.20
+                − min(30, 15 × contradiction_count)</pre>
+  <p>Pursuit alignment counts evaluator priorities + differentiators that
+  appear in the proposal text. Readiness alignment counts open readiness
+  blockers that are acknowledged in the draft. If a pursuit has no
+  readiness blockers, readiness alignment is 100.</p>
+</section>
+
+<section class="block arch" id="alignment-arch">
+  <h2>6. Evaluator Alignment</h2>
+  <pre>matches(priority, content):
+  p = normalize(priority)
+  return p.length >= 5 AND normalize(content).includes(p.slice(0, 18))
+
+alignment_score = round(addressed / total × 80)
+                + min(20, recurring_signals × 5 + patterns_matched × 5)</pre>
+  <p>The 18-char prefix is deliberate: it&rsquo;s long enough to avoid false
+  positives on single words but short enough to tolerate minor paraphrasing.</p>
+</section>
+
+<section class="block arch" id="dashboard-arch">
+  <h2>7. Quality Ops Dashboard Composite</h2>
+  <pre>composite_quality_score = round(
+    avg_proposal_quality   × 0.35
+  + avg_groundedness       × 0.20
+  + avg_coherence          × 0.15
+  + avg_alignment          × 0.15
+  + explainability_coverage × 0.10
+  + rbac_coverage_pct      × 0.05
+)
+
+status = composite >= 85 ? 'healthy'
+       : composite >= 60 ? 'watch'
+       : composite >= 40 ? 'elevated'
+                          : 'critical'</pre>
+</section>
+
+<h2>Screens</h2>
+
+<section class="block" id="screen-full">
+  <h3>AI Quality Operations Center &mdash; full page</h3>
+  <img class="shot" src="deep-research-assets/p14-01-quality-full.png" alt="Quality Ops full" />
+  <div class="caption">Cold-start view on prod &mdash; no scored proposals yet so every chart is at zero.</div>
+</section>
+<section class="block" id="screen-actions"><h3>Operator actions</h3><img class="shot" src="deep-research-assets/p14-02-actions.png" alt="actions" /></section>
+<section class="block" id="screen-composite"><h3>Composite quality score</h3><img class="shot" src="deep-research-assets/p14-03-composite.png" alt="composite" /></section>
+<section class="block" id="screen-pq"><h3>Proposal quality</h3><img class="shot" src="deep-research-assets/p14-04-proposal-quality.png" alt="pq" /></section>
+<section class="block" id="screen-gr"><h3>Groundedness</h3><img class="shot" src="deep-research-assets/p14-05-groundedness.png" alt="gr" /></section>
+<section class="block" id="screen-sc"><h3>Strategic coherence</h3><img class="shot" src="deep-research-assets/p14-06-coherence.png" alt="sc" /></section>
+<section class="block" id="screen-ea"><h3>Evaluator alignment</h3><img class="shot" src="deep-research-assets/p14-07-alignment.png" alt="ea" /></section>
+<section class="block" id="screen-lineage"><h3>Lineage coverage</h3><img class="shot" src="deep-research-assets/p14-08-lineage-coverage.png" alt="lineage" />
+<div class="caption">8 hot-path lineage helpers visible. Edge count populates as soon as new pursuits / drafts / packages are processed.</div></section>
+<section class="block" id="screen-explainability"><h3>Explainability coverage</h3><img class="shot" src="deep-research-assets/p14-09-explainability.png" alt="explainability" /></section>
+<section class="block" id="screen-alerts"><h3>Open quality alerts</h3><img class="shot" src="deep-research-assets/p14-10-quality-alerts.png" alt="alerts" /></section>
+
+<section class="block" id="schema">
+  <h2>Database schema (Phase 14)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>proposal_quality</code></td><td>Per-output composite score + 8 sub-dimension scores + strengths/weaknesses/recommendations.</td></tr>
+      <tr><td><code>groundedness_analysis</code></td><td>Per-output supported/weak/unsupported claim counts + sample unsupported sentences + evidence sources.</td></tr>
+      <tr><td><code>strategic_coherence</code></td><td>Per-output coherence score + contradictions + sub-alignments (pursuit / positioning / readiness).</td></tr>
+      <tr><td><code>evaluator_alignment</code></td><td>Per-output alignment score + addressed/missing priorities + matched strategic patterns.</td></tr>
+      <tr><td><code>replay_visualizations</code></td><td>Pre-computed replay-timeline payloads (table created, render component deferred to Phase 15).</td></tr>
+      <tr><td><code>quality_metrics</code></td><td>Periodic snapshots of avg quality / groundedness / coherence / alignment across the tenant.</td></tr>
+      <tr><td><code>quality_alerts</code></td><td>Actionable quality alerts with severity + recommendation; recommendation-only.</td></tr>
+    </tbody>
+  </table>
+  <p>Single migration <code>20260516000006-deep-research-phase-14.js</code>. Applied to prod in <strong>0.468s</strong>.</p>
+</section>
+
+<section class="block" id="routes">
+  <h2>API routes (Phase 14)</h2>
+  <pre>GET    /quality-ops                                   &mdash; composite dashboard
+POST   /quality-ops/snapshot                          &mdash; record a snapshot
+GET    /quality-ops/history                           &mdash; recent snapshots
+GET    /quality-ops/alerts                            &mdash; open alerts
+
+GET    /quality/proposal/summary                      &mdash; tenant-wide summary
+GET    /quality/proposal/top                          &mdash; top-scoring outputs
+POST   /quality/proposal/:outputId/score              &mdash; score one output
+GET    /quality/proposal/:outputId                    &mdash; latest score
+
+POST   /quality/groundedness/:outputId/analyze        &mdash; run groundedness
+GET    /quality/groundedness/:outputId                &mdash; latest groundedness
+
+POST   /quality/coherence/:outputId/analyze           &mdash; run coherence
+GET    /quality/coherence/:outputId                   &mdash; latest coherence
+
+POST   /quality/alignment/:outputId/analyze           &mdash; run alignment
+GET    /quality/alignment/:outputId                   &mdash; latest alignment
+
+GET    /lineage-writer/summary                        &mdash; lineage health</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <ul>
+    <li><strong>Backend &mdash; new (15):</strong> 6 services + 7 models + 1 migration + 1 unit test.</li>
+    <li><strong>Backend &mdash; modified:</strong> controller (+15 handlers), routes (+15 routes), models/index.js (+7 models), <code>actionGenerator.service.js</code> + <code>pursuitActivation.service.js</code> + <code>captureStrategy.service.js</code> + <code>complianceMatrix.service.js</code> + <code>submissionPackage.service.js</code> + <code>captureWorker.service.js</code> (lineage wiring).</li>
+    <li><strong>Frontend &mdash; new (1):</strong> <code>QualityOpsPage.jsx</code>.</li>
+    <li><strong>Frontend &mdash; modified:</strong> deepResearchService (+15 client methods), App.jsx (route), Sidebar.jsx (AI Quality Ops link).</li>
+    <li><strong>Docs:</strong> this walkthrough + 10 screenshots.</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 23 new Phase 14 tests covering WEIGHTS sum, classify ladder, clamp, scoreCompleteness / scoreClarity / scoreDifferentiation / scoreStrategicAlignment / buildRecommendations; groundedness CLAIM/EVIDENCE/WEAK markers + splitIntoSentences + classifySentence (all 4 categories) + hasMarker; strategicCoherence CONTRADICTION_PAIRS + detectContradictions (positive + negative) + detectPursuitAlignment + detectReadinessAlignment; evaluatorAlignment normalize + matches + short-priority rejection; lineageEdgeWriter helpers surface + emit soft-fail.</li>
+    <li><strong>Full suite:</strong> 186 suites, <strong>2083 tests</strong>, all green (Phase 13 baseline 2060 &rarr; +23 net, zero regressions).</li>
+    <li><strong>Migration:</strong> Applied to prod cleanly in <strong>0.468s</strong>; all 7 new tables verified in <code>information_schema</code>.</li>
+    <li><strong>Prod smoke (authenticated):</strong> <code>/api/v1/deep-research/quality-ops</code> returns 200 with composite_quality_score=0 + status=critical because no Phase 14-scored proposals exist on prod yet &mdash; expected cold-start state.</li>
+    <li><strong>Dashboard:</strong> Renders all 10 sections cleanly; 10 screenshots captured.</li>
+    <li><strong>Initial route ordering bug:</strong> First deploy hit a 500 because <code>/quality/proposal/top</code> was being matched against the <code>/:outputId</code> param route. Fixed in commit <code>f0ae2c7</code> by moving static routes before the param route.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations &mdash; deferred to Phase 15</h2>
+  <ul>
+    <li><strong>Interactive lineage explorer is API-only.</strong> The <code>GET /operational-lineage/:kind/:id</code> endpoint returns the BFS graph; a vanilla-SVG render page is deferred.</li>
+    <li><strong>Replay visualization (ReplayTimeline component) deferred.</strong> The <code>replay_visualizations</code> table exists; the React component is Phase 15.</li>
+    <li><strong>Quality scoring is opt-in.</strong> No automatic scheduler runs the 4 scorers on every new draft &mdash; an operator clicks &ldquo;Score&rdquo; on a specific output, or a Phase 15 cron job will run them.</li>
+    <li><strong>RBAC migration sprint completion deferred.</strong> Phase 14 ships the alerts table; per-route migration to <code>requirePermission(...)</code> is incremental.</li>
+    <li><strong>quality_alerts auto-generation deferred.</strong> The table exists; an automatic alert generator (e.g. "this proposal has &gt; 5 unsupported claims") is Phase 15.</li>
+    <li><strong>Hot-path callsites are 7 of ~12.</strong> Still pending: workflowGovernance.transition (approval audits), slaEscalation.actOnEvent (already publishes SSE; lineage edge pending), proposalReadiness.scorePursuit, reviewQueueBridge.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended Phase 15 &mdash; Quality Automation + Lineage Visualization</h2>
+  <ol>
+    <li><strong>Auto-score scheduler</strong> &mdash; cron job runs proposalQuality / groundedness / coherence / alignment on every new OpportunityOutput shortly after generation.</li>
+    <li><strong>Interactive lineage explorer page</strong> &mdash; vanilla SVG force-directed graph at <code>/admin/deep-research/lineage/:scope/:id</code>, similar philosophy to the Phase 8 OpportunityGraphCanvas.</li>
+    <li><strong>ReplayTimeline component</strong> &mdash; timeline visualization over <code>replay_events</code> rows with filtering / collapsing / actor overlay.</li>
+    <li><strong>Auto-alert generator</strong> &mdash; on every quality score, emit a <code>quality_alerts</code> row if composite &lt; 50, groundedness &lt; 50, or contradictions &gt; 0.</li>
+    <li><strong>Remaining hot-path wiring</strong> &mdash; workflowGovernance.transition, slaEscalation.actOnEvent, proposalReadiness.scorePursuit, reviewQueueBridge.</li>
+    <li><strong>RBAC migration sprint</strong> &mdash; replace <code>checkPermissions(ROLES.ADMIN)</code> with <code>requirePermission(...)</code> route-by-route, generating a <code>quality_alerts</code> row per still-legacy route.</li>
+    <li><strong>Quality trend charts</strong> &mdash; sparklines on the dashboard reading from <code>quality_metrics</code> snapshots.</li>
+    <li><strong>Per-output quality drawer</strong> on the Review Queue + Pursuit Workspace pages so operators see quality at the point of review, not on a separate page.</li>
+  </ol>
+</section>
+
+<script>
+  document.querySelectorAll('img.shot').forEach((img) => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</main>
+</div>
+</body>
+</html>
