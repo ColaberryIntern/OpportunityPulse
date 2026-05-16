@@ -175,6 +175,16 @@ const OperatorPermission = require('./OperatorPermission')(sequelize);
 const GovernanceEvent = require('./GovernanceEvent')(sequelize);
 const ObservabilityStream = require('./ObservabilityStream')(sequelize);
 
+// Deep Research Phase 12 — cross-phase tenant backfill + LLM provenance hardening.
+const PromptProvenance = require('./PromptProvenance')(sequelize);
+const AssetMigration = require('./AssetMigration')(sequelize);
+const RbacCoverage = require('./RbacCoverage')(sequelize);
+const GovernanceIntegrity = require('./GovernanceIntegrity')(sequelize);
+const SlaEmailEvent = require('./SlaEmailEvent')(sequelize);
+const AuditArchive = require('./AuditArchive')(sequelize);
+const PermissionCache = require('./PermissionCache')(sequelize);
+const StreamMetric = require('./StreamMetric')(sequelize);
+
 const models = {
   UserRole,
   User,
@@ -315,6 +325,15 @@ const models = {
   OperatorPermission,
   GovernanceEvent,
   ObservabilityStream,
+  // Phase 12
+  PromptProvenance,
+  AssetMigration,
+  RbacCoverage,
+  GovernanceIntegrity,
+  SlaEmailEvent,
+  AuditArchive,
+  PermissionCache,
+  StreamMetric,
 };
 
 // Set up associations

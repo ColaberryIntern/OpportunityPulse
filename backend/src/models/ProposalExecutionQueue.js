@@ -17,6 +17,7 @@ module.exports = (sequelize) => {
     startedAt: { type: DataTypes.DATE, allowNull: true, field: 'started_at' },
     completedAt: { type: DataTypes.DATE, allowNull: true, field: 'completed_at' },
     actor: { type: DataTypes.STRING(120), allowNull: true },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'proposal_execution_queue', timestamps: true, underscored: true,
     indexes: [{ fields: ['pursuit_id'] }, { fields: ['status'] }],

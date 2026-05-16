@@ -14,6 +14,7 @@ module.exports = (sequelize) => {
     queuePressure: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'queue_pressure' },
     rationale: { type: DataTypes.TEXT, allowNull: true },
     capturedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'captured_at' },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'operational_metrics', timestamps: false, underscored: true,
     indexes: [{ fields: ['pursuit_id', 'captured_at'] }],

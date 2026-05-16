@@ -342,6 +342,47 @@ router.post('/governance/stream/publish', ...admin, jsonSmall, c.observabilityPu
 // Pursuit context prompt preview (Phase 11 — deterministic prompt composition)
 router.get('/governance/pursuits/:id/prompt-block', ...admin, c.previewPursuitContextPrompt);
 
+// ---- Phase 12 — tenant-safe operational consistency + provenance ---------
+
+// Governance Integrity dashboard
+router.get('/governance-integrity', ...admin, c.getGovernanceIntegrity);
+router.post('/governance-integrity/snapshot', ...admin, jsonSmall, c.snapshotGovernanceIntegrity);
+router.get('/governance-integrity/history', ...admin, c.listGovernanceIntegrity);
+
+// Prompt provenance
+router.get('/provenance/pursuit/:id', ...admin, c.listProvenanceForPursuit);
+router.get('/provenance/output/:outputId', ...admin, c.getProvenanceByOutput);
+router.get('/provenance/hash/:hash', ...admin, c.getProvenanceByHash);
+router.get('/provenance/summary', ...admin, c.summarizeProvenance);
+router.post('/provenance/pursuit/:id/build', ...admin, jsonSmall, c.buildProvenanceForPursuit);
+
+// RBAC coverage
+router.get('/rbac/coverage', ...admin, c.getRbacCoverage);
+router.post('/rbac/coverage/snapshot', ...admin, jsonSmall, c.snapshotRbacCoverage);
+
+// SLA digest pipeline
+router.post('/sla-digest/preview', ...admin, jsonSmall, c.previewSlaDigest);
+router.post('/sla-digest/send', ...admin, jsonSmall, c.sendSlaDigest);
+router.get('/sla-digest/emails', ...admin, c.listSlaEmails);
+router.get('/sla-digest/summary', ...admin, c.summarizeSlaEmails);
+
+// SSE stream metrics
+router.get('/stream-metrics', ...admin, c.getStreamMetrics);
+router.post('/stream-metrics/snapshot', ...admin, jsonSmall, c.snapshotStreamMetrics);
+router.get('/stream-metrics/history', ...admin, c.listStreamMetrics);
+
+// Asset migration
+router.get('/asset-migration/plan', ...admin, c.planAssetMigration);
+router.post('/asset-migration/run', ...admin, jsonSmall, c.runAssetMigration);
+router.get('/asset-migration/summary', ...admin, c.summarizeAssetMigration);
+router.get('/asset-migration/attempts', ...admin, c.recentAssetMigrationAttempts);
+
+// Audit retention
+router.get('/audit-retention/pressure', ...admin, c.getRetentionPressure);
+router.get('/audit-retention/recommend', ...admin, c.recommendArchive);
+router.post('/audit-retention/archive', ...admin, jsonSmall, c.archiveWindow);
+router.get('/audit-retention/archives', ...admin, c.listArchives);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

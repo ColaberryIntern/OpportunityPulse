@@ -23,19 +23,16 @@ async function tenantHealth(orgId) {
 }
 
 async function slaEscalations(orgId) {
-  // NOTE: Phase 10 sla_events table is not yet tenant-scoped (no
-  // organization_id column). Phase 11 reads all open events across the
-  // platform; tenant scoping will land when the Phase 10 tables get the
-  // organization_id column. The orgId parameter is reserved for that.
-  // eslint-disable-next-line no-unused-vars
-  const _orgId = orgId;
-  const open = await SlaEvent.count({ where: { status: 'open' } });
-  const ack = await SlaEvent.count({ where: { status: 'acknowledged' } });
+  // Phase 12: sla_events now carries organization_id (backfilled to default
+  // org 1). Filter properly.
+  const orgFilter = orgId != null ? { organizationId: Number(orgId) } : {};
+  const open = await SlaEvent.count({ where: { ...orgFilter, status: 'open' } });
+  const ack = await SlaEvent.count({ where: { ...orgFilter, status: 'acknowledged' } });
   const escalated = await SlaEvent.count({
-    where: { severity: { [Op.gte]: 80 }, status: { [Op.in]: ['open', 'acknowledged'] } },
+    where: { ...orgFilter, severity: { [Op.gte]: 80 }, status: { [Op.in]: ['open', 'acknowledged'] } },
   });
   const topSeverity = await SlaEvent.findAll({
-    where: { status: { [Op.in]: ['open', 'acknowledged'] } },
+    where: { ...orgFilter, status: { [Op.in]: ['open', 'acknowledged'] } },
     order: [['severity', 'DESC']], limit: 10,
   });
   return {

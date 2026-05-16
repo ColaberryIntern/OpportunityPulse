@@ -21,6 +21,7 @@ module.exports = (sequelize) => {
     progressPct: { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0, field: 'progress_pct' },
     batchId: { type: DataTypes.STRING(60), allowNull: true, field: 'batch_id' },
     actor: { type: DataTypes.STRING(120), allowNull: true },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'worker_jobs', timestamps: true, underscored: true,
     indexes: [

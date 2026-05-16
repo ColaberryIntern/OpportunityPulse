@@ -92,6 +92,15 @@ const storageProviders = require('./storageProviders.service');
 const observabilityStream = require('./observabilityStream.service');
 const pursuitContextPrompt = require('./pursuitContextPrompt.service');
 const governanceDashboard = require('./governanceDashboard.service');
+// Phase 12 — cross-phase tenant backfill + LLM provenance hardening.
+const promptProvenance = require('./promptProvenance.service');
+const rbacCoverage = require('./rbacCoverage.service');
+const slaDigest = require('./slaDigest.service');
+const sseHotPaths = require('./sseHotPaths.service');
+const assetMigration = require('./assetMigration.service');
+const auditRetention = require('./auditRetention.service');
+const governanceIntegrity = require('./governanceIntegrity.service');
+const { sequelize: dbSequelize } = require('../models');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -1900,6 +1909,241 @@ async function previewPursuitContextPrompt(req, res) {
   } catch (e) { return mapError(res, e, 'previewPursuitContextPrompt', 'Failed'); }
 }
 
+// ---- Phase 12 — tenant-safe operational consistency + provenance ----
+
+async function getGovernanceIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceIntegrity.getDashboard({
+      organizationId: orgId, sequelize: dbSequelize,
+    }));
+  } catch (e) { return mapError(res, e, 'getGovernanceIntegrity', 'Failed to load integrity dashboard'); }
+}
+async function snapshotGovernanceIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await governanceIntegrity.snapshotIntegrity({
+      organizationId: orgId, sequelize: dbSequelize,
+    });
+    return successResponse(res, row.toJSON(), 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotGovernanceIntegrity', 'Snapshot failed'); }
+}
+async function listGovernanceIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceIntegrity.recentIntegrity({
+      organizationId: orgId,
+      limit: req.query.limit ? Number(req.query.limit) : 25,
+    }));
+  } catch (e) { return mapError(res, e, 'listGovernanceIntegrity', 'Failed'); }
+}
+
+// Prompt provenance
+async function listProvenanceForPursuit(req, res) {
+  try {
+    return successResponse(res, await promptProvenance.listForPursuit(
+      Number(req.params.id),
+      { limit: req.query.limit ? Number(req.query.limit) : 25 },
+    ));
+  } catch (e) { return mapError(res, e, 'listProvenanceForPursuit', 'Failed'); }
+}
+async function getProvenanceByOutput(req, res) {
+  try {
+    return successResponse(res, await promptProvenance.findByOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'getProvenanceByOutput', 'Failed'); }
+}
+async function getProvenanceByHash(req, res) {
+  try {
+    return successResponse(res, await promptProvenance.findByAuditHash(req.params.hash));
+  } catch (e) { return mapError(res, e, 'getProvenanceByHash', 'Failed'); }
+}
+async function summarizeProvenance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await promptProvenance.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'summarizeProvenance', 'Failed'); }
+}
+async function buildProvenanceForPursuit(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const { opportunityId, outputType, persist } = req.body || {};
+    return successResponse(res, await promptProvenance.buildAndPersist(
+      Number(req.params.id),
+      {
+        organizationId: orgId,
+        opportunityId: opportunityId == null ? null : Number(opportunityId),
+        outputType, persist: persist !== false,
+        generatedBy: req.user ? req.user.email : null,
+      },
+    ));
+  } catch (e) { return mapError(res, e, 'buildProvenanceForPursuit', 'Failed'); }
+}
+
+// RBAC coverage
+async function getRbacCoverage(req, res) {
+  try {
+    const router = req.app && req.app._router;
+    let analyzed = null;
+    if (router) {
+      // The deepResearch sub-router is mounted at the app level; we need to
+      // find it. For v1, snapshot the deepResearch router specifically.
+      const deepRouter = require('./deepResearch.routes');
+      analyzed = rbacCoverage.analyzeRouter(deepRouter);
+    }
+    return successResponse(res, {
+      latest: await rbacCoverage.latestSnapshot(),
+      live: analyzed,
+    });
+  } catch (e) { return mapError(res, e, 'getRbacCoverage', 'Failed'); }
+}
+async function snapshotRbacCoverage(req, res) {
+  try {
+    const deepRouter = require('./deepResearch.routes');
+    const row = await rbacCoverage.snapshotCoverage(deepRouter);
+    return successResponse(res, row ? row.toJSON() : null, 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotRbacCoverage', 'Failed'); }
+}
+
+// SLA digest
+async function previewSlaDigest(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await slaDigest.sendForOrg(orgId, {
+      recipients: req.body && Array.isArray(req.body.recipients) ? req.body.recipients : null,
+      dryRun: true,
+    }));
+  } catch (e) { return mapError(res, e, 'previewSlaDigest', 'Failed'); }
+}
+async function sendSlaDigest(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await slaDigest.sendForOrg(orgId, {
+      recipients: req.body && Array.isArray(req.body.recipients) ? req.body.recipients : null,
+      dryRun: false,
+    }));
+  } catch (e) { return mapError(res, e, 'sendSlaDigest', 'Failed'); }
+}
+async function listSlaEmails(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await slaDigest.listRecentEmails({
+      organizationId: orgId,
+      limit: req.query.limit ? Number(req.query.limit) : 25,
+    }));
+  } catch (e) { return mapError(res, e, 'listSlaEmails', 'Failed'); }
+}
+async function summarizeSlaEmails(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await slaDigest.summarize({
+      organizationId: orgId,
+      sinceDays: req.query.sinceDays ? Number(req.query.sinceDays) : 7,
+    }));
+  } catch (e) { return mapError(res, e, 'summarizeSlaEmails', 'Failed'); }
+}
+
+// SSE hot-path metrics
+async function getStreamMetrics(req, res) {
+  try {
+    return successResponse(res, sseHotPaths.summarize());
+  } catch (e) { return mapError(res, e, 'getStreamMetrics', 'Failed'); }
+}
+async function snapshotStreamMetrics(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await sseHotPaths.snapshotMetrics({
+      organizationId: orgId,
+      windowMinutes: req.body && req.body.windowMinutes ? Number(req.body.windowMinutes) : 5,
+    }));
+  } catch (e) { return mapError(res, e, 'snapshotStreamMetrics', 'Failed'); }
+}
+async function listStreamMetrics(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await sseHotPaths.recentMetrics({
+      organizationId: orgId,
+      channel: req.query.channel || null,
+      limit: req.query.limit ? Number(req.query.limit) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'listStreamMetrics', 'Failed'); }
+}
+
+// Asset migration
+async function planAssetMigration(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await assetMigration.planMigration({
+      organizationId: orgId,
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'planAssetMigration', 'Failed'); }
+}
+async function runAssetMigration(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await assetMigration.runBatch({
+      organizationId: orgId,
+      limit: req.body && req.body.limit ? Number(req.body.limit) : 25,
+      toProvider: req.body && req.body.toProvider || null,
+      copyBytes: Boolean(req.body && req.body.copyBytes),
+      actor: req.user ? req.user.email : null,
+    }));
+  } catch (e) { return mapError(res, e, 'runAssetMigration', 'Failed'); }
+}
+async function summarizeAssetMigration(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await assetMigration.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'summarizeAssetMigration', 'Failed'); }
+}
+async function recentAssetMigrationAttempts(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await assetMigration.recentAttempts({
+      organizationId: orgId,
+      limit: req.query.limit ? Number(req.query.limit) : 20,
+    }));
+  } catch (e) { return mapError(res, e, 'recentAssetMigrationAttempts', 'Failed'); }
+}
+
+// Audit retention
+async function getRetentionPressure(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await auditRetention.retentionPressure({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getRetentionPressure', 'Failed'); }
+}
+async function recommendArchive(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await auditRetention.recommendArchive({
+      organizationId: orgId,
+      maxWindowDays: req.query.maxWindowDays ? Number(req.query.maxWindowDays) : 90,
+    }));
+  } catch (e) { return mapError(res, e, 'recommendArchive', 'Failed'); }
+}
+async function archiveWindow(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await auditRetention.archiveWindow({
+      organizationId: orgId,
+      windowStart: req.body && req.body.windowStart,
+      windowEnd: req.body && req.body.windowEnd,
+      archiveLocation: req.body && req.body.archiveLocation,
+      actor: req.user ? req.user.email : null,
+    }), 'Archive manifest recorded', 201);
+  } catch (e) { return mapError(res, e, 'archiveWindow', 'Failed'); }
+}
+async function listArchives(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await auditRetention.listArchives({
+      organizationId: orgId,
+      limit: req.query.limit ? Number(req.query.limit) : 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listArchives', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -2112,4 +2356,30 @@ module.exports = {
   observabilityHealth,
   observabilityPublish,
   previewPursuitContextPrompt,
+  // Phase 12
+  getGovernanceIntegrity,
+  snapshotGovernanceIntegrity,
+  listGovernanceIntegrity,
+  listProvenanceForPursuit,
+  getProvenanceByOutput,
+  getProvenanceByHash,
+  summarizeProvenance,
+  buildProvenanceForPursuit,
+  getRbacCoverage,
+  snapshotRbacCoverage,
+  previewSlaDigest,
+  sendSlaDigest,
+  listSlaEmails,
+  summarizeSlaEmails,
+  getStreamMetrics,
+  snapshotStreamMetrics,
+  listStreamMetrics,
+  planAssetMigration,
+  runAssetMigration,
+  summarizeAssetMigration,
+  recentAssetMigrationAttempts,
+  getRetentionPressure,
+  recommendArchive,
+  archiveWindow,
+  listArchives,
 };

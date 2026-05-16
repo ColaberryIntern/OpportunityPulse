@@ -897,3 +897,118 @@ export async function previewPursuitContextPrompt(pursuitId, params = {}) {
   const res = await api.get(`${base}/governance/pursuits/${pursuitId}/prompt-block`, { params });
   return res.data?.data;
 }
+
+// ---- Phase 12 — tenant-safe operational consistency + provenance --------
+
+export async function getGovernanceIntegrity() {
+  const res = await api.get(`${base}/governance-integrity`);
+  return res.data?.data;
+}
+export async function snapshotGovernanceIntegrity() {
+  const res = await api.post(`${base}/governance-integrity/snapshot`);
+  return res.data?.data;
+}
+export async function listGovernanceIntegrity(params = {}) {
+  const res = await api.get(`${base}/governance-integrity/history`, { params });
+  return res.data?.data;
+}
+
+// Prompt provenance
+export async function listProvenanceForPursuit(pursuitId, params = {}) {
+  const res = await api.get(`${base}/provenance/pursuit/${pursuitId}`, { params });
+  return res.data?.data;
+}
+export async function getProvenanceByOutput(outputId) {
+  const res = await api.get(`${base}/provenance/output/${outputId}`);
+  return res.data?.data;
+}
+export async function getProvenanceByHash(hash) {
+  const res = await api.get(`${base}/provenance/hash/${hash}`);
+  return res.data?.data;
+}
+export async function summarizeProvenance() {
+  const res = await api.get(`${base}/provenance/summary`);
+  return res.data?.data;
+}
+export async function buildProvenanceForPursuit(pursuitId, body = {}) {
+  const res = await api.post(`${base}/provenance/pursuit/${pursuitId}/build`, body);
+  return res.data?.data;
+}
+
+// RBAC coverage
+export async function getRbacCoverage() {
+  const res = await api.get(`${base}/rbac/coverage`);
+  return res.data?.data;
+}
+export async function snapshotRbacCoverage() {
+  const res = await api.post(`${base}/rbac/coverage/snapshot`);
+  return res.data?.data;
+}
+
+// SLA digest
+export async function previewSlaDigest(body = {}) {
+  const res = await api.post(`${base}/sla-digest/preview`, body);
+  return res.data?.data;
+}
+export async function sendSlaDigest(body = {}) {
+  const res = await api.post(`${base}/sla-digest/send`, body);
+  return res.data?.data;
+}
+export async function listSlaEmails(params = {}) {
+  const res = await api.get(`${base}/sla-digest/emails`, { params });
+  return res.data?.data;
+}
+export async function summarizeSlaEmails(params = {}) {
+  const res = await api.get(`${base}/sla-digest/summary`, { params });
+  return res.data?.data;
+}
+
+// SSE stream metrics
+export async function getStreamMetrics() {
+  const res = await api.get(`${base}/stream-metrics`);
+  return res.data?.data;
+}
+export async function snapshotStreamMetrics(body = {}) {
+  const res = await api.post(`${base}/stream-metrics/snapshot`, body);
+  return res.data?.data;
+}
+export async function listStreamMetrics(params = {}) {
+  const res = await api.get(`${base}/stream-metrics/history`, { params });
+  return res.data?.data;
+}
+
+// Asset migration
+export async function planAssetMigration(params = {}) {
+  const res = await api.get(`${base}/asset-migration/plan`, { params });
+  return res.data?.data;
+}
+export async function runAssetMigration(body = {}) {
+  const res = await api.post(`${base}/asset-migration/run`, body);
+  return res.data?.data;
+}
+export async function summarizeAssetMigration() {
+  const res = await api.get(`${base}/asset-migration/summary`);
+  return res.data?.data;
+}
+export async function recentAssetMigrationAttempts(params = {}) {
+  const res = await api.get(`${base}/asset-migration/attempts`, { params });
+  return res.data?.data;
+}
+
+// Audit retention
+export async function getRetentionPressure() {
+  const res = await api.get(`${base}/audit-retention/pressure`);
+  return res.data?.data;
+}
+export async function recommendArchive(params = {}) {
+  const res = await api.get(`${base}/audit-retention/recommend`, { params });
+  return res.data?.data;
+}
+export async function archiveAuditWindow(body = {}) {
+  const res = await api.post(`${base}/audit-retention/archive`, body);
+  return res.data?.data;
+}
+export async function listAuditArchives(params = {}) {
+  const res = await api.get(`${base}/audit-retention/archives`, { params });
+  return res.data?.data;
+}

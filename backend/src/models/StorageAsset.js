@@ -21,6 +21,7 @@ module.exports = (sequelize) => {
     submissionPackageId: { type: DataTypes.INTEGER, allowNull: true, field: 'submission_package_id' },
     uploadedBy: { type: DataTypes.STRING(120), allowNull: true, field: 'uploaded_by' },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'storage_assets', timestamps: true, underscored: true,
     indexes: [{ fields: ['asset_kind'] }, { fields: ['pursuit_id'] }],

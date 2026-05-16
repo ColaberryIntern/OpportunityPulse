@@ -148,7 +148,7 @@ async function checkPermission({ userId, role, permission }) {
 
 // Express middleware. Use *after* verifyToken.
 function requirePermission(permission) {
-  return async function rbacGuard(req, res, next) {
+  async function rbacGuard(req, res, next) {
     if (!req.user) {
       return res.status(401).json({ error: { message: 'Auth required' } });
     }
@@ -163,7 +163,10 @@ function requirePermission(permission) {
       });
     }
     next();
-  };
+  }
+  // Stamp the permission name so the rbacCoverage analyzer can inspect it.
+  rbacGuard._permission = permission;
+  return rbacGuard;
 }
 
 // One-call read of a user's effective permission set + role.

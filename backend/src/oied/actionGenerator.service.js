@@ -279,7 +279,14 @@ function scorePersonalization({ userProfile, pastWins, content, grounding = null
 }
 
 // Public: generate ONE output for an opportunity. Persists as draft.
-async function generateOutput({ opportunityId, type, generatedBy = null, userId = null }) {
+async function generateOutput({
+  opportunityId, type, generatedBy = null, userId = null,
+  // Phase 12: optional pursuit-context prompt injection. When pursuitId is
+  // present, a deterministic, audit-hashed context block is composed via
+  // promptProvenance.buildAndPersist() and prepended to the user prompt.
+  // The OpportunityOutput is linked back to the provenance row.
+  pursuitId = null,
+} = {}) {
   if (!ALLOWED_TYPES.includes(type)) {
     throw new Error(`Unknown output type: ${type}`);
   }
@@ -376,6 +383,32 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
     userPromptText = buildUserPrompt(opp, userProfile, pastWins, { vaultExcerpts });
   }
 
+  // Phase 12: pursuit-context prompt provenance. Soft-fails so an unavailable
+  // pursuit-context never blocks a draft. The block is prepended to the user
+  // prompt and the resulting OpportunityOutput row links back via audit hash.
+  let promptProvenanceRow = null;
+  let promptAuditHash = null;
+  if (pursuitId != null) {
+    try {
+      // eslint-disable-next-line global-require
+      const promptProvenance = require('../deepResearch/promptProvenance.service');
+      const orgId = await profileSvc.resolveOrgId(effectiveUserId).catch(() => null);
+      const composed = await promptProvenance.buildAndPersist(Number(pursuitId), {
+        organizationId: orgId, opportunityId, outputType: type,
+        generatedBy: generatedBy ? String(generatedBy) : null,
+      });
+      if (composed && composed.block) {
+        userPromptText = `${composed.block}\n\n---\n\n${userPromptText}`;
+        promptAuditHash = composed.audit_hash;
+        promptProvenanceRow = composed.provenance_id;
+      }
+    } catch (e) {
+      logger.warn('OIED: pursuit-context provenance failed (continuing without)', {
+        error: e.message,
+      });
+    }
+  }
+
   const { content } = await aiClient.chat(
     systemPrompt,
     userPromptText,
@@ -425,7 +458,34 @@ async function generateOutput({ opportunityId, type, generatedBy = null, userId 
     generatedBy,
     aiModel: 'gpt-4o-mini',
     metadata,
+    // Phase 12: link to the deterministic prompt-context provenance row
+    // when one was composed for this draft.
+    promptProvenanceId: promptProvenanceRow,
+    promptAuditHash,
   });
+
+  // Phase 12: link the provenance row back to the output (closes the loop
+  // for the "what context produced this output?" query).
+  if (promptProvenanceRow && row && row.id) {
+    try {
+      // eslint-disable-next-line global-require
+      const promptProvenance = require('../deepResearch/promptProvenance.service');
+      await promptProvenance.linkOutput(row.id, {
+        provenanceId: promptProvenanceRow, auditHash: promptAuditHash,
+      });
+    } catch (e) { /* swallow */ }
+  }
+
+  // Phase 12: publish draft.complete to the SSE bus (tenant-aware).
+  try {
+    // eslint-disable-next-line global-require
+    const sseHotPaths = require('../deepResearch/sseHotPaths.service');
+    const orgId = await profileSvc.resolveOrgId(effectiveUserId).catch(() => null);
+    sseHotPaths.publish.draftComplete({
+      output_id: row.id, opportunity_id: opportunityId, type, pursuit_id: pursuitId,
+      audit_hash: promptAuditHash,
+    }, { organizationId: orgId });
+  } catch (e) { /* swallow */ }
 
   logger.info('OIED: action generated', {
     opportunityId,

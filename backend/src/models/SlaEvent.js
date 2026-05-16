@@ -16,6 +16,7 @@ module.exports = (sequelize) => {
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     detectedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'detected_at' },
     resolvedAt: { type: DataTypes.DATE, allowNull: true, field: 'resolved_at' },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'sla_events', timestamps: false, underscored: true,
     indexes: [{ fields: ['sla_kind', 'status'] }, { fields: ['pursuit_id'] }],

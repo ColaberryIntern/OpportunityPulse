@@ -15,6 +15,7 @@ module.exports = (sequelize) => {
     p95LatencyMs: { type: DataTypes.INTEGER, allowNull: true, field: 'p95_latency_ms' },
     retryRate: { type: DataTypes.DECIMAL(5, 3), allowNull: false, defaultValue: 0, field: 'retry_rate' },
     capturedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'captured_at' },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'queue_metrics', timestamps: false, underscored: true,
     indexes: [{ fields: ['queue_kind', 'captured_at'] }],

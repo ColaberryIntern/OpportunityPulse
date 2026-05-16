@@ -16,6 +16,7 @@ module.exports = (sequelize) => {
     stackSnippet: { type: DataTypes.TEXT, allowNull: true, field: 'stack_snippet' },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     detectedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'detected_at' },
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'execution_failures', timestamps: false, underscored: true,
     indexes: [{ fields: ['worker_job_id'] }, { fields: ['failure_kind'] }],

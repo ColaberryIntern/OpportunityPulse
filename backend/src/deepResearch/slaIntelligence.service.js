@@ -63,6 +63,7 @@ function escalationFor(slaKind, ageDays) {
 async function upsertEvent({
   slaKind, pursuitId = null, subjectKind = null, subjectId = null,
   ageDays, thresholdDays, metadata = {},
+  organizationId = null,  // Phase 12: tenant-stamp on every SLA event
 }) {
   const where = { slaKind, pursuitId, subjectKind, subjectId, status: 'open' };
   const severity = severityForAge({ ageDays, thresholdDays });
@@ -77,6 +78,7 @@ async function upsertEvent({
     subjectKind, subjectId: subjectId == null ? null : String(subjectId),
     severity, ageDays, thresholdDays,
     escalation, status: 'open', metadata,
+    organizationId: organizationId == null ? null : Number(organizationId),
   });
   return row.toJSON();
 }
