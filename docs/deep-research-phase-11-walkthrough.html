@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 11 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Architecture</h2>
+  <a href="#tenant-arch">Tenant isolation</a>
+  <a href="#rbac-arch">RBAC ladder</a>
+  <a href="#audit-arch">Audit trail</a>
+  <a href="#lineage-arch">Event lineage</a>
+  <a href="#sla-arch">SLA escalation</a>
+  <a href="#storage-arch">Storage providers</a>
+  <a href="#sse-arch">SSE bus</a>
+  <a href="#workflow-arch">Workflow governance</a>
+  <a href="#prompt-arch">Prompt composition</a>
+  <a href="#dashboard-arch">Governance dashboard</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Governance full page</a>
+  <a href="#screen-pressure">Tenant pressure</a>
+  <a href="#screen-sla">SLA escalations</a>
+  <a href="#screen-workloads">Operator workloads</a>
+  <a href="#screen-bottlenecks">Workflow bottlenecks</a>
+  <a href="#screen-aging">Approval aging</a>
+  <a href="#screen-audit">Audit trail</a>
+  <a href="#screen-storage">Storage backend</a>
+  <a href="#screen-streams">Observability streams</a>
+  <a href="#screen-events">Governance events</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 12</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 11</h1>
+  <div class="subtitle">Multi-Tenant Governance + Operational Auditability</div>
+  <p>
+    Phase 10 turned the platform into <em>operational capture infrastructure</em>.
+    Phase 11 makes it <em>enterprise-governed strategic capture infrastructure</em>:
+    multi-tenant isolation, 6-role RBAC, append-only audit trail, directed-edge
+    event lineage, SLA escalation workflow, real S3/MinIO/local storage providers,
+    SSE-based real-time observability, operator workflow governance, deterministic
+    pursuit-context prompt composition, and an Enterprise Capture Governance
+    Center dashboard. Every operator action remains
+    <span class="badge b-gov">measure-only</span>. Every prompt input is
+    <span class="badge b-gov">inspectable</span>. No auto-submit, no auto-bid,
+    no auto-sign, no hidden prompt augmentation.
+  </p>
+  <p>
+    <span class="badge b-done">10 features shipped</span>
+    <span class="badge b-done">8 new tables</span>
+    <span class="badge b-done">10 new services</span>
+    <span class="badge b-done">26 new API routes</span>
+    <span class="badge b-done">40 new unit tests</span>
+    <span class="badge b-done">Full suite 2022/2022 green</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Why Phase 11</h2>
+  <p>
+    Phase 10 made every long-running operation durable, observable, and
+    retry-safe. But the platform was still single-tenant by assumption,
+    auth was a single &ldquo;admin or not&rdquo; flag, every operator
+    action was opaque after-the-fact (no audit trail), every prompt to the
+    LLM mixed pre-baked context with model-generated text (no provenance),
+    and SLA events surfaced on a dashboard but had no workflow over them
+    (acknowledge / assign / escalate were not first-class).
+  </p>
+  <p>
+    Phase 11 closes those gaps with a single coordinated upgrade: every
+    domain action is auditable; every operator&rsquo;s permissions are
+    explicit; every cross-entity relationship is queryable as a directed
+    edge; every long-running stream of events can be pushed to the UI in
+    real time; every prompt the LLM sees is composed from named, traceable
+    sources; and every tenant gets its own governance settings.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — preserved verbatim</h2>
+  <ul>
+    <li><span class="badge b-gov">No auto-submit</span> &mdash; the system <em>never</em>
+      transmits a proposal to any portal. Drafts always land in the Review Queue.</li>
+    <li><span class="badge b-gov">No auto-bid</span> &mdash; pursuit decisions, pricing,
+      and signatory authority remain human.</li>
+    <li><span class="badge b-gov">No auto-sign</span> &mdash; nothing is signed,
+      certified, or transmitted on the operator&rsquo;s behalf.</li>
+    <li><span class="badge b-gov">No hidden prompt augmentation</span> &mdash; the
+      pursuit-context block is deterministically composed from named sources,
+      previewable via API, and an <code>audit_hash</code> tags every block so the
+      exact prompt that shipped with each draft is reproducible.</li>
+    <li><span class="badge b-gov">No opaque RBAC</span> &mdash; every role has a
+      declared default permission set, every override is logged with grantor + grant_at,
+      and every permission check is a pure function over a stable identifier set.</li>
+    <li><span class="badge b-gov">Tenant isolation</span> &mdash; cross-tenant access
+      raises <code>TENANT_DENIED</code> in strict mode (env-flagged); loose mode
+      logs and continues so existing single-tenant deployments keep working.</li>
+    <li><span class="badge b-gov">Append-only audit</span> &mdash; the audit table has
+      no update / delete surface. Forensics work because the log is immutable.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped — the 10 features</h2>
+  <table>
+    <thead><tr><th style="width:22%">Feature</th><th>What it does</th><th style="width:18%">Service</th></tr></thead>
+    <tbody>
+      <tr><td>1. <strong>Multi-Tenant Isolation</strong></td>
+        <td>Resolves <code>organization_id</code> from the JWT (falls back to a
+        User lookup), middleware stamps <code>req.tenantId</code> per request,
+        helpers (<code>applyTenantScope</code>, <code>applyTenantScopeRaw</code>,
+        <code>assertOwnership</code>) gate every org-scoped query. Per-tenant
+        <code>TenantSettings</code> row carries governance mode, SLA threshold
+        overrides, approval-required list, storage provider, feature flags,
+        retention days.</td>
+        <td><code>tenantIsolation.service.js</code></td></tr>
+      <tr><td>2. <strong>Enterprise RBAC</strong></td>
+        <td>6 roles (observer / reviewer / proposal_writer / capture_manager /
+        org_admin / super_admin), ~30 declared permissions, deterministic
+        <code>isAllowed</code> check, per-user <code>OperatorPermission</code>
+        overlay with grantor + revoked-at, legacy <code>ROLES.ADMIN</code>
+        normalizes to <code>super_admin</code> so existing routes keep working.
+        <code>requirePermission(name)</code> middleware factory.</td>
+        <td><code>rbac.service.js</code></td></tr>
+      <tr><td>3. <strong>Audit Trail</strong></td>
+        <td>Append-only <code>audit_events</code> with actor email + role + IP
+        + user-agent + correlation_id. Queryable by tenant / actor / pursuit /
+        kind / verb / date range. CSV export. <code>recordFromRequest(req, ...)</code>
+        sugar lets every controller log in one line.</td>
+        <td><code>auditTrail.service.js</code></td></tr>
+      <tr><td>4. <strong>Operational Event Lineage</strong></td>
+        <td>Directed edges between domain entities (<code>research_run</code> →
+        <code>cluster</code> → <code>pursuit</code> → <code>draft</code> →
+        <code>package</code> → <code>submission</code> → <code>operator</code>).
+        Bounded BFS traversal (<code>chain</code>), upstream + downstream views,
+        per-pursuit timeline.</td>
+        <td><code>eventLineage.service.js</code></td></tr>
+      <tr><td>5. <strong>SLA Escalation Workflow</strong></td>
+        <td>Acknowledge / assign / escalate / reassign / resolve / dismiss
+        actions over Phase 10 sla_events. Every action creates a
+        <code>SlaAcknowledgement</code> audit row. Escalation ladder
+        (observer → org_admin). Daily digest payload. Auto-creates
+        <code>WorkflowAssignment</code> rows on assign / reassign.
+        RECOMMENDATION-ONLY: no auto-resolve.</td>
+        <td><code>slaEscalation.service.js</code></td></tr>
+      <tr><td>6. <strong>Real Storage Providers</strong></td>
+        <td>S3 / MinIO / local-disk adapters layered over the Phase 10
+        <code>url_only</code> registry. Lazy <code>aws-sdk</code> loading so the
+        platform never crashes for missing deps. Signed URLs delegated to the
+        provider. Migration status reports rows that need a one-off byte copy.
+        Soft-fail <code>deleteBytes</code> so metadata cleanup proceeds.</td>
+        <td><code>storageProviders.service.js</code></td></tr>
+      <tr><td>7. <strong>Real-Time Observability Stream</strong></td>
+        <td>SSE bus with 9 declared channels (worker.state, queue.update,
+        sla.alert, readiness.change, draft.complete, package.assembled, failure,
+        governance.event, workflow.transition). Tenant-isolated, throttled
+        (250ms min per channel), reconnect-safe ring buffer (100 events).
+        In-DB <code>observability_streams</code> registry. Heartbeats every 25s.</td>
+        <td><code>observabilityStream.service.js</code></td></tr>
+      <tr><td>8. <strong>Operator Workflow Governance</strong></td>
+        <td>Approval workflows (pursuit_approval / draft_review / compliance_review /
+        submission_approval / sla_resolution / artifact_review / package_release).
+        Full assignment history on the row. Workload-by-operator rollup.
+        Approval-aging report. Bottleneck detector. Every transition writes a
+        <code>GovernanceEvent</code>.</td>
+        <td><code>workflowGovernance.service.js</code></td></tr>
+      <tr><td>9. <strong>Pursuit-Context Prompt Integration</strong></td>
+        <td>Deterministic markdown block composed from pursuit + capture strategy
+        + readiness blockers + linked opps + suggested assets + strategic
+        patterns + recurring agency. Char-budget aware. Includes a governance
+        footer telling the LLM not to invent facts. <strong><code>audit_hash</code></strong>
+        on every block so the exact prompt shipped is reproducible.</td>
+        <td><code>pursuitContextPrompt.service.js</code></td></tr>
+      <tr><td>10. <strong>Enterprise Governance Dashboard</strong></td>
+        <td>Single-pane composite at <code>/admin/deep-research/governance</code>:
+        tenant pressure indicator (0&ndash;100 health score), SLA escalations,
+        operator workloads, audit timeline, workflow bottlenecks, approval aging,
+        queue governance, storage health, stream registry, lineage overview,
+        recent governance events.</td>
+        <td><code>governanceDashboard.service.js</code> + <code>GovernancePage.jsx</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="tenant-arch">
+  <h2>1. Tenant Isolation Architecture</h2>
+  <div class="arrow-diagram">request &mdash;&mdash;&gt; verifyToken &mdash;&mdash;&gt; checkPermissions(ADMIN) &mdash;&mdash;&gt; tenantMiddleware &mdash;&mdash;&gt; controller
+                                                                          |
+                                                                          v
+                                                              req.tenantId = orgId
+                                                                          |
+                                                                          v
+                            applyTenantScope(where, orgId)  &lt;-----  service calls
+                            assertOwnership(row, orgId)
+</div>
+  <p>The <code>tenantMiddleware</code> resolves <code>org_id</code> once per
+  request from <code>req.user.organizationId</code> (or a User lookup if the JWT
+  doesn&rsquo;t carry it), stamps it on <code>req.tenantId</code>, and every
+  service consumes it via <code>applyTenantScope</code>. Strict mode raises
+  <code>TENANT_DENIED</code> on cross-tenant reads;
+  loose mode logs and continues so existing single-tenant prod deployments
+  keep working without flipping a flag.</p>
+</section>
+
+<section class="block arch" id="rbac-arch">
+  <h2>2. RBAC Ladder + Permission Map</h2>
+  <table>
+    <thead><tr><th>Role</th><th>Default permissions</th></tr></thead>
+    <tbody>
+      <tr><td>observer</td><td>dashboard.view, pursuit.view, opportunity.view, compliance.view, sla.view, audit.view, lineage.view, governance.view</td></tr>
+      <tr><td>reviewer</td><td>+ approval.acknowledge, sla.acknowledge, artifact.download</td></tr>
+      <tr><td>proposal_writer</td><td>+ compliance.edit, draft.generate, draft.regenerate, artifact.upload</td></tr>
+      <tr><td>capture_manager</td><td>+ pursuit.activate / deactivate / edit, compliance.augment_llm, sla.assign / resolve, approval.approve / reject, queue.cancel / enqueue, artifact.delete, storage.signed_url</td></tr>
+      <tr><td>org_admin</td><td>+ tenant.read / write, user.permission.grant, queue.drain, storage.delete</td></tr>
+      <tr><td>super_admin</td><td>all permissions</td></tr>
+    </tbody>
+  </table>
+  <p>The legacy <code>ROLES.ADMIN</code> claim normalizes to <code>super_admin</code>
+  so every Phase 1&ndash;10 admin-gated route keeps working without change.
+  Per-user <code>OperatorPermission</code> rows can grant a narrower role
+  with explicit permission overrides; the override stack is checked first
+  by <code>checkPermission</code>.</p>
+</section>
+
+<section class="block arch" id="audit-arch">
+  <h2>3. Audit Trail Shape</h2>
+  <pre>audit_events
+  id              BIGINT PK
+  organization_id INT
+  actor_user_id   INT
+  actor_email     STRING
+  actor_role      STRING
+  action_kind     STRING   -- pursuit / draft / compliance / queue / sla / governance ...
+  action_verb     STRING   -- create / update / acknowledge / approve / reject ...
+  subject_kind    STRING   -- pursuit / compliance_matrix / workflow_assignment ...
+  subject_id      STRING
+  pursuit_id      INT
+  payload         JSONB
+  ip_address      STRING
+  user_agent      STRING
+  correlation_id  STRING
+  created_at      TIMESTAMP</pre>
+  <p>Append-only. No update or delete surface. <code>recordFromRequest(req, ...)</code>
+  pulls actor + tenant + IP + UA off the request so controllers can log
+  in one line. CSV export is gated on tenant + date range.</p>
+</section>
+
+<section class="block arch" id="lineage-arch">
+  <h2>4. Event Lineage as Directed Edges</h2>
+  <div class="arrow-diagram">research_run
+    |   derived_from
+    v
+  cluster
+    |   spawned
+    v
+  pursuit ----- approved_by ----- operator
+    |   generated
+    v
+  draft (OpportunityOutput)
+    |   fed_into
+    v
+  package (SubmissionPackage)
+    |   requires
+    v
+  submission_artifact
+</div>
+  <p>The <code>event_lineage</code> table stores one row per directed edge.
+  <code>chain()</code> does bounded BFS up to depth 6; <code>fullLineage()</code>
+  combines downstream + upstream for a UI graph. Per-pursuit lineage view
+  is one query (<code>where pursuit_id = N order by created_at</code>).</p>
+</section>
+
+<section class="block arch" id="sla-arch">
+  <h2>5. SLA Escalation Workflow</h2>
+  <p>Six actions over a Phase 10 <code>sla_event</code>:</p>
+  <ul>
+    <li><code>acknowledge</code> &mdash; flips event to <code>acknowledged</code>; operator owns it</li>
+    <li><code>assign</code> / <code>reassign</code> &mdash; creates / updates a <code>WorkflowAssignment</code> over the event</li>
+    <li><code>escalate</code> &mdash; bumps severity by 15 (capped at 100); ladder advance is operator-driven, not auto</li>
+    <li><code>resolve</code> &mdash; terminal; closes the loop</li>
+    <li><code>dismiss</code> &mdash; terminal; closes as non-actionable</li>
+    <li><code>note</code> &mdash; adds context without changing state</li>
+  </ul>
+  <p>Every action creates one <code>SlaAcknowledgement</code> row capturing
+  severity_at_action and the assignee snapshot, plus one <code>audit_events</code>
+  row. The daily <code>generateDigest({organizationId})</code> output is the
+  Phase 12 hook for email delivery via the Source Health Agent pipeline.</p>
+</section>
+
+<section class="block arch" id="storage-arch">
+  <h2>6. Real Storage Providers</h2>
+  <pre>configuredProvider() &rarr;
+  ┌─ s3        / minio  &rarr; aws-sdk client (lazy load) &rarr; bucket + key &rarr; putObject / getObject / getSignedUrl / deleteObject
+  ├─ local              &rarr; ${DEEP_RESEARCH_LOCAL_STORAGE_ROOT}/${asset.key} &rarr; fs.writeFile / fs.readFile / fs.unlink
+  └─ url_only (default) &rarr; metadata-only; content_ref carries the external URL</pre>
+  <p>Backwards-compatible: in <code>url_only</code> mode every operation
+  is a no-op against bytes and the Phase 10 registry behavior is preserved.
+  <code>aws-sdk</code> is loaded lazily so it&rsquo;s not a hard dependency.
+  <code>migrationStatus()</code> reports rows that would need a one-off byte
+  migration when a provider is configured.</p>
+</section>
+
+<section class="block arch" id="sse-arch">
+  <h2>7. SSE Bus Architecture</h2>
+  <pre>publisher (Phase 10 / 11 service)
+   |
+   v
+publish(channel, body, {organizationId})
+   |
+   +--> ring_buffer.push(ev)        // 100 events, in-memory
+   |
+   v
+for each subscriber:
+   if subscriber.orgId === ev.orgId (or null) AND channel in subscriber.channels:
+       res.write(formatEvent(ev))   // SSE: "id: N\nevent: channel\ndata: {...}\n\n"
+
+clients reconnect with `Last-Event-ID` header &rarr; ring buffer replay</pre>
+  <p>Per-channel throttle (250ms min) prevents UI spam. Heartbeats every
+  25s keep proxies from closing the connection. Tenant-isolated: a
+  publisher with <code>organizationId=5</code> never reaches a subscriber
+  bound to <code>organizationId=7</code>. Active subscriber registry is
+  persisted to <code>observability_streams</code> for audit + fairness
+  enforcement.</p>
+</section>
+
+<section class="block arch" id="workflow-arch">
+  <h2>8. Workflow Governance State Machine</h2>
+  <pre>open --acknowledge--&gt; acknowledged --start--&gt; in_progress --approve--&gt; approved (terminal)
+   |                       |                          |
+   |                       |                          +---reject---&gt; rejected (terminal)
+   |                       |
+   |                       +---complete---&gt; completed (terminal)
+   |
+   +---escalate---&gt; escalated   (severity boost; back to open after reassign)
+   +---cancel---&gt; cancelled (terminal)</pre>
+  <p>Each transition writes one <code>GovernanceEvent</code> with severity
+  scaled to the transition kind (rejected=70, escalated=80, others=40),
+  one <code>audit_events</code> row, and one in-row history entry on the
+  <code>WorkflowAssignment</code>. Workload + bottleneck + approval-aging
+  reports are pure aggregations off the table; no separate caching layer.</p>
+</section>
+
+<section class="block arch" id="prompt-arch">
+  <h2>9. Pursuit-Context Prompt Composition</h2>
+  <p>Inputs &mdash; every line traces to a named Phase 8/9 source:</p>
+  <ul>
+    <li><code>context.pursuit</code> &mdash; PursuitWorkspace row (name, classification, status)</li>
+    <li><code>context.capture</code> &mdash; Phase 8 CaptureStrategy (evaluator priorities, agency pain points, differentiators, positioning, incumbent risks, partnerships, reusable language)</li>
+    <li><code>context.readiness</code> &mdash; Phase 8 / 9 ProposalReadiness blockers</li>
+    <li><code>context.opps</code> &mdash; pursuit&rsquo;s linkedOpportunityIds, hydrated</li>
+    <li><code>context.assets</code> &mdash; Phase 7 proposalAcceleration suggested assets</li>
+    <li><code>context.strategic_patterns</code> &mdash; Phase 6 strategic patterns active for the pursuit</li>
+    <li><code>context.recurring_agency</code> &mdash; Phase 7 recurring-agency intelligence</li>
+  </ul>
+  <p>Output: a markdown block + an <code>audit_hash</code> (sha256-16 of the
+  block) + an explicit list of which sections were included vs excluded.
+  Char-budget aware (default 4500). Governance footer instructs the LLM
+  not to invent stakeholders. The function is pure: same context object
+  in &rarr; same block out &rarr; same hash. Every draft can record the
+  hash to prove what prompt-context shipped with it.</p>
+</section>
+
+<section class="block arch" id="dashboard-arch">
+  <h2>10. Governance Dashboard Composite</h2>
+  <p>Read-only single pane. Composed of 11 sections:</p>
+  <ol>
+    <li><strong>Tenant pressure indicator</strong> &mdash; 0&ndash;100 health score; status (healthy / watch / elevated / critical)</li>
+    <li><strong>Tenant settings</strong> &mdash; governance mode, isolation strictness, retention</li>
+    <li><strong>SLA escalations</strong> &mdash; open / acknowledged / escalated counts + top-10 by severity</li>
+    <li><strong>Operator workloads</strong> &mdash; per-assignee count + oldest assignment + highest priority</li>
+    <li><strong>Workflow bottlenecks</strong> &mdash; workflow kinds where avg age &gt; expected</li>
+    <li><strong>Approval aging</strong> &mdash; assignments older than 2 days still not terminal</li>
+    <li><strong>Audit timeline</strong> &mdash; last 25 actions with actor + verb + subject</li>
+    <li><strong>Queue governance</strong> &mdash; open / ack&rsquo;d / in_progress / overdue assignments</li>
+    <li><strong>Storage backend</strong> &mdash; provider health + migration status</li>
+    <li><strong>Observability streams</strong> &mdash; active subscribers + channel registry</li>
+    <li><strong>Operational lineage</strong> &mdash; total edges + last 24h</li>
+    <li><strong>Governance events</strong> &mdash; recent operator decisions</li>
+  </ol>
+</section>
+
+<h2>Screens</h2>
+
+<section class="block" id="screen-full">
+  <h3>Governance dashboard &mdash; full page</h3>
+  <img class="shot" src="deep-research-assets/p11-01-governance-full.png" alt="Governance full page" />
+  <div class="caption">Single-pane Enterprise Capture Governance Center. Cold-start view on prod (no workflows / SLA events yet).</div>
+</section>
+
+<section class="block" id="screen-pressure">
+  <h3>Tenant Health + Pressure</h3>
+  <img class="shot" src="deep-research-assets/p11-02-tenant-pressure.png" alt="Tenant pressure" />
+  <div class="caption">Composite 0&ndash;100 pressure score; standard governance mode; loose isolation. All counters zero on cold start.</div>
+</section>
+
+<section class="block" id="screen-sla">
+  <h3>SLA Escalations</h3>
+  <img class="shot" src="deep-research-assets/p11-03-sla-escalations.png" alt="SLA escalations" />
+  <div class="caption">Open / acknowledged / escalated rollup + top-10 by severity table. Empty today &mdash; Phase 10 worker is opt-in and SLA scans haven&rsquo;t run.</div>
+</section>
+
+<section class="block" id="screen-workloads">
+  <h3>Operator Workloads</h3>
+  <img class="shot" src="deep-research-assets/p11-04-operator-workloads.png" alt="Operator workloads" />
+  <div class="caption">Per-operator workload rollup. Empty today &mdash; no workflow assignments yet.</div>
+</section>
+
+<section class="block" id="screen-bottlenecks">
+  <h3>Workflow Bottlenecks</h3>
+  <img class="shot" src="deep-research-assets/p11-05-workflow-bottlenecks.png" alt="Workflow bottlenecks" />
+  <div class="caption">Workflow kinds ranked by average age. Empty today.</div>
+</section>
+
+<section class="block" id="screen-aging">
+  <h3>Approval Aging</h3>
+  <img class="shot" src="deep-research-assets/p11-06-approval-aging.png" alt="Approval aging" />
+  <div class="caption">Assignments older than 2 days still not terminal. Empty today.</div>
+</section>
+
+<section class="block" id="screen-audit">
+  <h3>Audit Trail</h3>
+  <img class="shot" src="deep-research-assets/p11-07-audit-trail.png" alt="Audit trail" />
+  <div class="caption">Recent operator + system actions with actor + verb. CSV export link in the header.</div>
+</section>
+
+<section class="block" id="screen-storage">
+  <h3>Storage Backend</h3>
+  <img class="shot" src="deep-research-assets/p11-08-storage-backend.png" alt="Storage backend" />
+  <div class="caption">Provider health + migration status. <code>url_only</code> in prod today.</div>
+</section>
+
+<section class="block" id="screen-streams">
+  <h3>Real-Time Observability Streams (SSE)</h3>
+  <img class="shot" src="deep-research-assets/p11-09-observability-streams.png" alt="Observability streams" />
+  <div class="caption">Active subscribers, max cap, heartbeat, ring buffer state, and the 9 declared channels.</div>
+</section>
+
+<section class="block" id="screen-events">
+  <h3>Governance Events</h3>
+  <img class="shot" src="deep-research-assets/p11-10-governance-events.png" alt="Governance events" />
+  <div class="caption">Recent operator decisions over workflow + approvals.</div>
+</section>
+
+<section class="block" id="schema">
+  <h2>Database schema (Phase 11)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>audit_events</code></td><td>Append-only operator + system action log. BIGINT id, JSONB payload, indexed by org + actor + pursuit + action.</td></tr>
+      <tr><td><code>event_lineage</code></td><td>Directed edge between domain entities. (from_kind, from_id) &rarr; (to_kind, to_id), edge_kind, metadata. Forward + reverse indexes.</td></tr>
+      <tr><td><code>workflow_assignments</code></td><td>Approval / review workflow rows. workflow_kind, subject (kind+id), assignee, status, priority, due_at, full history JSONB.</td></tr>
+      <tr><td><code>sla_acknowledgements</code></td><td>Append-only operator workflow log over Phase 10 sla_events.</td></tr>
+      <tr><td><code>tenant_settings</code></td><td>One row per organization. Governance mode, SLA threshold overrides, approval-required list, storage provider, feature flags, retention.</td></tr>
+      <tr><td><code>operator_permissions</code></td><td>Per-user RBAC overlay. Role assignment + explicit permission grants/revokes. Append-only history via revoked_at.</td></tr>
+      <tr><td><code>governance_events</code></td><td>Operator-action governance event log (separate from audit_events for dashboard speed).</td></tr>
+      <tr><td><code>observability_streams</code></td><td>Active SSE subscriber registry for audit + fairness.</td></tr>
+    </tbody>
+  </table>
+  <p>Single migration: <code>20260516000003-deep-research-phase-11.js</code>.
+  Applied to prod in <strong>447ms</strong>.</p>
+</section>
+
+<section class="block" id="routes">
+  <h2>API routes (Phase 11)</h2>
+  <p>All mounted under <code>/api/v1/deep-research</code>; admin-only via the
+  existing chain, plus the new <code>tenantMiddleware</code>.</p>
+  <pre>GET    /governance                                     &mdash; dashboard composite
+GET    /governance/tenant                              &mdash; tenant settings
+PATCH  /governance/tenant                              &mdash; update tenant settings
+
+GET    /governance/me/permissions                      &mdash; current user's effective permissions
+GET    /governance/roles                               &mdash; role + permission catalog
+GET    /governance/grants                              &mdash; list role grants
+POST   /governance/grants                              &mdash; grant role + override permissions
+DELETE /governance/grants/user/:userId                 &mdash; revoke all grants
+
+GET    /governance/audit                               &mdash; query audit log
+GET    /governance/audit/summary                       &mdash; rolling N-minute summary
+GET    /governance/audit/export.csv                    &mdash; CSV export
+
+GET    /governance/lineage/:kind/:id                   &mdash; full lineage (upstream + downstream)
+POST   /governance/lineage                             &mdash; record an edge
+GET    /governance/pursuits/:id/lineage                &mdash; per-pursuit timeline
+
+POST   /governance/sla-events/:id/actions              &mdash; ack / assign / escalate / resolve
+GET    /governance/sla-events/:id/history              &mdash; per-event audit chain
+GET    /governance/sla/digest                          &mdash; daily digest payload
+
+GET    /governance/workflows                           &mdash; list assignments
+POST   /governance/workflows                           &mdash; create assignment
+PATCH  /governance/workflows/:id                       &mdash; transition state
+GET    /governance/workflows/workloads                 &mdash; by-operator rollup
+GET    /governance/workflows/bottlenecks               &mdash; bottleneck detector
+
+GET    /governance/storage/health                      &mdash; provider health
+GET    /governance/storage/migration                   &mdash; migration status
+
+GET    /governance/stream            (SSE)             &mdash; subscribe
+GET    /governance/stream/health                       &mdash; stream registry health
+POST   /governance/stream/publish                      &mdash; admin-only publish (test hook)
+
+GET    /governance/pursuits/:id/prompt-block           &mdash; deterministic pursuit-context prompt preview</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <ul>
+    <li><strong>Backend &mdash; new (20):</strong></li>
+    <li><code>backend/src/deepResearch/tenantIsolation.service.js</code></li>
+    <li><code>backend/src/deepResearch/rbac.service.js</code></li>
+    <li><code>backend/src/deepResearch/auditTrail.service.js</code></li>
+    <li><code>backend/src/deepResearch/eventLineage.service.js</code></li>
+    <li><code>backend/src/deepResearch/slaEscalation.service.js</code></li>
+    <li><code>backend/src/deepResearch/workflowGovernance.service.js</code></li>
+    <li><code>backend/src/deepResearch/storageProviders.service.js</code></li>
+    <li><code>backend/src/deepResearch/observabilityStream.service.js</code></li>
+    <li><code>backend/src/deepResearch/pursuitContextPrompt.service.js</code></li>
+    <li><code>backend/src/deepResearch/governanceDashboard.service.js</code></li>
+    <li><code>backend/src/migrations/20260516000003-deep-research-phase-11.js</code></li>
+    <li><code>backend/src/models/AuditEvent.js</code> + 7 other model files</li>
+    <li><code>backend/tests/deepResearch/phase11.test.js</code> (40 unit tests)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-11-walkthrough.js</code></li>
+    <li><strong>Backend &mdash; modified:</strong></li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> &mdash; +26 handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> &mdash; +26 routes + tenantMiddleware on the admin chain</li>
+    <li><code>backend/src/models/index.js</code> &mdash; +8 models</li>
+    <li><strong>Frontend &mdash; new (1):</strong></li>
+    <li><code>frontend/src/pages/GovernancePage.jsx</code></li>
+    <li><strong>Frontend &mdash; modified:</strong></li>
+    <li><code>frontend/src/services/deepResearchService.js</code> &mdash; +27 client methods</li>
+    <li><code>frontend/src/App.jsx</code> &mdash; route + import</li>
+    <li><code>frontend/src/components/common/Sidebar.jsx</code> &mdash; &ldquo;Governance Center&rdquo; nav link</li>
+    <li><strong>Docs:</strong></li>
+    <li><code>docs/deep-research-phase-11-walkthrough.html</code> (this file)</li>
+    <li><code>docs/deep-research-assets/p11-*.png</code> (10 screenshots)</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 40 new Phase 11 tests, all passing. Coverage:
+      <ul>
+        <li><code>tenantIsolation</code> &mdash; applyTenantScope (camel + raw), assertOwnership in strict + loose modes, DEFAULT_ORG_ID</li>
+        <li><code>rbac</code> &mdash; ladder ordering, normalizeLegacyRole admin→super_admin, isAllowed per-role, explicit permission overrides, super_admin has every permission</li>
+        <li><code>auditTrail</code> &mdash; VALID_KINDS + COMMON_VERBS surfaces</li>
+        <li><code>eventLineage</code> &mdash; VALID_KINDS + EDGE_KINDS + MAX_DEPTH</li>
+        <li><code>slaEscalation</code> &mdash; VALID_ACTIONS, ESCALATION_LADDER, nextEscalationRole</li>
+        <li><code>workflowGovernance</code> &mdash; VALID_WORKFLOW_KINDS + VALID_STATUSES</li>
+        <li><code>storageProviders</code> &mdash; SUPPORTED_PROVIDERS, configuredProvider fallback, providerHealth url_only path</li>
+        <li><code>observabilityStream</code> &mdash; VALID_CHANNELS, summarize, unknown-channel ignore, no-subscriber publish, throttle, publishers helper</li>
+        <li><code>pursuitContextPrompt</code> &mdash; composePromptBlock null-context, included sections, char-budget truncation, governance footer, MAX_BLOCK_CHARS range</li>
+      </ul>
+    </li>
+    <li><strong>Full suite:</strong> 183 suites, 2022 tests, all green (Phase 10 baseline 1982 &rarr; +40 net; zero regressions).</li>
+    <li><strong>Migration:</strong> Applied to prod cleanly in <strong>0.447s</strong>; all 8 new tables verified in <code>information_schema</code>.</li>
+    <li><strong>Prod smoke:</strong> Backend health 200; <code>/api/v1/deep-research/governance</code> returns a fully populated composite (initial deploy hit a 500 because the Phase 11 governance aggregator tried to filter the Phase 10 sla_events table by organization_id which it doesn&rsquo;t have yet; resolved in commit <code>063b3fa</code> by removing the filter on un-scoped Phase 10 tables &mdash; that org_id backfill is queued for Phase 12).</li>
+    <li><strong>Dashboard:</strong> Governance page renders all 11 sections cleanly on prod (10/10 screenshots captured).</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations &mdash; deferred to Phase 12</h2>
+  <ul>
+    <li><strong>Phase 10 tables aren&rsquo;t org-scoped yet:</strong> <code>sla_events</code>,
+      <code>worker_jobs</code>, <code>proposal_execution_queue</code>,
+      <code>artifact_lifecycle_events</code>, <code>queue_metrics</code>,
+      <code>storage_assets</code>, <code>execution_failures</code>,
+      <code>operational_metrics</code> have no <code>organization_id</code> column.
+      Phase 11 governance reads them platform-wide. A Phase 12 migration adds
+      org_id to all of them with a default backfill to org 1.</li>
+    <li><strong>S3 / MinIO providers are wired but not migrated:</strong> the
+      adapter calls work, but no existing url_only asset has been copied to
+      S3 yet. Phase 12 ships the one-off byte-migration script.</li>
+    <li><strong>SLA email escalation:</strong> the daily digest payload is built;
+      the actual email send is queued for Phase 12&rsquo;s Source Health Agent integration.</li>
+    <li><strong>SSE channels are publish-side wired</strong> on a few hot
+      paths (SLA actions, workflow transitions). Phase 12 wires the rest
+      (worker.state, queue.update, draft.complete, package.assembled, failure)
+      into the Phase 10 services.</li>
+    <li><strong>Pursuit-context prompt block</strong> is previewable via API
+      and audit-hashed, but the actual prepend into
+      <code>actionGenerator.buildGroundedUserPrompt</code> is staged separately
+      so the Phase 11 governance gate can be flipped before any LLM behavior
+      changes.</li>
+    <li><strong>RBAC middleware</strong> is wired (<code>requirePermission</code>),
+      but existing admin-gated routes haven&rsquo;t been migrated off the legacy
+      <code>checkPermissions(ROLES.ADMIN)</code> chain. Phase 12 does the migration.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended Phase 12 &mdash; Cross-Phase Tenant Backfill + LLM Provenance Hardening</h2>
+  <ol>
+    <li><strong>Phase 10 tables org-scope backfill</strong> &mdash; one migration
+      adds <code>organization_id</code> to all 8 Phase 10 tables with a default
+      backfill to org 1, then governance dashboard switches to true per-tenant
+      reads.</li>
+    <li><strong>Real prompt prepend in actionGenerator</strong> &mdash; integrate
+      <code>pursuitContextPrompt.previewBlockForPursuit</code> into
+      <code>buildGroundedUserPrompt</code> as a real LLM input. Stamp
+      <code>audit_hash</code> on every OpportunityOutput row.</li>
+    <li><strong>RBAC route migration</strong> &mdash; replace the legacy
+      <code>checkPermissions(ROLES.ADMIN)</code> with
+      <code>requirePermission(...)</code> on every route, one feature at a time.</li>
+    <li><strong>S3 byte migration script</strong> &mdash; one-off script copies
+      every <code>url_only</code> asset to S3 (or MinIO) when the operator
+      flips the env var. Idempotent.</li>
+    <li><strong>SLA email pipeline</strong> &mdash; wire <code>generateDigest</code>
+      into the existing Source Health Agent email plumbing for a daily 8AM
+      org-scoped summary.</li>
+    <li><strong>SSE publish wiring</strong> &mdash; thread the Phase 10
+      services to emit on the appropriate channels so the dashboard becomes
+      live without poll-refresh.</li>
+    <li><strong>UI permission gating</strong> &mdash; React hook
+      <code>usePermissions()</code> + per-button <code>&lt;Permitted name="X"&gt;</code>
+      wrapper so the UI matches the backend authorization model.</li>
+    <li><strong>Audit log export retention</strong> &mdash; configurable
+      auto-archive of audit_events older than <code>retention_days</code> on
+      the tenant_settings row.</li>
+  </ol>
+</section>
+
+<script>
+  document.querySelectorAll('img.shot').forEach((img) => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</main>
+</div>
+</body>
+</html>
