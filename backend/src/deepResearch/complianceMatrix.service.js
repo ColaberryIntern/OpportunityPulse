@@ -128,6 +128,14 @@ async function buildForPursuit(pursuitId, { rfpText = null, sourceAttachmentId =
       status: 'missing',
     });
   }
+  // Phase 14: lineage edge — pursuit generated a compliance matrix.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.complianceMatrixBuilt({
+      pursuitId: Number(pursuitId), matrixId: matrix.id,
+    });
+  } catch (e) { /* swallow */ }
   return getMatrixForPursuit(pursuitId);
 }
 

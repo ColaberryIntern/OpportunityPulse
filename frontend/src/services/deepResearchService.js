@@ -1141,3 +1141,66 @@ export async function streamIntegrityHistory(params = {}) {
   const res = await api.get(`${base}/stream-integrity/history`, { params });
   return res.data?.data;
 }
+
+// ---- Phase 14 — operational lineage activation + AI quality intelligence -
+
+export async function getQualityOps() {
+  const res = await api.get(`${base}/quality-ops`);
+  return res.data?.data;
+}
+export async function snapshotQualityMetrics() {
+  const res = await api.post(`${base}/quality-ops/snapshot`);
+  return res.data?.data;
+}
+export async function listQualityMetrics(params = {}) {
+  const res = await api.get(`${base}/quality-ops/history`, { params });
+  return res.data?.data;
+}
+export async function listQualityAlerts(params = {}) {
+  const res = await api.get(`${base}/quality-ops/alerts`, { params });
+  return res.data?.data;
+}
+export async function scoreProposalQuality(outputId) {
+  const res = await api.post(`${base}/quality/proposal/${outputId}/score`);
+  return res.data?.data;
+}
+export async function latestProposalQuality(outputId) {
+  const res = await api.get(`${base}/quality/proposal/${outputId}`);
+  return res.data?.data;
+}
+export async function summarizeProposalQuality(params = {}) {
+  const res = await api.get(`${base}/quality/proposal/summary`, { params });
+  return res.data?.data;
+}
+export async function topProposalQuality(params = {}) {
+  const res = await api.get(`${base}/quality/proposal/top`, { params });
+  return res.data?.data;
+}
+export async function analyzeGroundedness(outputId) {
+  const res = await api.post(`${base}/quality/groundedness/${outputId}/analyze`);
+  return res.data?.data;
+}
+export async function latestGroundedness(outputId) {
+  const res = await api.get(`${base}/quality/groundedness/${outputId}`);
+  return res.data?.data;
+}
+export async function analyzeCoherence(outputId) {
+  const res = await api.post(`${base}/quality/coherence/${outputId}/analyze`);
+  return res.data?.data;
+}
+export async function latestCoherence(outputId) {
+  const res = await api.get(`${base}/quality/coherence/${outputId}`);
+  return res.data?.data;
+}
+export async function analyzeAlignment(outputId) {
+  const res = await api.post(`${base}/quality/alignment/${outputId}/analyze`);
+  return res.data?.data;
+}
+export async function latestAlignment(outputId) {
+  const res = await api.get(`${base}/quality/alignment/${outputId}`);
+  return res.data?.data;
+}
+export async function lineageWriterSummary() {
+  const res = await api.get(`${base}/lineage-writer/summary`);
+  return res.data?.data;
+}

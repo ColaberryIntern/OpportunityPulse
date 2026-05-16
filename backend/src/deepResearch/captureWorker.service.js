@@ -82,6 +82,19 @@ async function enqueue({
     status: 'queued',
   });
   logger.info('captureWorker: enqueued', { id: row.id, jobKind, batchId });
+  // Phase 14: lineage edge + SSE publish. Both soft-fail.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.queueEnqueued({
+      jobId: row.id, pursuitId, jobKind, actorEmail: actor,
+    });
+    // eslint-disable-next-line global-require
+    const sseHotPaths = require('./sseHotPaths.service');
+    sseHotPaths.publish.queueUpdate({
+      job_id: row.id, job_kind: jobKind, status: 'queued', pursuit_id: pursuitId,
+    });
+  } catch (e) { /* swallow */ }
   return row.toJSON();
 }
 
@@ -136,6 +149,15 @@ async function recordFailure(job, err) {
     willRetry, nextRetryAt,
     stackSnippet: err && err.stack ? String(err.stack).slice(0, 500) : null,
   });
+  // Phase 14: SSE failure publish.
+  try {
+    // eslint-disable-next-line global-require
+    const sseHotPaths = require('./sseHotPaths.service');
+    sseHotPaths.publish.failure({
+      job_id: job.id, job_kind: job.jobKind, failure_kind: failureKind,
+      will_retry: willRetry, message: err && err.message,
+    });
+  } catch (e) { /* swallow */ }
 }
 
 async function runOne(job) {

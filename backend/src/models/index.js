@@ -195,6 +195,15 @@ const PermissionIntegrity = require('./PermissionIntegrity')(sequelize);
 const StreamIntegrity = require('./StreamIntegrity')(sequelize);
 const GovernanceConsistency = require('./GovernanceConsistency')(sequelize);
 
+// Deep Research Phase 14 — operational lineage activation + AI quality intelligence.
+const ProposalQuality = require('./ProposalQuality')(sequelize);
+const GroundednessAnalysis = require('./GroundednessAnalysis')(sequelize);
+const StrategicCoherence = require('./StrategicCoherence')(sequelize);
+const EvaluatorAlignment = require('./EvaluatorAlignment')(sequelize);
+const ReplayVisualization = require('./ReplayVisualization')(sequelize);
+const QualityMetric = require('./QualityMetric')(sequelize);
+const QualityAlert = require('./QualityAlert')(sequelize);
+
 const models = {
   UserRole,
   User,
@@ -353,6 +362,14 @@ const models = {
   PermissionIntegrity,
   StreamIntegrity,
   GovernanceConsistency,
+  // Phase 14
+  ProposalQuality,
+  GroundednessAnalysis,
+  StrategicCoherence,
+  EvaluatorAlignment,
+  ReplayVisualization,
+  QualityMetric,
+  QualityAlert,
 };
 
 // Set up associations

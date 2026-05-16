@@ -124,6 +124,22 @@ async function assemblePackage({
     // eslint-disable-next-line no-await-in-loop
     await proposalArtifact.recordUse(id);
   }
+  // Phase 14: lineage edge — pursuit generated a submission package.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.packageAssembled({
+      pursuitId: Number(pursuitId), packageId: pkg.id,
+      actorEmail: assembledBy || null,
+    });
+    // Phase 12: publish SSE.
+    // eslint-disable-next-line global-require
+    const sseHotPaths = require('./sseHotPaths.service');
+    sseHotPaths.publish.packageAssembled({
+      package_id: pkg.id, pursuit_id: pursuitId,
+      artifact_count: finalArtifactIds.length,
+    });
+  } catch (e) { /* swallow */ }
   return pkg.toJSON();
 }
 

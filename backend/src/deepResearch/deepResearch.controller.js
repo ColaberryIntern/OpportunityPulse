@@ -112,6 +112,13 @@ const approvalProvenance = require('./approvalProvenance.service');
 const operationalReplay = require('./operationalReplay.service');
 const streamIntegrity = require('./streamIntegrity.service');
 const governanceAssurance = require('./governanceAssurance.service');
+// Phase 14 — operational lineage activation + AI quality intelligence.
+const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+const proposalQuality = require('./proposalQuality.service');
+const groundednessSvc = require('./groundedness.service');
+const strategicCoherence = require('./strategicCoherence.service');
+const evaluatorAlignment = require('./evaluatorAlignment.service');
+const qualityOpsDashboard = require('./qualityOpsDashboard.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -2369,6 +2376,125 @@ async function streamIntegrityHistory(req, res) {
   } catch (e) { return mapError(res, e, 'streamIntegrityHistory', 'Failed'); }
 }
 
+// ---- Phase 14 — operational lineage activation + AI quality intelligence ---
+
+// Quality Ops dashboard
+async function getQualityOps(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityOpsDashboard.getDashboard({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getQualityOps', 'Failed'); }
+}
+async function snapshotQualityMetrics(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await qualityOpsDashboard.snapshotMetrics({ organizationId: orgId });
+    return successResponse(res, row, 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotQualityMetrics', 'Failed'); }
+}
+async function listQualityMetrics(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityOpsDashboard.recentMetricSnapshots({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'listQualityMetrics', 'Failed'); }
+}
+async function listQualityAlerts(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityOpsDashboard.listAlerts({
+      organizationId: orgId, status: req.query.status || 'open',
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listQualityAlerts', 'Failed'); }
+}
+
+// Proposal quality
+async function scoreProposalQuality(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await proposalQuality.scoreOutput(
+      Number(req.params.outputId),
+      { organizationId: orgId, actor: req.user ? req.user.email : null },
+    ));
+  } catch (e) { return mapError(res, e, 'scoreProposalQuality', 'Failed'); }
+}
+async function latestProposalQuality(req, res) {
+  try {
+    return successResponse(res, await proposalQuality.latestForOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'latestProposalQuality', 'Failed'); }
+}
+async function summarizeProposalQuality(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await proposalQuality.summarize({
+      organizationId: orgId, sinceDays: req.query.sinceDays ? Number(req.query.sinceDays) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'summarizeProposalQuality', 'Failed'); }
+}
+async function topProposalQuality(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await proposalQuality.topRecent({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 10,
+    }));
+  } catch (e) { return mapError(res, e, 'topProposalQuality', 'Failed'); }
+}
+
+// Groundedness
+async function analyzeGroundedness(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await groundednessSvc.analyze(
+      Number(req.params.outputId), { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'analyzeGroundedness', 'Failed'); }
+}
+async function latestGroundedness(req, res) {
+  try {
+    return successResponse(res, await groundednessSvc.latestForOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'latestGroundedness', 'Failed'); }
+}
+
+// Strategic coherence
+async function analyzeCoherence(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await strategicCoherence.analyze(
+      Number(req.params.outputId), { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'analyzeCoherence', 'Failed'); }
+}
+async function latestCoherence(req, res) {
+  try {
+    return successResponse(res, await strategicCoherence.latestForOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'latestCoherence', 'Failed'); }
+}
+
+// Evaluator alignment
+async function analyzeAlignment(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await evaluatorAlignment.analyze(
+      Number(req.params.outputId), { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'analyzeAlignment', 'Failed'); }
+}
+async function latestAlignment(req, res) {
+  try {
+    return successResponse(res, await evaluatorAlignment.latestForOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'latestAlignment', 'Failed'); }
+}
+
+// Lineage writer summary (for the new lineage explorer)
+async function lineageWriterSummary(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await lineageEdgeWriter.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'lineageWriterSummary', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -2635,4 +2761,20 @@ module.exports = {
   getStreamIntegrity,
   snapshotStreamIntegrity,
   streamIntegrityHistory,
+  // Phase 14
+  getQualityOps,
+  snapshotQualityMetrics,
+  listQualityMetrics,
+  listQualityAlerts,
+  scoreProposalQuality,
+  latestProposalQuality,
+  summarizeProposalQuality,
+  topProposalQuality,
+  analyzeGroundedness,
+  latestGroundedness,
+  analyzeCoherence,
+  latestCoherence,
+  analyzeAlignment,
+  latestAlignment,
+  lineageWriterSummary,
 };

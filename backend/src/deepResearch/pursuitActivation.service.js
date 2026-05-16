@@ -178,6 +178,19 @@ async function activate({
     actor,
   });
 
+  // Phase 14: emit lineage edge from the source (cluster/pattern/venture/...)
+  // to the new pursuit. Soft-fails so activation never breaks on lineage.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.pursuitActivated({
+      pursuitId: pursuit.id,
+      sourceKind, sourceId,
+      organizationId: pursuit.organizationId || null,
+      actorEmail: actor || null,
+    });
+  } catch (e) { /* swallow */ }
+
   return {
     pursuit: pursuit.toJSON(),
     activation: activation.toJSON(),

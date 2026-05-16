@@ -487,6 +487,20 @@ async function generateOutput({
     }, { organizationId: orgId });
   } catch (e) { /* swallow */ }
 
+  // Phase 14: emit cross-provenance + operational-lineage edge so the
+  // draft becomes a first-class node in the lineage graph. Soft-fails.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('../deepResearch/lineageEdgeWriter.service');
+    const orgIdForLineage = await profileSvc.resolveOrgId(effectiveUserId).catch(() => null);
+    lineageEdgeWriter.helpers.draftGenerated({
+      pursuitId, opportunityId, outputId: row.id,
+      organizationId: orgIdForLineage,
+      actorEmail: generatedBy ? String(generatedBy) : null,
+      auditHash: promptAuditHash,
+    });
+  } catch (e) { /* swallow */ }
+
   logger.info('OIED: action generated', {
     opportunityId,
     type,

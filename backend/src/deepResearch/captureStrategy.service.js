@@ -231,6 +231,17 @@ async function buildForPursuit(pursuitId) {
     recurringThemes,
     narrative,
   });
+
+  // Phase 14: lineage edge — pursuit spawned a capture strategy.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.captureStrategyBuilt({
+      pursuitId: Number(pursuitId), captureId: row.id,
+      organizationId: pursuit.organizationId || null,
+    });
+  } catch (e) { /* swallow */ }
+
   return row.toJSON();
 }
 

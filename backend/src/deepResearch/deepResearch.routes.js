@@ -432,6 +432,35 @@ router.get('/stream-integrity', ...admin, c.getStreamIntegrity);
 router.post('/stream-integrity/snapshot', ...admin, jsonSmall, c.snapshotStreamIntegrity);
 router.get('/stream-integrity/history', ...admin, c.streamIntegrityHistory);
 
+// ---- Phase 14 — operational lineage activation + AI quality intelligence -
+
+// AI Quality Operations dashboard
+router.get('/quality-ops', ...admin, c.getQualityOps);
+router.post('/quality-ops/snapshot', ...admin, jsonSmall, c.snapshotQualityMetrics);
+router.get('/quality-ops/history', ...admin, c.listQualityMetrics);
+router.get('/quality-ops/alerts', ...admin, c.listQualityAlerts);
+
+// Proposal quality
+router.post('/quality/proposal/:outputId/score', ...admin, jsonSmall, c.scoreProposalQuality);
+router.get('/quality/proposal/:outputId', ...admin, c.latestProposalQuality);
+router.get('/quality/proposal/summary', ...admin, c.summarizeProposalQuality);
+router.get('/quality/proposal/top', ...admin, c.topProposalQuality);
+
+// Groundedness
+router.post('/quality/groundedness/:outputId/analyze', ...admin, jsonSmall, c.analyzeGroundedness);
+router.get('/quality/groundedness/:outputId', ...admin, c.latestGroundedness);
+
+// Strategic coherence
+router.post('/quality/coherence/:outputId/analyze', ...admin, jsonSmall, c.analyzeCoherence);
+router.get('/quality/coherence/:outputId', ...admin, c.latestCoherence);
+
+// Evaluator alignment
+router.post('/quality/alignment/:outputId/analyze', ...admin, jsonSmall, c.analyzeAlignment);
+router.get('/quality/alignment/:outputId', ...admin, c.latestAlignment);
+
+// Lineage writer health
+router.get('/lineage-writer/summary', ...admin, c.lineageWriterSummary);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);
