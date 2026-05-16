@@ -59,6 +59,17 @@ const ventureConflict = require('./ventureConflict.service');
 const researchRevenue = require('./researchRevenue.service');
 const captureStrategy = require('./captureStrategy.service');
 const submissionReadiness = require('./submissionReadiness.service');
+// Phase 9 — submission readiness + compliance intelligence.
+const rfpAttachment = require('./rfpAttachment.service');
+const proposalArtifact = require('./proposalArtifact.service');
+const complianceMatrix = require('./complianceMatrix.service');
+const submissionPackage = require('./submissionPackage.service');
+const proposalTimeline = require('./proposalTimeline.service');
+const complianceGap = require('./complianceGap.service');
+const submissionReadinessEngine = require('./submissionReadinessEngine.service');
+const parallelDraftQueue = require('./parallelDraftQueue.service');
+const pursuitContextInjector = require('./pursuitContextInjector.service');
+const captureOps = require('./captureOps.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -1098,6 +1109,231 @@ async function applySubmissionTemplate(req, res) {
   } catch (e) { return mapError(res, e, 'applySubmissionTemplate', 'Failed to apply submission template'); }
 }
 
+// ---- Phase 9 — submission readiness + compliance intelligence -----------
+
+async function listRfpAttachments(req, res) {
+  try {
+    return successResponse(res, await rfpAttachment.listForPursuit(
+      Number(req.params.id), { kind: req.query.kind || null },
+    ));
+  } catch (e) { return mapError(res, e, 'listRfpAttachments', 'Failed to list RFP attachments'); }
+}
+async function addRfpAttachment(req, res) {
+  try {
+    return successResponse(res, await rfpAttachment.addAttachment({
+      pursuitId: Number(req.params.id),
+      ...(req.body || {}),
+      uploadedBy: req.user ? req.user.email : null,
+    }), 'Attachment added', 201);
+  } catch (e) { return mapError(res, e, 'addRfpAttachment', 'Failed to add RFP attachment'); }
+}
+async function updateRfpAttachment(req, res) {
+  try {
+    return successResponse(res, await rfpAttachment.updateAttachment(
+      Number(req.params.id), req.body || {},
+    ), 'Attachment updated');
+  } catch (e) { return mapError(res, e, 'updateRfpAttachment', 'Failed to update RFP attachment'); }
+}
+async function deleteRfpAttachment(req, res) {
+  try {
+    return successResponse(res, await rfpAttachment.deleteAttachment(Number(req.params.id)),
+      'Attachment deleted');
+  } catch (e) { return mapError(res, e, 'deleteRfpAttachment', 'Failed to delete attachment'); }
+}
+async function summarizeRfpAttachments(req, res) {
+  try {
+    return successResponse(res, await rfpAttachment.summarizeForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'summarizeRfpAttachments', 'Failed to summarize attachments'); }
+}
+
+async function listProposalArtifacts(req, res) {
+  try {
+    return successResponse(res, await proposalArtifact.listArtifacts({
+      artifactKind: req.query.kind || null,
+      status: req.query.status || null,
+      q: req.query.q || null,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listProposalArtifacts', 'Failed to list proposal artifacts'); }
+}
+async function addProposalArtifact(req, res) {
+  try {
+    return successResponse(res, await proposalArtifact.addArtifact({
+      ...(req.body || {}),
+      uploadedBy: req.user ? req.user.email : null,
+    }), 'Artifact added', 201);
+  } catch (e) { return mapError(res, e, 'addProposalArtifact', 'Failed to add proposal artifact'); }
+}
+async function updateProposalArtifact(req, res) {
+  try {
+    return successResponse(res, await proposalArtifact.updateArtifact(
+      Number(req.params.id), req.body || {},
+    ), 'Artifact updated');
+  } catch (e) { return mapError(res, e, 'updateProposalArtifact', 'Failed to update proposal artifact'); }
+}
+async function deleteProposalArtifact(req, res) {
+  try {
+    return successResponse(res, await proposalArtifact.deleteArtifact(Number(req.params.id)),
+      'Artifact deleted');
+  } catch (e) { return mapError(res, e, 'deleteProposalArtifact', 'Failed to delete proposal artifact'); }
+}
+async function refreshArtifactExpirations(req, res) {
+  try {
+    return successResponse(res, await proposalArtifact.refreshExpirationStatuses(),
+      'Expiration statuses refreshed');
+  } catch (e) { return mapError(res, e, 'refreshArtifactExpirations', 'Failed to refresh expirations'); }
+}
+
+async function buildComplianceMatrix(req, res) {
+  try {
+    const { rfpText, sourceAttachmentId } = req.body || {};
+    return successResponse(res, await complianceMatrix.buildForPursuit(
+      Number(req.params.id),
+      { rfpText, sourceAttachmentId },
+    ), 'Compliance matrix built');
+  } catch (e) { return mapError(res, e, 'buildComplianceMatrix', 'Failed to build compliance matrix'); }
+}
+async function getComplianceMatrix(req, res) {
+  try {
+    const out = await complianceMatrix.getMatrixForPursuit(Number(req.params.id));
+    return successResponse(res, out);
+  } catch (e) { return mapError(res, e, 'getComplianceMatrix', 'Failed to load compliance matrix'); }
+}
+async function updateComplianceMatrixItem(req, res) {
+  try {
+    return successResponse(res, await complianceMatrix.updateMatrixItem(
+      Number(req.params.id), req.body || {},
+    ), 'Matrix item updated');
+  } catch (e) { return mapError(res, e, 'updateComplianceMatrixItem', 'Failed to update matrix item'); }
+}
+
+async function assembleSubmissionPackage(req, res) {
+  try {
+    return successResponse(res, await submissionPackage.assemblePackage({
+      pursuitId: Number(req.params.id),
+      ...(req.body || {}),
+      assembledBy: req.user ? req.user.email : null,
+    }), 'Submission package assembled', 201);
+  } catch (e) { return mapError(res, e, 'assembleSubmissionPackage', 'Failed to assemble package'); }
+}
+async function listSubmissionPackages(req, res) {
+  try {
+    return successResponse(res, await submissionPackage.listForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listSubmissionPackages', 'Failed to list packages'); }
+}
+async function getSubmissionPackage(req, res) {
+  try {
+    const out = await submissionPackage.getPackageDetail(Number(req.params.id));
+    if (!out) return errorResponse(res, 'Package not found', 404);
+    return successResponse(res, out);
+  } catch (e) { return mapError(res, e, 'getSubmissionPackage', 'Failed to load package'); }
+}
+async function updateSubmissionPackage(req, res) {
+  try {
+    return successResponse(res, await submissionPackage.updatePackage(
+      Number(req.params.id), req.body || {},
+    ), 'Package updated');
+  } catch (e) { return mapError(res, e, 'updateSubmissionPackage', 'Failed to update package'); }
+}
+
+async function listProposalTimeline(req, res) {
+  try {
+    return successResponse(res, await proposalTimeline.listForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listProposalTimeline', 'Failed to load timeline'); }
+}
+async function addTimelineEvent(req, res) {
+  try {
+    return successResponse(res, await proposalTimeline.addEvent({
+      pursuitId: Number(req.params.id), ...(req.body || {}),
+    }), 'Timeline event added', 201);
+  } catch (e) { return mapError(res, e, 'addTimelineEvent', 'Failed to add timeline event'); }
+}
+async function updateTimelineEvent(req, res) {
+  try {
+    return successResponse(res, await proposalTimeline.updateEvent(
+      Number(req.params.id), req.body || {},
+    ), 'Timeline event updated');
+  } catch (e) { return mapError(res, e, 'updateTimelineEvent', 'Failed to update timeline event'); }
+}
+async function seedDefaultTimeline(req, res) {
+  try {
+    const { dueAt } = req.body || {};
+    return successResponse(res, await proposalTimeline.seedDefaultTimeline(
+      Number(req.params.id), { dueAt },
+    ), 'Default timeline seeded');
+  } catch (e) { return mapError(res, e, 'seedDefaultTimeline', 'Failed to seed timeline'); }
+}
+
+async function listComplianceGaps(req, res) {
+  try {
+    return successResponse(res, await complianceGap.listForPursuit(
+      Number(req.params.id), { status: req.query.status || null },
+    ));
+  } catch (e) { return mapError(res, e, 'listComplianceGaps', 'Failed to list compliance gaps'); }
+}
+async function refreshComplianceGaps(req, res) {
+  try {
+    return successResponse(res, await complianceGap.refreshForPursuit(Number(req.params.id)),
+      'Compliance gaps refreshed');
+  } catch (e) { return mapError(res, e, 'refreshComplianceGaps', 'Failed to refresh compliance gaps'); }
+}
+async function updateComplianceGap(req, res) {
+  try {
+    const { status } = req.body || {};
+    return successResponse(res, await complianceGap.updateGapStatus(
+      Number(req.params.id), status, req.user ? req.user.email : null,
+    ), 'Gap status updated');
+  } catch (e) { return mapError(res, e, 'updateComplianceGap', 'Failed to update compliance gap'); }
+}
+
+async function scoreSubmissionReadiness(req, res) {
+  try {
+    return successResponse(res, await submissionReadinessEngine.scorePursuit(
+      Number(req.params.id), { actor: req.user ? req.user.email : null },
+    ), 'Submission readiness scored');
+  } catch (e) { return mapError(res, e, 'scoreSubmissionReadiness', 'Failed to score submission readiness'); }
+}
+
+async function enqueueParallelDrafts(req, res) {
+  try {
+    const { outputType, concurrency, skipExisting } = req.body || {};
+    return successResponse(res, await parallelDraftQueue.enqueueForPursuit(
+      Number(req.params.id),
+      {
+        outputType: outputType || 'proposal',
+        concurrency: Number(concurrency) || undefined,
+        skipExisting: skipExisting !== false,
+        actor: req.user ? req.user.email : null,
+        generatedBy: req.user ? req.user.id : null,
+      },
+    ), 'Parallel draft batch processed');
+  } catch (e) { return mapError(res, e, 'enqueueParallelDrafts', 'Parallel draft generation failed'); }
+}
+async function listParallelDraftJobs(req, res) {
+  try {
+    return successResponse(res, await parallelDraftQueue.listJobs({
+      pursuitId: Number(req.params.id),
+      batchId: req.query.batchId || null,
+    }));
+  } catch (e) { return mapError(res, e, 'listParallelDraftJobs', 'Failed to list draft jobs'); }
+}
+
+async function getPursuitContextBlock(req, res) {
+  try {
+    const block = await pursuitContextInjector.buildContextBlock(
+      Number(req.params.id),
+      req.query.opportunityId ? Number(req.query.opportunityId) : null,
+    );
+    return successResponse(res, { block });
+  } catch (e) { return mapError(res, e, 'getPursuitContextBlock', 'Failed to build context block'); }
+}
+
+async function getCaptureOps(req, res) {
+  try {
+    return successResponse(res, await captureOps.getCaptureOps());
+  } catch (e) { return mapError(res, e, 'getCaptureOps', 'Failed to load capture operations'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -1222,4 +1458,34 @@ module.exports = {
   updateSubmissionArtifact,
   deleteSubmissionArtifact,
   applySubmissionTemplate,
+  // Phase 9
+  listRfpAttachments,
+  addRfpAttachment,
+  updateRfpAttachment,
+  deleteRfpAttachment,
+  summarizeRfpAttachments,
+  listProposalArtifacts,
+  addProposalArtifact,
+  updateProposalArtifact,
+  deleteProposalArtifact,
+  refreshArtifactExpirations,
+  buildComplianceMatrix,
+  getComplianceMatrix,
+  updateComplianceMatrixItem,
+  assembleSubmissionPackage,
+  listSubmissionPackages,
+  getSubmissionPackage,
+  updateSubmissionPackage,
+  listProposalTimeline,
+  addTimelineEvent,
+  updateTimelineEvent,
+  seedDefaultTimeline,
+  listComplianceGaps,
+  refreshComplianceGaps,
+  updateComplianceGap,
+  scoreSubmissionReadiness,
+  enqueueParallelDrafts,
+  listParallelDraftJobs,
+  getPursuitContextBlock,
+  getCaptureOps,
 };

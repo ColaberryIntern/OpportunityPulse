@@ -8,6 +8,13 @@ import {
   buildCaptureStrategy, getCaptureStrategy,
   listSubmissionArtifacts, addSubmissionArtifact,
   applySubmissionTemplate, updateSubmissionArtifact,
+  // Phase 9
+  getComplianceMatrix, buildComplianceMatrix, updateComplianceMatrixItem,
+  scoreSubmissionReadiness, enqueueParallelDrafts,
+  listProposalTimeline, seedDefaultTimeline,
+  listComplianceGaps, refreshComplianceGaps, updateComplianceGap,
+  listRfpAttachments, addRfpAttachment, summarizeRfpAttachments,
+  assembleSubmissionPackage, listSubmissionPackages,
 } from '../services/deepResearchService';
 import {
   OpportunityRow, JustificationCard, PursuitStatusPill, StatCard, EvidenceDrawer,
@@ -161,19 +168,33 @@ function PursuitWorkspacePage() {
   const [submission, setSubmission] = useState(null);
   const [handoffs, setHandoffs] = useState([]);
   const [handoffResult, setHandoffResult] = useState(null);
+  // Phase 9 panel state.
+  const [matrix, setMatrix] = useState(null);
+  const [timeline, setTimeline] = useState([]);
+  const [gaps, setGaps] = useState([]);
+  const [rfpAttachments, setRfpAttachments] = useState([]);
+  const [packages, setPackages] = useState([]);
+  const [rfpText, setRfpText] = useState('');
 
   const load = useCallback(async () => {
     if (isNew) return;
     setLoading(true); setErr(null);
     try {
-      const [main, r, cap, sub, h] = await Promise.all([
+      const [main, r, cap, sub, h, m, t, g, a, p] = await Promise.all([
         getPursuit(id),
         getPursuitReadiness(id).catch(() => null),
         getCaptureStrategy(id).catch(() => null),
         listSubmissionArtifacts(id).catch(() => null),
         listPursuitHandoffs(id).catch(() => []),
+        getComplianceMatrix(id).catch(() => null),
+        listProposalTimeline(id).catch(() => []),
+        listComplianceGaps(id, { status: 'open' }).catch(() => []),
+        listRfpAttachments(id).catch(() => []),
+        listSubmissionPackages(id).catch(() => []),
       ]);
       setData(main); setReadiness(r); setCapture(cap); setSubmission(sub); setHandoffs(h || []);
+      setMatrix(m); setTimeline(t || []); setGaps(g || []);
+      setRfpAttachments(a || []); setPackages(p || []);
     } catch (e) { setErr(e?.response?.data?.message || e.message || 'Failed to load pursuit'); }
     finally { setLoading(false); }
   }, [id, isNew]);
@@ -698,6 +719,307 @@ function PursuitWorkspacePage() {
               </ul>
             </div>
           )}
+        </Section>
+
+        {/* Phase 9 — Submission Readiness Score (composite). */}
+        <Section
+          title="Submission Readiness Score (Phase 9 Composite)"
+          subtitle="7-dimension composite over compliance, attachments, artifacts, package, staffing, capability, timeline."
+          testId="section-phase9-readiness"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => scoreSubmissionReadiness(data.id), 'Score failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              Score Submission Readiness
+            </button>
+          }
+        >
+          <p className="text-xs text-gray-500 italic">
+            Click "Score Submission Readiness" to compute the Phase 9 composite. Reads compliance matrix,
+            RFP attachment locker, proposal artifact vault, submission packages, staffing/capability,
+            and timeline health. Result lands in the Proposal Readiness panel above.
+          </p>
+        </Section>
+
+        {/* Phase 9 — Compliance Matrix. */}
+        <Section
+          title="Compliance Matrix"
+          subtitle="Parsed RFP requirements + standard template. Mark each row satisfied / partial / missing."
+          testId="section-compliance-matrix"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => buildComplianceMatrix(data.id, { rfpText }), 'Matrix build failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              {matrix ? 'Re-build matrix' : 'Build matrix'}
+            </button>
+          }
+        >
+          <textarea
+            value={rfpText}
+            onChange={(e) => setRfpText(e.target.value)}
+            placeholder="Paste RFP text here for richer matrix parsing (optional — leaves a standard template if empty)…"
+            rows={3}
+            className="w-full text-xs px-2 py-1 border border-gray-300 rounded mb-3 font-sans"
+          />
+          {!matrix ? (
+            <p className="text-xs text-gray-500 italic">No matrix yet. Click "Build matrix".</p>
+          ) : (
+            <div>
+              <div className="flex items-baseline gap-3 mb-3 text-sm">
+                <span className="text-2xl font-bold text-gray-900">{Number(matrix.matrix.completionPct).toFixed(0)}%</span>
+                <span className="text-xs text-gray-500">
+                  {matrix.matrix.satisfiedCount} satisfied · {matrix.matrix.partialCount} partial ·
+                  {' '}{matrix.matrix.missingCount} missing of {matrix.matrix.totalCount}
+                </span>
+              </div>
+              <ul className="space-y-1 text-xs max-h-[400px] overflow-y-auto">
+                {(matrix.items || []).map((it) => (
+                  <li key={it.id} className="flex items-center gap-2 border border-gray-200 rounded px-2 py-1">
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                      it.severity === 'critical' ? 'bg-red-100 text-red-700'
+                        : it.severity === 'high' ? 'bg-amber-100 text-amber-800'
+                          : 'bg-gray-100 text-gray-600'
+                    }`}>{it.itemKind}</span>
+                    <span className="flex-1 text-gray-900 truncate" title={it.label}>{it.label}</span>
+                    <select
+                      value={it.status}
+                      onChange={(e) => withBusy(
+                        () => updateComplianceMatrixItem(it.id, { status: e.target.value }),
+                        'Update failed',
+                      )}
+                      disabled={busy}
+                      className={`text-[11px] px-2 py-0.5 rounded border ${
+                        it.status === 'satisfied' ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                          : it.status === 'partial' ? 'bg-amber-50 border-amber-300 text-amber-800'
+                            : 'bg-red-50 border-red-300 text-red-700'
+                      }`}
+                    >
+                      {['satisfied', 'partial', 'missing', 'na'].map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Section>
+
+        {/* Phase 9 — Compliance Gaps. */}
+        <Section
+          title="Compliance Gaps"
+          subtitle="Auto-detected gaps from the matrix + artifact vault + attachment locker. Recommendation-only."
+          testId="section-compliance-gaps"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => refreshComplianceGaps(data.id), 'Refresh failed')}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              Refresh gaps
+            </button>
+          }
+        >
+          {gaps.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">No open gaps detected.</p>
+          ) : (
+            <ul className="space-y-2 text-xs">
+              {gaps.slice(0, 12).map((g) => (
+                <li key={g.id} className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-gray-900">[{g.gapKind}] {g.label}</span>
+                    <span className="text-[11px] font-semibold text-amber-800">
+                      severity {Math.round(Number(g.severity))}
+                    </span>
+                  </div>
+                  {Array.isArray(g.recommendedActions) && g.recommendedActions.length > 0 && (
+                    <ul className="text-[11px] text-gray-700 ml-3">
+                      {g.recommendedActions.slice(0, 2).map((a, i) => <li key={i}>• {a}</li>)}
+                    </ul>
+                  )}
+                  <div className="flex justify-end mt-1">
+                    <button
+                      type="button"
+                      onClick={() => withBusy(() => updateComplianceGap(g.id, { status: 'acknowledged' }), 'Update failed')}
+                      disabled={busy}
+                      className="text-[11px] px-2 py-0.5 rounded bg-white border border-gray-300 hover:bg-gray-100 mr-1"
+                    >
+                      Acknowledge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => withBusy(() => updateComplianceGap(g.id, { status: 'mitigated' }), 'Update failed')}
+                      disabled={busy}
+                      className="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                    >
+                      Mitigate
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        {/* Phase 9 — RFP Attachments Locker. */}
+        <Section
+          title="RFP Attachment Locker"
+          subtitle="Track RFPs, amendments, supporting docs, Q&A responses, past proposals. Metadata-only in v1."
+          testId="section-rfp-locker"
+        >
+          {rfpAttachments.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">No RFP attachments uploaded yet.</p>
+          ) : (
+            <ul className="space-y-1 text-xs">
+              {rfpAttachments.slice(0, 30).map((a) => (
+                <li key={a.id} className="flex items-center gap-2 border border-gray-200 rounded px-2 py-1">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">
+                    {a.attachmentKind}
+                  </span>
+                  <span className="flex-1 text-gray-900 truncate" title={a.label}>{a.label}</span>
+                  <span className="text-[11px] text-gray-500">v{a.version}</span>
+                  {a.contentRef && (
+                    <a
+                      href={a.contentRef}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-cyan-700 hover:underline"
+                    >
+                      open ↗
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        {/* Phase 9 — Proposal Timeline. */}
+        <Section
+          title="Proposal Timeline"
+          subtitle="Append-only event log per pursuit. Track milestones, drafts, compliance, artifacts, blockers."
+          testId="section-timeline"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => seedDefaultTimeline(data.id), 'Seed failed')}
+              disabled={busy || timeline.length > 0}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              Seed default timeline
+            </button>
+          }
+        >
+          {timeline.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">No timeline yet. Click "Seed default timeline" to start.</p>
+          ) : (
+            <ul className="space-y-1 text-xs">
+              {timeline.slice(0, 20).map((e) => (
+                <li key={e.id} className="flex items-center gap-2 border-l-2 pl-2 py-0.5"
+                  style={{
+                    borderColor: e.status === 'done' ? '#10b981'
+                      : e.status === 'overdue' ? '#ef4444'
+                        : e.status === 'blocked' ? '#f59e0b'
+                          : '#94a3b8',
+                  }}
+                >
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                    e.status === 'done' ? 'bg-emerald-100 text-emerald-800'
+                      : e.status === 'overdue' ? 'bg-red-100 text-red-700'
+                        : e.status === 'blocked' ? 'bg-amber-100 text-amber-800'
+                          : 'bg-gray-100 text-gray-600'
+                  }`}>{e.status}</span>
+                  <span className="text-gray-700">{e.eventKind}</span>
+                  <span className="flex-1 text-gray-900">{e.label}</span>
+                  {e.dueAt && (
+                    <span className="text-[11px] text-gray-500">{new Date(e.dueAt).toLocaleDateString()}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        {/* Phase 9 — Submission Packages. */}
+        <Section
+          title="Submission Packages"
+          subtitle="Assembled proposal packages: drafts + RFP attachments + reusable artifacts. NO auto-submit."
+          testId="section-packages"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(() => assembleSubmissionPackage(data.id), 'Assemble failed')}
+              disabled={busy || linkedOpps.length === 0}
+              className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40"
+            >
+              Assemble package
+            </button>
+          }
+        >
+          {packages.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">No packages assembled yet.</p>
+          ) : (
+            <ul className="space-y-2 text-xs">
+              {packages.slice(0, 6).map((p) => (
+                <li key={p.id} className="rounded border border-gray-200 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-gray-900">{p.name}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded font-semibold ${
+                      p.status === 'ready' ? 'bg-emerald-100 text-emerald-800'
+                        : p.status === 'submitted' ? 'bg-violet-100 text-violet-800'
+                          : 'bg-gray-100 text-gray-600'
+                    }`}>{p.status}</span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-lg font-bold text-gray-900">
+                      {Number(p.completenessScore).toFixed(0)}%
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      {(p.outputIds || []).length} drafts · {(p.attachmentIds || []).length} attachments ·
+                      {' '}{(p.artifactIds || []).length} reusable artifacts
+                    </span>
+                  </div>
+                  {Array.isArray(p.missingComponents) && p.missingComponents.length > 0 && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      Missing: {p.missingComponents.slice(0, 4).join(', ')}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        {/* Phase 9 — Parallel Draft Generation. */}
+        <Section
+          title="Parallel Draft Generation"
+          subtitle="Runs the Review Queue handoff with bounded concurrency. Faster than the sequential Phase 8 path."
+          testId="section-parallel-drafts"
+          right={
+            <button
+              type="button"
+              onClick={() => withBusy(async () => {
+                const out = await enqueueParallelDrafts(data.id, { concurrency: 3 });
+                setHandoffResult(out);
+              }, 'Parallel batch failed')}
+              disabled={busy || linkedOpps.length === 0}
+              className="text-xs px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
+            >
+              Run Parallel Batch
+            </button>
+          }
+        >
+          <p className="text-xs text-gray-500 italic">
+            Concurrency 3 by default. Idempotent — already-successful drafts are skipped. Results land in
+            the Generate Drafts panel above + the Review Queue.
+          </p>
         </Section>
 
         <Section title="Submission Reminder" testId="section-submission-reminder">

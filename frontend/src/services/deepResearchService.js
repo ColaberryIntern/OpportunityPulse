@@ -522,3 +522,122 @@ export async function deleteSubmissionArtifact(artifactId) {
   const res = await api.delete(`${base}/submission-artifacts/${artifactId}`);
   return res.data?.data;
 }
+
+// ---- Phase 9 — submission readiness + compliance intelligence -----------
+
+export async function getCaptureOps() {
+  const res = await api.get(`${base}/capture-ops`);
+  return res.data?.data;
+}
+export async function listRfpAttachments(pursuitId, params = {}) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/rfp-attachments`, { params });
+  return res.data?.data;
+}
+export async function addRfpAttachment(pursuitId, body) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/rfp-attachments`, body);
+  return res.data?.data;
+}
+export async function summarizeRfpAttachments(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/rfp-attachments/summary`);
+  return res.data?.data;
+}
+export async function updateRfpAttachment(id, body) {
+  const res = await api.patch(`${base}/rfp-attachments/${id}`, body);
+  return res.data?.data;
+}
+export async function deleteRfpAttachment(id) {
+  const res = await api.delete(`${base}/rfp-attachments/${id}`);
+  return res.data?.data;
+}
+export async function listProposalArtifacts(params = {}) {
+  const res = await api.get(`${base}/proposal-artifacts`, { params });
+  return res.data?.data;
+}
+export async function addProposalArtifact(body) {
+  const res = await api.post(`${base}/proposal-artifacts`, body);
+  return res.data?.data;
+}
+export async function updateProposalArtifact(id, body) {
+  const res = await api.patch(`${base}/proposal-artifacts/${id}`, body);
+  return res.data?.data;
+}
+export async function deleteProposalArtifact(id) {
+  const res = await api.delete(`${base}/proposal-artifacts/${id}`);
+  return res.data?.data;
+}
+export async function refreshArtifactExpirations() {
+  const res = await api.post(`${base}/proposal-artifacts/refresh-expirations`);
+  return res.data?.data;
+}
+export async function getComplianceMatrix(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/compliance-matrix`);
+  return res.data?.data;
+}
+export async function buildComplianceMatrix(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/compliance-matrix/build`, body);
+  return res.data?.data;
+}
+export async function updateComplianceMatrixItem(id, body) {
+  const res = await api.patch(`${base}/compliance-matrix-items/${id}`, body);
+  return res.data?.data;
+}
+export async function listSubmissionPackages(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/submission-packages`);
+  return res.data?.data;
+}
+export async function assembleSubmissionPackage(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/submission-packages`, body);
+  return res.data?.data;
+}
+export async function getSubmissionPackage(id) {
+  const res = await api.get(`${base}/submission-packages/${id}`);
+  return res.data?.data;
+}
+export async function updateSubmissionPackage(id, body) {
+  const res = await api.patch(`${base}/submission-packages/${id}`, body);
+  return res.data?.data;
+}
+export async function listProposalTimeline(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/timeline`);
+  return res.data?.data;
+}
+export async function addTimelineEvent(pursuitId, body) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/timeline`, body);
+  return res.data?.data;
+}
+export async function seedDefaultTimeline(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/timeline/seed`, body);
+  return res.data?.data;
+}
+export async function updateTimelineEvent(id, body) {
+  const res = await api.patch(`${base}/timeline-events/${id}`, body);
+  return res.data?.data;
+}
+export async function listComplianceGaps(pursuitId, params = {}) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/compliance-gaps`, { params });
+  return res.data?.data;
+}
+export async function refreshComplianceGaps(pursuitId) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/compliance-gaps/refresh`);
+  return res.data?.data;
+}
+export async function updateComplianceGap(id, body) {
+  const res = await api.patch(`${base}/compliance-gaps/${id}`, body);
+  return res.data?.data;
+}
+export async function scoreSubmissionReadiness(pursuitId) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/submission-readiness/score`);
+  return res.data?.data;
+}
+export async function enqueueParallelDrafts(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/parallel-drafts`, body);
+  return res.data?.data;
+}
+export async function listParallelDraftJobs(pursuitId, params = {}) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/parallel-drafts`, { params });
+  return res.data?.data;
+}
+export async function getPursuitContextBlock(pursuitId, params = {}) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/context-block`, { params });
+  return res.data?.data;
+}

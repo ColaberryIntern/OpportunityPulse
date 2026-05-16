@@ -43,6 +43,7 @@ import ActionIntelligencePage from './pages/ActionIntelligencePage';
 import ClusterDrilldownPage from './pages/ClusterDrilldownPage';
 import PursuitWorkspacePage from './pages/PursuitWorkspacePage';
 import ResearchRunsPage from './pages/ResearchRunsPage';
+import CaptureOpsPage from './pages/CaptureOpsPage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -448,6 +449,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <ResearchRunsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/capture-ops"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <CaptureOpsPage />
             </ProtectedLayout>
           }
         />

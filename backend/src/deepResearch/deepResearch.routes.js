@@ -196,6 +196,52 @@ router.post('/pursuits/:id/submission-artifacts/template', ...admin, c.applySubm
 router.patch('/submission-artifacts/:id', ...admin, jsonSmall, c.updateSubmissionArtifact);
 router.delete('/submission-artifacts/:id', ...admin, c.deleteSubmissionArtifact);
 
+// ---- Phase 9 — submission readiness + compliance intelligence ------------
+// Capture Operations Dashboard
+router.get('/capture-ops', ...admin, c.getCaptureOps);
+
+// RFP attachments per pursuit
+router.get('/pursuits/:id/rfp-attachments', ...admin, c.listRfpAttachments);
+router.post('/pursuits/:id/rfp-attachments', ...admin, jsonLarge, c.addRfpAttachment);
+router.get('/pursuits/:id/rfp-attachments/summary', ...admin, c.summarizeRfpAttachments);
+router.patch('/rfp-attachments/:id', ...admin, jsonLarge, c.updateRfpAttachment);
+router.delete('/rfp-attachments/:id', ...admin, c.deleteRfpAttachment);
+
+// Proposal artifact vault (org-wide)
+router.get('/proposal-artifacts', ...admin, c.listProposalArtifacts);
+router.post('/proposal-artifacts', ...admin, jsonLarge, c.addProposalArtifact);
+router.post('/proposal-artifacts/refresh-expirations', ...admin, c.refreshArtifactExpirations);
+router.patch('/proposal-artifacts/:id', ...admin, jsonLarge, c.updateProposalArtifact);
+router.delete('/proposal-artifacts/:id', ...admin, c.deleteProposalArtifact);
+
+// Compliance matrix
+router.get('/pursuits/:id/compliance-matrix', ...admin, c.getComplianceMatrix);
+router.post('/pursuits/:id/compliance-matrix/build', ...admin, jsonLarge, c.buildComplianceMatrix);
+router.patch('/compliance-matrix-items/:id', ...admin, jsonSmall, c.updateComplianceMatrixItem);
+
+// Submission packages
+router.get('/pursuits/:id/submission-packages', ...admin, c.listSubmissionPackages);
+router.post('/pursuits/:id/submission-packages', ...admin, jsonSmall, c.assembleSubmissionPackage);
+router.get('/submission-packages/:id', ...admin, c.getSubmissionPackage);
+router.patch('/submission-packages/:id', ...admin, jsonSmall, c.updateSubmissionPackage);
+
+// Proposal timeline
+router.get('/pursuits/:id/timeline', ...admin, c.listProposalTimeline);
+router.post('/pursuits/:id/timeline', ...admin, jsonSmall, c.addTimelineEvent);
+router.post('/pursuits/:id/timeline/seed', ...admin, jsonSmall, c.seedDefaultTimeline);
+router.patch('/timeline-events/:id', ...admin, jsonSmall, c.updateTimelineEvent);
+
+// Compliance gaps
+router.get('/pursuits/:id/compliance-gaps', ...admin, c.listComplianceGaps);
+router.post('/pursuits/:id/compliance-gaps/refresh', ...admin, c.refreshComplianceGaps);
+router.patch('/compliance-gaps/:id', ...admin, jsonSmall, c.updateComplianceGap);
+
+// Submission readiness engine + parallel draft queue + context injector
+router.post('/pursuits/:id/submission-readiness/score', ...admin, c.scoreSubmissionReadiness);
+router.post('/pursuits/:id/parallel-drafts', ...admin, jsonSmall, c.enqueueParallelDrafts);
+router.get('/pursuits/:id/parallel-drafts', ...admin, c.listParallelDraftJobs);
+router.get('/pursuits/:id/context-block', ...admin, c.getPursuitContextBlock);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

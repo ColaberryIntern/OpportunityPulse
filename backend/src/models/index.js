@@ -146,6 +146,15 @@ const CaptureStrategy = require('./CaptureStrategy')(sequelize);
 const OpportunityExpansion = require('./OpportunityExpansion')(sequelize);
 const ResearchRevenueLink = require('./ResearchRevenueLink')(sequelize);
 const SubmissionReadinessArtifact = require('./SubmissionReadinessArtifact')(sequelize);
+// Deep Research Phase 9 — submission readiness + compliance intelligence.
+const RfpAttachment = require('./RfpAttachment')(sequelize);
+const ProposalArtifact = require('./ProposalArtifact')(sequelize);
+const ComplianceMatrix = require('./ComplianceMatrix')(sequelize);
+const ComplianceMatrixItem = require('./ComplianceMatrixItem')(sequelize);
+const SubmissionPackage = require('./SubmissionPackage')(sequelize);
+const ProposalTimelineEvent = require('./ProposalTimelineEvent')(sequelize);
+const ComplianceGap = require('./ComplianceGap')(sequelize);
+const ParallelDraftJob = require('./ParallelDraftJob')(sequelize);
 
 const models = {
   UserRole,
@@ -262,6 +271,14 @@ const models = {
   OpportunityExpansion,
   ResearchRevenueLink,
   SubmissionReadinessArtifact,
+  RfpAttachment,
+  ProposalArtifact,
+  ComplianceMatrix,
+  ComplianceMatrixItem,
+  SubmissionPackage,
+  ProposalTimelineEvent,
+  ComplianceGap,
+  ParallelDraftJob,
 };
 
 // Set up associations
