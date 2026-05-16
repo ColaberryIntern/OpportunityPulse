@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 10 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Mechanics</h2>
+  <a href="#worker">Durable worker</a>
+  <a href="#exec-queue">Proposal Execution Queue</a>
+  <a href="#sla">SLA Intelligence</a>
+  <a href="#lifecycle">Artifact Lifecycle</a>
+  <a href="#observability">Queue Observability</a>
+  <a href="#storage">Storage abstraction</a>
+  <a href="#context-wiring">Pursuit Context wiring</a>
+  <a href="#durable-drafts">Durable Draft Generation</a>
+  <a href="#llm-augment">LLM Compliance Augment</a>
+  <a href="#capture-infra">Capture Infrastructure dash</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Capture Infra full</a>
+  <a href="#screen-actions">Operator actions</a>
+  <a href="#screen-worker">Durable worker</a>
+  <a href="#screen-queue">Queue throughput</a>
+  <a href="#screen-sla">SLA pressure</a>
+  <a href="#screen-artifacts">Artifact lifecycle</a>
+  <a href="#screen-exec">Execution queue</a>
+  <a href="#screen-jobs">Recent jobs</a>
+  <a href="#screen-failures">Failures</a>
+  <a href="#screen-storage">Storage</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 11</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 10</h1>
+  <div class="subtitle">Operational Scalability + Execution Infrastructure</div>
+  <p>
+    Phase 9 made the system <em>know</em> what was needed to submit a proposal. Phase 10
+    makes the system <em>operate</em>: durable workers, persistent queues, SLA
+    pressure detection, artifact lifecycle, queue observability, file-storage
+    abstraction, optional LLM augmentation, and a Capture Infrastructure dashboard
+    that ties it all together. Every operation remains
+    <span class="badge b-gov">measure-only</span> &mdash; no auto-submit, no auto-bid,
+    no auto-sign.
+  </p>
+  <p>
+    <span class="badge b-done">10 features shipped</span>
+    <span class="badge b-done">8 new tables</span>
+    <span class="badge b-done">10 new services</span>
+    <span class="badge b-done">27 new API routes</span>
+    <span class="badge b-done">21 new unit tests</span>
+    <span class="badge b-done">Full suite 1982/1982 green</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Why Phase 10</h2>
+  <p>
+    Phases 7&ndash;9 layered <strong>intelligence</strong> onto every pursuit: opportunity
+    expansion, capture strategy, parallel draft generation, compliance matrix
+    parsing, submission packages, gap detection, readiness scoring, and the
+    Capture Operations dashboard. Each piece worked, but each piece was in the
+    <em>request lifecycle</em>: when a user clicked "build compliance matrix" or
+    "generate drafts," the API thread did the work, held the connection, and the
+    user waited.
+  </p>
+  <p>
+    That model can&rsquo;t survive enterprise scale &mdash; long jobs time out, retries are
+    awkward, observability is per-request, partial failures leave silent gaps,
+    SLA breaches go unnoticed, expiring artifacts go unnoticed, and there&rsquo;s no
+    single pane to see what the platform is actually <em>doing</em> across all
+    pursuits in flight.
+  </p>
+  <p>
+    Phase 10 lifts every long-running operation out of the request lifecycle and
+    onto a <strong>durable worker queue</strong> backed by Postgres. Jobs are
+    resumable, retry-safe, observable, idempotent, cancelable. The new
+    <strong>Capture Infrastructure</strong> dashboard at
+    <code>/admin/deep-research/capture-infra</code> is the operator&rsquo;s single window
+    onto worker health, queue throughput, SLA pressure, artifact lifecycle,
+    execution queue, recent failures, and storage status.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract preserved</h2>
+  <p>Phase 10 is an <strong>infrastructure</strong> upgrade, not a policy change. Every
+  guardrail from Phases 1&ndash;9 holds verbatim:</p>
+  <ul>
+    <li><span class="badge b-gov">No auto-submit</span> &mdash; the system <em>never</em>
+      transmits a proposal to any portal. Drafts always land in the Review Queue with
+      status <code>draft</code>; submission is human-only.</li>
+    <li><span class="badge b-gov">No auto-bid</span> &mdash; pursuit decisions, pricing,
+      and signatory authority remain human.</li>
+    <li><span class="badge b-gov">No auto-sign</span> &mdash; nothing is signed,
+      certified, or transmitted on the operator&rsquo;s behalf.</li>
+    <li><span class="badge b-gov">Deterministic primary</span> &mdash; the LLM second-pass
+      for compliance matrix is feature-flagged OFF by default. The Phase 9 regex-based
+      parser remains the source of truth.</li>
+    <li><span class="badge b-gov">Measure-only</span> &mdash; SLA scanners, artifact
+      lifecycle, queue observability, and failure breakdowns surface state; they don&rsquo;t
+      mutate downstream artifacts.</li>
+    <li><span class="badge b-gov">Audit-traceable</span> &mdash; every worker job persists
+      its full payload, attempt count, started/finished timestamps, and typed failure
+      class to the database.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped &mdash; the 10 features</h2>
+  <table>
+    <thead><tr><th style="width:22%">Feature</th><th>What it does</th><th style="width:18%">Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1. <strong>Durable capture worker</strong></td>
+        <td>Polling-based worker over the new <code>worker_jobs</code> table. Six job kinds
+        (draft generation, compliance parse, package assembly, artifact lifecycle scan,
+        SLA scan, storage upload). Bounded concurrency, exponential backoff with jitter,
+        typed failure classification, idempotent acquisition via optimistic UPDATE.</td>
+        <td><code>captureWorker.service.js</code></td></tr>
+      <tr><td>2. <strong>Proposal Execution Queue</strong></td>
+        <td>High-level queue entries that fan out into multiple worker jobs (e.g. one
+        draft batch = N draft_generation jobs). Status rollup, idempotent enqueue,
+        cancellable.</td>
+        <td><code>proposalExecutionQueue.service.js</code></td></tr>
+      <tr><td>3. <strong>SLA Intelligence</strong></td>
+        <td>Six scanners detect SLA breaches: gap aging, pursuit stagnant, draft
+        stalled, queue aging, readiness stagnant, blocker aging. Severity score scales
+        with overshoot. Idempotent upsert keeps one open event per (kind, subject).</td>
+        <td><code>slaIntelligence.service.js</code></td></tr>
+      <tr><td>4. <strong>Artifact Lifecycle Automation</strong></td>
+        <td>Nightly scan flips proposal artifacts between active &harr; expiring &harr;
+        expired. Renewal recommendations sorted by criticality. Append-only event log
+        on <code>artifact_lifecycle_events</code>.</td>
+        <td><code>artifactLifecycle.service.js</code></td></tr>
+      <tr><td>5. <strong>Queue Observability</strong></td>
+        <td>Per-kind p50 / p95 latency, retry rate, success rate. Periodic snapshots
+        to <code>queue_metrics</code>. Worker health score combining failure rate and
+        backlog depth.</td>
+        <td><code>queueObservability.service.js</code></td></tr>
+      <tr><td>6. <strong>Storage abstraction</strong></td>
+        <td>Provider-agnostic file-asset registry. Four backends declared: <code>s3</code>,
+        <code>minio</code>, <code>local</code>, <code>url_only</code> (default). MIME +
+        size validation. Signed URLs delegated to provider.</td>
+        <td><code>storage.service.js</code></td></tr>
+      <tr><td>7. <strong>Pursuit Context wiring</strong></td>
+        <td>Threads the Phase 9 pursuit context block into actionGenerator at draft
+        time. v1 stamps the block onto OpportunityOutput metadata for audit; full prompt
+        prepend deferred to Phase 11.</td>
+        <td><code>pursuitContextWiring.service.js</code></td></tr>
+      <tr><td>8. <strong>Durable Draft Generation</strong></td>
+        <td>Replaces Phase 8&rsquo;s in-process <code>parallelDraftQueue</code> with
+        worker-backed jobs. Resumable, retry-safe, idempotent. One worker_job per
+        linked opportunity.</td>
+        <td><code>durableDraftGeneration.service.js</code></td></tr>
+      <tr><td>9. <strong>LLM Compliance Augment</strong></td>
+        <td><strong>Strictly opt-in</strong> second-pass for thin compliance matrices.
+        Disabled by default via <code>DEEP_RESEARCH_LLM_COMPLIANCE_ENABLED</code>. The
+        deterministic Phase 9 parser remains primary; the LLM only fills gaps and tags
+        every item with <code>metadata.source</code>.</td>
+        <td><code>complianceMatrixLlm.service.js</code></td></tr>
+      <tr><td>10. <strong>Capture Infrastructure dashboard</strong></td>
+        <td>Single-pane operator view that aggregates all the above: worker health,
+        queue throughput, SLA pressure, artifact lifecycle, execution queue, recent
+        jobs, failures, storage. Manual triggers for SLA scan, lifecycle scan, queue
+        snapshot, worker drain.</td>
+        <td><code>captureInfra.service.js</code> + <code>CaptureInfraPage.jsx</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="worker">
+  <h2>1. Durable capture worker</h2>
+  <p>The worker is a polling loop driven by node-cron at
+  <code>*/5 * * * * *</code>. Each tick, it queries up to <code>DEFAULT_CONCURRENCY</code>
+  rows from <code>worker_jobs</code> with <code>status=&#39;queued&#39;</code> and
+  <code>run_after &le; NOW()</code>, atomically upgrading each to
+  <code>status=&#39;processing&#39;</code> via an optimistic <code>UPDATE&hellip;WHERE</code>
+  that includes the previous status. That guarantees only one worker tick claims
+  a given job even if two workers run concurrently.</p>
+  <pre>// Job kinds dispatched by loadHandler():
+draft_generation        &rarr; durableDraftGeneration.runDraftJob
+compliance_parse        &rarr; complianceMatrix.buildForPursuit
+package_assembly        &rarr; submissionPackage.assemblePackage
+artifact_lifecycle_scan &rarr; artifactLifecycle.runNightlyScan
+sla_scan                &rarr; slaIntelligence.runFullScan
+storage_upload          &rarr; (handler stub; Phase 11)</pre>
+  <p>Each failure is classified into a typed bucket (<code>timeout</code>,
+  <code>permanent</code>, <code>config</code>, <code>upstream</code>,
+  <code>transient</code>), and the next retry is scheduled with exponential backoff
+  + jitter (30s / 2m / 8m, capped at 10 min). Permanent failures don&rsquo;t retry.</p>
+  <p>The worker is <strong>opt-in</strong> via the
+  <code>DEEP_RESEARCH_WORKER_ENABLED=true</code> env var &mdash; default OFF so prod
+  can flip it on intentionally after a smoke test.</p>
+</section>
+
+<section class="block arch" id="exec-queue">
+  <h2>2. Proposal Execution Queue</h2>
+  <p>The execution queue (table <code>proposal_execution_queue</code>) is the
+  <em>operator-facing</em> grouping over worker_jobs. One queue entry maps to
+  one user intent (&ldquo;build drafts for pursuit 7&rdquo;), which fans out into
+  multiple worker_jobs (one per linked opportunity). Aggregate status, succeeded /
+  failed counts, and SLA-due timestamps live on the queue row; per-job detail
+  remains in worker_jobs. The split keeps the dashboard responsive without
+  scanning thousands of worker rows.</p>
+</section>
+
+<section class="block arch" id="sla">
+  <h2>3. SLA Intelligence</h2>
+  <p>Six scanners run via a single <code>runFullScan()</code> entry point:</p>
+  <table>
+    <thead><tr><th>Scanner</th><th>What ages it</th><th>Default threshold (days)</th><th>Env override</th></tr></thead>
+    <tbody>
+      <tr><td>gap_aging</td><td>Open compliance gap</td><td>7</td><td><code>DEEP_RESEARCH_SLA_GAP_DAYS</code></td></tr>
+      <tr><td>pursuit_stagnant</td><td>No pursuit activity</td><td>14</td><td><code>DEEP_RESEARCH_SLA_PURSUIT_DAYS</code></td></tr>
+      <tr><td>draft_stalled</td><td>Draft job stuck processing</td><td>3</td><td><code>DEEP_RESEARCH_SLA_DRAFT_DAYS</code></td></tr>
+      <tr><td>queue_aging</td><td>Worker job stuck queued</td><td>2</td><td><code>DEEP_RESEARCH_SLA_QUEUE_DAYS</code></td></tr>
+      <tr><td>readiness_stagnant</td><td>Readiness score not refreshed</td><td>10</td><td><code>DEEP_RESEARCH_SLA_READINESS_DAYS</code></td></tr>
+      <tr><td>blocker_aging</td><td>Timeline event blocked</td><td>5</td><td><code>DEEP_RESEARCH_SLA_BLOCKER_DAYS</code></td></tr>
+    </tbody>
+  </table>
+  <p>Each scanner upserts into <code>sla_events</code>: one open event per
+  (slaKind, scopeKind, scopeId). Severity = 40 + (ageDays &minus; threshold) &times; 6,
+  clamped to [40, 100]. Escalation copy is generated per kind.</p>
+</section>
+
+<section class="block arch" id="lifecycle">
+  <h2>4. Artifact Lifecycle Automation</h2>
+  <p>Proposal artifacts (capability statements, COIs, past performance write-ups,
+  diversity certifications, etc.) have an <code>expires_at</code> column from
+  Phase 9. Phase 10 wires that into a scanner: artifacts within
+  <code>EXPIRING_WINDOW_DAYS</code> (default 30) flip to <code>expiring</code>;
+  past <code>expires_at</code> flips to <code>expired</code>. Every state
+  transition is recorded in <code>artifact_lifecycle_events</code> for auditable
+  history. Renewal recommendations sort by criticality + days-until-expiry.</p>
+</section>
+
+<section class="block arch" id="observability">
+  <h2>5. Queue Observability</h2>
+  <p>For each job kind in the last 60 minutes (configurable), the observability
+  service computes job count, p50 / p95 latency in milliseconds, retry rate
+  (avg attempts &gt; 1 / total), and failures-by-class. Periodic snapshots can be
+  appended to <code>queue_metrics</code> for trend analysis. Worker health is a
+  composite 0&ndash;100 score combining recent failure rate and backlog depth.</p>
+</section>
+
+<section class="block arch" id="storage">
+  <h2>6. Storage abstraction</h2>
+  <p>The <code>storage_assets</code> registry stores a row per file (provider,
+  bucket, key, MIME, size, retention, expiry). Four declared backends:</p>
+  <ul>
+    <li><strong>s3</strong> &mdash; AWS S3 via aws-sdk (provider stub; full wiring in Phase 11).</li>
+    <li><strong>minio</strong> &mdash; self-hosted S3-compatible (provider stub).</li>
+    <li><strong>local</strong> &mdash; disk-backed for dev/staging (provider stub).</li>
+    <li><strong>url_only</strong> &mdash; v1 default: metadata-only; the file lives at an
+      externally-hosted URL recorded in <code>content_ref</code>. Lets the platform deploy
+      and start tracking artifacts without any S3 credentials.</li>
+  </ul>
+  <p>MIME allowlist + max-size are enforced before any provider call.</p>
+</section>
+
+<section class="block arch" id="context-wiring">
+  <h2>7. Pursuit Context wiring</h2>
+  <p>The Phase 9 <code>pursuitContextInjector</code> composes a context block
+  summarizing pursuit + capture strategy + linked opportunities + suggested
+  assets + readiness blockers. Phase 10 wires that block into the OIED
+  <code>actionGenerator</code> draft pipeline. v1 stamps the composed block onto
+  the OpportunityOutput&rsquo;s <code>metadata.pursuit_context_block</code> so the
+  draft is auditably linked to the pursuit context it was generated under. Full
+  prompt-prepend integration is queued for Phase 11.</p>
+</section>
+
+<section class="block arch" id="durable-drafts">
+  <h2>8. Durable Draft Generation</h2>
+  <p>Replaces Phase 8&rsquo;s in-process <code>parallelDraftQueue.service</code>.
+  Each linked opportunity in a pursuit becomes one <code>worker_jobs</code>
+  row with <code>job_kind=&#39;draft_generation&#39;</code>. The worker picks them up
+  with bounded concurrency. Drafts always land in the Review Queue at
+  <code>status=&#39;draft&#39;</code>; human review + human submit still required.
+  Idempotent &mdash; a pursuit can be re-enqueued and any opportunity that already
+  has a completed draft job is skipped.</p>
+</section>
+
+<section class="block arch" id="llm-augment">
+  <h2>9. LLM Compliance Augment (opt-in)</h2>
+  <p>When a deterministic compliance matrix has fewer than
+  <code>LOW_CONFIDENCE_THRESHOLD</code> (default 6) items, an operator can opt
+  the matrix into an LLM second-pass. The LLM is constrained by a strict system
+  prompt to return only structured JSON
+  (<code>{ item_kind, label, requirement_text, severity }</code>),
+  capped at 25 items, and explicitly told <em>not</em> to invent items or
+  duplicate the deterministic-already-found ones (capability statement, past
+  perf, NAICS, deadlines, etc.). New items are merged with
+  <code>metadata.source=&#39;llm_phase10&#39;</code> for full audit.</p>
+  <p><span class="badge b-gov">Feature-flag protected</span>. Enabled only when
+  <code>DEEP_RESEARCH_LLM_COMPLIANCE_ENABLED=true</code>. Off by default in prod.</p>
+</section>
+
+<section class="block arch" id="capture-infra">
+  <h2>10. Capture Infrastructure dashboard</h2>
+  <p>Single page that aggregates worker health, queue throughput, SLA pressure,
+  artifact lifecycle, execution queue, recent worker jobs, failures, and
+  storage. Manual operator triggers: <em>Refresh</em>, <em>Run SLA Scan</em>,
+  <em>Run Artifact Lifecycle Scan</em>, <em>Snapshot Queue Metrics</em>,
+  <em>Drain Worker Once</em>. Read-only for all aggregated state.</p>
+</section>
+
+<h2>Screens</h2>
+
+<section class="block" id="screen-full">
+  <h3>Capture Infrastructure dashboard &mdash; full page</h3>
+  <img class="shot" src="deep-research-assets/p10-01-capture-infra-full.png" alt="Capture Infrastructure full page" />
+  <div class="caption">Composite over every Phase 10 surface. All zero-state today because no
+  worker_jobs have been enqueued yet on prod &mdash; this is the cold-start view.</div>
+</section>
+
+<section class="block" id="screen-actions">
+  <h3>Operator action bar</h3>
+  <img class="shot" src="deep-research-assets/p10-02-actions.png" alt="Operator actions" />
+  <div class="caption">Manual triggers: refresh / SLA scan / artifact lifecycle scan / queue snapshot / worker drain.</div>
+</section>
+
+<section class="block" id="screen-worker">
+  <h3>Durable Worker section</h3>
+  <img class="shot" src="deep-research-assets/p10-03-worker.png" alt="Durable Worker" />
+  <div class="caption">Worker is <code>disabled</code> in prod today (flag off). Health score 100, no failures.</div>
+</section>
+
+<section class="block" id="screen-queue">
+  <h3>Queue Throughput section</h3>
+  <img class="shot" src="deep-research-assets/p10-04-queue.png" alt="Queue throughput" />
+  <div class="caption">Per-kind p50 / p95 latency, retry rate. Empty today (no jobs).</div>
+</section>
+
+<section class="block" id="screen-sla">
+  <h3>SLA Pressure section</h3>
+  <img class="shot" src="deep-research-assets/p10-05-sla.png" alt="SLA pressure" />
+  <div class="caption">Open SLA events across all six scanners. Empty today (scanners haven&rsquo;t run yet).</div>
+</section>
+
+<section class="block" id="screen-artifacts">
+  <h3>Artifact Lifecycle section</h3>
+  <img class="shot" src="deep-research-assets/p10-06-artifacts.png" alt="Artifact lifecycle" />
+  <div class="caption">Total / active / expiring / expired / events-7d / health-pct.</div>
+</section>
+
+<section class="block" id="screen-exec">
+  <h3>Proposal Execution Queue section</h3>
+  <img class="shot" src="deep-research-assets/p10-07-exec-queue.png" alt="Execution queue" />
+  <div class="caption">High-level queue entries by status. Empty today (no batches enqueued).</div>
+</section>
+
+<section class="block" id="screen-jobs">
+  <h3>Recent Worker Jobs section</h3>
+  <img class="shot" src="deep-research-assets/p10-08-recent-jobs.png" alt="Recent jobs" />
+  <div class="caption">Last 25 worker_jobs across all kinds. Empty today.</div>
+</section>
+
+<section class="block" id="screen-failures">
+  <h3>Execution Failures section</h3>
+  <img class="shot" src="deep-research-assets/p10-09-failures.png" alt="Failures" />
+  <div class="caption">7-day failure breakdown by failure_kind and job_kind. Empty today &mdash; clean slate.</div>
+</section>
+
+<section class="block" id="screen-storage">
+  <h3>Storage Backend section</h3>
+  <img class="shot" src="deep-research-assets/p10-10-storage.png" alt="Storage" />
+  <div class="caption"><code>url_only</code> provider in production today; zero registered assets.</div>
+</section>
+
+<section class="block" id="schema">
+  <h2>Database schema (Phase 10)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>worker_jobs</code></td><td>The durable job queue. Per-row: job_kind, status, priority, payload, result, attempt/max_attempts, run_after, batch_id, started_at, finished_at.</td></tr>
+      <tr><td><code>proposal_execution_queue</code></td><td>High-level queue entries. One row per operator intent; fans out into N worker_jobs via batch_id.</td></tr>
+      <tr><td><code>artifact_lifecycle_events</code></td><td>Append-only log of every lifecycle transition (created / used / expiring / expired / renewed / archived).</td></tr>
+      <tr><td><code>sla_events</code></td><td>Open + acknowledged + resolved SLA breach events. One open per (kind, subject) via idempotent upsert.</td></tr>
+      <tr><td><code>queue_metrics</code></td><td>Periodic throughput snapshots for trend analysis.</td></tr>
+      <tr><td><code>storage_assets</code></td><td>File registry (provider, bucket, key, mime, size, retention, expires_at).</td></tr>
+      <tr><td><code>execution_failures</code></td><td>Typed failure log with failure_kind + will_retry + next_retry_at.</td></tr>
+      <tr><td><code>operational_metrics</code></td><td>Per-pursuit composite metrics (throughput, completion, SLA score).</td></tr>
+    </tbody>
+  </table>
+  <p>Single migration: <code>20260516000002-deep-research-phase-10.js</code>. Applied
+  to prod in 443ms.</p>
+</section>
+
+<section class="block" id="routes">
+  <h2>API routes (Phase 10)</h2>
+  <p>All mounted under <code>/api/v1/deep-research</code>, all admin-only.</p>
+  <pre>GET    /capture-infra                                  &mdash; dashboard composite
+GET    /worker-jobs                                    &mdash; list jobs (filter by kind/status/pursuit)
+GET    /worker-jobs/:id                                &mdash; one job detail
+POST   /worker-jobs/:id/cancel                         &mdash; cancel job
+POST   /worker-jobs/drain                              &mdash; one drain pass (operator)
+
+POST   /pursuits/:id/execution-queue/draft-batch       &mdash; fan-out draft batch
+POST   /pursuits/:id/execution-queue/single            &mdash; single execution job
+GET    /execution-queue                                &mdash; list entries
+GET    /execution-queue/:id                            &mdash; entry detail
+POST   /execution-queue/:id/refresh                    &mdash; recompute status from jobs
+POST   /execution-queue/:id/cancel                     &mdash; cancel entry + descendant jobs
+
+POST   /sla/scan                                       &mdash; run all 6 SLA scanners
+GET    /sla/events                                     &mdash; list events
+PATCH  /sla/events/:id                                 &mdash; ack / resolve / dismiss
+
+POST   /artifact-lifecycle/scan                        &mdash; nightly scan (manual trigger)
+GET    /artifact-lifecycle/renewals                    &mdash; ranked renewal recommendations
+GET    /artifact-lifecycle/:id/events                  &mdash; lifecycle event history for one artifact
+
+GET    /queue-observability                            &mdash; rolling p50/p95/retry/success
+POST   /queue-observability/snapshot                   &mdash; append snapshot to queue_metrics
+GET    /queue-observability/snapshots                  &mdash; recent snapshots
+
+POST   /storage-assets                                 &mdash; register a new asset
+GET    /storage-assets                                 &mdash; list
+GET    /storage-assets/:id/signed-url                  &mdash; signed download URL (provider-delegated)
+DELETE /storage-assets/:id                             &mdash; deregister + delete
+
+POST   /pursuits/:id/durable-drafts                    &mdash; enqueue durable drafts (worker-backed)
+GET    /pursuits/:id/durable-drafts                    &mdash; list draft worker jobs for pursuit
+
+GET    /pursuits/:id/context-block/preview             &mdash; preview pursuit context block
+POST   /pursuits/:id/compliance-matrix/llm-augment     &mdash; opt-in LLM second-pass (feature-flagged)</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <ul>
+    <li><strong>Backend &mdash; new (21):</strong></li>
+    <li><code>backend/src/deepResearch/captureWorker.service.js</code></li>
+    <li><code>backend/src/deepResearch/proposalExecutionQueue.service.js</code></li>
+    <li><code>backend/src/deepResearch/slaIntelligence.service.js</code></li>
+    <li><code>backend/src/deepResearch/artifactLifecycle.service.js</code></li>
+    <li><code>backend/src/deepResearch/queueObservability.service.js</code></li>
+    <li><code>backend/src/deepResearch/storage.service.js</code></li>
+    <li><code>backend/src/deepResearch/pursuitContextWiring.service.js</code></li>
+    <li><code>backend/src/deepResearch/durableDraftGeneration.service.js</code></li>
+    <li><code>backend/src/deepResearch/complianceMatrixLlm.service.js</code></li>
+    <li><code>backend/src/deepResearch/captureInfra.service.js</code></li>
+    <li><code>backend/src/migrations/20260516000002-deep-research-phase-10.js</code></li>
+    <li><code>backend/src/models/WorkerJob.js</code> + 7 other model files</li>
+    <li><code>backend/tests/deepResearch/phase10.test.js</code> (21 unit tests)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-10-walkthrough.js</code></li>
+    <li><strong>Backend &mdash; modified:</strong></li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> &mdash; +28 handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> &mdash; +27 routes</li>
+    <li><code>backend/src/models/index.js</code> &mdash; +8 models</li>
+    <li><code>backend/src/server.js</code> &mdash; <code>captureWorker.startScheduler()</code></li>
+    <li><strong>Frontend &mdash; new (1):</strong></li>
+    <li><code>frontend/src/pages/CaptureInfraPage.jsx</code></li>
+    <li><strong>Frontend &mdash; modified:</strong></li>
+    <li><code>frontend/src/services/deepResearchService.js</code> &mdash; +27 client methods</li>
+    <li><code>frontend/src/App.jsx</code> &mdash; route + import</li>
+    <li><code>frontend/src/components/common/Sidebar.jsx</code> &mdash; nav link</li>
+    <li><strong>Docs:</strong></li>
+    <li><code>docs/deep-research-phase-10-walkthrough.html</code> (this file)</li>
+    <li><code>docs/deep-research-assets/p10-*.png</code> (10 screenshots)</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 21 new Phase 10 tests, all passing. Coverage: captureWorker
+      (classifyFailureKind, backoffMs, newBatchId, VALID_JOB_KINDS); storage (activeProvider,
+      VALID_PROVIDERS, isMimeAllowed); slaIntelligence (severityForAge, escalationFor,
+      VALID_KINDS, THRESHOLDS); artifactLifecycle (VALID_EVENT_KINDS,
+      EXPIRING_WINDOW_DAYS); queueObservability (median, p95, VALID_KINDS);
+      complianceMatrixLlm (FEATURE_FLAG_ENV, isEnabled, sanitizeLlmItems edge cases);
+      proposalExecutionQueue (VALID_KINDS, VALID_STATUSES); durableDraftGeneration
+      (SUPPORTED_TYPES).</li>
+    <li><strong>Full suite:</strong> 182 suites, 1982 tests, all green
+      (Phase 9 baseline was 1961). +21 net.</li>
+    <li><strong>Migration:</strong> Applied to prod in 443ms; all 8 new tables verified
+      in <code>information_schema</code>.</li>
+    <li><strong>Smoke test:</strong> Backend health endpoint returns 200;
+      <code>/api/v1/deep-research/capture-infra</code> returns 401 unauthorized
+      (admin-gated) confirming route is wired; live page renders end-to-end
+      including all 8 dashboard sections.</li>
+    <li><strong>Dashboard:</strong> Capture Infrastructure page renders all 8 sections
+      cleanly on prod (10/10 section screenshots captured).</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations &mdash; deferred to Phase 11</h2>
+  <ul>
+    <li><strong>Storage providers</strong> beyond <code>url_only</code> are stubs.
+      S3 / MinIO / local-disk wiring is queued for Phase 11. Asset registration works
+      today via <code>content_ref</code> URLs.</li>
+    <li><strong>Pursuit context block prompt integration:</strong> currently stamped
+      onto OpportunityOutput metadata (audit-only). Phase 11 will pre-pend the block
+      into actionGenerator&rsquo;s user-prompt builder so it actually shapes the LLM
+      output.</li>
+    <li><strong>SLA email escalation:</strong> open events are surfaced on the dashboard
+      but not yet emailed. Phase 11 will integrate with the daily Source Health Agent
+      email plumbing.</li>
+    <li><strong>Worker scheduler is opt-in via env flag.</strong> Prod has the worker
+      <em>disabled</em> by default until smoke-validated. Flip
+      <code>DEEP_RESEARCH_WORKER_ENABLED=true</code> on the prod env to activate.</li>
+    <li><strong>LLM compliance augment is opt-in via env flag.</strong> Deterministic
+      Phase 9 parser remains the primary source of truth.</li>
+    <li><strong>Real-time UI updates:</strong> the dashboard is poll-on-refresh; no
+      WebSocket / SSE push yet.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended Phase 11</h2>
+  <p><strong>Title:</strong> Multi-Tenant Submission Operations + Auditability Hardening.</p>
+  <p>Phase 10 turned the platform into an enterprise-capable execution substrate.
+  Phase 11 should harden it for multi-tenant submission workflows + cross-pursuit
+  auditability:</p>
+  <ol>
+    <li><strong>S3 / MinIO storage provider</strong> wiring &mdash; replace the
+      <code>url_only</code> default with a real backed store. Migrate the existing
+      proposal artifacts and submission packages into it.</li>
+    <li><strong>Pursuit-context prompt integration</strong> in
+      <code>actionGenerator.buildGroundedUserPrompt()</code> &mdash; the context block
+      becomes a real input to the LLM, not just metadata.</li>
+    <li><strong>SLA email escalation</strong> via the daily Source Health Agent
+      pipeline &mdash; open events digest, ack tracking, reassignment workflow.</li>
+    <li><strong>Multi-tenant scoping</strong> on every Phase 9/10 surface
+      (organization_id everywhere; row-level filtering at the model layer).</li>
+    <li><strong>Submission audit trail</strong> &mdash; one append-only log of every
+      operator action on every pursuit, queryable by user / pursuit / date range.</li>
+    <li><strong>Capture Infrastructure trend charts</strong> &mdash; turn the periodic
+      <code>queue_metrics</code> snapshots into sparklines on the dashboard.</li>
+    <li><strong>Compliance Matrix LLM augment UI</strong> &mdash; one-click button on
+      the Pursuit Workspace page (currently API-only).</li>
+    <li><strong>WebSocket / SSE push</strong> for the dashboard so operator sees state
+      changes live without refresh.</li>
+  </ol>
+</section>
+
+<script>
+  document.querySelectorAll('img.shot').forEach((img) => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</main>
+</div>
+</body>
+</html>
