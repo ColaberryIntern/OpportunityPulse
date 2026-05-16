@@ -165,6 +165,16 @@ const StorageAsset = require('./StorageAsset')(sequelize);
 const ExecutionFailure = require('./ExecutionFailure')(sequelize);
 const OperationalMetric = require('./OperationalMetric')(sequelize);
 
+// Deep Research Phase 11 — multi-tenant governance + operational auditability.
+const AuditEvent = require('./AuditEvent')(sequelize);
+const EventLineage = require('./EventLineage')(sequelize);
+const WorkflowAssignment = require('./WorkflowAssignment')(sequelize);
+const SlaAcknowledgement = require('./SlaAcknowledgement')(sequelize);
+const TenantSettings = require('./TenantSettings')(sequelize);
+const OperatorPermission = require('./OperatorPermission')(sequelize);
+const GovernanceEvent = require('./GovernanceEvent')(sequelize);
+const ObservabilityStream = require('./ObservabilityStream')(sequelize);
+
 const models = {
   UserRole,
   User,
@@ -296,6 +306,15 @@ const models = {
   StorageAsset,
   ExecutionFailure,
   OperationalMetric,
+  // Phase 11
+  AuditEvent,
+  EventLineage,
+  WorkflowAssignment,
+  SlaAcknowledgement,
+  TenantSettings,
+  OperatorPermission,
+  GovernanceEvent,
+  ObservabilityStream,
 };
 
 // Set up associations

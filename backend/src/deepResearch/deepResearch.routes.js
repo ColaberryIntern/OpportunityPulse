@@ -14,7 +14,8 @@ const { ROLES } = require('../config/constants');
 const c = require('./deepResearch.controller');
 
 const router = express.Router();
-const admin = [verifyToken, checkPermissions(ROLES.ADMIN)];
+const { tenantMiddleware } = require('./tenantIsolation.service');
+const admin = [verifyToken, checkPermissions(ROLES.ADMIN), tenantMiddleware];
 const jsonSmall = express.json({ limit: '8kb' });
 const jsonLarge = express.json({ limit: '64kb' });
 
@@ -290,6 +291,56 @@ router.get('/pursuits/:id/context-block/preview', ...admin, c.previewPursuitCont
 
 // LLM compliance augment
 router.post('/pursuits/:id/compliance-matrix/llm-augment', ...admin, jsonLarge, c.llmAugmentComplianceMatrix);
+
+// ---- Phase 11 — multi-tenant governance + operational auditability -------
+
+// Governance dashboard composite
+router.get('/governance', ...admin, c.getGovernance);
+
+// Tenant settings
+router.get('/governance/tenant', ...admin, c.getTenantSettings);
+router.patch('/governance/tenant', ...admin, jsonSmall, c.updateTenantSettings);
+
+// RBAC
+router.get('/governance/me/permissions', verifyToken, c.describeMyPermissions);
+router.get('/governance/roles', verifyToken, c.listRolesAndPermissions);
+router.get('/governance/grants', ...admin, c.listRoleGrants);
+router.post('/governance/grants', ...admin, jsonSmall, c.grantRole);
+router.delete('/governance/grants/user/:userId', ...admin, c.revokeRoles);
+
+// Audit trail
+router.get('/governance/audit', ...admin, c.listAuditEvents);
+router.get('/governance/audit/summary', ...admin, c.summarizeAuditTrail);
+router.get('/governance/audit/export.csv', ...admin, c.exportAuditCsv);
+
+// Event lineage
+router.get('/governance/lineage/:kind/:id', ...admin, c.getLineage);
+router.post('/governance/lineage', ...admin, jsonSmall, c.recordLineageEdge);
+router.get('/governance/pursuits/:id/lineage', ...admin, c.getPursuitLineage);
+
+// SLA escalation
+router.post('/governance/sla-events/:id/actions', ...admin, jsonSmall, c.actOnSlaEvent);
+router.get('/governance/sla-events/:id/history', ...admin, c.getSlaEventHistory);
+router.get('/governance/sla/digest', ...admin, c.getSlaDigest);
+
+// Workflow governance
+router.get('/governance/workflows', ...admin, c.listWorkflowAssignments);
+router.post('/governance/workflows', ...admin, jsonSmall, c.createWorkflowAssignment);
+router.patch('/governance/workflows/:id', ...admin, jsonSmall, c.transitionWorkflowAssignment);
+router.get('/governance/workflows/workloads', ...admin, c.operatorWorkloads);
+router.get('/governance/workflows/bottlenecks', ...admin, c.workflowBottlenecks);
+
+// Storage providers
+router.get('/governance/storage/health', ...admin, c.storageProviderHealth);
+router.get('/governance/storage/migration', ...admin, c.storageMigrationStatus);
+
+// Real-time observability stream (SSE)
+router.get('/governance/stream', verifyToken, c.observabilitySubscribe);
+router.get('/governance/stream/health', ...admin, c.observabilityHealth);
+router.post('/governance/stream/publish', ...admin, jsonSmall, c.observabilityPublish);
+
+// Pursuit context prompt preview (Phase 11 — deterministic prompt composition)
+router.get('/governance/pursuits/:id/prompt-block', ...admin, c.previewPursuitContextPrompt);
 
 // ---- report (:id) routes --------------------------------------------------
 

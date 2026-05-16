@@ -765,3 +765,135 @@ export async function llmAugmentComplianceMatrix(pursuitId, body = {}) {
   const res = await api.post(`${base}/pursuits/${pursuitId}/compliance-matrix/llm-augment`, body);
   return res.data?.data;
 }
+
+// ---- Phase 11 — multi-tenant governance + operational auditability ------
+
+export async function getGovernance() {
+  const res = await api.get(`${base}/governance`);
+  return res.data?.data;
+}
+
+// Tenant
+export async function getTenantSettings() {
+  const res = await api.get(`${base}/governance/tenant`);
+  return res.data?.data;
+}
+export async function updateTenantSettings(body) {
+  const res = await api.patch(`${base}/governance/tenant`, body);
+  return res.data?.data;
+}
+
+// RBAC
+export async function describeMyPermissions() {
+  const res = await api.get(`${base}/governance/me/permissions`);
+  return res.data?.data;
+}
+export async function listRolesAndPermissions() {
+  const res = await api.get(`${base}/governance/roles`);
+  return res.data?.data;
+}
+export async function listRoleGrants(params = {}) {
+  const res = await api.get(`${base}/governance/grants`, { params });
+  return res.data?.data;
+}
+export async function grantRole(body) {
+  const res = await api.post(`${base}/governance/grants`, body);
+  return res.data?.data;
+}
+export async function revokeRoles(userId) {
+  const res = await api.delete(`${base}/governance/grants/user/${userId}`);
+  return res.data?.data;
+}
+
+// Audit
+export async function listAuditEvents(params = {}) {
+  const res = await api.get(`${base}/governance/audit`, { params });
+  return res.data?.data;
+}
+export async function summarizeAuditTrail(params = {}) {
+  const res = await api.get(`${base}/governance/audit/summary`, { params });
+  return res.data?.data;
+}
+export function auditExportCsvUrl(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return `${base}/governance/audit/export.csv${qs ? `?${qs}` : ''}`;
+}
+
+// Lineage
+export async function getLineage(kind, id, params = {}) {
+  const res = await api.get(`${base}/governance/lineage/${kind}/${id}`, { params });
+  return res.data?.data;
+}
+export async function recordLineageEdge(body) {
+  const res = await api.post(`${base}/governance/lineage`, body);
+  return res.data?.data;
+}
+export async function getPursuitLineage(pursuitId) {
+  const res = await api.get(`${base}/governance/pursuits/${pursuitId}/lineage`);
+  return res.data?.data;
+}
+
+// SLA escalation
+export async function actOnSlaEvent(id, body) {
+  const res = await api.post(`${base}/governance/sla-events/${id}/actions`, body);
+  return res.data?.data;
+}
+export async function getSlaEventHistory(id) {
+  const res = await api.get(`${base}/governance/sla-events/${id}/history`);
+  return res.data?.data;
+}
+export async function getSlaDigest() {
+  const res = await api.get(`${base}/governance/sla/digest`);
+  return res.data?.data;
+}
+
+// Workflow governance
+export async function listWorkflowAssignments(params = {}) {
+  const res = await api.get(`${base}/governance/workflows`, { params });
+  return res.data?.data;
+}
+export async function createWorkflowAssignment(body) {
+  const res = await api.post(`${base}/governance/workflows`, body);
+  return res.data?.data;
+}
+export async function transitionWorkflowAssignment(id, body) {
+  const res = await api.patch(`${base}/governance/workflows/${id}`, body);
+  return res.data?.data;
+}
+export async function getOperatorWorkloads() {
+  const res = await api.get(`${base}/governance/workflows/workloads`);
+  return res.data?.data;
+}
+export async function getWorkflowBottlenecks() {
+  const res = await api.get(`${base}/governance/workflows/bottlenecks`);
+  return res.data?.data;
+}
+
+// Storage providers
+export async function getStorageProviderHealth() {
+  const res = await api.get(`${base}/governance/storage/health`);
+  return res.data?.data;
+}
+export async function getStorageMigrationStatus() {
+  const res = await api.get(`${base}/governance/storage/migration`);
+  return res.data?.data;
+}
+
+// Observability stream (SSE) — caller manages EventSource lifecycle
+export function observabilityStreamUrl({ channels, lastEventId } = {}) {
+  const params = new URLSearchParams();
+  if (channels && channels.length) params.set('channels', channels.join(','));
+  if (lastEventId) params.set('lastEventId', lastEventId);
+  const qs = params.toString();
+  return `/api/v1/deep-research/governance/stream${qs ? `?${qs}` : ''}`;
+}
+export async function getObservabilityHealth() {
+  const res = await api.get(`${base}/governance/stream/health`);
+  return res.data?.data;
+}
+
+// Pursuit context prompt preview (Phase 11)
+export async function previewPursuitContextPrompt(pursuitId, params = {}) {
+  const res = await api.get(`${base}/governance/pursuits/${pursuitId}/prompt-block`, { params });
+  return res.data?.data;
+}

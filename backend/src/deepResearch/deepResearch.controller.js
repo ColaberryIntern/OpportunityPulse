@@ -81,6 +81,17 @@ const pursuitContextWiring = require('./pursuitContextWiring.service');
 const durableDraftGeneration = require('./durableDraftGeneration.service');
 const complianceMatrixLlm = require('./complianceMatrixLlm.service');
 const captureInfra = require('./captureInfra.service');
+// Phase 11 — multi-tenant governance + operational auditability.
+const tenantIsolation = require('./tenantIsolation.service');
+const rbac = require('./rbac.service');
+const auditTrail = require('./auditTrail.service');
+const eventLineage = require('./eventLineage.service');
+const slaEscalation = require('./slaEscalation.service');
+const workflowGovernance = require('./workflowGovernance.service');
+const storageProviders = require('./storageProviders.service');
+const observabilityStream = require('./observabilityStream.service');
+const pursuitContextPrompt = require('./pursuitContextPrompt.service');
+const governanceDashboard = require('./governanceDashboard.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -1582,6 +1593,313 @@ async function llmAugmentComplianceMatrix(req, res) {
   } catch (e) { return mapError(res, e, 'llmAugmentComplianceMatrix', 'LLM augment failed'); }
 }
 
+// ---- Phase 11 — multi-tenant governance + operational auditability ----
+
+// Governance dashboard composite
+async function getGovernance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceDashboard.getGovernance(orgId));
+  } catch (e) { return mapError(res, e, 'getGovernance', 'Failed to load governance dashboard'); }
+}
+
+// Tenant settings
+async function getTenantSettings(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await tenantIsolation.summarizeTenant(orgId));
+  } catch (e) { return mapError(res, e, 'getTenantSettings', 'Failed to load tenant settings'); }
+}
+async function updateTenantSettings(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await tenantIsolation.updateSettings(orgId, req.body || {});
+    await auditTrail.recordFromRequest(req, {
+      actionKind: 'tenant', actionVerb: 'update',
+      subjectKind: 'tenant_settings', subjectId: String(row.id),
+      payload: { keys: Object.keys(req.body || {}) },
+    });
+    return successResponse(res, row.toJSON(), 'Tenant settings updated');
+  } catch (e) { return mapError(res, e, 'updateTenantSettings', 'Failed to update tenant settings'); }
+}
+
+// RBAC
+async function describeMyPermissions(req, res) {
+  try {
+    const out = await rbac.describePermissions(
+      req.user ? (req.user.userId || req.user.id) : null,
+      req.user ? req.user.role : null,
+    );
+    return successResponse(res, out);
+  } catch (e) { return mapError(res, e, 'describeMyPermissions', 'Failed to load permissions'); }
+}
+async function listRoleGrants(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const rows = await rbac.listGrants({
+      organizationId: orgId,
+      userId: req.query.userId ? Number(req.query.userId) : null,
+      activeOnly: req.query.activeOnly !== 'false',
+    });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listRoleGrants', 'Failed to list grants'); }
+}
+async function grantRole(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const { userId, roleName, permissions } = req.body || {};
+    if (!userId || !roleName) return errorResponse(res, 'userId + roleName required', 400);
+    const row = await rbac.grantRole(Number(userId), {
+      roleName, permissions, organizationId: orgId,
+      grantedBy: req.user ? req.user.email : null,
+    });
+    await auditTrail.recordFromRequest(req, {
+      actionKind: 'rbac', actionVerb: 'grant',
+      subjectKind: 'user', subjectId: String(userId),
+      payload: { role: roleName, permissions },
+    });
+    return successResponse(res, row.toJSON(), 'Role granted', 201);
+  } catch (e) { return mapError(res, e, 'grantRole', 'Failed to grant role'); }
+}
+async function revokeRoles(req, res) {
+  try {
+    const out = await rbac.revokeAll(Number(req.params.userId), {
+      revokedBy: req.user ? req.user.email : null,
+    });
+    await auditTrail.recordFromRequest(req, {
+      actionKind: 'rbac', actionVerb: 'revoke',
+      subjectKind: 'user', subjectId: req.params.userId,
+    });
+    return successResponse(res, out, 'Roles revoked');
+  } catch (e) { return mapError(res, e, 'revokeRoles', 'Failed to revoke roles'); }
+}
+async function listRolesAndPermissions(req, res) {
+  try {
+    return successResponse(res, {
+      roles: rbac.ROLE_NAMES.map((r) => ({
+        name: r, level: rbac.ROLE_LEVELS[r],
+        default_permissions: rbac.DEFAULT_PERMISSIONS_BY_ROLE[r],
+      })),
+      all_permissions: rbac.PERMISSIONS,
+    });
+  } catch (e) { return mapError(res, e, 'listRolesAndPermissions', 'Failed'); }
+}
+
+// Audit trail
+async function listAuditEvents(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const rows = await auditTrail.query({
+      organizationId: orgId,
+      actorUserId: req.query.actorUserId ? Number(req.query.actorUserId) : null,
+      pursuitId: req.query.pursuitId ? Number(req.query.pursuitId) : null,
+      actionKind: req.query.actionKind || null,
+      actionVerb: req.query.actionVerb || null,
+      since: req.query.since || null,
+      until: req.query.until || null,
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listAuditEvents', 'Failed to query audit events'); }
+}
+async function summarizeAuditTrail(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await auditTrail.summarize({
+      organizationId: orgId,
+      sinceMinutes: req.query.sinceMinutes ? Number(req.query.sinceMinutes) : 24 * 60,
+    }));
+  } catch (e) { return mapError(res, e, 'summarizeAuditTrail', 'Failed'); }
+}
+async function exportAuditCsv(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const csv = await auditTrail.exportCsv({
+      organizationId: orgId,
+      since: req.query.since || null,
+      until: req.query.until || null,
+      limit: req.query.limit ? Number(req.query.limit) : 5000,
+    });
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="audit_${Date.now()}.csv"`);
+    return res.status(200).send(csv);
+  } catch (e) { return mapError(res, e, 'exportAuditCsv', 'Failed to export audit CSV'); }
+}
+
+// Event lineage
+async function getLineage(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const { kind, id } = req.params;
+    return successResponse(res, await eventLineage.fullLineage(kind, id, {
+      organizationId: orgId,
+      maxDepth: req.query.depth ? Number(req.query.depth) : 3,
+    }));
+  } catch (e) { return mapError(res, e, 'getLineage', 'Failed to load lineage'); }
+}
+async function recordLineageEdge(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await eventLineage.recordEdge({ organizationId: orgId, ...(req.body || {}) });
+    return successResponse(res, row ? row.toJSON() : null, 'Lineage edge recorded', 201);
+  } catch (e) { return mapError(res, e, 'recordLineageEdge', 'Failed to record edge'); }
+}
+async function getPursuitLineage(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await eventLineage.pursuitLineage(Number(req.params.id), { organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getPursuitLineage', 'Failed to load pursuit lineage'); }
+}
+
+// SLA escalation
+async function actOnSlaEvent(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const out = await slaEscalation.actOnEvent(Number(req.params.id), {
+      organizationId: orgId,
+      actorUserId: req.user ? (req.user.userId || req.user.id) : null,
+      actorEmail: req.user ? req.user.email : null,
+      action: req.body && req.body.action,
+      assigneeUserId: req.body && req.body.assigneeUserId,
+      assigneeEmail: req.body && req.body.assigneeEmail,
+      assigneeRole: req.body && req.body.assigneeRole,
+      notes: req.body && req.body.notes,
+      metadata: req.body && req.body.metadata,
+    });
+    observabilityStream.publishers.slaAlert({
+      event_id: Number(req.params.id), action: req.body && req.body.action,
+      actor: req.user ? req.user.email : null,
+    }, { organizationId: orgId });
+    return successResponse(res, out, 'SLA action recorded');
+  } catch (e) { return mapError(res, e, 'actOnSlaEvent', 'SLA action failed'); }
+}
+async function getSlaDigest(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await slaEscalation.generateDigest({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getSlaDigest', 'Failed to generate digest'); }
+}
+async function getSlaEventHistory(req, res) {
+  try {
+    return successResponse(res, await slaEscalation.historyForEvent(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'getSlaEventHistory', 'Failed to load history'); }
+}
+
+// Workflow governance
+async function createWorkflowAssignment(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const out = await workflowGovernance.createAssignment({
+      organizationId: orgId,
+      ...(req.body || {}),
+      assignedBy: req.user ? req.user.email : null,
+    });
+    observabilityStream.publishers.workflowTransition({
+      action: 'create', workflow_kind: req.body && req.body.workflowKind,
+    }, { organizationId: orgId });
+    return successResponse(res, out, 'Assignment created', 201);
+  } catch (e) { return mapError(res, e, 'createWorkflowAssignment', 'Failed to create assignment'); }
+}
+async function transitionWorkflowAssignment(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const out = await workflowGovernance.transition(Number(req.params.id), {
+      organizationId: orgId,
+      status: req.body && req.body.status,
+      notes: req.body && req.body.notes,
+      actorEmail: req.user ? req.user.email : null,
+      actorUserId: req.user ? (req.user.userId || req.user.id) : null,
+    });
+    observabilityStream.publishers.workflowTransition({
+      assignment_id: Number(req.params.id), to: req.body && req.body.status,
+    }, { organizationId: orgId });
+    return successResponse(res, out, 'Status updated');
+  } catch (e) { return mapError(res, e, 'transitionWorkflowAssignment', 'Transition failed'); }
+}
+async function listWorkflowAssignments(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const rows = await workflowGovernance.listAssignments({
+      organizationId: orgId,
+      assigneeUserId: req.query.assigneeUserId ? Number(req.query.assigneeUserId) : null,
+      status: req.query.status || null,
+      workflowKind: req.query.workflowKind || null,
+      pursuitId: req.query.pursuitId ? Number(req.query.pursuitId) : null,
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    });
+    return successResponse(res, rows);
+  } catch (e) { return mapError(res, e, 'listWorkflowAssignments', 'Failed to list assignments'); }
+}
+async function operatorWorkloads(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await workflowGovernance.workloadByOperator({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'operatorWorkloads', 'Failed'); }
+}
+async function workflowBottlenecks(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await workflowGovernance.detectBottlenecks({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'workflowBottlenecks', 'Failed'); }
+}
+
+// Storage providers
+async function storageProviderHealth(req, res) {
+  try {
+    return successResponse(res, await storageProviders.providerHealth());
+  } catch (e) { return mapError(res, e, 'storageProviderHealth', 'Failed'); }
+}
+async function storageMigrationStatus(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await storageProviders.migrationStatus({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'storageMigrationStatus', 'Failed'); }
+}
+
+// Observability stream (SSE)
+async function observabilitySubscribe(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const channels = req.query.channels ? String(req.query.channels).split(',') : [];
+    await observabilityStream.subscribe(req, res, {
+      channels,
+      organizationId: orgId,
+      userId: req.user ? (req.user.userId || req.user.id) : null,
+      userEmail: req.user ? req.user.email : null,
+      lastEventId: req.query.lastEventId || req.headers['last-event-id'] || null,
+    });
+    // No response.end here — the stream owns the connection.
+    return undefined;
+  } catch (e) { return mapError(res, e, 'observabilitySubscribe', 'Stream subscribe failed'); }
+}
+async function observabilityHealth(req, res) {
+  try {
+    return successResponse(res, {
+      summary: observabilityStream.summarize(),
+      streams: observabilityStream.activeStreams(),
+    });
+  } catch (e) { return mapError(res, e, 'observabilityHealth', 'Failed'); }
+}
+async function observabilityPublish(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const { channel, body } = req.body || {};
+    const delivered = observabilityStream.publish(channel, body || {}, { organizationId: orgId });
+    return successResponse(res, { channel, delivered });
+  } catch (e) { return mapError(res, e, 'observabilityPublish', 'Publish failed'); }
+}
+
+// Pursuit context prompt preview
+async function previewPursuitContextPrompt(req, res) {
+  try {
+    const opportunityId = req.query.opportunityId ? Number(req.query.opportunityId) : null;
+    const maxChars = req.query.maxChars ? Number(req.query.maxChars) : undefined;
+    return successResponse(res, await pursuitContextPrompt.previewBlockForPursuit(
+      Number(req.params.id), { opportunityId, maxChars },
+    ));
+  } catch (e) { return mapError(res, e, 'previewPursuitContextPrompt', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -1765,4 +2083,33 @@ module.exports = {
   listDurableDrafts,
   previewPursuitContextBlock,
   llmAugmentComplianceMatrix,
+  // Phase 11
+  getGovernance,
+  getTenantSettings,
+  updateTenantSettings,
+  describeMyPermissions,
+  listRoleGrants,
+  grantRole,
+  revokeRoles,
+  listRolesAndPermissions,
+  listAuditEvents,
+  summarizeAuditTrail,
+  exportAuditCsv,
+  getLineage,
+  recordLineageEdge,
+  getPursuitLineage,
+  actOnSlaEvent,
+  getSlaDigest,
+  getSlaEventHistory,
+  createWorkflowAssignment,
+  transitionWorkflowAssignment,
+  listWorkflowAssignments,
+  operatorWorkloads,
+  workflowBottlenecks,
+  storageProviderHealth,
+  storageMigrationStatus,
+  observabilitySubscribe,
+  observabilityHealth,
+  observabilityPublish,
+  previewPursuitContextPrompt,
 };

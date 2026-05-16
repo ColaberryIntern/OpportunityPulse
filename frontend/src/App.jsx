@@ -45,6 +45,7 @@ import PursuitWorkspacePage from './pages/PursuitWorkspacePage';
 import ResearchRunsPage from './pages/ResearchRunsPage';
 import CaptureOpsPage from './pages/CaptureOpsPage';
 import CaptureInfraPage from './pages/CaptureInfraPage';
+import GovernancePage from './pages/GovernancePage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -466,6 +467,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <CaptureInfraPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/governance"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <GovernancePage />
             </ProtectedLayout>
           }
         />
