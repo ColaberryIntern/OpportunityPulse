@@ -70,6 +70,17 @@ const submissionReadinessEngine = require('./submissionReadinessEngine.service')
 const parallelDraftQueue = require('./parallelDraftQueue.service');
 const pursuitContextInjector = require('./pursuitContextInjector.service');
 const captureOps = require('./captureOps.service');
+// Phase 10 — operational scalability + execution infrastructure.
+const storage = require('./storage.service');
+const captureWorker = require('./captureWorker.service');
+const proposalExecutionQueue = require('./proposalExecutionQueue.service');
+const slaIntelligence = require('./slaIntelligence.service');
+const artifactLifecycle = require('./artifactLifecycle.service');
+const queueObservability = require('./queueObservability.service');
+const pursuitContextWiring = require('./pursuitContextWiring.service');
+const durableDraftGeneration = require('./durableDraftGeneration.service');
+const complianceMatrixLlm = require('./complianceMatrixLlm.service');
+const captureInfra = require('./captureInfra.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -1334,6 +1345,243 @@ async function getCaptureOps(req, res) {
   } catch (e) { return mapError(res, e, 'getCaptureOps', 'Failed to load capture operations'); }
 }
 
+// ---- Phase 10 — operational scalability + execution infrastructure -----
+
+async function getCaptureInfra(req, res) {
+  try {
+    return successResponse(res, await captureInfra.getCaptureInfra());
+  } catch (e) { return mapError(res, e, 'getCaptureInfra', 'Failed to load capture infrastructure'); }
+}
+
+// Worker jobs
+async function listWorkerJobs(req, res) {
+  try {
+    return successResponse(res, await captureWorker.listJobs({
+      status: req.query.status || null,
+      jobKind: req.query.jobKind || null,
+      batchId: req.query.batchId || null,
+      pursuitId: req.query.pursuitId,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listWorkerJobs', 'Failed to list worker jobs'); }
+}
+async function getWorkerJob(req, res) {
+  try {
+    const row = await captureWorker.getJob(Number(req.params.id));
+    if (!row) return errorResponse(res, 'Job not found', 404);
+    return successResponse(res, row);
+  } catch (e) { return mapError(res, e, 'getWorkerJob', 'Failed to load worker job'); }
+}
+async function cancelWorkerJob(req, res) {
+  try {
+    return successResponse(res, await captureWorker.cancelJob(
+      Number(req.params.id), req.user ? req.user.email : null,
+    ), 'Job cancelled');
+  } catch (e) { return mapError(res, e, 'cancelWorkerJob', 'Failed to cancel job'); }
+}
+async function drainWorkerOnce(req, res) {
+  try {
+    const concurrency = Number((req.body && req.body.concurrency) || 0) || undefined;
+    return successResponse(res, await captureWorker.drainOnce({ concurrency }),
+      'Drain pass complete');
+  } catch (e) { return mapError(res, e, 'drainWorkerOnce', 'Drain failed'); }
+}
+
+// Proposal execution queue
+async function enqueueExecutionDraftBatch(req, res) {
+  try {
+    const { opportunityIds, priority, slaDueAt } = req.body || {};
+    return successResponse(res, await proposalExecutionQueue.enqueueDraftBatch({
+      pursuitId: Number(req.params.id),
+      opportunityIds, priority, slaDueAt,
+      actor: req.user ? req.user.email : null,
+    }), 'Draft batch enqueued', 201);
+  } catch (e) { return mapError(res, e, 'enqueueExecutionDraftBatch', 'Failed to enqueue draft batch'); }
+}
+async function enqueueExecutionSingleJob(req, res) {
+  try {
+    const { queueKind, payload, priority, slaDueAt } = req.body || {};
+    return successResponse(res, await proposalExecutionQueue.enqueueSingleJob({
+      pursuitId: Number(req.params.id),
+      queueKind, payload, priority, slaDueAt,
+      actor: req.user ? req.user.email : null,
+    }), 'Job enqueued', 201);
+  } catch (e) { return mapError(res, e, 'enqueueExecutionSingleJob', 'Failed to enqueue job'); }
+}
+async function listExecutionQueue(req, res) {
+  try {
+    return successResponse(res, await proposalExecutionQueue.listEntries({
+      pursuitId: req.query.pursuitId,
+      status: req.query.status || null,
+      queueKind: req.query.queueKind || null,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listExecutionQueue', 'Failed to list execution queue'); }
+}
+async function getExecutionQueueEntry(req, res) {
+  try {
+    const out = await proposalExecutionQueue.getEntryDetail(Number(req.params.id));
+    if (!out) return errorResponse(res, 'Queue entry not found', 404);
+    return successResponse(res, out);
+  } catch (e) { return mapError(res, e, 'getExecutionQueueEntry', 'Failed to load queue entry'); }
+}
+async function refreshExecutionEntry(req, res) {
+  try {
+    return successResponse(res, await proposalExecutionQueue.refreshEntryFromJobs(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'refreshExecutionEntry', 'Failed to refresh queue entry'); }
+}
+async function cancelExecutionEntry(req, res) {
+  try {
+    return successResponse(res, await proposalExecutionQueue.cancelEntry(
+      Number(req.params.id), req.user ? req.user.email : null,
+    ), 'Queue entry cancelled');
+  } catch (e) { return mapError(res, e, 'cancelExecutionEntry', 'Failed to cancel queue entry'); }
+}
+
+// SLA intelligence
+async function runSlaScan(req, res) {
+  try {
+    return successResponse(res, await slaIntelligence.runFullScan(), 'SLA scan complete');
+  } catch (e) { return mapError(res, e, 'runSlaScan', 'SLA scan failed'); }
+}
+async function listSlaEvents(req, res) {
+  try {
+    return successResponse(res, await slaIntelligence.listEvents({
+      status: req.query.status || 'open',
+      slaKind: req.query.slaKind || null,
+      pursuitId: req.query.pursuitId,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listSlaEvents', 'Failed to list SLA events'); }
+}
+async function updateSlaEvent(req, res) {
+  try {
+    const { status } = req.body || {};
+    return successResponse(res, await slaIntelligence.updateEventStatus(
+      Number(req.params.id), status, req.user ? req.user.email : null,
+    ), 'SLA event updated');
+  } catch (e) { return mapError(res, e, 'updateSlaEvent', 'Failed to update SLA event'); }
+}
+
+// Artifact lifecycle
+async function runArtifactLifecycleScan(req, res) {
+  try {
+    return successResponse(res, await artifactLifecycle.runNightlyScan(), 'Lifecycle scan complete');
+  } catch (e) { return mapError(res, e, 'runArtifactLifecycleScan', 'Lifecycle scan failed'); }
+}
+async function recommendArtifactRenewals(req, res) {
+  try {
+    return successResponse(res, await artifactLifecycle.recommendRenewals());
+  } catch (e) { return mapError(res, e, 'recommendArtifactRenewals', 'Failed to load renewal recommendations'); }
+}
+async function listArtifactLifecycleEvents(req, res) {
+  try {
+    return successResponse(res, await artifactLifecycle.listEventsForArtifact(
+      Number(req.params.id), { limit: Number(req.query.limit) || 50 },
+    ));
+  } catch (e) { return mapError(res, e, 'listArtifactLifecycleEvents', 'Failed to list lifecycle events'); }
+}
+
+// Queue observability
+async function getQueueObservability(req, res) {
+  try {
+    return successResponse(res, await queueObservability.summarize({
+      windowMinutes: Number(req.query.windowMinutes) || 60,
+    }));
+  } catch (e) { return mapError(res, e, 'getQueueObservability', 'Failed to load queue observability'); }
+}
+async function snapshotQueueMetrics(req, res) {
+  try {
+    return successResponse(res, await queueObservability.snapshotAll({
+      windowMinutes: Number((req.body && req.body.windowMinutes) || 60),
+    }), 'Queue metrics snapshot captured');
+  } catch (e) { return mapError(res, e, 'snapshotQueueMetrics', 'Snapshot failed'); }
+}
+async function getQueueSnapshots(req, res) {
+  try {
+    return successResponse(res, await queueObservability.recentSnapshots({
+      queueKind: req.query.queueKind || null,
+      limit: Number(req.query.limit) || 24,
+    }));
+  } catch (e) { return mapError(res, e, 'getQueueSnapshots', 'Failed to load snapshots'); }
+}
+
+// Storage
+async function registerStorageAsset(req, res) {
+  try {
+    return successResponse(res, await storage.registerAsset({
+      ...(req.body || {}),
+      uploadedBy: req.user ? req.user.email : null,
+    }), 'Storage asset registered', 201);
+  } catch (e) { return mapError(res, e, 'registerStorageAsset', 'Failed to register storage asset'); }
+}
+async function getStorageSignedUrl(req, res) {
+  try {
+    return successResponse(res, await storage.signedUrl(
+      Number(req.params.id),
+      { expiresInSeconds: Number(req.query.expiresIn) || 900 },
+    ));
+  } catch (e) { return mapError(res, e, 'getStorageSignedUrl', 'Failed to sign URL'); }
+}
+async function listStorageAssets(req, res) {
+  try {
+    return successResponse(res, await storage.listAssets({
+      assetKind: req.query.kind || null,
+      pursuitId: req.query.pursuitId,
+      limit: Number(req.query.limit) || 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listStorageAssets', 'Failed to list storage assets'); }
+}
+async function deleteStorageAsset(req, res) {
+  try {
+    return successResponse(res, await storage.deleteAsset(Number(req.params.id)),
+      'Storage asset deleted');
+  } catch (e) { return mapError(res, e, 'deleteStorageAsset', 'Failed to delete storage asset'); }
+}
+
+// Durable draft generation
+async function enqueueDurableDrafts(req, res) {
+  try {
+    const { outputType, priority, useContextBlock, skipExisting } = req.body || {};
+    return successResponse(res, await durableDraftGeneration.enqueueForPursuit(
+      Number(req.params.id),
+      {
+        outputType: outputType || 'proposal',
+        priority,
+        useContextBlock: useContextBlock !== false,
+        skipExisting: skipExisting !== false,
+        actor: req.user ? req.user.email : null,
+      },
+    ), 'Durable draft batch enqueued');
+  } catch (e) { return mapError(res, e, 'enqueueDurableDrafts', 'Failed to enqueue durable drafts'); }
+}
+async function listDurableDrafts(req, res) {
+  try {
+    return successResponse(res, await durableDraftGeneration.summarizeForPursuit(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listDurableDrafts', 'Failed to list durable drafts'); }
+}
+
+// Pursuit context preview
+async function previewPursuitContextBlock(req, res) {
+  try {
+    return successResponse(res, await pursuitContextWiring.previewContextBlock(
+      Number(req.params.id),
+      req.query.opportunityId ? Number(req.query.opportunityId) : null,
+    ));
+  } catch (e) { return mapError(res, e, 'previewPursuitContextBlock', 'Failed to preview pursuit context'); }
+}
+
+// LLM compliance second-pass
+async function llmAugmentComplianceMatrix(req, res) {
+  try {
+    const { rfpText, force } = req.body || {};
+    return successResponse(res, await complianceMatrixLlm.maybeAugmentMatrix(
+      Number(req.params.id),
+      { rfpText, force: Boolean(force), actor: req.user ? req.user.email : null },
+    ), 'LLM augment attempted');
+  } catch (e) { return mapError(res, e, 'llmAugmentComplianceMatrix', 'LLM augment failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -1488,4 +1736,33 @@ module.exports = {
   listParallelDraftJobs,
   getPursuitContextBlock,
   getCaptureOps,
+  // Phase 10
+  getCaptureInfra,
+  listWorkerJobs,
+  getWorkerJob,
+  cancelWorkerJob,
+  drainWorkerOnce,
+  enqueueExecutionDraftBatch,
+  enqueueExecutionSingleJob,
+  listExecutionQueue,
+  getExecutionQueueEntry,
+  refreshExecutionEntry,
+  cancelExecutionEntry,
+  runSlaScan,
+  listSlaEvents,
+  updateSlaEvent,
+  runArtifactLifecycleScan,
+  recommendArtifactRenewals,
+  listArtifactLifecycleEvents,
+  getQueueObservability,
+  snapshotQueueMetrics,
+  getQueueSnapshots,
+  registerStorageAsset,
+  getStorageSignedUrl,
+  listStorageAssets,
+  deleteStorageAsset,
+  enqueueDurableDrafts,
+  listDurableDrafts,
+  previewPursuitContextBlock,
+  llmAugmentComplianceMatrix,
 };

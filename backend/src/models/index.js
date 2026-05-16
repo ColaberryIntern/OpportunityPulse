@@ -155,6 +155,15 @@ const SubmissionPackage = require('./SubmissionPackage')(sequelize);
 const ProposalTimelineEvent = require('./ProposalTimelineEvent')(sequelize);
 const ComplianceGap = require('./ComplianceGap')(sequelize);
 const ParallelDraftJob = require('./ParallelDraftJob')(sequelize);
+// Deep Research Phase 10 — operational scalability + execution infrastructure.
+const WorkerJob = require('./WorkerJob')(sequelize);
+const ProposalExecutionQueue = require('./ProposalExecutionQueue')(sequelize);
+const ArtifactLifecycleEvent = require('./ArtifactLifecycleEvent')(sequelize);
+const SlaEvent = require('./SlaEvent')(sequelize);
+const QueueMetric = require('./QueueMetric')(sequelize);
+const StorageAsset = require('./StorageAsset')(sequelize);
+const ExecutionFailure = require('./ExecutionFailure')(sequelize);
+const OperationalMetric = require('./OperationalMetric')(sequelize);
 
 const models = {
   UserRole,
@@ -279,6 +288,14 @@ const models = {
   ProposalTimelineEvent,
   ComplianceGap,
   ParallelDraftJob,
+  WorkerJob,
+  ProposalExecutionQueue,
+  ArtifactLifecycleEvent,
+  SlaEvent,
+  QueueMetric,
+  StorageAsset,
+  ExecutionFailure,
+  OperationalMetric,
 };
 
 // Set up associations

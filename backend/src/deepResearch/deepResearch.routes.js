@@ -242,6 +242,55 @@ router.post('/pursuits/:id/parallel-drafts', ...admin, jsonSmall, c.enqueueParal
 router.get('/pursuits/:id/parallel-drafts', ...admin, c.listParallelDraftJobs);
 router.get('/pursuits/:id/context-block', ...admin, c.getPursuitContextBlock);
 
+// ---- Phase 10 — operational scalability + execution infrastructure -------
+// Capture Infrastructure dashboard
+router.get('/capture-infra', ...admin, c.getCaptureInfra);
+
+// Worker jobs
+router.get('/worker-jobs', ...admin, c.listWorkerJobs);
+router.get('/worker-jobs/:id', ...admin, c.getWorkerJob);
+router.post('/worker-jobs/:id/cancel', ...admin, c.cancelWorkerJob);
+router.post('/worker-jobs/drain', ...admin, jsonSmall, c.drainWorkerOnce);
+
+// Proposal execution queue
+router.post('/pursuits/:id/execution-queue/draft-batch', ...admin, jsonSmall, c.enqueueExecutionDraftBatch);
+router.post('/pursuits/:id/execution-queue/single', ...admin, jsonSmall, c.enqueueExecutionSingleJob);
+router.get('/execution-queue', ...admin, c.listExecutionQueue);
+router.get('/execution-queue/:id', ...admin, c.getExecutionQueueEntry);
+router.post('/execution-queue/:id/refresh', ...admin, c.refreshExecutionEntry);
+router.post('/execution-queue/:id/cancel', ...admin, c.cancelExecutionEntry);
+
+// SLA intelligence
+router.post('/sla/scan', ...admin, c.runSlaScan);
+router.get('/sla/events', ...admin, c.listSlaEvents);
+router.patch('/sla/events/:id', ...admin, jsonSmall, c.updateSlaEvent);
+
+// Artifact lifecycle
+router.post('/artifact-lifecycle/scan', ...admin, c.runArtifactLifecycleScan);
+router.get('/artifact-lifecycle/renewals', ...admin, c.recommendArtifactRenewals);
+router.get('/artifact-lifecycle/:id/events', ...admin, c.listArtifactLifecycleEvents);
+
+// Queue observability
+router.get('/queue-observability', ...admin, c.getQueueObservability);
+router.post('/queue-observability/snapshot', ...admin, jsonSmall, c.snapshotQueueMetrics);
+router.get('/queue-observability/snapshots', ...admin, c.getQueueSnapshots);
+
+// Storage assets
+router.post('/storage-assets', ...admin, jsonLarge, c.registerStorageAsset);
+router.get('/storage-assets', ...admin, c.listStorageAssets);
+router.get('/storage-assets/:id/signed-url', ...admin, c.getStorageSignedUrl);
+router.delete('/storage-assets/:id', ...admin, c.deleteStorageAsset);
+
+// Durable draft generation
+router.post('/pursuits/:id/durable-drafts', ...admin, jsonSmall, c.enqueueDurableDrafts);
+router.get('/pursuits/:id/durable-drafts', ...admin, c.listDurableDrafts);
+
+// Pursuit context preview
+router.get('/pursuits/:id/context-block/preview', ...admin, c.previewPursuitContextBlock);
+
+// LLM compliance augment
+router.post('/pursuits/:id/compliance-matrix/llm-augment', ...admin, jsonLarge, c.llmAugmentComplianceMatrix);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

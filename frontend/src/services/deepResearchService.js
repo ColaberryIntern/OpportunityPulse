@@ -641,3 +641,127 @@ export async function getPursuitContextBlock(pursuitId, params = {}) {
   const res = await api.get(`${base}/pursuits/${pursuitId}/context-block`, { params });
   return res.data?.data;
 }
+
+// ---- Phase 10 — operational scalability + execution infrastructure -------
+
+export async function getCaptureInfra() {
+  const res = await api.get(`${base}/capture-infra`);
+  return res.data?.data;
+}
+
+export async function listWorkerJobs(params = {}) {
+  const res = await api.get(`${base}/worker-jobs`, { params });
+  return res.data?.data;
+}
+export async function getWorkerJob(id) {
+  const res = await api.get(`${base}/worker-jobs/${id}`);
+  return res.data?.data;
+}
+export async function cancelWorkerJob(id) {
+  const res = await api.post(`${base}/worker-jobs/${id}/cancel`);
+  return res.data?.data;
+}
+export async function drainWorkerOnce(body = {}) {
+  const res = await api.post(`${base}/worker-jobs/drain`, body);
+  return res.data?.data;
+}
+
+export async function enqueueExecutionDraftBatch(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/execution-queue/draft-batch`, body);
+  return res.data?.data;
+}
+export async function enqueueExecutionSingleJob(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/execution-queue/single`, body);
+  return res.data?.data;
+}
+export async function listExecutionQueue(params = {}) {
+  const res = await api.get(`${base}/execution-queue`, { params });
+  return res.data?.data;
+}
+export async function getExecutionQueueEntry(id) {
+  const res = await api.get(`${base}/execution-queue/${id}`);
+  return res.data?.data;
+}
+export async function refreshExecutionEntry(id) {
+  const res = await api.post(`${base}/execution-queue/${id}/refresh`);
+  return res.data?.data;
+}
+export async function cancelExecutionEntry(id) {
+  const res = await api.post(`${base}/execution-queue/${id}/cancel`);
+  return res.data?.data;
+}
+
+export async function runSlaScan() {
+  const res = await api.post(`${base}/sla/scan`);
+  return res.data?.data;
+}
+export async function listSlaEvents(params = {}) {
+  const res = await api.get(`${base}/sla/events`, { params });
+  return res.data?.data;
+}
+export async function updateSlaEvent(id, body) {
+  const res = await api.patch(`${base}/sla/events/${id}`, body);
+  return res.data?.data;
+}
+
+export async function runArtifactLifecycleScan() {
+  const res = await api.post(`${base}/artifact-lifecycle/scan`);
+  return res.data?.data;
+}
+export async function recommendArtifactRenewals() {
+  const res = await api.get(`${base}/artifact-lifecycle/renewals`);
+  return res.data?.data;
+}
+export async function listArtifactLifecycleEvents(artifactId, params = {}) {
+  const res = await api.get(`${base}/artifact-lifecycle/${artifactId}/events`, { params });
+  return res.data?.data;
+}
+
+export async function getQueueObservability(params = {}) {
+  const res = await api.get(`${base}/queue-observability`, { params });
+  return res.data?.data;
+}
+export async function snapshotQueueMetrics(body = {}) {
+  const res = await api.post(`${base}/queue-observability/snapshot`, body);
+  return res.data?.data;
+}
+export async function getQueueSnapshots(params = {}) {
+  const res = await api.get(`${base}/queue-observability/snapshots`, { params });
+  return res.data?.data;
+}
+
+export async function registerStorageAsset(body) {
+  const res = await api.post(`${base}/storage-assets`, body);
+  return res.data?.data;
+}
+export async function listStorageAssets(params = {}) {
+  const res = await api.get(`${base}/storage-assets`, { params });
+  return res.data?.data;
+}
+export async function getStorageSignedUrl(id) {
+  const res = await api.get(`${base}/storage-assets/${id}/signed-url`);
+  return res.data?.data;
+}
+export async function deleteStorageAsset(id) {
+  const res = await api.delete(`${base}/storage-assets/${id}`);
+  return res.data?.data;
+}
+
+export async function enqueueDurableDrafts(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/durable-drafts`, body);
+  return res.data?.data;
+}
+export async function listDurableDrafts(pursuitId) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/durable-drafts`);
+  return res.data?.data;
+}
+
+export async function previewPursuitContextBlock(pursuitId, params = {}) {
+  const res = await api.get(`${base}/pursuits/${pursuitId}/context-block/preview`, { params });
+  return res.data?.data;
+}
+
+export async function llmAugmentComplianceMatrix(pursuitId, body = {}) {
+  const res = await api.post(`${base}/pursuits/${pursuitId}/compliance-matrix/llm-augment`, body);
+  return res.data?.data;
+}

@@ -391,6 +391,11 @@ async function startServer() {
       // — enable with DEEP_RESEARCH_ADAPTIVE_REFRESH_ENABLED=true.
       const adaptiveRefresh = require('./deepResearch/adaptiveRefresh.service');
       adaptiveRefresh.startScheduler();
+
+      // Deep Research Phase 10 — durable capture worker. Default OFF —
+      // enable with DEEP_RESEARCH_WORKER_ENABLED=true.
+      const captureWorker = require('./deepResearch/captureWorker.service');
+      captureWorker.startScheduler();
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
