@@ -118,8 +118,11 @@ async function actOnEvent(slaEventId, {
 }
 
 async function listOpen({ organizationId = null, limit = 100 } = {}) {
+  // Phase 10 sla_events is not yet org-scoped; organizationId reserved for
+  // a future Phase 10-table migration. See governanceDashboard for context.
+  // eslint-disable-next-line no-unused-vars
+  const _orgId = organizationId;
   const where = { status: { [Op.in]: ['open', 'acknowledged'] } };
-  if (organizationId != null) where.organizationId = Number(organizationId);
   const rows = await SlaEvent.findAll({
     where, order: [['severity', 'DESC'], ['updated_at', 'ASC']],
     limit: Math.min(500, Number(limit) || 100),
@@ -139,11 +142,11 @@ async function historyForEvent(slaEventId) {
 // counts. Service returns the structured payload; the actual email send is
 // done by the existing source-health-agent pipeline (Phase 11 follow-up).
 async function generateDigest({ organizationId = null } = {}) {
-  const where = {};
-  if (organizationId != null) where.organizationId = Number(organizationId);
-
-  const open = await SlaEvent.count({ where: { ...where, status: 'open' } });
-  const ack = await SlaEvent.count({ where: { ...where, status: 'acknowledged' } });
+  // Phase 10 sla_events is not yet org-scoped (sla_acknowledgements IS).
+  // Filtering only the ack table by org for now; full sla_events scoping
+  // arrives with the planned Phase 10-table org_id migration.
+  const open = await SlaEvent.count({ where: { status: 'open' } });
+  const ack = await SlaEvent.count({ where: { status: 'acknowledged' } });
   const resolved24h = await SlaAcknowledgement.count({
     where: {
       ...(organizationId != null ? { organizationId: Number(organizationId) } : {}),
@@ -152,7 +155,7 @@ async function generateDigest({ organizationId = null } = {}) {
     },
   });
   const newCritical = await SlaEvent.findAll({
-    where: { ...where, severity: { [Op.gte]: 80 }, status: { [Op.in]: ['open', 'acknowledged'] } },
+    where: { severity: { [Op.gte]: 80 }, status: { [Op.in]: ['open', 'acknowledged'] } },
     order: [['severity', 'DESC']], limit: 10,
   });
 
