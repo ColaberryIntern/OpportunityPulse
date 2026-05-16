@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 9 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Mechanics</h2>
+  <a href="#readiness-engine">Readiness engine</a>
+  <a href="#attachments">RFP attachments</a>
+  <a href="#artifacts">Artifact vault</a>
+  <a href="#matrix">Compliance matrix</a>
+  <a href="#packages">Submission packages</a>
+  <a href="#injector">Context injector</a>
+  <a href="#parallel">Parallel draft queue</a>
+  <a href="#timeline">Timeline</a>
+  <a href="#gaps">Compliance gaps</a>
+  <a href="#capture-ops">Capture Ops dashboard</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-capops">Capture Ops</a>
+  <a href="#screen-capops-kpis">Capture Ops KPIs</a>
+  <a href="#screen-capops-gaps">Capture Ops gaps</a>
+  <a href="#screen-pursuit-full">Pursuit full page</a>
+  <a href="#screen-matrix">Compliance matrix</a>
+  <a href="#screen-pursuit-gaps">Pursuit gaps</a>
+  <a href="#screen-readiness">Readiness composite</a>
+  <a href="#screen-timeline">Timeline</a>
+  <a href="#screen-packages">Packages</a>
+  <a href="#screen-parallel">Parallel drafts</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 10</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 9</h1>
+  <p class="subtitle">Submission Readiness + Compliance Intelligence · 2026-05-16 · commit <code>e9ff863</code> · all 1,961 backend tests passing</p>
+  <p>
+    Phase 8 turned strategic intelligence into pursuit activation. Phase 9
+    closes the loop to <strong>submission readiness</strong>: an RFP
+    attachment locker, a reusable proposal artifact vault, a deterministic
+    compliance matrix generator, a submission package assembler, a
+    pursuit-aware proposal context injector, a parallel draft generation
+    queue, a proposal readiness timeline, a compliance gap detector, and
+    the new <strong>Capture Operations Center</strong> dashboard at
+    <code>/admin/deep-research/capture-ops</code>.
+    All measure-only — no auto-submit, no auto-bid, no auto-sign.
+  </p>
+  <p>
+    On the seeded prod run for pursuit #3: built a compliance matrix
+    parsing a sample RFP ("Submit via SAM.gov by 30 days. Include
+    capability statement and SF-1449. Key personnel resumes required.
+    NAICS 541512.") → <strong>14 matrix items</strong>; seeded the
+    default 8-event proposal timeline; detected <strong>16 compliance
+    gaps</strong>; assembled a submission package; scored the Phase 9
+    submission readiness composite at <strong>22 / 100 (blocked, 10
+    blockers)</strong>; Capture Ops Center returned <strong>3 active
+    pursuits</strong> with mean readiness 22.
+  </p>
+  <p>
+    <span class="badge b-done">8 new tables</span>
+    <span class="badge b-done">10 services</span>
+    <span class="badge b-done">30 new tests</span>
+    <span class="badge b-done">1961 / 1961 passing</span>
+    <span class="badge b-cyan">Capture Operations Center</span>
+    <span class="badge b-gov">Human-in-the-loop</span>
+    <span class="badge b-warn">No auto-submission</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Strategic evolution</h2>
+  <table>
+    <thead><tr><th>Phase</th><th>Identity</th><th>Output of the phase</th></tr></thead>
+    <tbody>
+      <tr><td>1-2</td><td>Strategic opportunity intelligence</td><td>Deep research synthesis</td></tr>
+      <tr><td>3-4</td><td>Execution + portfolio intelligence</td><td>Resource capacity + portfolio prioritization</td></tr>
+      <tr><td>5-6</td><td>Temporal + adaptive operations</td><td>Observatory + adaptive refresh + venture health</td></tr>
+      <tr><td>7</td><td>Evidence-backed traceability</td><td>Traceability layer + action intelligence</td></tr>
+      <tr><td>7.5-7.6</td><td>Contextual continuity + competing tools</td><td>Strategic workspace + market saturation</td></tr>
+      <tr><td>8</td><td>Strategic capture intelligence</td><td>Pursuit activation + capture strategy</td></tr>
+      <tr><td><strong>9</strong></td><td><strong>Submission readiness intelligence</strong></td><td><strong>RFP locker + compliance matrix + submission packaging</strong></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — what this phase will and will not do</h2>
+  <h3>What Phase 9 IS allowed to do</h3>
+  <ul>
+    <li>Track RFP/amendment/attachment metadata with versioning + tagging + expiration.</li>
+    <li>Maintain a reusable artifact vault (resumes, case studies, past performance, etc.) with auto-expiration status detection.</li>
+    <li>Parse RFP text deterministically (12+ phrase patterns) into a compliance matrix; fall back to a 10-item default template.</li>
+    <li>Assemble a submission package metadata snapshot with a completeness score + a missing-components list.</li>
+    <li>Generate drafts in bounded-concurrency parallel mode (default 3, max 8) into the existing Review Queue.</li>
+    <li>Compose a pursuit-context block (capture strategy, positioning, linked opps, acceleration assets, readiness blockers) for the actionGenerator.</li>
+    <li>Detect compliance gaps and emit severity + recommended actions.</li>
+    <li>Track an append-only proposal timeline with overdue auto-detection.</li>
+  </ul>
+  <h3>What Phase 9 will NEVER do</h3>
+  <ul>
+    <li><strong>Auto-submit proposals.</strong> Submission package status moves to <code>submitted</code> only when a human flips the dropdown.</li>
+    <li><strong>Auto-bid.</strong> No procurement portal integration exists.</li>
+    <li><strong>Auto-sign anything.</strong> No e-signature, no contract execution, no compliance attestations.</li>
+    <li><strong>Auto-modify compliance docs.</strong> The matrix items are operator-edited; the engine only proposes the initial structure.</li>
+    <li><strong>Hide why.</strong> Every readiness score persists factors + blockers + accelerators + rationale.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped (10 features)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Submission Readiness Engine (composite)</td><td><code>submissionReadinessEngine.service</code> — 7 dimensions sum to 100</td></tr>
+      <tr><td>2</td><td>RFP Attachment Locker</td><td><code>rfpAttachment.service</code> + locker panel on pursuit</td></tr>
+      <tr><td>3</td><td>Proposal Artifact Vault</td><td><code>proposalArtifact.service</code> with expiration tracking + suggest-for-context</td></tr>
+      <tr><td>4</td><td>Compliance Matrix Generator</td><td><code>complianceMatrix.service</code> — 12-pattern RFP parser + default template + roll-up</td></tr>
+      <tr><td>5</td><td>Submission Package Assembler</td><td><code>submissionPackage.service</code> — drafts + attachments + artifacts → completeness score</td></tr>
+      <tr><td>6</td><td>Pursuit-Aware Proposal Context Injection</td><td><code>pursuitContextInjector.service</code> — composes prompt-ready block</td></tr>
+      <tr><td>7</td><td>Parallel Draft Generation</td><td><code>parallelDraftQueue.service</code> — bounded concurrency, retry-safe, idempotent</td></tr>
+      <tr><td>8</td><td>Proposal Readiness Timeline</td><td><code>proposalTimeline.service</code> — 8-event default + overdue auto-detection</td></tr>
+      <tr><td>9</td><td>Compliance Gap Intelligence</td><td><code>complianceGap.service</code> — 6 gap kinds × severity + actions</td></tr>
+      <tr><td>10</td><td>Capture Operations Dashboard</td><td><code>CaptureOpsPage.jsx</code> at <code>/admin/deep-research/capture-ops</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block feature" id="readiness-engine">
+  <h2>1. Submission Readiness Engine</h2>
+  <p>The Phase 9 composite reads from 7 weighted dimensions:</p>
+  <table>
+    <thead><tr><th>Dimension</th><th>Weight</th><th>What it measures</th></tr></thead>
+    <tbody>
+      <tr><td>Compliance matrix</td><td>25</td><td>Completion % of the parsed RFP matrix</td></tr>
+      <tr><td>Attachment locker</td><td>15</td><td>RFP presence + amendments + supporting docs - expired</td></tr>
+      <tr><td>Artifact vault</td><td>15</td><td>Active capability statements + past performance availability</td></tr>
+      <tr><td>Package readiness</td><td>15</td><td>Best submission package completeness across packages</td></tr>
+      <tr><td>Staffing</td><td>10</td><td>Reuses Phase 8 staffing dimension</td></tr>
+      <tr><td>Capability</td><td>10</td><td>Reuses Phase 8 capability dimension</td></tr>
+      <tr><td>Timeline health</td><td>10</td><td>100 baseline - overdue × 8 - blocked × 15</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Classifications: <code>ready</code> (≥80, &lt;3 blockers) / <code>needs_prep</code> (35-79) /
+    <code>blocked</code> (≥3 blockers OR &lt;35). Persisted into the Phase 8
+    <code>proposal_readiness_scores</code> table (scope=pursuit) so the
+    Capture Ops dashboard reads it without a new join.
+  </p>
+</section>
+
+<section class="block feature" id="attachments">
+  <h2>2. RFP Attachment Locker</h2>
+  <p>
+    Metadata-only registry. Each attachment carries: kind (rfp / amendment /
+    attachment / compliance_doc / supporting / qa_response / past_proposal /
+    other), label, filename, content_ref (URL or future storage key),
+    mime_type, size_bytes, version (auto-bumped on same-label re-upload),
+    tags, related_attachment_ids, expires_at, uploaded_by.
+  </p>
+  <p>
+    <strong>v1 is metadata-only.</strong> No file blob storage — operators
+    paste a URL or share-link. Real blob storage lands in Phase 10.
+  </p>
+</section>
+
+<section class="block feature" id="artifacts">
+  <h2>3. Proposal Artifact Vault</h2>
+  <p>
+    Org-wide reusable library — 9 artifact kinds: resume, case_study,
+    past_performance, certification, boilerplate, diagram,
+    capability_statement, reference, template. Each row carries tags +
+    capability_tags + agencies (where this artifact has been used) +
+    reuse_score + times_used + expires_at + status (active / expiring /
+    expired / archived).
+  </p>
+  <p>
+    The <code>refreshExpirationStatuses</code> helper flips active →
+    expiring 30 days before expiry, then expiring → expired on the
+    expiry date. Idempotent, safe to call from the dashboard refresh
+    button.
+  </p>
+  <p>
+    <code>suggestForContext({ capabilityTags, agencies, kinds })</code>
+    surfaces the best matches for a target context — feeds the
+    submissionPackage assembler when no explicit artifactIds are passed.
+  </p>
+</section>
+
+<section class="block feature" id="matrix">
+  <h2>4. Compliance Matrix Generator</h2>
+  <p>Deterministic regex-based RFP text parser. 12 phrase patterns recognized:</p>
+  <ul>
+    <li><strong>Forms:</strong> SF-33, SF-1449, SF-330</li>
+    <li><strong>Certifications:</strong> NAICS code, CAGE code, SAM.gov, security clearance, 8(a) / HUBZone / WOSB / SDVOSB / small business</li>
+    <li><strong>Attachments:</strong> capability statement, past performance</li>
+    <li><strong>Staffing:</strong> key personnel</li>
+    <li><strong>Due dates + instructions:</strong> due-by phrases, page-limit phrases</li>
+  </ul>
+  <p>
+    When no RFP text is supplied, falls back to the 10-item default template
+    (cover form + SAM.gov + reps & certs + capability + past performance +
+    key personnel + technical narrative + pricing + page-limit + deadline).
+  </p>
+  <p>
+    Items are persisted with status (satisfied / partial / missing / na)
+    and severity (critical / high / normal). Per-item status updates
+    auto-roll-up the parent matrix's completion_pct.
+  </p>
+</section>
+
+<section class="block feature" id="packages">
+  <h2>5. Submission Package Assembler</h2>
+  <p>
+    Composes a metadata snapshot for a pursuit: which OpportunityOutput
+    drafts, which RFP attachments, which reusable proposal artifacts. When
+    artifactIds aren't supplied, auto-suggests top capability_statement +
+    past_performance from the vault. Records usage on every included
+    artifact (<code>times_used</code> bumped) so the vault learns what's
+    actively reused.
+  </p>
+  <p>Completeness scoring:</p>
+  <pre>30 pts — ≥1 proposal draft (output)
+15 pts — ≥1 RFP attachment
+15 pts — ≥1 capability_statement artifact
+15 pts — ≥1 past_performance artifact
+25 pts — pro-rated to compliance matrix completion %
+─────────
+100 max</pre>
+  <p>
+    Status workflow: <code>draft</code> → <code>ready</code> →
+    <code>submitted</code> (the latter is a human-set marker only; no
+    portal submission happens).
+  </p>
+</section>
+
+<section class="block feature" id="injector">
+  <h2>6. Pursuit-Aware Proposal Context Injection</h2>
+  <p>
+    Composes a prompt-ready "## Pursuit Context (Phase 9 injection)" block
+    carrying capture strategy narrative, evaluator priorities, agency
+    pain points, differentiators, recurring agency pattern, linked
+    opportunities (up to 12), suggested acceleration assets (up to 6),
+    and readiness blockers.
+  </p>
+  <p>
+    The block is exposed at <code>GET /pursuits/:id/context-block</code>
+    and is intended to be appended to the actionGenerator user prompt
+    when generating a draft from this pursuit. <strong>The actionGenerator
+    extension itself is deferred</strong> — this service produces the
+    payload; wiring it into the prompt is a small Phase 10 add.
+  </p>
+</section>
+
+<section class="block feature" id="parallel">
+  <h2>7. Parallel Draft Generation</h2>
+  <p>
+    Replaces Phase 8's sequential Review Queue handoff with a small
+    in-process concurrency pool. Default 3, max 8. Each linked opportunity
+    becomes one <code>parallel_draft_jobs</code> row; the pool processes
+    them with bounded concurrency and records the outcome per job.
+  </p>
+  <p>
+    <strong>Idempotent:</strong> already-successful jobs for the same
+    (pursuit, opportunity, type) are skipped on re-run.
+    <strong>Retry-safe:</strong> failures don't abort the batch.
+    <strong>Observable:</strong> every job's status + error message + attempt
+    count is in the table.
+    <strong>Resumable:</strong> a fresh batch can re-run only the failed
+    opportunities from a prior batch by passing <code>skipExisting=true</code>.
+  </p>
+</section>
+
+<section class="block feature" id="timeline">
+  <h2>8. Proposal Readiness Timeline</h2>
+  <p>
+    Append-only event log per pursuit. 8 event kinds: milestone, draft,
+    compliance, artifact, staffing, blocker, submission, note. 5 statuses:
+    pending, in_progress, done, overdue, blocked.
+  </p>
+  <p>
+    <code>seedDefaultTimeline({ dueAt })</code> applies an 8-event default
+    template anchored to a target deadline:
+  </p>
+  <pre>Pursuit activated (done)
+Compliance matrix built       — due_at = dueAt - 7d
+Capability statement attached — due_at = dueAt - 5d
+Past performance attached     — due_at = dueAt - 5d
+Key personnel resumes ready   — due_at = dueAt - 3d
+Proposal draft generated      — due_at = dueAt - 2d
+Internal red-team review      — due_at = dueAt - 1d
+Submission deadline           — due_at = dueAt (critical)</pre>
+  <p>
+    <code>refreshOverdueStatuses</code> auto-flips pending events whose
+    <code>dueAt</code> has passed to <code>overdue</code>.
+  </p>
+</section>
+
+<section class="block feature" id="gaps">
+  <h2>9. Compliance Gap Intelligence</h2>
+  <p>Six gap kinds with default severity:</p>
+  <table>
+    <thead><tr><th>Gap kind</th><th>Default severity</th></tr></thead>
+    <tbody>
+      <tr><td>missing_form</td><td>85</td></tr>
+      <tr><td>missing_certification</td><td>80</td></tr>
+      <tr><td>missing_staffing</td><td>75</td></tr>
+      <tr><td>expired_artifact</td><td>70</td></tr>
+      <tr><td>missing_attachment</td><td>65</td></tr>
+      <tr><td>weak_capability</td><td>55</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Severity is boosted +10 for items flagged <code>critical</code> on the
+    compliance matrix. Each gap carries 2-3 recommended actions composed
+    from a per-kind playbook. Status workflow: open → acknowledged → mitigated
+    / dismissed (audit-preserved).
+  </p>
+</section>
+
+<section class="block action" id="capture-ops">
+  <h2>10. Capture Operations Dashboard</h2>
+  <p>
+    The new top-level surface at
+    <code>/admin/deep-research/capture-ops</code>. Read-only composite:
+  </p>
+  <ul>
+    <li><strong>Active Pursuits</strong> — open + in_progress workspaces</li>
+    <li><strong>Readiness summary</strong> — mean composite + classification distribution</li>
+    <li><strong>Compliance gaps by pursuit</strong> — severity-ranked, with sample gaps inline</li>
+    <li><strong>Artifact health</strong> — active vs expiring vs expired with a health %</li>
+    <li><strong>Package snapshot</strong> — mean completeness + status distribution</li>
+    <li><strong>Timeline rollup</strong> — overdue + blocked + next-due across pursuits</li>
+    <li><strong>Draft queue</strong> — in-flight parallel batch jobs</li>
+  </ul>
+</section>
+
+<hr/>
+
+<section class="block" id="screen-capops">
+  <h2>Screen: Capture Operations Center — full page</h2>
+  <img class="shot" src="deep-research-assets/p9-01-capture-ops-full.png" alt="capture ops full" />
+  <p class="caption">The new top-level dashboard at <code>/admin/deep-research/capture-ops</code>. All Phase 9 signals roll up here.</p>
+</section>
+
+<section class="block" id="screen-capops-kpis">
+  <h2>Screen: Capture Ops KPIs</h2>
+  <img class="shot" src="deep-research-assets/p9-02-capture-ops-kpis.png" alt="capture ops kpis" />
+  <p class="caption">Active pursuits · mean readiness with classification distribution · open compliance gaps · drafts in-flight.</p>
+</section>
+
+<section class="block" id="screen-capops-gaps">
+  <h2>Screen: Compliance gaps by pursuit</h2>
+  <img class="shot" src="deep-research-assets/p9-03-capture-ops-gaps.png" alt="capture ops gaps" />
+  <p class="caption">Severity-ranked. Each card shows the top-3 sample gaps inline so the executive triages without clicking through.</p>
+</section>
+
+<section class="block" id="screen-pursuit-full">
+  <h2>Screen: Pursuit workspace — full page (with Phase 9 panels)</h2>
+  <img class="shot" src="deep-research-assets/p9-04-pursuit-full.png" alt="pursuit full" />
+  <p class="caption">7 new Phase 9 panels added below the Phase 8 panels: Submission Readiness Composite, Compliance Matrix, Compliance Gaps, RFP Locker, Timeline, Submission Packages, Parallel Drafts.</p>
+</section>
+
+<section class="block" id="screen-matrix">
+  <h2>Screen: Compliance Matrix</h2>
+  <img class="shot" src="deep-research-assets/p9-05-compliance-matrix.png" alt="compliance matrix" />
+  <p class="caption">RFP-text textarea + Build button → 14 items extracted in this example. Each item's status is an inline dropdown that auto-rolls-up the matrix.</p>
+</section>
+
+<section class="block" id="screen-pursuit-gaps">
+  <h2>Screen: Compliance Gaps (pursuit page)</h2>
+  <img class="shot" src="deep-research-assets/p9-06-pursuit-gaps.png" alt="pursuit gaps" />
+  <p class="caption">Per-pursuit gap list with severity pills + recommended actions + Acknowledge / Mitigate inline actions.</p>
+</section>
+
+<section class="block" id="screen-readiness">
+  <h2>Screen: Submission Readiness Composite (Phase 9)</h2>
+  <img class="shot" src="deep-research-assets/p9-07-submission-readiness.png" alt="submission readiness" />
+  <p class="caption">7-dimension composite that adds Phase 9 signals to Phase 8's per-dim scoring. Result lands in the Proposal Readiness panel.</p>
+</section>
+
+<section class="block" id="screen-timeline">
+  <h2>Screen: Proposal Timeline</h2>
+  <img class="shot" src="deep-research-assets/p9-08-timeline.png" alt="timeline" />
+  <p class="caption">8-event default template, color-coded left-border by status. Overdue events auto-flip when due_at passes.</p>
+</section>
+
+<section class="block" id="screen-packages">
+  <h2>Screen: Submission Packages</h2>
+  <img class="shot" src="deep-research-assets/p9-09-packages.png" alt="packages" />
+  <p class="caption">Assembled drafts + RFP attachments + reusable artifacts with a completeness score + missing-components list. Status stays human-controlled.</p>
+</section>
+
+<section class="block" id="screen-parallel">
+  <h2>Screen: Parallel Draft Generation</h2>
+  <img class="shot" src="deep-research-assets/p9-10-parallel-drafts.png" alt="parallel drafts" />
+  <p class="caption">Bounded-concurrency pool (default 3, max 8). Idempotent re-runs skip already-successful jobs.</p>
+</section>
+
+<hr/>
+
+<section class="block arch" id="schema">
+  <h2>Database schema (Phase 9)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>rfp_attachments</code></td><td>RFP/amendment/supporting doc metadata + versioning + tagging.</td></tr>
+      <tr><td><code>proposal_artifacts</code></td><td>Reusable artifact library (9 kinds) + expiration tracking.</td></tr>
+      <tr><td><code>compliance_matrices</code></td><td>Top-level matrix per pursuit/opportunity + roll-up counts.</td></tr>
+      <tr><td><code>compliance_matrix_items</code></td><td>Per-requirement rows with status + severity.</td></tr>
+      <tr><td><code>submission_packages</code></td><td>Assembled package metadata snapshots.</td></tr>
+      <tr><td><code>proposal_timeline_events</code></td><td>Append-only event log per pursuit.</td></tr>
+      <tr><td><code>compliance_gaps</code></td><td>Detected gaps + severity + actions + status workflow.</td></tr>
+      <tr><td><code>parallel_draft_jobs</code></td><td>Concurrency-pool job audit rows.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="routes">
+  <h2>API routes (Phase 9)</h2>
+  <ul>
+    <li><code>GET /capture-ops</code> — dashboard payload</li>
+    <li><code>GET|POST /pursuits/:id/rfp-attachments</code> + summary + PATCH/DELETE per-id</li>
+    <li><code>GET|POST /proposal-artifacts</code> + refresh-expirations + PATCH/DELETE per-id</li>
+    <li><code>GET /pursuits/:id/compliance-matrix</code> + <code>POST .../build</code> + PATCH per-item</li>
+    <li><code>GET|POST /pursuits/:id/submission-packages</code> + per-id GET/PATCH</li>
+    <li><code>GET|POST /pursuits/:id/timeline</code> + <code>POST .../seed</code> + PATCH per-event</li>
+    <li><code>GET /pursuits/:id/compliance-gaps</code> + <code>POST .../refresh</code> + PATCH per-id</li>
+    <li><code>POST /pursuits/:id/submission-readiness/score</code></li>
+    <li><code>POST|GET /pursuits/:id/parallel-drafts</code></li>
+    <li><code>GET /pursuits/:id/context-block?opportunityId=...</code></li>
+  </ul>
+</section>
+
+<section class="block arch" id="files">
+  <h2>Files changed</h2>
+  <h3>Added — backend</h3>
+  <ul>
+    <li><code>backend/src/migrations/20260516000001-deep-research-phase-9.js</code> (8 tables)</li>
+    <li>8 new Sequelize models</li>
+    <li>10 new services in <code>backend/src/deepResearch/</code></li>
+    <li><code>backend/tests/deepResearch/phase9.test.js</code> (30 tests)</li>
+    <li><code>backend/scripts/capture-deep-research-phase-9-walkthrough.js</code></li>
+  </ul>
+  <h3>Added — frontend</h3>
+  <ul>
+    <li><code>frontend/src/pages/CaptureOpsPage.jsx</code></li>
+  </ul>
+  <h3>Modified — additive only</h3>
+  <ul>
+    <li><code>backend/src/models/index.js</code> — register 8 new models</li>
+    <li><code>backend/src/deepResearch/deepResearch.controller.js</code> — 27 new handlers</li>
+    <li><code>backend/src/deepResearch/deepResearch.routes.js</code> — 27 new routes</li>
+    <li><code>frontend/src/services/deepResearchService.js</code> — 24 new client functions</li>
+    <li><code>frontend/src/pages/PursuitWorkspacePage.jsx</code> — 7 new panels</li>
+    <li><code>frontend/src/App.jsx</code> + <code>Sidebar.jsx</code> — new route + sidebar link</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validations</h2>
+  <ul>
+    <li><strong>Tests:</strong> 30 new pure-logic tests; <strong>1961 / 1961 jest tests pass</strong> (+30 net new on top of Phase 8's 1931). Zero regressions across all 181 suites.</li>
+    <li><strong>Migration:</strong> ran clean on prod (<code>migrated 0.527s</code>). All 8 tables verified.</li>
+    <li><strong>End-to-end on prod (pursuit #3):</strong> Built compliance matrix from sample RFP → 14 items extracted; seeded 8-event default timeline; detected 16 compliance gaps; assembled submission package (0% complete, 4 missing components); scored Phase 9 composite readiness 22 (blocked, 10 blockers); Capture Ops dashboard returned 3 active pursuits with mean readiness 22.</li>
+    <li><strong>UI:</strong> 10 screenshots captured from live prod — Capture Ops dashboard (full + KPIs + gaps) and the pursuit page with all 7 new Phase 9 panels.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li>
+      <strong>RFP attachment locker is metadata-only.</strong> No file blob
+      storage in v1 — operators paste a content_ref URL. Real blob storage
+      (S3 / cloud bucket) is a Phase 10 add.
+    </li>
+    <li>
+      <strong>Compliance matrix parser is regex-based, not LLM-based.</strong>
+      The 12 patterns catch the common federal/state phrasings but miss
+      paraphrased or table-formatted requirements. Phase 10 could add an
+      optional LLM second-pass for low-completeness matrices.
+    </li>
+    <li>
+      <strong>Parallel draft pool runs in-process.</strong> The pool runs
+      inside the HTTP request handler, so large batches (>20 opps) can hit
+      the nginx 60s timeout. Phase 10 could move it to a background worker
+      with polling.
+    </li>
+    <li>
+      <strong>Pursuit context injector composes the block but doesn't yet
+      wire it into actionGenerator.</strong> The block is exposed at
+      <code>GET /pursuits/:id/context-block</code>; Phase 10 will extend
+      actionGenerator to accept an optional <code>pursuitContext</code> arg
+      and append it to the user prompt.
+    </li>
+    <li>
+      <strong>Artifact expiration refresh is manual.</strong> A button on
+      the Capture Ops dashboard triggers it; no cron job. Phase 10 could
+      add a nightly scheduler.
+    </li>
+    <li>
+      <strong>Compliance gap detection has no SLA tracking.</strong> Gaps
+      detect-and-rank but the dashboard doesn't surface "this gap has been
+      open for 14 days" yet. Aging would be a useful Phase 10 add.
+    </li>
+  </ul>
+</section>
+
+<section class="block summary" id="future">
+  <h2>Recommended Phase 10</h2>
+  <ul>
+    <li>
+      <strong>Real file storage.</strong> Wire S3 (or a self-hosted MinIO)
+      behind the rfp_attachments + proposal_artifacts content_ref columns.
+      Add a multer-disk upload endpoint guarded by admin RBAC + size limits.
+    </li>
+    <li>
+      <strong>Background worker for parallel drafts.</strong> Move the
+      concurrency pool out of the request handler into a node-cron-style
+      processor. Add polling endpoint for the UI to track batch progress.
+    </li>
+    <li>
+      <strong>actionGenerator pursuit-context wiring.</strong> Extend the
+      OIED actionGenerator to accept <code>pursuitContext</code>; the
+      Phase 9 injector already produces the payload.
+    </li>
+    <li>
+      <strong>Optional LLM compliance-matrix second-pass.</strong> For
+      matrices below 60% recognition on a long RFP text, run a single
+      structured LLM call to extract additional requirements. Behind a
+      feature flag.
+    </li>
+    <li>
+      <strong>Gap aging + SLA.</strong> Track <code>detected_at</code> on
+      compliance_gaps + flag gaps open &gt;7 days as "aging" on the
+      Capture Ops dashboard.
+    </li>
+    <li>
+      <strong>Artifact expiration scheduler.</strong> Nightly cron flips
+      expiring + expired statuses + emails the operator a digest of
+      "artifacts expiring next 30 days".
+    </li>
+    <li>
+      <strong>Outcome learning loop.</strong> When a submission package
+      moves to <code>submitted</code> and later to "won" / "lost", feed
+      outcomes back to the readiness engine to learn which dimension
+      thresholds actually correlate with wins.
+    </li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('img.shot').forEach(function(img) {
+    img.addEventListener('click', function() { img.classList.toggle('zoomed'); });
+  });
+})();
+</script>
+
+</body>
+</html>
