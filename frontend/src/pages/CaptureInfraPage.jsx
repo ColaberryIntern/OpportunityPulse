@@ -164,18 +164,18 @@ function CaptureInfraPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Stat label="Poll interval" value={`${(worker.poll_ms || 0) / 1000}s`} />
           <Stat label="Concurrency" value={worker.default_concurrency} hint={`max ${worker.max_concurrency}`} />
-          <Stat label="Processing" value={worker.health?.processing ?? 0} />
+          <Stat label="Processing" value={worker.health?.processing_now ?? 0} />
           <Stat
-            label="Stalled jobs"
-            value={worker.health?.stalled ?? 0}
-            tone={(worker.health?.stalled || 0) > 0 ? 'warn' : 'default'}
-            hint="processing > 10 min"
+            label="Health score"
+            value={worker.health?.score ?? 0}
+            tone={(worker.health?.score ?? 100) < 60 ? 'bad' : (worker.health?.score ?? 100) < 80 ? 'warn' : 'good'}
+            hint={`failure rate ${Math.round((worker.health?.failure_rate || 0) * 100)}%`}
           />
         </div>
       </Section>
 
       <Section
-        title="Queue Throughput (last 60 min)"
+        title={`Queue Throughput (last ${queue.window_minutes || 60} min)`}
         subtitle="Latency + retry rate across all job kinds"
         testId="section-queue"
       >
@@ -184,18 +184,39 @@ function CaptureInfraPage() {
           <Stat label="Processing" value={queue.processing || 0} />
           <Stat label="Failed (24h)" value={queue.failed_24h || 0} tone={(queue.failed_24h || 0) > 0 ? 'warn' : 'default'} />
           <Stat label="Cancelled (24h)" value={queue.cancelled_24h || 0} />
-          <Stat label="Total (window)" value={queue.total || 0} />
+          <Stat label="Failures (window)" value={queue.failures_total || 0} tone={(queue.failures_total || 0) > 0 ? 'warn' : 'default'} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="p50 latency" value={`${queue.median_ms || 0}ms`} />
-          <Stat label="p95 latency" value={`${queue.p95_ms || 0}ms`} />
-          <Stat label="Retry rate" value={`${Math.round((queue.retry_rate || 0) * 100)}%`} />
-          <Stat label="Success rate" value={`${Math.round((queue.success_rate || 0) * 100)}%`} tone="good" />
-        </div>
-        {queue.by_kind && (
+        {Array.isArray(queue.by_kind) && queue.by_kind.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Per job kind</div>
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-y border-gray-200 text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <th className="text-left p-2">Kind</th>
+                  <th className="text-right p-2">Jobs</th>
+                  <th className="text-right p-2">p50 (ms)</th>
+                  <th className="text-right p-2">p95 (ms)</th>
+                  <th className="text-right p-2">Retry rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.by_kind.map((k) => (
+                  <tr key={k.queue_kind} className="border-b border-gray-100">
+                    <td className="p-2 font-mono text-[11px]">{k.queue_kind}</td>
+                    <td className="p-2 text-right">{k.jobs ?? 0}</td>
+                    <td className="p-2 text-right">{k.median_latency_ms ?? '—'}</td>
+                    <td className="p-2 text-right">{k.p95_latency_ms ?? '—'}</td>
+                    <td className="p-2 text-right">{Math.round(((k.retry_rate || 0) * 100))}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {queue.failures_by_class && Object.keys(queue.failures_by_class).length > 0 && (
           <div className="mt-4">
-            <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">By job kind</div>
-            <KvList obj={queue.by_kind} />
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Failures by class (window)</div>
+            <KvList obj={queue.failures_by_class} />
           </div>
         )}
       </Section>
@@ -217,13 +238,15 @@ function CaptureInfraPage() {
       <Section
         title="Artifact Lifecycle"
         subtitle="Renewal recommendations + expiring soon"
+        right={<Pill tone={(artifacts.health_pct ?? 100) >= 80 ? 'green' : 'amber'}>health {artifacts.health_pct ?? 0}%</Pill>}
         testId="section-artifacts"
       >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Expiring (30d)" value={artifacts.expiring_count || 0} tone={(artifacts.expiring_count || 0) > 0 ? 'warn' : 'default'} />
-          <Stat label="Expired" value={artifacts.expired_count || 0} tone={(artifacts.expired_count || 0) > 0 ? 'bad' : 'default'} />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Stat label="Total" value={artifacts.total || 0} />
+          <Stat label="Active" value={artifacts.active || 0} tone="good" />
+          <Stat label="Expiring" value={artifacts.expiring || 0} tone={(artifacts.expiring || 0) > 0 ? 'warn' : 'default'} />
+          <Stat label="Expired" value={artifacts.expired || 0} tone={(artifacts.expired || 0) > 0 ? 'bad' : 'default'} />
           <Stat label="Events (7d)" value={artifacts.events_last_7d || 0} />
-          <Stat label="Renewal recs" value={artifacts.renewal_recommendations || 0} />
         </div>
       </Section>
 
@@ -329,9 +352,9 @@ function CaptureInfraPage() {
         testId="section-storage"
       >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Total assets" value={storage.total_assets || 0} />
-          <Stat label="Total bytes" value={storage.total_bytes || 0} hint="across all assets" />
-          <Stat label="Recent (7d)" value={storage.recent_count || 0} />
+          <Stat label="Total assets" value={storage.total || 0} />
+          <Stat label="With retention" value={storage.with_retention || 0} />
+          <Stat label="Expired" value={storage.expired || 0} tone={(storage.expired || 0) > 0 ? 'warn' : 'default'} />
           <Stat label="Max size (MB)" value={Math.round((storage.max_size_bytes || 0) / 1_000_000)} />
         </div>
       </Section>
