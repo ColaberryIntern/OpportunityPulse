@@ -185,6 +185,16 @@ const AuditArchive = require('./AuditArchive')(sequelize);
 const PermissionCache = require('./PermissionCache')(sequelize);
 const StreamMetric = require('./StreamMetric')(sequelize);
 
+// Deep Research Phase 13 — cross-phase provenance completion + governance consistency.
+const CrossProvenance = require('./CrossProvenance')(sequelize);
+const OperationalLineage = require('./OperationalLineage')(sequelize);
+const GovernanceDrift = require('./GovernanceDrift')(sequelize);
+const ApprovalLineage = require('./ApprovalLineage')(sequelize);
+const ReplayEvent = require('./ReplayEvent')(sequelize);
+const PermissionIntegrity = require('./PermissionIntegrity')(sequelize);
+const StreamIntegrity = require('./StreamIntegrity')(sequelize);
+const GovernanceConsistency = require('./GovernanceConsistency')(sequelize);
+
 const models = {
   UserRole,
   User,
@@ -334,6 +344,15 @@ const models = {
   AuditArchive,
   PermissionCache,
   StreamMetric,
+  // Phase 13
+  CrossProvenance,
+  OperationalLineage,
+  GovernanceDrift,
+  ApprovalLineage,
+  ReplayEvent,
+  PermissionIntegrity,
+  StreamIntegrity,
+  GovernanceConsistency,
 };
 
 // Set up associations

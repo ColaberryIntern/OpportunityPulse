@@ -1012,3 +1012,132 @@ export async function listAuditArchives(params = {}) {
   const res = await api.get(`${base}/audit-retention/archives`, { params });
   return res.data?.data;
 }
+
+// ---- Phase 13 — cross-phase provenance + governance consistency --------
+
+export async function getGovernanceAssurance() {
+  const res = await api.get(`${base}/governance-assurance`);
+  return res.data?.data;
+}
+
+// Cross-provenance
+export async function recordCrossProvenance(body) {
+  const res = await api.post(`${base}/cross-provenance`, body);
+  return res.data?.data;
+}
+export async function listCrossProvenanceForSubject(kind, id, params = {}) {
+  const res = await api.get(`${base}/cross-provenance/${kind}/${id}`, { params });
+  return res.data?.data;
+}
+export async function listCrossProvenanceForPursuit(pursuitId) {
+  const res = await api.get(`${base}/cross-provenance/pursuit/${pursuitId}`);
+  return res.data?.data;
+}
+export async function summarizeCrossProvenance() {
+  const res = await api.get(`${base}/cross-provenance-summary`);
+  return res.data?.data;
+}
+
+// Operational lineage
+export async function recordOperationalLineage(body) {
+  const res = await api.post(`${base}/operational-lineage`, body);
+  return res.data?.data;
+}
+export async function getOperationalLineage(kind, id, params = {}) {
+  const res = await api.get(`${base}/operational-lineage/${kind}/${id}`, { params });
+  return res.data?.data;
+}
+export async function getProposalAncestry(outputId) {
+  const res = await api.get(`${base}/operational-lineage/proposal/${outputId}`);
+  return res.data?.data;
+}
+
+// Permission integrity
+export async function getPermissionIntegrity() {
+  const res = await api.get(`${base}/permission-integrity`);
+  return res.data?.data;
+}
+export async function snapshotPermissionIntegrity() {
+  const res = await api.post(`${base}/permission-integrity/snapshot`);
+  return res.data?.data;
+}
+export async function permissionMismatchReport() {
+  const res = await api.get(`${base}/permission-integrity/mismatches`);
+  return res.data?.data;
+}
+
+// Governance consistency
+export async function runConsistencyScans() {
+  const res = await api.post(`${base}/governance-consistency/scan`);
+  return res.data?.data;
+}
+export async function listConsistencyFindings(params = {}) {
+  const res = await api.get(`${base}/governance-consistency`, { params });
+  return res.data?.data;
+}
+export async function updateConsistencyFinding(id, body) {
+  const res = await api.patch(`${base}/governance-consistency/${id}`, body);
+  return res.data?.data;
+}
+
+// Proposal explainability
+export async function getProposalExplanation(outputId) {
+  const res = await api.get(`${base}/explainability/output/${outputId}`);
+  return res.data?.data;
+}
+
+// Governance drift
+export async function runDriftScans() {
+  const res = await api.post(`${base}/governance-drift/scan`);
+  return res.data?.data;
+}
+export async function listDriftFindings(params = {}) {
+  const res = await api.get(`${base}/governance-drift`, { params });
+  return res.data?.data;
+}
+export async function updateDriftFinding(id, body) {
+  const res = await api.patch(`${base}/governance-drift/${id}`, body);
+  return res.data?.data;
+}
+
+// Approval provenance
+export async function listApprovalsForWorkflow(id) {
+  const res = await api.get(`${base}/approval-provenance/workflow/${id}`);
+  return res.data?.data;
+}
+export async function listApprovalsForSubject(kind, id) {
+  const res = await api.get(`${base}/approval-provenance/subject/${kind}/${id}`);
+  return res.data?.data;
+}
+export async function approvalBottlenecks(params = {}) {
+  const res = await api.get(`${base}/approval-provenance/bottlenecks`, { params });
+  return res.data?.data;
+}
+export async function backfillApprovalProvenance(body = {}) {
+  const res = await api.post(`${base}/approval-provenance/backfill`, body);
+  return res.data?.data;
+}
+
+// Operational replay
+export async function buildOperationalReplay(scope, scopeId) {
+  const res = await api.get(`${base}/replay/${scope}/${scopeId}`);
+  return res.data?.data;
+}
+export async function persistOperationalReplay(scope, scopeId) {
+  const res = await api.post(`${base}/replay/${scope}/${scopeId}/persist`);
+  return res.data?.data;
+}
+
+// Stream integrity
+export async function getStreamIntegrity(params = {}) {
+  const res = await api.get(`${base}/stream-integrity`, { params });
+  return res.data?.data;
+}
+export async function snapshotStreamIntegrity(body = {}) {
+  const res = await api.post(`${base}/stream-integrity/snapshot`, body);
+  return res.data?.data;
+}
+export async function streamIntegrityHistory(params = {}) {
+  const res = await api.get(`${base}/stream-integrity/history`, { params });
+  return res.data?.data;
+}

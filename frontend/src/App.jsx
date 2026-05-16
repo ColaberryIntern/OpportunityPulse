@@ -47,6 +47,7 @@ import CaptureOpsPage from './pages/CaptureOpsPage';
 import CaptureInfraPage from './pages/CaptureInfraPage';
 import GovernancePage from './pages/GovernancePage';
 import GovernanceIntegrityPage from './pages/GovernanceIntegrityPage';
+import GovernanceAssurancePage from './pages/GovernanceAssurancePage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -484,6 +485,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <GovernanceIntegrityPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/governance-assurance"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <GovernanceAssurancePage />
             </ProtectedLayout>
           }
         />

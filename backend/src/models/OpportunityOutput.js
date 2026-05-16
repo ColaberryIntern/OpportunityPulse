@@ -32,6 +32,8 @@ module.exports = (sequelize) => {
     // a deterministic prompt-context block via these two fields.
     promptProvenanceId: { type: DataTypes.BIGINT, allowNull: true, field: 'prompt_provenance_id' },
     promptAuditHash: { type: DataTypes.STRING(64), allowNull: true, field: 'prompt_audit_hash' },
+    // Phase 13: tenant scoping (added via migration 20260516000005, default 1).
+    organizationId: { type: DataTypes.INTEGER, allowNull: true, field: 'organization_id' },
   }, {
     tableName: 'opportunity_outputs',
     timestamps: true,

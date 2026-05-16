@@ -383,6 +383,55 @@ router.get('/audit-retention/recommend', ...admin, c.recommendArchive);
 router.post('/audit-retention/archive', ...admin, jsonSmall, c.archiveWindow);
 router.get('/audit-retention/archives', ...admin, c.listArchives);
 
+// ---- Phase 13 — cross-phase provenance + governance consistency ---------
+
+// Governance Assurance dashboard
+router.get('/governance-assurance', ...admin, c.getGovernanceAssurance);
+
+// Cross-provenance
+router.post('/cross-provenance', ...admin, jsonSmall, c.recordCrossProvenance);
+router.get('/cross-provenance/:kind/:id', ...admin, c.listCrossProvenanceForSubject);
+router.get('/cross-provenance/pursuit/:id', ...admin, c.listCrossProvenanceForPursuit);
+router.get('/cross-provenance-summary', ...admin, c.summarizeCrossProvenance);
+
+// Operational lineage
+router.post('/operational-lineage', ...admin, jsonSmall, c.recordLineageEdgeV13);
+router.get('/operational-lineage/:kind/:id', ...admin, c.getOperationalLineage);
+router.get('/operational-lineage/proposal/:outputId', ...admin, c.getProposalAncestry);
+
+// Permission integrity
+router.get('/permission-integrity', ...admin, c.getPermissionIntegrity);
+router.post('/permission-integrity/snapshot', ...admin, jsonSmall, c.snapshotPermissionIntegrity);
+router.get('/permission-integrity/mismatches', ...admin, c.permissionMismatchReport);
+
+// Governance consistency
+router.post('/governance-consistency/scan', ...admin, jsonSmall, c.runConsistencyScans);
+router.get('/governance-consistency', ...admin, c.listConsistencyFindings);
+router.patch('/governance-consistency/:id', ...admin, jsonSmall, c.updateConsistencyFinding);
+
+// Proposal explainability
+router.get('/explainability/output/:outputId', ...admin, c.getProposalExplanation);
+
+// Governance drift
+router.post('/governance-drift/scan', ...admin, jsonSmall, c.runDriftScans);
+router.get('/governance-drift', ...admin, c.listDriftFindings);
+router.patch('/governance-drift/:id', ...admin, jsonSmall, c.updateDriftFinding);
+
+// Approval provenance
+router.get('/approval-provenance/workflow/:id', ...admin, c.listApprovalsForWorkflow);
+router.get('/approval-provenance/subject/:kind/:id', ...admin, c.listApprovalsForSubject);
+router.get('/approval-provenance/bottlenecks', ...admin, c.approvalBottlenecks);
+router.post('/approval-provenance/backfill', ...admin, jsonSmall, c.backfillApprovalProvenance);
+
+// Operational replay
+router.get('/replay/:scope/:scopeId', ...admin, c.buildOperationalReplay);
+router.post('/replay/:scope/:scopeId/persist', ...admin, jsonSmall, c.persistOperationalReplay);
+
+// Stream integrity
+router.get('/stream-integrity', ...admin, c.getStreamIntegrity);
+router.post('/stream-integrity/snapshot', ...admin, jsonSmall, c.snapshotStreamIntegrity);
+router.get('/stream-integrity/history', ...admin, c.streamIntegrityHistory);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

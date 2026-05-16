@@ -101,6 +101,17 @@ const assetMigration = require('./assetMigration.service');
 const auditRetention = require('./auditRetention.service');
 const governanceIntegrity = require('./governanceIntegrity.service');
 const { sequelize: dbSequelize } = require('../models');
+// Phase 13 — cross-phase provenance completion + governance consistency.
+const crossProvenance = require('./crossProvenance.service');
+const operationalLineage = require('./operationalLineage.service');
+const permissionIntegrity = require('./permissionIntegrity.service');
+const governanceConsistency = require('./governanceConsistency.service');
+const proposalExplainability = require('./proposalExplainability.service');
+const governanceDrift = require('./governanceDrift.service');
+const approvalProvenance = require('./approvalProvenance.service');
+const operationalReplay = require('./operationalReplay.service');
+const streamIntegrity = require('./streamIntegrity.service');
+const governanceAssurance = require('./governanceAssurance.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -2144,6 +2155,220 @@ async function listArchives(req, res) {
   } catch (e) { return mapError(res, e, 'listArchives', 'Failed'); }
 }
 
+// ---- Phase 13 — cross-phase provenance + governance consistency ------
+
+// Governance Assurance dashboard
+async function getGovernanceAssurance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceAssurance.getDashboard({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getGovernanceAssurance', 'Failed to load assurance dashboard'); }
+}
+
+// Cross-provenance
+async function recordCrossProvenance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await crossProvenance.record({ organizationId: orgId, ...(req.body || {}), actorEmail: req.user ? req.user.email : null });
+    return successResponse(res, row ? row.toJSON() : null, 'Recorded', 201);
+  } catch (e) { return mapError(res, e, 'recordCrossProvenance', 'Failed'); }
+}
+async function listCrossProvenanceForSubject(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await crossProvenance.forSubject(
+      req.params.kind, req.params.id, { organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 100 },
+    ));
+  } catch (e) { return mapError(res, e, 'listCrossProvenanceForSubject', 'Failed'); }
+}
+async function listCrossProvenanceForPursuit(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await crossProvenance.forPursuit(Number(req.params.id), { organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'listCrossProvenanceForPursuit', 'Failed'); }
+}
+async function summarizeCrossProvenance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await crossProvenance.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'summarizeCrossProvenance', 'Failed'); }
+}
+
+// Operational lineage
+async function recordLineageEdgeV13(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationalLineage.recordEdge({ organizationId: orgId, ...(req.body || {}) }), 'Edge recorded', 201);
+  } catch (e) { return mapError(res, e, 'recordLineageEdgeV13', 'Failed'); }
+}
+async function getOperationalLineage(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationalLineage.fullLineage(
+      req.params.kind, req.params.id, { organizationId: orgId, maxDepth: req.query.depth ? Number(req.query.depth) : 3 },
+    ));
+  } catch (e) { return mapError(res, e, 'getOperationalLineage', 'Failed'); }
+}
+async function getProposalAncestry(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationalLineage.proposalAncestry(Number(req.params.outputId), { organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getProposalAncestry', 'Failed'); }
+}
+
+// Permission integrity
+async function getPermissionIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await permissionIntegrity.computeIntegrity({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getPermissionIntegrity', 'Failed'); }
+}
+async function snapshotPermissionIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await permissionIntegrity.snapshot({ organizationId: orgId });
+    return successResponse(res, row ? row.toJSON() : null, 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotPermissionIntegrity', 'Failed'); }
+}
+async function permissionMismatchReport(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await permissionIntegrity.mismatchReport({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'permissionMismatchReport', 'Failed'); }
+}
+
+// Governance consistency
+async function runConsistencyScans(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceConsistency.runAllScans({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'runConsistencyScans', 'Failed'); }
+}
+async function listConsistencyFindings(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceConsistency.listFindings({
+      organizationId: orgId, status: req.query.status || 'open',
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listConsistencyFindings', 'Failed'); }
+}
+async function updateConsistencyFinding(req, res) {
+  try {
+    return successResponse(res, await governanceConsistency.updateFindingStatus(Number(req.params.id), {
+      status: req.body && req.body.status, actorEmail: req.user ? req.user.email : null,
+    }));
+  } catch (e) { return mapError(res, e, 'updateConsistencyFinding', 'Failed'); }
+}
+
+// Proposal explainability
+async function getProposalExplanation(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await proposalExplainability.buildExplanation(
+      Number(req.params.outputId), { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'getProposalExplanation', 'Failed'); }
+}
+
+// Governance drift
+async function runDriftScans(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceDrift.runAllScans({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'runDriftScans', 'Failed'); }
+}
+async function listDriftFindings(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await governanceDrift.listFindings({
+      organizationId: orgId, status: req.query.status || 'open',
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listDriftFindings', 'Failed'); }
+}
+async function updateDriftFinding(req, res) {
+  try {
+    return successResponse(res, await governanceDrift.updateFinding(Number(req.params.id), {
+      status: req.body && req.body.status, actorEmail: req.user ? req.user.email : null,
+    }));
+  } catch (e) { return mapError(res, e, 'updateDriftFinding', 'Failed'); }
+}
+
+// Approval provenance
+async function listApprovalsForWorkflow(req, res) {
+  try {
+    return successResponse(res, await approvalProvenance.listForWorkflow(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'listApprovalsForWorkflow', 'Failed'); }
+}
+async function listApprovalsForSubject(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await approvalProvenance.listForSubject(
+      req.params.kind, req.params.id, { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'listApprovalsForSubject', 'Failed'); }
+}
+async function approvalBottlenecks(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await approvalProvenance.bottlenecks({ organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 25 }));
+  } catch (e) { return mapError(res, e, 'approvalBottlenecks', 'Failed'); }
+}
+async function backfillApprovalProvenance(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await approvalProvenance.backfillFromWorkflows({ organizationId: orgId, limit: req.body && req.body.limit ? Number(req.body.limit) : 200 }));
+  } catch (e) { return mapError(res, e, 'backfillApprovalProvenance', 'Failed'); }
+}
+
+// Operational replay
+async function buildOperationalReplay(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationalReplay.buildReplay({
+      scope: req.params.scope, scopeId: req.params.scopeId, organizationId: orgId,
+    }));
+  } catch (e) { return mapError(res, e, 'buildOperationalReplay', 'Failed'); }
+}
+async function persistOperationalReplay(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const built = await operationalReplay.buildReplay({
+      scope: req.params.scope, scopeId: req.params.scopeId, organizationId: orgId,
+    });
+    return successResponse(res, await operationalReplay.persistReplay(built, { organizationId: orgId }), 'Replay persisted', 201);
+  } catch (e) { return mapError(res, e, 'persistOperationalReplay', 'Failed'); }
+}
+
+// Stream integrity
+async function getStreamIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await streamIntegrity.summarize({
+      organizationId: orgId,
+      sinceMinutes: req.query.sinceMinutes ? Number(req.query.sinceMinutes) : 60,
+    }));
+  } catch (e) { return mapError(res, e, 'getStreamIntegrity', 'Failed'); }
+}
+async function snapshotStreamIntegrity(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await streamIntegrity.snapshot({
+      organizationId: orgId,
+      windowMinutes: req.body && req.body.windowMinutes ? Number(req.body.windowMinutes) : 5,
+    }), 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotStreamIntegrity', 'Failed'); }
+}
+async function streamIntegrityHistory(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await streamIntegrity.recentSnapshots({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'streamIntegrityHistory', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -2382,4 +2607,32 @@ module.exports = {
   recommendArchive,
   archiveWindow,
   listArchives,
+  // Phase 13
+  getGovernanceAssurance,
+  recordCrossProvenance,
+  listCrossProvenanceForSubject,
+  listCrossProvenanceForPursuit,
+  summarizeCrossProvenance,
+  recordLineageEdgeV13,
+  getOperationalLineage,
+  getProposalAncestry,
+  getPermissionIntegrity,
+  snapshotPermissionIntegrity,
+  permissionMismatchReport,
+  runConsistencyScans,
+  listConsistencyFindings,
+  updateConsistencyFinding,
+  getProposalExplanation,
+  runDriftScans,
+  listDriftFindings,
+  updateDriftFinding,
+  listApprovalsForWorkflow,
+  listApprovalsForSubject,
+  approvalBottlenecks,
+  backfillApprovalProvenance,
+  buildOperationalReplay,
+  persistOperationalReplay,
+  getStreamIntegrity,
+  snapshotStreamIntegrity,
+  streamIntegrityHistory,
 };
