@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 12 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Architecture</h2>
+  <a href="#tenant-arch">Tenant backfill</a>
+  <a href="#provenance-arch">Prompt provenance</a>
+  <a href="#injection-arch">Prompt injection</a>
+  <a href="#rbac-arch">RBAC migration</a>
+  <a href="#ui-arch">UI permissions</a>
+  <a href="#email-arch">SLA email pipeline</a>
+  <a href="#sse-arch">SSE hot paths</a>
+  <a href="#migration-arch">Asset migration</a>
+  <a href="#retention-arch">Audit retention</a>
+  <a href="#integrity-arch">Integrity dashboard</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Integrity full page</a>
+  <a href="#screen-actions">Operator actions</a>
+  <a href="#screen-composite">Integrity composite</a>
+  <a href="#screen-rbac">RBAC coverage</a>
+  <a href="#screen-provenance">Prompt provenance</a>
+  <a href="#screen-migration">Asset migration</a>
+  <a href="#screen-retention">Audit retention</a>
+  <a href="#screen-sla-email">SLA email</a>
+  <a href="#screen-sse">SSE throughput</a>
+  <a href="#screen-rbac-snap">RBAC snapshot</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 13</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 12</h1>
+  <div class="subtitle">Cross-Phase Tenant Backfill + LLM Provenance Hardening</div>
+  <p>
+    Phase 11 declared multi-tenant governance. Phase 12 makes it real: every
+    Phase 10 table now carries <code>organization_id</code>; every draft
+    traces back to a deterministic, audit-hashed prompt context block;
+    every route&rsquo;s RBAC posture is inspectable; storage migration,
+    audit retention, SLA email delivery, and SSE throughput are first-class
+    governance surfaces; and the new <em>Governance Integrity Operations
+    Center</em> reports a single composite trust score over all of it.
+  </p>
+  <p>
+    <span class="badge b-done">10 features shipped</span>
+    <span class="badge b-done">8 new tables</span>
+    <span class="badge b-done">org_id on 8 Phase 10 tables</span>
+    <span class="badge b-done">2 new opportunity_outputs columns</span>
+    <span class="badge b-done">7 new services</span>
+    <span class="badge b-done">25 new API routes</span>
+    <span class="badge b-done">21 new unit tests</span>
+    <span class="badge b-done">Full suite 2043/2043 green</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Why Phase 12</h2>
+  <p>
+    Phase 11 acknowledged a critical gap: the Phase 10 tables
+    (<code>worker_jobs</code>, <code>sla_events</code>, <code>storage_assets</code>,
+    etc.) had no <code>organization_id</code> column, so the new governance
+    dashboard couldn&rsquo;t do real per-tenant reads. Same for prompt
+    provenance &mdash; Phase 11 composed pursuit-context blocks and audit-hashed
+    them, but the actual prompt going to the LLM still didn&rsquo;t carry that
+    block, and no <code>prompt_provenance</code> table existed to record
+    what each draft was actually generated from.
+  </p>
+  <p>
+    Phase 12 closes both: a single migration adds <code>organization_id</code>
+    to every unscoped Phase 10 table, the actionGenerator integrates the
+    pursuit-context block as a real LLM input, every draft is persisted with
+    a provenance pointer, and a new Governance Integrity dashboard composites
+    the trust signals across tenant isolation, RBAC coverage, provenance
+    coverage, SSE health, and audit retention into a single 0&ndash;100 score
+    operators can monitor.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — preserved verbatim</h2>
+  <ul>
+    <li><span class="badge b-gov">No auto-submit</span> &mdash; drafts always land in the Review Queue.</li>
+    <li><span class="badge b-gov">No auto-bid</span> &mdash; pricing + signatory authority remain human.</li>
+    <li><span class="badge b-gov">No auto-sign</span> &mdash; nothing is signed or transmitted.</li>
+    <li><span class="badge b-gov">No hidden prompt augmentation</span> &mdash; the
+      pursuit-context block is deterministic, char-budget aware, has a governance
+      footer, gets an <code>audit_hash</code>, and is recorded in
+      <code>prompt_provenance</code> before it ships to the LLM.</li>
+    <li><span class="badge b-gov">No deletion of source rows</span> &mdash;
+      <code>auditRetention.archiveWindow</code> records a manifest with a
+      content hash; the actual cold-storage copy is operator-driven.
+      <code>assetMigration</code> never deletes the url_only original.</li>
+    <li><span class="badge b-gov">Backend is the source of truth</span> &mdash;
+      the new <code>usePermissions()</code> hook + <code>&lt;Permitted&gt;</code>
+      component are UX-only. Every controller still calls
+      <code>requirePermission(...)</code> on its route.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped — the 10 features</h2>
+  <table>
+    <thead><tr><th style="width:22%">Feature</th><th>What it does</th><th style="width:18%">Surface</th></tr></thead>
+    <tbody>
+      <tr><td>1. <strong>Cross-Phase Tenant Backfill</strong></td>
+        <td>Single idempotent migration adds <code>organization_id</code> (default
+        org 1) to all 8 Phase 10 tables. Phase 10 model definitions extended;
+        governance dashboard switched to real per-tenant filters; SLA scanner
+        upsertEvent stamps org_id on every new event.</td>
+        <td>migration <code>20260516000004</code></td></tr>
+      <tr><td>2. <strong>Prompt Provenance Hardening</strong></td>
+        <td>New <code>prompt_provenance</code> table. <code>promptProvenance.service.record</code>
+        + <code>buildAndPersist</code> + <code>linkOutput</code>. Every draft
+        traces back via <code>audit_hash</code> &rarr; provenance row &rarr; block
+        preview &rarr; included/excluded sections.</td>
+        <td><code>promptProvenance.service.js</code></td></tr>
+      <tr><td>3. <strong>Real Prompt Context Injection</strong></td>
+        <td><code>actionGenerator.generateOutput</code> now accepts an optional
+        <code>pursuitId</code>. When present, composes the Phase 11 context
+        block, prepends it to <code>buildGroundedUserPrompt</code>, records the
+        provenance row, and stamps <code>prompt_provenance_id</code> +
+        <code>prompt_audit_hash</code> on the resulting OpportunityOutput.</td>
+        <td>OIED <code>actionGenerator.service.js</code></td></tr>
+      <tr><td>4. <strong>Full RBAC Route Coverage Reporter</strong></td>
+        <td><code>rbacCoverage.service.analyzeRouter</code> walks the Express
+        deepResearch router and classifies each route as
+        <code>requires_permission</code> / <code>legacy_admin</code> /
+        <code>unprotected</code>. <code>rbac_coverage</code> snapshot table
+        persists periodic coverage. <code>requirePermission</code> middleware
+        now stamps <code>_permission</code> on its guard fn so the analyzer
+        can read the protected permission name.</td>
+        <td><code>rbacCoverage.service.js</code></td></tr>
+      <tr><td>5. <strong>UI Permission Synchronization</strong></td>
+        <td>React <code>usePermissions()</code> hook with in-memory TTL cache;
+        <code>&lt;Permitted name="..."&gt;</code> wrapper hides unauthorized UI;
+        fail-closed to observer-only if the permission lookup errors.</td>
+        <td><code>hooks/usePermissions.js</code> + <code>components/common/Permitted.jsx</code></td></tr>
+      <tr><td>6. <strong>SLA Escalation Email Pipeline</strong></td>
+        <td><code>slaDigest.service.sendForOrg</code> assembles a per-tenant
+        digest from <code>slaEscalation.generateDigest</code>, ships via the
+        existing <code>utils/email</code> plumbing, records every attempt to
+        <code>sla_email_events</code>. <code>dryRun=true</code> for preview;
+        soft-fail when no mailer is configured.</td>
+        <td><code>slaDigest.service.js</code></td></tr>
+      <tr><td>7. <strong>SSE Hot-Path Wiring + Metrics</strong></td>
+        <td><code>sseHotPaths.publish.draftComplete</code> wired into
+        <code>actionGenerator.generateOutput</code>; per-channel counters
+        snapshot to <code>stream_metrics</code> table. 9 publisher helpers
+        for the 9 declared channels.</td>
+        <td><code>sseHotPaths.service.js</code></td></tr>
+      <tr><td>8. <strong>S3 / MinIO Asset Migration</strong></td>
+        <td><code>assetMigration.service</code>: idempotent, resumable
+        <code>url_only</code> &rarr; configured-provider migration with hash
+        validation. <code>asset_migrations</code> log per attempt.
+        <strong>Never deletes the original.</strong></td>
+        <td><code>assetMigration.service.js</code></td></tr>
+      <tr><td>9. <strong>Audit Retention Infrastructure</strong></td>
+        <td>Configurable per-tenant retention (<code>TenantSettings.retentionDays</code>,
+        default 365). <code>retentionPressure</code> indicator,
+        <code>recommendArchive</code>, <code>archiveWindow</code> writes a
+        manifest + content-hash to <code>audit_archives</code>.
+        <strong>Never deletes source rows in v1.</strong></td>
+        <td><code>auditRetention.service.js</code></td></tr>
+      <tr><td>10. <strong>Governance Integrity Operations Center</strong></td>
+        <td>Single composite dashboard at
+        <code>/admin/deep-research/governance-integrity</code>. Five sub-scores
+        (tenant isolation / RBAC / provenance / observability / retention)
+        weighted into a 0&ndash;100 trust score with status pill
+        (healthy / watch / elevated / critical). Snapshots persisted to
+        <code>governance_integrity</code>.</td>
+        <td><code>governanceIntegrity.service.js</code> + <code>GovernanceIntegrityPage.jsx</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="tenant-arch">
+  <h2>1. Cross-Phase Tenant Backfill</h2>
+  <div class="arrow-diagram">migration up():
+  for table in [worker_jobs, proposal_execution_queue, artifact_lifecycle_events,
+                 sla_events, queue_metrics, storage_assets,
+                 execution_failures, operational_metrics]:
+      if not has column "organization_id":
+          ADD column organization_id INTEGER DEFAULT 1
+          UPDATE table SET organization_id = 1 WHERE organization_id IS NULL
+          CREATE INDEX table_org_id_idx
+</div>
+  <p>Idempotent: a second migration run is a no-op because each table is
+  inspected via <code>describeTable</code> first. Backfills default to org 1
+  (the seeded default org). Phase 10 model definitions get the field added so
+  ORM queries can use it without raw SQL. The governance dashboard&rsquo;s
+  <code>slaEscalations()</code> aggregator + the
+  <code>slaEscalation.listOpen / generateDigest</code> functions all switched
+  back to real org filters in this phase.</p>
+</section>
+
+<section class="block arch" id="provenance-arch">
+  <h2>2. Prompt Provenance Hardening</h2>
+  <pre>prompt_provenance
+  id, organization_id, audit_hash, prompt_version,
+  pursuit_id, opportunity_id, output_id, output_type,
+  included_sections, excluded_sections, char_length,
+  context_inputs, block_preview, generated_by, created_at
+
+opportunity_outputs (extended)
+  + prompt_provenance_id BIGINT
+  + prompt_audit_hash    VARCHAR(64)</pre>
+  <p>Every draft links to one provenance row; every provenance row carries
+  the <em>full preview</em> of the prompt-context block (truncated to 4000
+  chars) so operators can answer the question &ldquo;what exact context
+  produced this output?&rdquo; from the database with zero replay required.</p>
+</section>
+
+<section class="block arch" id="injection-arch">
+  <h2>3. Real Prompt Context Injection</h2>
+  <pre>actionGenerator.generateOutput({opportunityId, type, pursuitId?})
+   |
+   v
+  if pursuitId is not null:
+    block, audit_hash, provenance_id = promptProvenance.buildAndPersist(pursuitId)
+    userPromptText = block + "\n\n---\n\n" + userPromptText
+   |
+   v
+  aiClient.chat(systemPrompt, userPromptText)
+   |
+   v
+  OpportunityOutput.create({..., prompt_provenance_id, prompt_audit_hash})
+   |
+   v
+  promptProvenance.linkOutput(output.id, {provenanceId, auditHash})  // close the loop
+   |
+   v
+  sseHotPaths.publish.draftComplete({output_id, audit_hash}, {organizationId})</pre>
+  <p>Soft-fails at every step: a missing pursuit context never blocks a
+  draft. When <code>pursuitId</code> is null the legacy path runs unchanged
+  &mdash; backwards-compatible.</p>
+</section>
+
+<section class="block arch" id="rbac-arch">
+  <h2>4. RBAC Route Coverage Reporter</h2>
+  <p>Static analyzer walks <code>router.stack</code> and inspects each
+  layer&rsquo;s middleware chain for named functions:</p>
+  <ul>
+    <li><code>verifyToken</code> + <code>rbacGuard</code> (with <code>_permission</code> stamp) &rarr; <strong>requires_permission</strong></li>
+    <li><code>verifyToken</code> + <code>checkPermissions</code> &rarr; <strong>legacy_admin</strong></li>
+    <li>no <code>verifyToken</code> &rarr; <strong>unprotected</strong></li>
+  </ul>
+  <p>Snapshot to <code>rbac_coverage</code> table. Operators can run the
+  &ldquo;Snapshot RBAC Coverage&rdquo; button on the integrity dashboard to
+  freeze a coverage point-in-time. Used as the RBAC sub-score input on the
+  composite trust score.</p>
+</section>
+
+<section class="block arch" id="ui-arch">
+  <h2>5. UI Permission Synchronization</h2>
+  <pre>// Hook
+const { can, role, role_level, loading } = usePermissions();
+if (can('queue.cancel')) { ... }
+
+// Wrapper
+&lt;Permitted name="approval.approve"&gt;
+  &lt;button onClick={approve}&gt;Approve&lt;/button&gt;
+&lt;/Permitted&gt;
+
+// With minRoleLevel
+&lt;Permitted minRoleLevel={3}&gt; // capture_manager or above
+  &lt;ConfigPanel /&gt;
+&lt;/Permitted&gt;</pre>
+  <p>Cached for 5 minutes in-memory. Fail-closed: when the lookup errors,
+  defaults to observer-only with <code>dashboard.view</code> permission.
+  Backend remains the source of truth on every API call.</p>
+</section>
+
+<section class="block arch" id="email-arch">
+  <h2>6. SLA Escalation Email Pipeline</h2>
+  <pre>slaDigest.sendForOrg(orgId, {recipients?, dryRun=true})
+   |
+   v
+  digest = slaEscalation.generateDigest({organizationId: orgId})  // org-filtered
+   |
+   v
+  body = formatBody(digest)   // counts, critical_open table, recommendation
+   |
+   v
+  row = SlaEmailEvent.create({status: dryRun? 'dry_run' : 'queued', ...})
+   |
+   v
+  if !dryRun: for each recipient: utils/email.sendEmail(...)
+   |          row.status = 'sent' / 'failed'
+   v
+  auditTrail.record({actionVerb: 'digest.preview' | 'digest.send'})</pre>
+  <p>Recipients resolved from <code>DEEP_RESEARCH_SLA_DIGEST_RECIPIENTS</code>
+  env var (preferred) or by looking up Users in the org. Default daily
+  cadence is operator-triggered for v1; a daily cron is one config flag away.</p>
+</section>
+
+<section class="block arch" id="sse-arch">
+  <h2>7. SSE Hot-Path Wiring</h2>
+  <p>The Phase 11 observabilityStream bus defined 9 channels; Phase 12 wires
+  publishers into Phase 10 hot paths and adds throughput metrics:</p>
+  <ul>
+    <li><code>actionGenerator.generateOutput</code> &rarr; <code>draft.complete</code> (wired v1)</li>
+    <li><code>captureWorker</code> tick handlers &rarr; <code>worker.state</code> + <code>queue.update</code> (counter wrappers ready; full callsite wiring is a one-line addition per handler)</li>
+    <li><code>slaEscalation.actOnEvent</code> &rarr; <code>sla.alert</code> (already wired in Phase 11 controller)</li>
+    <li>per-channel <code>StreamMetric</code> snapshot persists rolling 5-minute counters</li>
+  </ul>
+</section>
+
+<section class="block arch" id="migration-arch">
+  <h2>8. S3 / MinIO Asset Migration</h2>
+  <pre>assetMigration.runBatch({organizationId, limit, toProvider, copyBytes, actor})
+   |
+   v
+  plan = planMigration({organizationId, limit})
+   |        (skips assets that already have an AssetMigration row in 'completed')
+   v
+  for each candidate:
+    attempt = AssetMigration.create({status: 'pending'})
+    attempt.status = 'in_progress'
+    if copyBytes AND asset.metadata.content_buffer_b64:
+        bytes = base64-decode
+        sha256 source
+        storageProviders.uploadBytes(asset, bytes)
+        verify target hash matches source hash
+    asset.provider = toProvider                  // flip the registry pointer
+    attempt.status = 'completed'
+    audit.record({actionVerb: 'asset.migrate'})</pre>
+  <p><strong>Never deletes the original</strong> &mdash; operator-driven only.
+  Resumable via the in_progress/pending status filter.</p>
+</section>
+
+<section class="block arch" id="retention-arch">
+  <h2>9. Audit Retention</h2>
+  <ul>
+    <li><strong>retentionPressure</strong>: per-tenant <code>{total, archive_eligible, archives_completed, retention_days, ratio, status}</code> &mdash; status maps eligible_ratio to healthy / watch / elevated / critical</li>
+    <li><strong>recommendArchive</strong>: returns a {start, end} window covering up to <code>maxWindowDays</code> of the oldest eligible events</li>
+    <li><strong>archiveWindow</strong>: writes an <code>audit_archives</code> manifest with a stable content-hash over (id, action_kind, action_verb, created_at) tuples. Does NOT delete the source rows in v1.</li>
+  </ul>
+</section>
+
+<section class="block arch" id="integrity-arch">
+  <h2>10. Governance Integrity Dashboard</h2>
+  <pre>integrity_score = round(
+    tenant_isolation_score * 0.25
+  + rbac_score             * 0.20
+  + provenance_score       * 0.20
+  + observability_score    * 0.15
+  + retention_score        * 0.20
+)</pre>
+  <p>Each sub-score is 0..100; the composite has status thresholds
+  (healthy &ge; 85 / watch &ge; 60 / elevated &ge; 40 / critical &lt; 40).
+  Snapshots persisted to <code>governance_integrity</code> for trend
+  analysis. The dashboard combines this with the Phase 12 surfaces
+  (provenance summary, migration progress, retention pressure, SLA email
+  health, SSE throughput).</p>
+</section>
+
+<h2>Screens</h2>
+
+<section class="block" id="screen-full">
+  <h3>Governance Integrity Operations Center &mdash; full page</h3>
+  <img class="shot" src="deep-research-assets/p12-01-integrity-full.png" alt="Integrity full page" />
+  <div class="caption">Composite over all 5 sub-scores plus migration / retention / SLA email / SSE throughput.</div>
+</section>
+
+<section class="block" id="screen-actions">
+  <h3>Operator actions bar</h3>
+  <img class="shot" src="deep-research-assets/p12-02-actions.png" alt="Operator actions" />
+  <div class="caption">Snapshot integrity / snapshot RBAC / snapshot stream metrics / preview SLA digest / plan asset migration. Every button is wrapped in <code>&lt;Permitted&gt;</code>.</div>
+</section>
+
+<section class="block" id="screen-composite">
+  <h3>Integrity Score Composite</h3>
+  <img class="shot" src="deep-research-assets/p12-03-integrity-composite.png" alt="Integrity composite" />
+  <div class="caption">60/100 on prod today &mdash; tenant_isolation=100 (all 8 Phase 10 tables now scoped), RBAC=0 (no snapshot yet), provenance=0 (no outputs linked yet on prod), observability=100, retention=100. &ldquo;watch&rdquo; status.</div>
+</section>
+
+<section class="block" id="screen-rbac">
+  <h3>RBAC Coverage</h3>
+  <img class="shot" src="deep-research-assets/p12-04-rbac-coverage.png" alt="RBAC coverage" />
+  <div class="caption">Pre-snapshot view &mdash; no coverage snapshot has been triggered yet.</div>
+</section>
+
+<section class="block" id="screen-provenance">
+  <h3>Prompt Provenance</h3>
+  <img class="shot" src="deep-research-assets/p12-05-prompt-provenance.png" alt="Provenance" />
+  <div class="caption">Empty on first deploy &mdash; populates as soon as the first pursuit-scoped draft is generated via the wired actionGenerator path.</div>
+</section>
+
+<section class="block" id="screen-migration">
+  <h3>Asset Migration</h3>
+  <img class="shot" src="deep-research-assets/p12-06-asset-migration.png" alt="Asset migration" />
+  <div class="caption"><code>url_only</code> provider in prod; zero remaining assets to migrate (zero registered today).</div>
+</section>
+
+<section class="block" id="screen-retention">
+  <h3>Audit Retention</h3>
+  <img class="shot" src="deep-research-assets/p12-07-audit-retention.png" alt="Retention" />
+  <div class="caption">Default 365-day retention; healthy status &mdash; nothing eligible for archive yet.</div>
+</section>
+
+<section class="block" id="screen-sla-email">
+  <h3>SLA Email Pipeline</h3>
+  <img class="shot" src="deep-research-assets/p12-08-sla-email.png" alt="SLA email" />
+  <div class="caption">7-day window. Zero sends today; the &ldquo;Preview SLA Digest&rdquo; button is wired and gated on <code>sla.acknowledge</code>.</div>
+</section>
+
+<section class="block" id="screen-sse">
+  <h3>SSE Stream Throughput</h3>
+  <img class="shot" src="deep-research-assets/p12-09-sse-throughput.png" alt="SSE throughput" />
+  <div class="caption">All 9 channels visible. Per-channel published / throttled counters; snapshot persists to <code>stream_metrics</code>.</div>
+</section>
+
+<section class="block" id="screen-rbac-snap">
+  <h3>After triggering an RBAC snapshot</h3>
+  <img class="shot" src="deep-research-assets/p12-10-rbac-snapshot.png" alt="Post-snapshot full page" />
+  <div class="caption">Full page after operator triggered the RBAC snapshot &mdash; the legacy_admin / requires_permission breakdown now populates.</div>
+</section>
+
+<section class="block" id="schema">
+  <h2>Database schema (Phase 12)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>prompt_provenance</code></td><td>Append-only log of every prompt-context block ever composed. audit_hash + included_sections + char_length + block_preview + output_id link.</td></tr>
+      <tr><td><code>asset_migrations</code></td><td>Storage migration attempts. From provider, to provider, source/target hash, byte count, status, attempt counter.</td></tr>
+      <tr><td><code>rbac_coverage</code></td><td>Periodic snapshots of route-level RBAC coverage. legacy_admin count, requires_permission count, coverage_pct, full route listing.</td></tr>
+      <tr><td><code>governance_integrity</code></td><td>Composite-score snapshot history. integrity_score + 5 sub-scores + computed_inputs JSONB.</td></tr>
+      <tr><td><code>sla_email_events</code></td><td>SLA digest email send log. Recipient, kind, severity_filter, events_included, status, sent_at, error_message.</td></tr>
+      <tr><td><code>audit_archives</code></td><td>Cold-storage manifest for audit_events. window_start/end, record_count, archive_hash, archive_location.</td></tr>
+      <tr><td><code>permission_cache</code></td><td>Short-TTL effective-permissions cache per user.</td></tr>
+      <tr><td><code>stream_metrics</code></td><td>Periodic SSE throughput snapshots. Per-channel published / throttled counts + active_subscribers.</td></tr>
+    </tbody>
+  </table>
+  <p>Plus <code>organization_id</code> added to all 8 Phase 10 tables, and
+  <code>prompt_provenance_id</code> + <code>prompt_audit_hash</code> added to
+  <code>opportunity_outputs</code>. Single migration
+  <code>20260516000004-deep-research-phase-12.js</code>. Applied to prod in
+  <strong>635ms</strong>.</p>
+</section>
+
+<section class="block" id="routes">
+  <h2>API routes (Phase 12)</h2>
+  <p>All mounted under <code>/api/v1/deep-research</code>; admin-gated via the
+  existing legacy chain plus the Phase 11 <code>tenantMiddleware</code>.</p>
+  <pre>GET    /governance-integrity                          &mdash; dashboard composite
+POST   /governance-integrity/snapshot                 &mdash; persist a snapshot
+GET    /governance-integrity/history                  &mdash; recent snapshots
+
+GET    /provenance/pursuit/:id                        &mdash; list provenance for a pursuit
+GET    /provenance/output/:outputId                   &mdash; provenance for one output
+GET    /provenance/hash/:hash                         &mdash; reverse lookup by audit hash
+GET    /provenance/summary                            &mdash; tenant-scoped summary
+POST   /provenance/pursuit/:id/build                  &mdash; compose + persist a block
+
+GET    /rbac/coverage                                 &mdash; live + latest snapshot
+POST   /rbac/coverage/snapshot                        &mdash; freeze a coverage snapshot
+
+POST   /sla-digest/preview                            &mdash; dry-run a digest
+POST   /sla-digest/send                               &mdash; actually email it
+GET    /sla-digest/emails                             &mdash; recent send log
+GET    /sla-digest/summary                            &mdash; 7-day rollup
+
+GET    /stream-metrics                                &mdash; in-memory counter summary
+POST   /stream-metrics/snapshot                       &mdash; flush counters to DB
+GET    /stream-metrics/history                        &mdash; recent snapshots
+
+GET    /asset-migration/plan                          &mdash; candidate list (no side effects)
+POST   /asset-migration/run                           &mdash; one batch
+GET    /asset-migration/summary                       &mdash; completion + pending counts
+GET    /asset-migration/attempts                      &mdash; recent attempt log
+
+GET    /audit-retention/pressure                      &mdash; eligible / total / status
+GET    /audit-retention/recommend                     &mdash; suggested archive window
+POST   /audit-retention/archive                       &mdash; write manifest (no delete)
+GET    /audit-retention/archives                      &mdash; manifest list</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <ul>
+    <li><strong>Backend &mdash; new (16):</strong> 7 new services (<code>promptProvenance</code>, <code>rbacCoverage</code>, <code>slaDigest</code>, <code>sseHotPaths</code>, <code>assetMigration</code>, <code>auditRetention</code>, <code>governanceIntegrity</code>) + 8 new models + 1 migration + 1 test file + 1 capture script.</li>
+    <li><strong>Backend &mdash; modified:</strong>
+      <ul>
+        <li><code>backend/src/deepResearch/deepResearch.controller.js</code> &mdash; +25 Phase 12 handlers</li>
+        <li><code>backend/src/deepResearch/deepResearch.routes.js</code> &mdash; +25 routes</li>
+        <li><code>backend/src/deepResearch/rbac.service.js</code> &mdash; stamps <code>_permission</code> on the guard fn</li>
+        <li><code>backend/src/deepResearch/slaEscalation.service.js</code> + <code>governanceDashboard.service.js</code> &mdash; restored real tenant filters on Phase 10 sla_events</li>
+        <li><code>backend/src/deepResearch/slaIntelligence.service.js</code> &mdash; <code>upsertEvent</code> stamps org_id</li>
+        <li><code>backend/src/oied/actionGenerator.service.js</code> &mdash; pursuit-context prompt prepend + provenance link + SSE publish</li>
+        <li>All 8 Phase 10 model files + OpportunityOutput &mdash; added <code>organizationId</code> field (and the two prompt-provenance fields on OpportunityOutput)</li>
+        <li><code>backend/src/models/index.js</code> &mdash; +8 Phase 12 models</li>
+      </ul>
+    </li>
+    <li><strong>Frontend &mdash; new (3):</strong> <code>hooks/usePermissions.js</code> + <code>components/common/Permitted.jsx</code> + <code>pages/GovernanceIntegrityPage.jsx</code></li>
+    <li><strong>Frontend &mdash; modified:</strong>
+      <ul>
+        <li><code>frontend/src/services/deepResearchService.js</code> &mdash; +30 Phase 12 client methods</li>
+        <li><code>frontend/src/App.jsx</code> &mdash; route + import</li>
+        <li><code>frontend/src/components/common/Sidebar.jsx</code> &mdash; &ldquo;Integrity Operations&rdquo; nav link</li>
+      </ul>
+    </li>
+    <li><strong>Docs:</strong> <code>docs/deep-research-phase-12-walkthrough.html</code> (this file) + 10 screenshots.</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 21 new Phase 12 tests covering promptProvenance surface, rbacCoverage analyzer classification + empty-input safety + requires_permission and legacy_admin detection, slaDigest formatBody + recipient resolution + SUBJECT_PREFIX, sseHotPaths counter increment + publisher coverage + summary shape, assetMigration VALID_STATUSES + surface, auditRetention DEFAULT_RETENTION_DAYS + ARCHIVE_BATCH_SIZE + bad-input rejection, governanceIntegrity PHASE_10_TABLES_WITH_ORG_ID + aggregator surface.</li>
+    <li><strong>Full suite:</strong> 184 suites, <strong>2043 tests</strong>, all green (Phase 11 baseline 2022 &rarr; +21 net; zero regressions).</li>
+    <li><strong>Migration:</strong> Applied to prod cleanly in <strong>0.635s</strong>. All 8 new tables verified; all 8 Phase 10 tables now carry <code>organization_id</code> (verified via <code>information_schema.columns</code>).</li>
+    <li><strong>Prod smoke:</strong> Backend <code>/api/v1/health</code> 200. Auth&rsquo;d call to <code>/api/v1/deep-research/governance-integrity</code> returns <code>{integrity_score: 60, sub_scores: {tenant_isolation: 100, rbac: 0, provenance: 0, observability: 100, retention: 100}}</code> &mdash; the tenant_isolation=100 confirms all Phase 10 tables are now scoped.</li>
+    <li><strong>Dashboard:</strong> Renders end-to-end with all 9 sections; 10 screenshots captured from live prod.</li>
+    <li><strong>Initial 500 recovery:</strong> First deploy hit a 500 because <code>provenanceScore</code> tried to filter <code>opportunity_outputs</code> by <code>organizationId</code> (column doesn&rsquo;t exist on that legacy table). Fixed in commit <code>a5a7bea</code> by reporting platform-wide provenance coverage for v1; the <code>opportunity_outputs</code> org_id backfill is queued for Phase 13.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations &mdash; deferred to Phase 13</h2>
+  <ul>
+    <li><strong><code>opportunity_outputs</code> still has no <code>organization_id</code></strong> &mdash; the provenance coverage score is platform-wide for v1. Phase 13 ships the backfill migration.</li>
+    <li><strong>SSE hot-path wiring is partial:</strong> <code>draft.complete</code> is wired in actionGenerator; <code>worker.state</code>, <code>queue.update</code>, <code>package.assembled</code>, <code>failure</code> still need callsite wiring in captureWorker tick handlers + submissionPackage assembler.</li>
+    <li><strong>S3 byte migration is opt-in via <code>copyBytes</code> and requires the asset to carry a base64 buffer in metadata.</strong> A real one-shot migration script that reads existing url_only assets and uploads them is Phase 13.</li>
+    <li><strong>SLA digest scheduling</strong> is operator-triggered for v1; daily cron at org-local 8AM is Phase 13.</li>
+    <li><strong>RBAC route migration</strong> is reporter-only in v1 &mdash; the analyzer identifies legacy routes but doesn&rsquo;t auto-migrate them. Per-feature migration to <code>requirePermission(...)</code> is the Phase 13 sprint.</li>
+    <li><strong>Audit archive cold-storage write</strong> records the manifest + hash; the actual S3/MinIO export-and-delete is Phase 13.</li>
+    <li><strong>permission_cache table</strong> is created but not yet used &mdash; in-process cache lives in <code>usePermissions</code> hook for v1. Phase 13 backs the cache with the table for cross-process sharing.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended Phase 13 &mdash; Cross-Phase Provenance + Full RBAC Migration</h2>
+  <ol>
+    <li><strong>opportunity_outputs org_id backfill</strong> &mdash; same idempotent migration pattern as Phase 12&rsquo;s Phase 10 backfill; provenance score finally goes per-tenant.</li>
+    <li><strong>Full SSE hot-path wiring</strong> in captureWorker + submissionPackage + complianceMatrix services; eliminate the &ldquo;refresh page to see updates&rdquo; UX.</li>
+    <li><strong>Per-feature RBAC route migration</strong> &mdash; replace <code>checkPermissions(ROLES.ADMIN)</code> with the specific permission per route. Use the Phase 12 rbacCoverage report as the punch-list.</li>
+    <li><strong>Real S3 byte migration script</strong> &mdash; one-shot script that reads every url_only asset, fetches its content_ref, uploads to S3, verifies the hash, flips the provider.</li>
+    <li><strong>Daily SLA digest cron</strong> at org-local 8AM via the existing Source Health Agent scheduler.</li>
+    <li><strong>Audit archive cold-storage write</strong> &mdash; complete the audit_archives lifecycle by adding the actual S3 export + the safe-delete of source rows after the archive hash is verified.</li>
+    <li><strong>Backed permission_cache</strong> &mdash; back the <code>usePermissions</code> hook with the <code>permission_cache</code> table for cross-process sharing across multiple frontend instances.</li>
+    <li><strong>Pursuit-context-injection wiring</strong> through the rest of the draft flows (the Phase 8 reviewQueueBridge calls <code>actionGenerator</code> with no pursuitId today; thread the pursuit forward).</li>
+  </ol>
+</section>
+
+<script>
+  document.querySelectorAll('img.shot').forEach((img) => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</main>
+</div>
+</body>
+</html>
