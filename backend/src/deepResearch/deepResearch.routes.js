@@ -440,11 +440,11 @@ router.post('/quality-ops/snapshot', ...admin, jsonSmall, c.snapshotQualityMetri
 router.get('/quality-ops/history', ...admin, c.listQualityMetrics);
 router.get('/quality-ops/alerts', ...admin, c.listQualityAlerts);
 
-// Proposal quality
-router.post('/quality/proposal/:outputId/score', ...admin, jsonSmall, c.scoreProposalQuality);
-router.get('/quality/proposal/:outputId', ...admin, c.latestProposalQuality);
+// Proposal quality (static routes BEFORE :outputId param to avoid path collisions)
 router.get('/quality/proposal/summary', ...admin, c.summarizeProposalQuality);
 router.get('/quality/proposal/top', ...admin, c.topProposalQuality);
+router.post('/quality/proposal/:outputId/score', ...admin, jsonSmall, c.scoreProposalQuality);
+router.get('/quality/proposal/:outputId', ...admin, c.latestProposalQuality);
 
 // Groundedness
 router.post('/quality/groundedness/:outputId/analyze', ...admin, jsonSmall, c.analyzeGroundedness);
