@@ -125,6 +125,8 @@ const qualityAlertSvc = require('./qualityAlert.service');
 const qualityTrend = require('./qualityTrend.service');
 const qaWorkflow = require('./qaWorkflow.service');
 const operationsIntelligence = require('./operationsIntelligence.service');
+const dailyResearchScheduler = require('./dailyResearchScheduler.service');
+const dailyTopicRanker = require('./dailyTopicRanker.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -2685,6 +2687,27 @@ async function qaWorkflowBottlenecks(req, res) {
   } catch (e) { return mapError(res, e, 'qaWorkflowBottlenecks', 'Failed'); }
 }
 
+// ---- Daily auto-pick Deep Research ---------------------------------------
+
+// Preview the ranker without running a scan.
+async function previewDailyAutoPick(req, res) {
+  try {
+    const topN = req.query.topN ? Number(req.query.topN) : 5;
+    return successResponse(res, await dailyTopicRanker.rankTopics({ topN }));
+  } catch (e) { return mapError(res, e, 'previewDailyAutoPick', 'Failed'); }
+}
+async function getTodaysAutoPick(req, res) {
+  try {
+    return successResponse(res, await dailyTopicRanker.pickTodaysTopic());
+  } catch (e) { return mapError(res, e, 'getTodaysAutoPick', 'Failed'); }
+}
+async function runDailyAutoPick(req, res) {
+  try {
+    return successResponse(res, await dailyResearchScheduler.runAutoPickedScan(),
+      'Auto-picked Deep Research scan complete', 201);
+  } catch (e) { return mapError(res, e, 'runDailyAutoPick', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -2989,4 +3012,8 @@ module.exports = {
   listQaWorkflows,
   qaWorkflowWorkload,
   qaWorkflowBottlenecks,
+  // Daily auto-pick
+  previewDailyAutoPick,
+  getTodaysAutoPick,
+  runDailyAutoPick,
 };

@@ -494,6 +494,11 @@ router.post('/qa-workflows', ...admin, jsonSmall, c.createQaWorkflow);
 router.patch('/qa-workflows/:id', ...admin, jsonSmall, c.transitionQaWorkflow);
 router.post('/qa-workflows/:id/reassign', ...admin, jsonSmall, c.reassignQaWorkflow);
 
+// ---- Daily auto-pick Deep Research ---------------------------------------
+router.get('/daily-auto-pick/preview', ...admin, c.previewDailyAutoPick);
+router.get('/daily-auto-pick/today', ...admin, c.getTodaysAutoPick);
+router.post('/daily-auto-pick/run', ...admin, jsonSmall, c.runDailyAutoPick);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

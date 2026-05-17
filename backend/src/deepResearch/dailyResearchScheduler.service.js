@@ -16,6 +16,7 @@ const logger = require('../logging/logger');
 const deepResearch = require('./deepResearch.service');
 const emailBriefing = require('./emailBriefing.service');
 const briefingSubscription = require('./briefingSubscription.service');
+const dailyTopicRanker = require('./dailyTopicRanker.service');
 
 let schedulerStarted = false;
 
@@ -35,21 +36,52 @@ function getScanTopics() {
   return topics.length ? topics : DEFAULT_SCAN_TOPICS;
 }
 
-// Build the scan plan: an array of { topic, subscription }.
+// Build the scan plan: an array of { topic, subscription, autoPicked }.
 //   - explicit `topics` override  → run exactly those (manual / test)
-//   - DB-driven                   → enabled subscriptions that are due
-//   - zero subscriptions at all   → env-topic fallback
+//   - DB-driven subscriptions     → enabled subscriptions that are due
+//   - data-driven auto-pick       → ALWAYS appended (unless disabled or
+//                                   topic already in plan) so the platform
+//                                   produces ≥ 1 data-driven Deep Research
+//                                   report every day
+//   - zero subscriptions + no pick → env-topic fallback
 async function buildScanPlan(topics) {
   if (Array.isArray(topics) && topics.length) {
-    return topics.map((t) => ({ topic: t, subscription: null }));
+    return topics.map((t) => ({ topic: t, subscription: null, autoPicked: false }));
   }
+  const plan = [];
   const subs = await BriefingSubscription.findAll({ where: { enabled: true } });
-  if (subs.length === 0) {
-    return getScanTopics().map((t) => ({ topic: t, subscription: null }));
+  const due = subs.filter((s) => briefingSubscription.isDue(s.toJSON()));
+  for (const s of due) {
+    plan.push({ topic: s.scanTopic, subscription: s, autoPicked: false });
   }
-  return subs
-    .filter((s) => briefingSubscription.isDue(s.toJSON()))
-    .map((s) => ({ topic: s.scanTopic, subscription: s }));
+
+  // Data-driven auto-pick. Opt-out via DEEP_RESEARCH_AUTO_PICK_ENABLED=false.
+  if (process.env.DEEP_RESEARCH_AUTO_PICK_ENABLED !== 'false') {
+    try {
+      const picked = await dailyTopicRanker.pickTodaysTopic();
+      if (picked && picked.topic) {
+        const lower = String(picked.topic).toLowerCase();
+        const alreadyInPlan = plan.some((p) => String(p.topic).toLowerCase() === lower);
+        if (!alreadyInPlan) {
+          plan.push({
+            topic: picked.topic, subscription: null, autoPicked: true,
+            pickerMetadata: picked,
+          });
+        }
+      } else if (picked && picked.reason) {
+        logger.info('dailyResearchScan: auto-pick skipped', { reason: picked.reason });
+      }
+    } catch (e) {
+      logger.warn('dailyResearchScan: auto-pick failed (continuing without)', { error: e.message });
+    }
+  }
+
+  // Final fallback: env / default topics when neither subscriptions nor the
+  // auto-picker produced anything (e.g. cold-start with no opportunity data).
+  if (plan.length === 0) {
+    return getScanTopics().map((t) => ({ topic: t, subscription: null, autoPicked: false }));
+  }
+  return plan;
 }
 
 // Run one full daily scan pass. Failure-first — one topic failing never
@@ -64,11 +96,17 @@ async function runDailyScan({ topics } = {}) {
   let succeeded = 0;
   let failed = 0;
 
-  for (const { topic, subscription } of plan) {
+  for (const { topic, subscription, autoPicked, pickerMetadata } of plan) {
     // eslint-disable-next-line no-await-in-loop
     const scan = await DailyResearchScan.create({
       scanTopic: topic, status: 'running', startedAt: new Date(),
     });
+    if (autoPicked && pickerMetadata) {
+      logger.info('dailyResearchScan: auto-picked topic', {
+        topic, composite_score: pickerMetadata.composite_score,
+        runners_up: pickerMetadata.runners_up,
+      });
+    }
     try {
       // eslint-disable-next-line no-await-in-loop
       const report = await deepResearch.runDeepResearch({
@@ -140,10 +178,32 @@ function startDailyResearchScheduler() {
   logger.info('Deep Research daily scan scheduler started', { schedule });
 }
 
+// On-demand: rank topics + run a Deep Research scan against the top pick.
+// Returns { topic, reportId, picker } so callers (controller / CLI) can
+// see which topic was selected and why. Skips the run when the picker
+// returns no usable candidate (cold-start with no data).
+async function runAutoPickedScan() {
+  const picked = await dailyTopicRanker.pickTodaysTopic();
+  if (!picked || !picked.topic) {
+    logger.info('runAutoPickedScan: no usable topic', { picked });
+    return { ran: false, picked };
+  }
+  const summary = await runDailyScan({ topics: [picked.topic] });
+  return {
+    ran: true,
+    topic: picked.topic,
+    composite_score: picked.composite_score,
+    sub_scores: picked.sub_scores,
+    runners_up: picked.runners_up,
+    summary,
+  };
+}
+
 module.exports = {
   DEFAULT_SCAN_TOPICS,
   getScanTopics,
   buildScanPlan,
   runDailyScan,
+  runAutoPickedScan,
   startDailyResearchScheduler,
 };
