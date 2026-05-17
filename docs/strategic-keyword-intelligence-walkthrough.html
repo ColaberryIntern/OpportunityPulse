@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Strategic Intelligence Overlay — Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#contract">Additivity contract</a>
+  <a href="#what-shipped">What shipped</a>
+  <a href="#before-after">Before / after</a>
+
+  <h2>Architecture</h2>
+  <a href="#dict-arch">Strategic dictionaries</a>
+  <a href="#score-arch">9-axis composite scorer</a>
+  <a href="#mode-arch">Mode-driven cloud reranking</a>
+  <a href="#discovery-arch">Discovery panel</a>
+  <a href="#deep-research-arch">Deep Research seeding</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-market-heat">Market Heat (default)</a>
+  <a href="#screen-procurement">Procurement mode</a>
+  <a href="#screen-strategic">Strategic Composite</a>
+  <a href="#screen-pain">Operational Pain</a>
+  <a href="#screen-convergence">Convergence</a>
+  <a href="#screen-panel">Discovery panel</a>
+  <a href="#screen-transitions">Active transitions</a>
+  <a href="#screen-r2m">Research to market</a>
+  <a href="#screen-conv-section">Convergence section</a>
+  <a href="#screen-pain-section">Operational pain</a>
+  <a href="#screen-mod-section">Modernization</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validation</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Recommended next phase</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Strategic Intelligence Overlay</h1>
+  <div class="subtitle">Evolving the descriptive keyword cloud into a venture-discovery and procurement-signal surface — without replacing it</div>
+  <p>
+    The legacy Market Heat keyword cloud answered <strong>"what are people talking about right now."</strong>
+    It sized words by raw frequency, colored them by sentiment, and tilted them by age.
+    It is a great descriptive surface, and it is preserved bit-for-bit.
+  </p>
+  <p>
+    The Strategic Intelligence Overlay layers a <strong>deterministic, explainable 9-axis composite scoring engine</strong>
+    on top of the same <code>keyword_trends</code> snapshot. Every word that appears in the cloud now also
+    carries a strategic_score, a commercialization_stage, and up to N strategic tags &mdash; computed from
+    cross-channel convergence, procurement vocabulary, research velocity, operational pain language, and
+    eight other signals. Operators can flip the cloud's <em>Mode</em> selector to reorder it by any of those
+    axes, and a new <em>Strategic Discovery</em> panel surfaces five named pursuit cues (active
+    commercialization transitions, research-to-market crossover, strongest convergence, rising operational
+    pain, strongest modernization pressure) with one-click deep-linking into Deep Research with the full
+    strategic context attached.
+  </p>
+  <p><strong>The default user experience is unchanged.</strong> Mode = market_heat falls through the legacy
+  two-query industry-quota merge path; the only thing different is that words now have extra fields in their
+  payload that the renderer can choose to surface. Switching to any other mode reranks the cloud
+  deterministically &mdash; no LLM in the hot path, every value reproducible from the same persisted snapshot.</p>
+  <p>
+    <span class="badge b-done">Live on prod</span>
+    <span class="badge b-cyan">170 keywords enriched</span>
+    <span class="badge b-gov">Recommendation-only</span>
+    <span class="badge b-warn">No LLM in scorers</span>
+  </p>
+</section>
+
+<section class="block governance" id="contract">
+  <h2>Additivity contract</h2>
+  <p>This was an explicitly additive build. The contract enforced through every commit:</p>
+  <ul>
+    <li><strong>Preserve every legacy behavior bit-for-bit.</strong> The descriptive cloud is sized by raw match counts, sentiment-colored, age-tilted, and click-through navigates to <code>/admin/opportunities/my?q=&lt;word&gt;</code>. All of that still works.</li>
+    <li><strong>Backward-compatible defaults on every new column.</strong> 12 new columns on <code>keyword_trends</code> default to <code>0</code> / <code>'unknown'</code> / <code>'standard'</code> / <code>[]</code>, so existing rendering paths read identical values for rows that haven't been re-enriched yet.</li>
+    <li><strong>Mode = market_heat is the unchanged default.</strong> The non-default modes (12 total) only activate when the operator explicitly switches.</li>
+    <li><strong>Soft-fail strategic enrichment.</strong> If any strategic scorer throws, the existing match_count / sentiment / channel_counts columns continue to persist. The legacy compute path can never be broken by a strategic-side bug.</li>
+    <li><strong>Recommendation-only end-to-end.</strong> No score auto-launches a Deep Research run, no priority auto-creates a pursuit, no convergence auto-modifies an opportunity. Every action is operator-initiated.</li>
+    <li><strong>No LLM in any scorer.</strong> The 9 sub-scorers are pure deterministic functions over persisted counts + curated dictionaries. Every output is explainable and reproducible from the same input.</li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped</h2>
+  <ol>
+    <li><strong>11 hand-curated category dictionaries</strong> (operational_pain, procurement_language, modernization_language, emerging_ai, regulated_domains, infrastructure, workforce_pressure, compliance_pressure, automation_categories, commercialization_signals, operational_outcomes). Bidirectional substring matching with multi-category membership.</li>
+    <li><strong>9-axis composite scorer.</strong> Weights sum to 1.0: convergence 22% / commercialization 18% / procurement 14% / operational_pain 12% / modernization 10% / venture 8% / research_velocity 6% / regulated_boost 5% / strategic_rarity 5%.</li>
+    <li><strong>2-tier classification ladder.</strong> Commercialization stage (unknown / research_only / early_signal / commercializing / production_ready / mainstream) and strategic priority (critical / high / standard / low). Critical requires both strategic_score >= 75 and convergence_score >= 50.</li>
+    <li><strong>5 commercialization-transition detectors.</strong> Active transitions, research-to-market crossover, strongest convergence, rising operational pain, strongest modernization pressure &mdash; each surfaced as a section in the new <em>Strategic Discovery</em> panel.</li>
+    <li><strong>Additive migration.</strong> 12 new columns on <code>keyword_trends</code> + 3 new indexes. Idempotent via <code>describeTable</code> guard.</li>
+    <li><strong>Mode-driven cloud reranking.</strong> 12 modes including <code>market_heat</code> (default = legacy). Non-default modes apply strategic sort + optional tag filter.</li>
+    <li><strong>Frontend evolution.</strong> Mode selector, strategic tooltip block, critical/high priority badges, conditional Deep Research deep-link.</li>
+    <li><strong>Strategic Discovery Panel.</strong> 5-section read-only surface; each row has a "Run Deep Research" button that opens <code>/admin/deep-research</code> with seed + origin + mode + tags + stage + strategic_score pre-filled.</li>
+    <li><strong>3 new admin API routes.</strong> <code>GET /keywords/strategic/discovery</code>, <code>GET /keywords/strategic/summary</code>, <code>GET /keywords/strategic/:word</code>.</li>
+    <li><strong>23 new pure-logic unit tests.</strong> Cover every sub-scorer, the composite, classification, the dictionaries, the dominant-category priority rule, the snake_case + camelCase row-shape compatibility, and the aggregate summary.</li>
+  </ol>
+</section>
+
+<section class="block context" id="before-after">
+  <h2>Before / after</h2>
+  <table>
+    <thead><tr><th>Concern</th><th>Before</th><th>After</th></tr></thead>
+    <tbody>
+      <tr><td>Cloud sizing</td><td>raw match_count only</td><td>raw match_count by default; switchable to strategic_score / procurement_score / convergence_score / 9 other axes</td></tr>
+      <tr><td>Cloud coloring</td><td>sentiment band only</td><td>sentiment band (unchanged) + optional critical/high priority pill</td></tr>
+      <tr><td>Cloud tooltip</td><td>match_count, totalMentions, channel counts</td><td>all of the above + strategic_score, priority, stage, sub-scores, strategic tags</td></tr>
+      <tr><td>Click target</td><td>opportunity search</td><td>opportunity search (default); Deep Research seed link when in strategic mode AND priority is critical/high</td></tr>
+      <tr><td>Discovery surface</td><td>none</td><td>5-section read-only Strategic Discovery panel</td></tr>
+      <tr><td>Cron</td><td>twice-daily keywordTrendCompute</td><td>twice-daily keywordTrendCompute + soft-failing strategic enrichment pass</td></tr>
+      <tr><td>API</td><td>1 admin route for the cloud</td><td>1 admin route for the cloud (now accepts <code>?mode=</code>) + 3 new strategic routes</td></tr>
+      <tr><td>Recommendation level</td><td>n/a (descriptive)</td><td>recommendation-only (pursuit cues, never auto-actions)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="dict-arch">
+  <h2>Strategic dictionaries</h2>
+  <p>The dictionaries module (<code>backend/src/oied/strategicKeywordDictionaries.js</code>) is hand-curated and intentionally small &mdash; ~150 phrases across 11 categories. The goal is signal density, not coverage.</p>
+  <h3>Categories</h3>
+  <table>
+    <thead><tr><th>Category</th><th>Examples</th><th>What it signals</th></tr></thead>
+    <tbody>
+      <tr><td>procurement_language</td><td>rfp, sow, far, gsa, idiq, set-aside</td><td>active federal procurement vocabulary</td></tr>
+      <tr><td>operational_pain</td><td>bottleneck, backlog, audit, downtime</td><td>delivery-side urgency that creates buyer demand</td></tr>
+      <tr><td>compliance_pressure</td><td>compliance, hipaa, gdpr, soc 2, fedramp</td><td>regulated work that creates predictable spend</td></tr>
+      <tr><td>regulated_domains</td><td>healthcare, financial services, defense, energy</td><td>industry verticals with structural barriers to entry</td></tr>
+      <tr><td>modernization_language</td><td>modernization, transformation, migration, legacy</td><td>large multi-year programs with budget allocation</td></tr>
+      <tr><td>emerging_ai</td><td>llm, rag, agentic, foundation model</td><td>research-frontier terms moving into procurement</td></tr>
+      <tr><td>workforce_pressure</td><td>staffing, talent shortage, attrition</td><td>hiring market signal that drives staff-aug demand</td></tr>
+      <tr><td>infrastructure</td><td>cloud, kubernetes, observability, devops</td><td>delivery substrate &mdash; cross-vertical applicability</td></tr>
+      <tr><td>commercialization_signals</td><td>pilot, deployment, rollout, production</td><td>movement from research into operational use</td></tr>
+      <tr><td>automation_categories</td><td>rpa, workflow automation, process mining</td><td>category-level venture spend</td></tr>
+      <tr><td>operational_outcomes</td><td>cost reduction, throughput, sla</td><td>buyer-facing value framings</td></tr>
+    </tbody>
+  </table>
+  <h3>Functions</h3>
+  <ul>
+    <li><code>normalizeWord(word)</code> &mdash; lowercase, trim, collapse internal whitespace.</li>
+    <li><code>wordMatches(word, phrase)</code> &mdash; bidirectional substring match (so "data compliance" matches both "compliance" and "data").</li>
+    <li><code>categoriesFor(word)</code> &mdash; returns the set of categories the word belongs to. Multi-category by design ("compliance" hits operational_pain + compliance_pressure simultaneously).</li>
+    <li><code>dominantCategory(categories)</code> &mdash; selects one canonical category using <code>CATEGORY_PRIORITY</code> (procurement_language first, then commercialization_signals, then operational_pain, etc.).</li>
+  </ul>
+</section>
+
+<section class="block arch" id="score-arch">
+  <h2>9-axis composite scorer</h2>
+  <p>The scoring engine (<code>backend/src/oied/strategicKeywordIntelligence.service.js</code>) is the heart of the overlay. Every sub-scorer is a pure function over <em>persisted</em> counts &mdash; no live API calls, no LLM inference.</p>
+
+  <div class="arrow-diagram">
+keyword_trends row
+  +-- word
+  +-- match_count             ----------+
+  +-- tool_count                        |
+  +-- total_mentions                    |
+  +-- channel_counts (JSON)             |
+  +-- sentiment_score                   |   strategic context
+  +-- avg_age_days                      |   ----------------
+                                        v
+                              +----------------------+
+                              | 9 sub-scorers (pure) |
+                              +----------------------+
+                                        |
+                                        v
+                              +----------------------+
+                              | weighted composite   |
+                              | + classification     |
+                              +----------------------+
+                                        |
+                                        v
+keyword_trends row (same row, persisted via updateOnDuplicate)
+  +-- strategic_score          (0-100)
+  +-- commercialization_score  (0-100)
+  +-- procurement_score        (0-100)
+  +-- modernization_score      (0-100)
+  +-- operational_pain_score   (0-100)
+  +-- venture_score            (0-100)
+  +-- research_velocity_score  (0-100)
+  +-- convergence_score        (0-100)
+  +-- strategic_tags           (JSONB array of category names)
+  +-- strategic_category       (dominant category name)
+  +-- strategic_priority       (critical / high / standard / low)
+  +-- commercialization_stage  (unknown / research_only / ... / mainstream)
+  </div>
+
+  <h3>Weights</h3>
+  <table>
+    <thead><tr><th>Axis</th><th>Weight</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>convergence</td><td>0.22</td><td>highest signal of an emerging market &mdash; the term shows up across research + procurement + hiring + capital simultaneously</td></tr>
+      <tr><td>commercialization</td><td>0.18</td><td>research signal moving into operational use is the clearest "the market is here" cue</td></tr>
+      <tr><td>procurement</td><td>0.14</td><td>real-money signal &mdash; appears in actual federal contracting vocabulary</td></tr>
+      <tr><td>operational_pain</td><td>0.12</td><td>buyer urgency &mdash; predicts willingness to pay for a fix</td></tr>
+      <tr><td>modernization</td><td>0.10</td><td>multi-year program signal with locked budget</td></tr>
+      <tr><td>venture</td><td>0.08</td><td>capital signal &mdash; investment news + AI tools + emerging_ai vocabulary</td></tr>
+      <tr><td>research_velocity</td><td>0.06</td><td>freshness of the research signal (decays with avg_age_days)</td></tr>
+      <tr><td>regulated_boost</td><td>0.05</td><td>structural barrier &mdash; bumps when regulated_domains overlap</td></tr>
+      <tr><td>strategic_rarity</td><td>0.05</td><td>penalizes terms that saturate the corpus (e.g. plain "ai") &mdash; surfaces specific concepts</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Classification ladders</h3>
+  <p>Both ladders are deterministic threshold maps.</p>
+  <pre>strategic_priority:
+  critical  -- strategic_score >= 75 AND convergence_score >= 50
+  high      -- strategic_score >= 60
+  standard  -- strategic_score >= 40
+  low       -- otherwise
+
+commercialization_stage:
+  mainstream        -- commercialization >= 75 AND procurement >= 50
+  production_ready  -- commercialization >= 60 AND procurement >= 30
+  commercializing   -- commercialization >= 40
+  early_signal      -- research_velocity >= 40 OR venture >= 40
+  research_only     -- research_velocity >= 25 AND commercialization &lt; 25
+  unknown           -- otherwise</pre>
+
+  <h3>Why no LLM</h3>
+  <p>Every sub-scorer is reproducible: given the same <code>keyword_trends</code> row and the same dictionaries, you always get the same 9 sub-scores, the same composite, and the same classification. This matters because (a) the cloud reranks deterministically across page loads, (b) operators can trace why a word was promoted to "critical", and (c) the scorers run inside the existing twice-daily compute cron without any new external dependency.</p>
+</section>
+
+<section class="block arch" id="mode-arch">
+  <h2>Mode-driven cloud reranking</h2>
+  <p>The cloud's read path (<code>backend/src/oied/intelligence.controller.js</code>) now accepts an optional <code>?mode=</code> query param.</p>
+  <table>
+    <thead><tr><th>Mode</th><th>Sort field</th><th>Optional tag filter</th></tr></thead>
+    <tbody>
+      <tr><td><code>market_heat</code> (default)</td><td>null &mdash; falls through to legacy 2-query industry-quota merge</td><td>none</td></tr>
+      <tr><td><code>strategic</code></td><td>strategic_score</td><td>none</td></tr>
+      <tr><td><code>procurement</code></td><td>procurement_score</td><td>none</td></tr>
+      <tr><td><code>venture_discovery</code></td><td>venture_score</td><td>none</td></tr>
+      <tr><td><code>operational_pain</code></td><td>operational_pain_score</td><td>none</td></tr>
+      <tr><td><code>modernization</code></td><td>modernization_score</td><td>none</td></tr>
+      <tr><td><code>convergence</code></td><td>convergence_score</td><td>none</td></tr>
+      <tr><td><code>commercialization</code></td><td>commercialization_score</td><td>none</td></tr>
+      <tr><td><code>emerging_research</code></td><td>research_velocity_score</td><td>none</td></tr>
+      <tr><td><code>ai_infrastructure</code></td><td>strategic_score</td><td>infrastructure OR emerging_ai</td></tr>
+      <tr><td><code>regulated_industries</code></td><td>strategic_score</td><td>regulated_domains</td></tr>
+      <tr><td><code>workforce_pressure</code></td><td>strategic_score</td><td>workforce_pressure</td></tr>
+    </tbody>
+  </table>
+  <p>The frontend's <code>sizingValueFor(w)</code> function in <code>KeywordCloud.jsx</code> maps the active mode to the right score field for font-size calculation. Sentiment color and age tilt remain unchanged across all modes.</p>
+</section>
+
+<section class="block arch" id="discovery-arch">
+  <h2>Strategic Discovery panel</h2>
+  <p>The discovery panel (<code>frontend/src/components/oied/StrategicDiscoveryPanel.jsx</code>, backed by <code>backend/src/oied/commercializationTransition.service.js</code>) surfaces five named pursuit cues. It mounts directly under the keyword cloud on the OIED dashboard.</p>
+  <table>
+    <thead><tr><th>Section</th><th>Detector</th><th>Score field</th></tr></thead>
+    <tbody>
+      <tr><td>Active commercialization transitions</td><td><code>commercialization_score &gt;= 35</code> AND <code>research_velocity_score &gt;= 30</code> AND <code>convergence_score &gt;= 20</code></td><td><code>strategic_score</code></td></tr>
+      <tr><td>Research &rarr; market crossover</td><td>top by <code>(research_velocity * procurement) ^ 0.5</code> for non-mainstream stages</td><td><code>crossover_score</code> (derived)</td></tr>
+      <tr><td>Strongest cross-channel convergence</td><td>top by <code>convergence_score</code></td><td><code>convergence_score</code></td></tr>
+      <tr><td>Rising operational pain</td><td>top by <code>operational_pain * (1 - clamp(avg_age_days/30))</code></td><td><code>rising_score</code> (derived)</td></tr>
+      <tr><td>Strongest modernization pressure</td><td>top by <code>modernization_score</code></td><td><code>modernization_score</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="deep-research-arch">
+  <h2>Deep Research seeding</h2>
+  <p>Two surfaces seed Deep Research from strategic context:</p>
+  <ol>
+    <li><strong>Keyword Cloud &mdash; conditional deep-link.</strong> When the cloud is in a strategic mode (anything other than <code>market_heat</code>) AND a word's priority is critical or high, the click target becomes <code>/admin/deep-research?seed=&lt;word&gt;&amp;origin=keyword_cloud&amp;mode=&lt;mode&gt;&amp;tags=&lt;tag1&gt;,&lt;tag2&gt;&amp;stage=&lt;stage&gt;&amp;strategic_score=&lt;n&gt;</code> instead of the opportunity search.</li>
+    <li><strong>Discovery panel &mdash; every row.</strong> Each section row has a "Run Deep Research" button that opens <code>/admin/deep-research</code> with <code>seed</code> + <code>origin=strategic_&lt;section_name&gt;</code> + <code>mode=strategic</code> + <code>tags</code> + <code>stage</code> + <code>strategic_score</code> pre-attached.</li>
+  </ol>
+  <p>The Deep Research page reads those params from the URL and uses them to pre-fill the run-seed form. No API changes were required on the Deep Research side; this is purely a deep-link.</p>
+</section>
+
+<h2 id="screen-market-heat">Screens</h2>
+<p>All screenshots captured from production (<code>http://95.216.199.47</code>) against the 170 keywords enriched after the latest deploy.</p>
+
+<h3>Market Heat (default)</h3>
+<img class="shot" src="deep-research-assets/strat-01-market-heat.png" alt="Keyword cloud in default Market Heat mode" />
+<div class="caption">Default mode. Sized by raw match_count, sentiment-colored, age-tilted. Identical to pre-overlay behavior.</div>
+
+<h3 id="screen-procurement">Procurement mode</h3>
+<img class="shot" src="deep-research-assets/strat-02-procurement-mode.png" alt="Keyword cloud in Procurement mode" />
+<div class="caption">Mode = procurement. Reorders by procurement_score. consulting / staffing / it_services / services / project rise to the top with procurement_score in the 39-65 range.</div>
+
+<h3 id="screen-strategic">Strategic Composite</h3>
+<img class="shot" src="deep-research-assets/strat-03-strategic-composite.png" alt="Keyword cloud in Strategic Composite mode" />
+<div class="caption">Mode = strategic. Reorders by the weighted 9-axis composite. Words with both procurement signal AND convergence float to the top.</div>
+
+<h3 id="screen-pain">Operational Pain mode</h3>
+<img class="shot" src="deep-research-assets/strat-04-operational-pain.png" alt="Keyword cloud in Operational Pain mode" />
+<div class="caption">Mode = operational_pain. Surfaces terms with pain-vocabulary overlap + freshness.</div>
+
+<h3 id="screen-convergence">Convergence mode</h3>
+<img class="shot" src="deep-research-assets/strat-05-convergence.png" alt="Keyword cloud in Convergence mode" />
+<div class="caption">Mode = convergence. Reorders by cross-channel breadth &mdash; words that show up across research + procurement + hiring + capital + news.</div>
+
+<h3 id="screen-panel">Strategic Discovery panel</h3>
+<img class="shot" src="deep-research-assets/strat-06-discovery-panel.png" alt="Full Strategic Discovery panel with 5 sections" />
+<div class="caption">The full discovery panel as it appears on the OIED dashboard, directly under the cloud. Read-only. Every row deep-links into Deep Research.</div>
+
+<h3 id="screen-transitions">Active commercialization transitions</h3>
+<img class="shot" src="deep-research-assets/strat-07-active-transitions.png" alt="Active transitions section" />
+<div class="caption">Section #1 &mdash; research + commercial channels active simultaneously.</div>
+
+<h3 id="screen-r2m">Research &rarr; market crossover</h3>
+<img class="shot" src="deep-research-assets/strat-08-research-to-market.png" alt="Research to market crossover section" />
+<div class="caption">Section #2 &mdash; high research velocity AND high procurement signal, not yet mainstream.</div>
+
+<h3 id="screen-conv-section">Strongest cross-channel convergence</h3>
+<img class="shot" src="deep-research-assets/strat-09-convergence-section.png" alt="Convergence section" />
+<div class="caption">Section #3 &mdash; ranked by cross-axis breadth.</div>
+
+<h3 id="screen-pain-section">Rising operational pain</h3>
+<img class="shot" src="deep-research-assets/strat-10-operational-pain-section.png" alt="Operational pain section" />
+<div class="caption">Section #4 &mdash; pain vocabulary + freshness + hiring/research demand.</div>
+
+<h3 id="screen-mod-section">Strongest modernization pressure</h3>
+<img class="shot" src="deep-research-assets/strat-11-modernization-section.png" alt="Modernization section" />
+<div class="caption">Section #5 &mdash; transformation programs visible in active procurement + infra adjacencies.</div>
+
+<section class="block summary" id="schema">
+  <h2>DB schema</h2>
+  <p>Single additive migration: <code>backend/src/migrations/20260517000002-strategic-keyword-intelligence.js</code>. Idempotent via <code>describeTable</code> guard.</p>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>strategic_score</td><td>DECIMAL(5,2)</td><td>0</td><td>weighted composite of 9 sub-scores</td></tr>
+      <tr><td>commercialization_score</td><td>DECIMAL(5,2)</td><td>0</td><td>research + procurement + hiring blend</td></tr>
+      <tr><td>procurement_score</td><td>DECIMAL(5,2)</td><td>0</td><td>vocabulary + gov_contract channel count</td></tr>
+      <tr><td>modernization_score</td><td>DECIMAL(5,2)</td><td>0</td><td>modernization vocab + procurement overlap</td></tr>
+      <tr><td>operational_pain_score</td><td>DECIMAL(5,2)</td><td>0</td><td>pain vocab + compliance + hiring + research</td></tr>
+      <tr><td>venture_score</td><td>DECIMAL(5,2)</td><td>0</td><td>AI tools + emerging_ai + investment channel</td></tr>
+      <tr><td>research_velocity_score</td><td>DECIMAL(5,2)</td><td>0</td><td>research channel intensity * freshness</td></tr>
+      <tr><td>convergence_score</td><td>DECIMAL(5,2)</td><td>0</td><td>count of distinct strategic axes present</td></tr>
+      <tr><td>strategic_tags</td><td>JSONB</td><td>[]</td><td>array of category names the word matched</td></tr>
+      <tr><td>strategic_category</td><td>STRING</td><td>'unknown'</td><td>dominant category by priority order</td></tr>
+      <tr><td>strategic_priority</td><td>STRING</td><td>'standard'</td><td>critical / high / standard / low</td></tr>
+      <tr><td>commercialization_stage</td><td>STRING</td><td>'unknown'</td><td>6-stage ladder</td></tr>
+    </tbody>
+  </table>
+  <p>Three new indexes: <code>strategic_score</code>, <code>commercialization_score</code>, <code>strategic_priority</code>.</p>
+</section>
+
+<section class="block summary" id="routes">
+  <h2>API routes</h2>
+  <table>
+    <thead><tr><th>Method</th><th>Route</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/v1/oied/keywords/cloud?mode=&lt;mode&gt;</code></td><td>existing route, extended with the <code>mode</code> param (mode=market_heat is the unchanged default)</td></tr>
+      <tr><td>GET</td><td><code>/api/v1/oied/keywords/strategic/discovery</code></td><td>5-section composite for the Strategic Discovery panel</td></tr>
+      <tr><td>GET</td><td><code>/api/v1/oied/keywords/strategic/summary</code></td><td>corpus-wide aggregate (count, avg_strategic_score, by_priority, by_stage, weights)</td></tr>
+      <tr><td>GET</td><td><code>/api/v1/oied/keywords/strategic/:word</code></td><td>per-word strategic detail (sub-scores + tags + stage + priority + raw counts)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block summary" id="files">
+  <h2>Files changed</h2>
+  <h3>New files</h3>
+  <table>
+    <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/migrations/20260517000002-strategic-keyword-intelligence.js</code></td><td>additive 12-column migration + 3 indexes</td></tr>
+      <tr><td><code>backend/src/oied/strategicKeywordDictionaries.js</code></td><td>11 category dictionaries + match/dominant helpers</td></tr>
+      <tr><td><code>backend/src/oied/strategicKeywordIntelligence.service.js</code></td><td>9-axis composite scorer + classification + enrich/summarize</td></tr>
+      <tr><td><code>backend/src/oied/commercializationTransition.service.js</code></td><td>5-section discovery dashboard composer</td></tr>
+      <tr><td><code>backend/tests/oied/strategicKeywordIntelligence.test.js</code></td><td>23 pure-logic unit tests</td></tr>
+      <tr><td><code>backend/scripts/capture-strategic-keyword-intelligence-walkthrough.js</code></td><td>Playwright screenshot capture (11 shots)</td></tr>
+      <tr><td><code>frontend/src/components/oied/StrategicDiscoveryPanel.jsx</code></td><td>5-section read-only panel with Deep Research deep-links</td></tr>
+      <tr><td><code>docs/strategic-keyword-intelligence-walkthrough.html</code></td><td>this document</td></tr>
+    </tbody>
+  </table>
+  <h3>Modified files</h3>
+  <table>
+    <thead><tr><th>Path</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/src/models/KeywordTrend.js</code></td><td>+12 fields + 3 indexes, all with backward-compatible defaults</td></tr>
+      <tr><td><code>backend/src/oied/keywordTrendCompute.service.js</code></td><td>soft-failing strategic enrichment after existing aggregation; updateOnDuplicate extended</td></tr>
+      <tr><td><code>backend/src/oied/intelligence.controller.js</code></td><td>mode-aware read path + 3 new handlers</td></tr>
+      <tr><td><code>backend/src/oied/oied.routes.js</code></td><td>3 new routes</td></tr>
+      <tr><td><code>frontend/src/components/oied/KeywordCloud.jsx</code></td><td>mode selector, strategic tooltip, priority badges, conditional deep-link</td></tr>
+      <tr><td><code>frontend/src/services/oiedService.js</code></td><td>3 new exports</td></tr>
+      <tr><td><code>frontend/src/pages/OIEDDashboardPage.jsx</code></td><td>mount StrategicDiscoveryPanel under the cloud</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 23 new pure-logic tests in <code>backend/tests/oied/strategicKeywordIntelligence.test.js</code> covering dictionaries (every category has phrases, CATEGORY_PRIORITY mirrors keys exactly, categoriesFor multi-match, dominantCategory priority order, normalizeWord, substring matching), WEIGHTS sum to 1.0 + 9 axes present, each sub-scorer's monotonicity (convergence rewards more axes, procurement boosted by vocab + gov, commercialization penalizes research-only, operational_pain combines factors, venture rewards AI tools + emerging_ai, research_velocity decays with age, regulated_boost requires the tag, strategic_rarity rewards rare words), composite ("compliance" with procurement signal scores high, "ai" scores low strategically), classification (stage ladder, priority ladder with convergence promotion), enrichKeywords (handles snake_case + camelCase row shapes), summarizeEnriched aggregate stats.</li>
+    <li><strong>Full Jest suite:</strong> 2132 / 2132 tests pass (+23 net new on top of Phase 15's 2109). Zero regressions across all suites.</li>
+    <li><strong>Migration:</strong> Applied to prod in 125ms via <code>npx sequelize-cli db:migrate</code>. All 12 columns + 3 indexes verified in <code>information_schema</code>.</li>
+    <li><strong>End-to-end on prod:</strong> Triggered recompute via <code>POST /api/v1/oied/keywords/recompute</code> &rarr; <code>{candidatesConsidered: 200, persisted: 170, dropped: 30, runId: 'kwt-2026-05-17-7a6e2b'}</code>. Strategic summary returned <code>{count: 170, avg_strategic_score: 12, by_priority: {low: 170}, by_stage: {unknown: 151, early_signal: 19}}</code>. Discovery dashboard returned <code>{counts: {active_transitions: 0, research_to_market: 0, strongest_convergence: 3, rising_operational_pain: 1, strongest_modernization: 3}}</code>. Procurement-mode cloud returned consulting / staffing / it_services at the top with procurement_score = 65 each &mdash; the deterministic rerank is working end-to-end.</li>
+    <li><strong>Default behavior preserved:</strong> Cloud with no <code>?mode=</code> param falls through to the legacy 2-query merge path and renders identically to pre-overlay. Verified visually (screenshot strat-01) and by diffing the response payloads.</li>
+    <li><strong>Screenshots:</strong> 11 captured from live prod (<code>docs/deep-research-assets/strat-*.png</code>): cloud in all 5 modes, full discovery panel, each of the 5 sub-sections.</li>
+  </ul>
+</section>
+
+<section class="block summary" id="limitations">
+  <h2>Known limitations</h2>
+  <ul>
+    <li><strong>Cold-start scores are low.</strong> The 170 keywords on prod were all classified as <code>priority: low</code> in the initial enrichment because the input snapshot is too thin for the convergence + commercialization thresholds to activate (active_transitions = 0, research_to_market = 0). Scores will rise organically as the ingestion pipeline accumulates more research / procurement / hiring channel counts over the next 1-2 cron cycles.</li>
+    <li><strong>Dictionaries are intentionally small.</strong> ~150 phrases across 11 categories. They favor precision over recall; expect occasional misses on paraphrased terms (e.g. "modernise" vs "modernize"). Adding entries is a 1-line change.</li>
+    <li><strong>No LLM fallback for category assignment.</strong> A term with no dictionary overlap gets <code>strategic_tags: []</code> and therefore zero contribution from procurement / operational_pain / modernization sub-scorers. This is by design (deterministic only) but means novel emerging terms are invisible until they're added to a dictionary.</li>
+    <li><strong>Strategic enrichment runs only inside the twice-daily compute cron.</strong> No on-demand "rescore this word" endpoint &mdash; you'd trigger a full recompute via <code>POST /api/v1/oied/keywords/recompute</code>. Per-word rescore is a small future add.</li>
+    <li><strong>Sentiment + age tilt are not mode-aware.</strong> In all modes the color band reflects raw sentiment and the rotation reflects raw avg_age_days. We could optionally add a "strategic tint" coloring path (e.g. red for critical priority) but it would conflict visually with sentiment; deliberately deferred.</li>
+    <li><strong>"Run Deep Research" button on each Discovery row is a deep-link only.</strong> The Deep Research page consumes the seed params and pre-fills the form; the operator still has to confirm and click run. No auto-spawn.</li>
+    <li><strong>convergence_score uses unweighted axis count.</strong> 5 axes present = 100; 1 axis = 20. Future work could weight axes (procurement counts 2x news, etc.) but the current shape rewards breadth uniformly &mdash; intentionally simple for explainability.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended next phase</h2>
+  <ol>
+    <li><strong>Strategic intelligence backfill cron.</strong> Run a one-off pass that enriches every existing <code>keyword_trends</code> row, not just the rows touched by the next compute window. Cheap (deterministic, runs in seconds) and produces a richer cold-start state.</li>
+    <li><strong>Dictionary expansion via operator feedback.</strong> Add a UI hook on the per-word strategic detail page: "this should also be tagged as &lt;category&gt;". Append to the appropriate dictionary on accept. Keep the dictionaries hand-curated; the operator just submits candidates.</li>
+    <li><strong>Per-word rescore API.</strong> <code>POST /api/v1/oied/keywords/strategic/:word/rescore</code> &mdash; recomputes the 9 sub-scores for one row in-place. Useful when a dictionary entry is added.</li>
+    <li><strong>Sparkline of strategic_score over time.</strong> Persist a daily snapshot of (word, strategic_score, priority) into a new <code>keyword_strategic_history</code> table; render a 30-day sparkline next to each word in the discovery panel.</li>
+    <li><strong>Strategic alerts.</strong> When a word crosses priority <code>low &rarr; high</code> between two compute cycles, emit an <code>operations_intelligence</code> alert. Soft-fail; recommendation-only; never auto-pursuit.</li>
+    <li><strong>Strategic context block on Deep Research output.</strong> When a Deep Research run is seeded from the cloud or discovery panel, attach the full strategic context (sub-scores, tags, stage, priority, source mode) to <code>OpportunityOutput.metadata</code> so the LLM has explicit grounding on why the operator picked this seed.</li>
+    <li><strong>"Why this score?" drawer.</strong> Per-word modal showing the 9 sub-scores with the input that drove each &mdash; e.g. "procurement_score = 65 because: 'consulting' matched procurement_language vocabulary (+30) AND gov_contract channel count = 12 (+25 cap)". Fully reproducible from persisted data; no LLM.</li>
+    <li><strong>Discovery panel export.</strong> CSV download of the 5 sections with full strategic context, for batch-seeding a Deep Research week.</li>
+  </ol>
+</section>
+
+</main>
+</div>
+
+<script>
+  document.querySelectorAll('img.shot').forEach(img => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</body>
+</html>
