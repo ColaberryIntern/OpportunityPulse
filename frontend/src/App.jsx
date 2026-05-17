@@ -49,6 +49,7 @@ import GovernancePage from './pages/GovernancePage';
 import GovernanceIntegrityPage from './pages/GovernanceIntegrityPage';
 import GovernanceAssurancePage from './pages/GovernanceAssurancePage';
 import QualityOpsPage from './pages/QualityOpsPage';
+import OperationsIntelligencePage from './pages/OperationsIntelligencePage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
 import ProfileEditorPage from './pages/ProfileEditorPage';
 import BundlesPage from './pages/BundlesPage';
@@ -502,6 +503,14 @@ function App() {
           element={
             <ProtectedLayout requiredRole="admin">
               <QualityOpsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/deep-research/operations-intelligence"
+          element={
+            <ProtectedLayout requiredRole="admin">
+              <OperationsIntelligencePage />
             </ProtectedLayout>
           }
         />

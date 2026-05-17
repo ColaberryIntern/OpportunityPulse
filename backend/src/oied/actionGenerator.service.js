@@ -501,6 +501,30 @@ async function generateOutput({
     });
   } catch (e) { /* swallow */ }
 
+  // Phase 15: automated quality pipeline. Runs the 4 scorers in
+  // background then evaluates alerts. Soft-fails so a quality run never
+  // breaks draft generation. Skipped when DEEP_RESEARCH_QUALITY_AUTO=false.
+  try {
+    if (process.env.DEEP_RESEARCH_QUALITY_AUTO !== 'false') {
+      // eslint-disable-next-line global-require
+      const qualityAutomation = require('../deepResearch/qualityAutomation.service');
+      // eslint-disable-next-line global-require
+      const qualityAlert = require('../deepResearch/qualityAlert.service');
+      const orgIdForQuality = await profileSvc.resolveOrgId(effectiveUserId).catch(() => null);
+      // Fire-and-forget; do not block the response.
+      setImmediate(async () => {
+        try {
+          await qualityAutomation.runForOutput(row.id, {
+            organizationId: orgIdForQuality,
+            trigger: pursuitId ? 'on_pursuit_draft' : 'on_output_create',
+            actor: generatedBy ? String(generatedBy) : null,
+          });
+          await qualityAlert.evaluateOutput(row.id, { organizationId: orgIdForQuality });
+        } catch (e) { logger.warn('OIED: post-generation quality run failed', { error: e.message }); }
+      });
+    }
+  } catch (e) { /* swallow */ }
+
   logger.info('OIED: action generated', {
     opportunityId,
     type,

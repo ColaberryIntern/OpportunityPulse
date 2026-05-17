@@ -461,6 +461,39 @@ router.get('/quality/alignment/:outputId', ...admin, c.latestAlignment);
 // Lineage writer health
 router.get('/lineage-writer/summary', ...admin, c.lineageWriterSummary);
 
+// ---- Phase 15 — quality automation + visual operational intelligence ----
+
+// Operations Intelligence dashboard
+router.get('/operations-intelligence', ...admin, c.getOperationsIntelligence);
+router.post('/operations-intelligence/snapshot', ...admin, jsonSmall, c.snapshotOperationsIntelligence);
+router.get('/operations-intelligence/history', ...admin, c.listOperationsIntelligence);
+
+// Quality automation (static routes BEFORE :outputId to avoid path collision)
+router.get('/quality-automation/summary', ...admin, c.summarizeQualitySnapshots);
+router.get('/quality-automation/snapshots', ...admin, c.listQualitySnapshots);
+router.post('/quality-automation/:outputId/run', ...admin, jsonSmall, c.runQualityAutomation);
+router.get('/quality-automation/:outputId/latest', ...admin, c.latestQualitySnapshot);
+
+// Quality alert lifecycle (static routes BEFORE :id)
+router.get('/quality-alerts/summary', ...admin, c.summarizeQualityAlertsV15);
+router.get('/quality-alerts', ...admin, c.listQualityAlertsV15);
+router.post('/quality-alerts/evaluate/:outputId', ...admin, jsonSmall, c.evaluateQualityAlerts);
+router.get('/quality-alerts/:id/history', ...admin, c.qualityAlertHistory);
+router.patch('/quality-alerts/:id', ...admin, jsonSmall, c.updateQualityAlert);
+
+// Quality trends
+router.post('/quality-trend/snapshot', ...admin, jsonSmall, c.snapshotQualityTrend);
+router.get('/quality-trend/history', ...admin, c.listQualityTrends);
+router.get('/quality-trend/summary', ...admin, c.summarizeQualityTrend);
+
+// QA workflows (static routes BEFORE :id)
+router.get('/qa-workflows/workload', ...admin, c.qaWorkflowWorkload);
+router.get('/qa-workflows/bottlenecks', ...admin, c.qaWorkflowBottlenecks);
+router.get('/qa-workflows', ...admin, c.listQaWorkflows);
+router.post('/qa-workflows', ...admin, jsonSmall, c.createQaWorkflow);
+router.patch('/qa-workflows/:id', ...admin, jsonSmall, c.transitionQaWorkflow);
+router.post('/qa-workflows/:id/reassign', ...admin, jsonSmall, c.reassignQaWorkflow);
+
 // ---- report (:id) routes --------------------------------------------------
 
 router.get('/:id', ...admin, c.getReport);

@@ -103,6 +103,22 @@ async function transition(id, {
       payload: { from: prevStatus, to: status, workflow_kind: row.workflowKind },
     });
   } catch (e) { /* swallow */ }
+  // Phase 15: lineage edge — workflow transition is an operator action
+  // against a subject. Soft-fails.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.workflowAssigned({
+      workflowId: row.id, subjectKind: row.subjectKind, subjectId: row.subjectId,
+      pursuitId: row.pursuitId, organizationId, actorEmail,
+    });
+    // eslint-disable-next-line global-require
+    const sseHotPaths = require('./sseHotPaths.service');
+    sseHotPaths.publish.workflowTransition({
+      workflow_id: row.id, from: prevStatus, to: status,
+      workflow_kind: row.workflowKind,
+    }, { organizationId });
+  } catch (e) { /* swallow */ }
   return row.toJSON();
 }
 

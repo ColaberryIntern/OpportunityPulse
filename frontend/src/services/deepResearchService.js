@@ -1204,3 +1204,98 @@ export async function lineageWriterSummary() {
   const res = await api.get(`${base}/lineage-writer/summary`);
   return res.data?.data;
 }
+
+// ---- Phase 15 — quality automation + visual operational intelligence ----
+
+export async function getOperationsIntelligence() {
+  const res = await api.get(`${base}/operations-intelligence`);
+  return res.data?.data;
+}
+export async function snapshotOperationsIntelligence() {
+  const res = await api.post(`${base}/operations-intelligence/snapshot`);
+  return res.data?.data;
+}
+export async function listOperationsIntelligence(params = {}) {
+  const res = await api.get(`${base}/operations-intelligence/history`, { params });
+  return res.data?.data;
+}
+
+// Quality automation
+export async function runQualityAutomation(outputId, body = {}) {
+  const res = await api.post(`${base}/quality-automation/${outputId}/run`, body);
+  return res.data?.data;
+}
+export async function latestQualitySnapshot(outputId) {
+  const res = await api.get(`${base}/quality-automation/${outputId}/latest`);
+  return res.data?.data;
+}
+export async function listQualitySnapshots(params = {}) {
+  const res = await api.get(`${base}/quality-automation/snapshots`, { params });
+  return res.data?.data;
+}
+export async function summarizeQualitySnapshots() {
+  const res = await api.get(`${base}/quality-automation/summary`);
+  return res.data?.data;
+}
+
+// Quality alerts (Phase 15 lifecycle)
+export async function evaluateQualityAlerts(outputId) {
+  const res = await api.post(`${base}/quality-alerts/evaluate/${outputId}`);
+  return res.data?.data;
+}
+export async function listQualityAlertsV15(params = {}) {
+  const res = await api.get(`${base}/quality-alerts`, { params });
+  return res.data?.data;
+}
+export async function updateQualityAlert(id, body) {
+  const res = await api.patch(`${base}/quality-alerts/${id}`, body);
+  return res.data?.data;
+}
+export async function qualityAlertHistory(id) {
+  const res = await api.get(`${base}/quality-alerts/${id}/history`);
+  return res.data?.data;
+}
+export async function summarizeQualityAlertsV15() {
+  const res = await api.get(`${base}/quality-alerts/summary`);
+  return res.data?.data;
+}
+
+// Quality trends
+export async function snapshotQualityTrend(body = {}) {
+  const res = await api.post(`${base}/quality-trend/snapshot`, body);
+  return res.data?.data;
+}
+export async function listQualityTrends(params = {}) {
+  const res = await api.get(`${base}/quality-trend/history`, { params });
+  return res.data?.data;
+}
+export async function summarizeQualityTrend() {
+  const res = await api.get(`${base}/quality-trend/summary`);
+  return res.data?.data;
+}
+
+// QA workflows
+export async function listQaWorkflows(params = {}) {
+  const res = await api.get(`${base}/qa-workflows`, { params });
+  return res.data?.data;
+}
+export async function createQaWorkflow(body) {
+  const res = await api.post(`${base}/qa-workflows`, body);
+  return res.data?.data;
+}
+export async function transitionQaWorkflow(id, body) {
+  const res = await api.patch(`${base}/qa-workflows/${id}`, body);
+  return res.data?.data;
+}
+export async function reassignQaWorkflow(id, body) {
+  const res = await api.post(`${base}/qa-workflows/${id}/reassign`, body);
+  return res.data?.data;
+}
+export async function qaWorkflowWorkload() {
+  const res = await api.get(`${base}/qa-workflows/workload`);
+  return res.data?.data;
+}
+export async function qaWorkflowBottlenecks() {
+  const res = await api.get(`${base}/qa-workflows/bottlenecks`);
+  return res.data?.data;
+}

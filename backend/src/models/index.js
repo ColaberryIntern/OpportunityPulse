@@ -204,6 +204,16 @@ const ReplayVisualization = require('./ReplayVisualization')(sequelize);
 const QualityMetric = require('./QualityMetric')(sequelize);
 const QualityAlert = require('./QualityAlert')(sequelize);
 
+// Deep Research Phase 15 — quality automation + visual operational intelligence.
+const QualitySnapshot = require('./QualitySnapshot')(sequelize);
+const QaWorkflow = require('./QaWorkflow')(sequelize);
+const LineageVisualization = require('./LineageVisualization')(sequelize);
+const ReplayTimelineView = require('./ReplayTimelineView')(sequelize);
+const QualityTrend = require('./QualityTrend')(sequelize);
+const QaAssignment = require('./QaAssignment')(sequelize);
+const OperationalIntelligence = require('./OperationalIntelligence')(sequelize);
+const QualityAlertHistory = require('./QualityAlertHistory')(sequelize);
+
 const models = {
   UserRole,
   User,
@@ -370,6 +380,15 @@ const models = {
   ReplayVisualization,
   QualityMetric,
   QualityAlert,
+  // Phase 15
+  QualitySnapshot,
+  QaWorkflow,
+  LineageVisualization,
+  ReplayTimelineView,
+  QualityTrend,
+  QaAssignment,
+  OperationalIntelligence,
+  QualityAlertHistory,
 };
 
 // Set up associations

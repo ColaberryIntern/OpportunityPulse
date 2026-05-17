@@ -111,6 +111,17 @@ async function actOnEvent(slaEventId, {
     });
   } catch (e) { /* audit must not break flow */ }
 
+  // Phase 15: lineage edge for the SLA action. Soft-fails.
+  try {
+    // eslint-disable-next-line global-require
+    const lineageEdgeWriter = require('./lineageEdgeWriter.service');
+    lineageEdgeWriter.helpers.slaActionTaken({
+      slaEventId: event.id, action,
+      pursuitId: event.scopeKind === 'pursuit' ? Number(event.scopeId) : null,
+      organizationId, actorEmail,
+    });
+  } catch (e) { /* swallow */ }
+
   return {
     event: event.toJSON(),
     acknowledgement: ack.toJSON(),

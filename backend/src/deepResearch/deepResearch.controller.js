@@ -119,6 +119,12 @@ const groundednessSvc = require('./groundedness.service');
 const strategicCoherence = require('./strategicCoherence.service');
 const evaluatorAlignment = require('./evaluatorAlignment.service');
 const qualityOpsDashboard = require('./qualityOpsDashboard.service');
+// Phase 15 — quality automation + visual operational intelligence.
+const qualityAutomation = require('./qualityAutomation.service');
+const qualityAlertSvc = require('./qualityAlert.service');
+const qualityTrend = require('./qualityTrend.service');
+const qaWorkflow = require('./qaWorkflow.service');
+const operationsIntelligence = require('./operationsIntelligence.service');
 
 function mapError(res, e, context, fallbackMsg) {
   if (e.code === 'BAD_INPUT') return errorResponse(res, e.message, 400);
@@ -2495,6 +2501,190 @@ async function lineageWriterSummary(req, res) {
   } catch (e) { return mapError(res, e, 'lineageWriterSummary', 'Failed'); }
 }
 
+// ---- Phase 15 — quality automation + visual operational intelligence ----
+
+// Operations Intelligence dashboard
+async function getOperationsIntelligence(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationsIntelligence.getDashboard({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'getOperationsIntelligence', 'Failed'); }
+}
+async function snapshotOperationsIntelligence(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    const row = await operationsIntelligence.snapshot({ organizationId: orgId });
+    return successResponse(res, row ? row.toJSON() : null, 'Snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotOperationsIntelligence', 'Failed'); }
+}
+async function listOperationsIntelligence(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await operationsIntelligence.recentSnapshots({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'listOperationsIntelligence', 'Failed'); }
+}
+
+// Quality automation
+async function runQualityAutomation(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAutomation.runForOutput(
+      Number(req.params.outputId),
+      {
+        organizationId: orgId,
+        trigger: (req.body && req.body.trigger) || 'manual',
+        actor: req.user ? req.user.email : null,
+      },
+    ));
+  } catch (e) { return mapError(res, e, 'runQualityAutomation', 'Failed'); }
+}
+async function latestQualitySnapshot(req, res) {
+  try {
+    return successResponse(res, await qualityAutomation.latestForOutput(Number(req.params.outputId)));
+  } catch (e) { return mapError(res, e, 'latestQualitySnapshot', 'Failed'); }
+}
+async function listQualitySnapshots(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAutomation.listSnapshots({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 50,
+    }));
+  } catch (e) { return mapError(res, e, 'listQualitySnapshots', 'Failed'); }
+}
+async function summarizeQualitySnapshots(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAutomation.summarize({
+      organizationId: orgId,
+      sinceDays: req.query.sinceDays ? Number(req.query.sinceDays) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'summarizeQualitySnapshots', 'Failed'); }
+}
+
+// Quality alerts (Phase 15 lifecycle)
+async function evaluateQualityAlerts(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAlertSvc.evaluateOutput(
+      Number(req.params.outputId), { organizationId: orgId },
+    ));
+  } catch (e) { return mapError(res, e, 'evaluateQualityAlerts', 'Failed'); }
+}
+async function listQualityAlertsV15(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAlertSvc.listAlerts({
+      organizationId: orgId, status: req.query.status || 'open',
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listQualityAlertsV15', 'Failed'); }
+}
+async function updateQualityAlert(req, res) {
+  try {
+    return successResponse(res, await qualityAlertSvc.updateAlertStatus(Number(req.params.id), {
+      status: req.body && req.body.status,
+      actorEmail: req.user ? req.user.email : null,
+      notes: req.body && req.body.notes,
+    }));
+  } catch (e) { return mapError(res, e, 'updateQualityAlert', 'Failed'); }
+}
+async function qualityAlertHistory(req, res) {
+  try {
+    return successResponse(res, await qualityAlertSvc.alertHistory(Number(req.params.id)));
+  } catch (e) { return mapError(res, e, 'qualityAlertHistory', 'Failed'); }
+}
+async function summarizeQualityAlertsV15(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityAlertSvc.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'summarizeQualityAlertsV15', 'Failed'); }
+}
+
+// Quality trends
+async function snapshotQualityTrend(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityTrend.snapshot({
+      organizationId: orgId,
+      windowDays: (req.body && req.body.windowDays) || undefined,
+    }), 'Trend snapshot recorded', 201);
+  } catch (e) { return mapError(res, e, 'snapshotQualityTrend', 'Failed'); }
+}
+async function listQualityTrends(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityTrend.recentSnapshots({
+      organizationId: orgId, limit: req.query.limit ? Number(req.query.limit) : 30,
+    }));
+  } catch (e) { return mapError(res, e, 'listQualityTrends', 'Failed'); }
+}
+async function summarizeQualityTrend(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qualityTrend.summarize({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'summarizeQualityTrend', 'Failed'); }
+}
+
+// QA workflows
+async function createQaWorkflow(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.createWorkflow({
+      organizationId: orgId, ...(req.body || {}),
+      assignedBy: req.user ? req.user.email : null,
+    }), 'QA workflow created', 201);
+  } catch (e) { return mapError(res, e, 'createQaWorkflow', 'Failed'); }
+}
+async function transitionQaWorkflow(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.transition(Number(req.params.id), {
+      organizationId: orgId,
+      status: req.body && req.body.status,
+      reviewerNotes: req.body && req.body.reviewerNotes,
+      remediationSummary: req.body && req.body.remediationSummary,
+      overrideReason: req.body && req.body.overrideReason,
+      actorEmail: req.user ? req.user.email : null,
+    }));
+  } catch (e) { return mapError(res, e, 'transitionQaWorkflow', 'Failed'); }
+}
+async function reassignQaWorkflow(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.reassign(Number(req.params.id), {
+      organizationId: orgId,
+      newAssigneeUserId: req.body && req.body.newAssigneeUserId,
+      newAssigneeEmail: req.body && req.body.newAssigneeEmail,
+      notes: req.body && req.body.notes,
+      reassignedBy: req.user ? req.user.email : null,
+    }));
+  } catch (e) { return mapError(res, e, 'reassignQaWorkflow', 'Failed'); }
+}
+async function listQaWorkflows(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.listWorkflows({
+      organizationId: orgId, status: req.query.status,
+      assigneeUserId: req.query.assigneeUserId ? Number(req.query.assigneeUserId) : null,
+      workflowKind: req.query.workflowKind, limit: req.query.limit ? Number(req.query.limit) : 100,
+    }));
+  } catch (e) { return mapError(res, e, 'listQaWorkflows', 'Failed'); }
+}
+async function qaWorkflowWorkload(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.workloadByReviewer({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'qaWorkflowWorkload', 'Failed'); }
+}
+async function qaWorkflowBottlenecks(req, res) {
+  try {
+    const orgId = await tenantIsolation.resolveTenantForRequest(req);
+    return successResponse(res, await qaWorkflow.bottlenecks({ organizationId: orgId }));
+  } catch (e) { return mapError(res, e, 'qaWorkflowBottlenecks', 'Failed'); }
+}
+
 module.exports = {
   run,
   listReports,
@@ -2777,4 +2967,26 @@ module.exports = {
   analyzeAlignment,
   latestAlignment,
   lineageWriterSummary,
+  // Phase 15
+  getOperationsIntelligence,
+  snapshotOperationsIntelligence,
+  listOperationsIntelligence,
+  runQualityAutomation,
+  latestQualitySnapshot,
+  listQualitySnapshots,
+  summarizeQualitySnapshots,
+  evaluateQualityAlerts,
+  listQualityAlertsV15,
+  updateQualityAlert,
+  qualityAlertHistory,
+  summarizeQualityAlertsV15,
+  snapshotQualityTrend,
+  listQualityTrends,
+  summarizeQualityTrend,
+  createQaWorkflow,
+  transitionQaWorkflow,
+  reassignQaWorkflow,
+  listQaWorkflows,
+  qaWorkflowWorkload,
+  qaWorkflowBottlenecks,
 };
