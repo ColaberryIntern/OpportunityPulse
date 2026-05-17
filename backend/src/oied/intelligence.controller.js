@@ -324,10 +324,37 @@ async function getNewsWordCloudHandler(req, res) {
 //   industries_only=true   filter to is_industry rows only
 //   sources=...            (legacy live mode only)
 //   lookback=14            (legacy live mode only)
+// Strategic mode → KeywordTrend sort-column mapping. Each mode re-ranks
+// the SAME persisted snapshot through a different strategic axis. The
+// default 'market_heat' preserves the original frequency-based behavior
+// bit-for-bit so the existing UX is unchanged when no mode is requested.
+const STRATEGIC_MODE_SORT = {
+  market_heat:            null,  // legacy: match_count DESC, total_mentions DESC
+  procurement:            ['procurement_score', 'DESC'],
+  venture_discovery:      ['venture_score', 'DESC'],
+  operational_pain:       ['operational_pain_score', 'DESC'],
+  modernization:          ['modernization_score', 'DESC'],
+  ai_infrastructure:      ['strategic_score', 'DESC'],
+  emerging_research:      ['research_velocity_score', 'DESC'],
+  commercialization:      ['commercialization_score', 'DESC'],
+  regulated_industries:   ['strategic_score', 'DESC'],
+  workforce_pressure:     ['strategic_score', 'DESC'],
+  strategic:              ['strategic_score', 'DESC'],   // alias for the composite
+  convergence:            ['convergence_score', 'DESC'],
+};
+
+const STRATEGIC_MODE_TAG_FILTER = {
+  ai_infrastructure:    'infrastructure',
+  regulated_industries: 'regulated_domains',
+  workforce_pressure:   'workforce_pressure',
+};
+
 async function getKeywordCloudHandler(req, res) {
   try {
     const max = Math.min(Number(req.query.max) || 40, 100);
     const industriesOnly = String(req.query.industries_only || '').toLowerCase() === 'true';
+    const modeRaw = String(req.query.mode || 'market_heat').toLowerCase().trim();
+    const mode = STRATEGIC_MODE_SORT[modeRaw] !== undefined ? modeRaw : 'market_heat';
 
     // eslint-disable-next-line global-require
     const { KeywordTrend } = require('../models');
@@ -338,10 +365,33 @@ async function getKeywordCloudHandler(req, res) {
     if (KeywordTrend) {
       try {
         let rows;
-        if (industriesOnly) {
+        // Resolve mode → sort + optional strategic tag filter. Mode
+        // 'market_heat' falls back to the legacy match_count ordering;
+        // every other mode sorts by the strategic axis. Tag filter
+        // restricts to a specific dictionary category (e.g. infrastructure).
+        const modeSort = STRATEGIC_MODE_SORT[mode];
+        const tagFilter = STRATEGIC_MODE_TAG_FILTER[mode] || null;
+        const strategicOrder = modeSort
+          ? [[modeSort[0], modeSort[1]], ['matchCount', 'DESC']]
+          : null;
+        const where = { matchCount: { [Op.gt]: 0 } };
+        if (industriesOnly) where.isIndustry = true;
+        if (tagFilter) {
+          // Postgres JSONB array contains the tag.
+          where.strategicTags = {
+            [Op.contains]: [tagFilter],
+          };
+        }
+
+        if (modeSort) {
+          // Strategic mode: rank purely by the chosen axis. No industry-
+          // quota padding — the axis itself reflects the right priority.
           rows = await KeywordTrend.findAll({
-            where: { matchCount: { [Op.gt]: 0 }, isIndustry: true },
-            order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
+            where, order: strategicOrder, limit: max,
+          });
+        } else if (industriesOnly) {
+          rows = await KeywordTrend.findAll({
+            where, order: [['matchCount', 'DESC'], ['totalMentions', 'DESC']],
             limit: max,
           });
         } else {
@@ -401,6 +451,20 @@ async function getKeywordCloudHandler(req, res) {
                 avg_age_days: data.avgAgeDays != null ? Number(data.avgAgeDays) : null,
                 is_industry: !!data.isIndustry,
                 channels,
+                // Strategic overlay (additive — defaults of 0 + 'unknown' /
+                // 'standard' when enrichment hasn't run yet).
+                strategic_score: Number(data.strategicScore) || 0,
+                commercialization_score: Number(data.commercializationScore) || 0,
+                procurement_score: Number(data.procurementScore) || 0,
+                modernization_score: Number(data.modernizationScore) || 0,
+                operational_pain_score: Number(data.operationalPainScore) || 0,
+                venture_score: Number(data.ventureScore) || 0,
+                research_velocity_score: Number(data.researchVelocityScore) || 0,
+                convergence_score: Number(data.convergenceScore) || 0,
+                strategic_tags: Array.isArray(data.strategicTags) ? data.strategicTags : [],
+                strategic_category: data.strategicCategory || null,
+                strategic_priority: data.strategicPriority || 'standard',
+                commercialization_stage: data.commercializationStage || 'unknown',
               };
             });
             return successResponse(res, {
@@ -408,6 +472,7 @@ async function getKeywordCloudHandler(req, res) {
               source: 'keyword_trends',
               last_computed_at: new Date(newest).toISOString(),
               industries_only: industriesOnly,
+              mode,
             });
           }
           logger.warn('intelligence.keywords.cloud: persisted snapshot stale, falling back', {
@@ -459,6 +524,85 @@ async function getDrillDownCloudHandler(req, res) {
 // POST /api/v1/oied/keywords/recompute — admin-only on-demand refresh of
 // the keyword_trends table. Mirrors the twice-daily cron job but lets
 // us refresh after content changes without waiting for the next slot.
+// Strategic Discovery — composite read across the 5 strategic surfaces
+// (active commercialization transitions / research-to-market crossover /
+// strongest convergence / rising operational pain / strongest
+// modernization). One endpoint = the StrategicDiscoveryPanel.
+async function getStrategicDiscoveryHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const svc = require('./commercializationTransition.service');
+    const perSectionLimit = Math.min(Number(req.query.perSectionLimit) || 10, 50);
+    const out = await svc.getDiscoveryDashboard({ perSectionLimit });
+    return successResponse(res, out);
+  } catch (e) {
+    logger.error('intelligence.strategic.discovery failed', { error: e.message });
+    return errorResponse(res, 'Failed to load strategic discovery: ' + e.message, 500);
+  }
+}
+
+// Single-keyword strategic detail — re-enriches one row at request time
+// (cheap) so the click handler can deep-link straight to a Deep Research
+// run with full strategic context.
+async function getStrategicKeywordDetailHandler(req, res) {
+  try {
+    const word = String(req.params.word || '').toLowerCase().trim();
+    if (!word) return errorResponse(res, 'word param required', 400);
+    // eslint-disable-next-line global-require
+    const { KeywordTrend } = require('../models');
+    const row = await KeywordTrend.findOne({ where: { word } });
+    if (!row) return errorResponse(res, 'keyword not found', 404);
+    const data = row.toJSON();
+    // eslint-disable-next-line global-require
+    const strategicIntel = require('./strategicKeywordIntelligence.service');
+    const enriched = strategicIntel.scoreKeyword({
+      word: data.word,
+      matchCount: data.matchCount,
+      toolCount: data.toolCount,
+      totalMentions: data.totalMentions,
+      channelCounts: data.channelCounts || {},
+      sentimentScore: data.sentimentScore,
+      avgAgeDays: data.avgAgeDays,
+    }, { maxMatchInCorpus: Math.max(1, data.matchCount || 1) });
+    return successResponse(res, {
+      ...enriched,
+      raw: {
+        match_count: data.matchCount,
+        tool_count: data.toolCount,
+        total_mentions: data.totalMentions,
+        channel_counts: data.channelCounts || {},
+        sentiment_score: data.sentimentScore,
+        sentiment_label: data.sentimentLabel,
+        avg_age_days: data.avgAgeDays,
+        is_industry: data.isIndustry,
+        last_computed_at: data.lastComputedAt,
+      },
+    });
+  } catch (e) {
+    logger.error('intelligence.strategic.keyword failed', { error: e.message });
+    return errorResponse(res, 'Failed to load strategic keyword detail: ' + e.message, 500);
+  }
+}
+
+// Strategic summary stats across the persisted snapshot — by priority,
+// stage, category. Used by the Mission Control header chip.
+async function getStrategicSummaryHandler(req, res) {
+  try {
+    // eslint-disable-next-line global-require
+    const { KeywordTrend } = require('../models');
+    const rows = await KeywordTrend.findAll({
+      where: { matchCount: { [Op.gt]: 0 } }, limit: 1000,
+    });
+    // eslint-disable-next-line global-require
+    const strategicIntel = require('./strategicKeywordIntelligence.service');
+    const enriched = strategicIntel.enrichKeywords(rows.map((r) => r.toJSON()));
+    return successResponse(res, strategicIntel.summarizeEnriched(enriched));
+  } catch (e) {
+    logger.error('intelligence.strategic.summary failed', { error: e.message });
+    return errorResponse(res, 'Failed to load strategic summary: ' + e.message, 500);
+  }
+}
+
 async function recomputeKeywordTrendsHandler(req, res) {
   try {
     // eslint-disable-next-line global-require
@@ -575,6 +719,12 @@ module.exports = {
   getRelatedToolsHandler,
   getDrillDownCloudHandler,
   recomputeKeywordTrendsHandler,
+  // Strategic Intelligence Overlay
+  getStrategicDiscoveryHandler,
+  getStrategicKeywordDetailHandler,
+  getStrategicSummaryHandler,
+  STRATEGIC_MODE_SORT,
+  STRATEGIC_MODE_TAG_FILTER,
   // Helpers (used by oied.controller list endpoints)
   attachContextToOpportunity,
   attachContextToBundle,

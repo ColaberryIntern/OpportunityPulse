@@ -25,6 +25,21 @@ module.exports = (sequelize) => {
     avgAgeDays:     { type: DataTypes.DECIMAL(4, 1), field: 'avg_age_days' },
     isIndustry:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_industry' },
     trendVelocity:  { type: DataTypes.DECIMAL(5, 2), field: 'trend_velocity' },
+    // Strategic Intelligence Overlay — additive (migration 20260517000002).
+    // Preserved 0-defaults keep the legacy descriptive cloud unchanged when
+    // the strategic enrichment hasn't run yet.
+    strategicScore:           { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'strategic_score' },
+    commercializationScore:   { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'commercialization_score' },
+    procurementScore:         { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'procurement_score' },
+    modernizationScore:       { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'modernization_score' },
+    operationalPainScore:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'operational_pain_score' },
+    ventureScore:             { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'venture_score' },
+    researchVelocityScore:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'research_velocity_score' },
+    convergenceScore:         { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'convergence_score' },
+    strategicTags:            { type: DataTypes.JSONB, allowNull: false, defaultValue: [], field: 'strategic_tags' },
+    strategicCategory:        { type: DataTypes.STRING(64), allowNull: true, field: 'strategic_category' },
+    strategicPriority:        { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'standard', field: 'strategic_priority' },
+    commercializationStage:   { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'unknown', field: 'commercialization_stage' },
     runId: {
       type: DataTypes.STRING(60),
       allowNull: false,
@@ -45,6 +60,9 @@ module.exports = (sequelize) => {
       { fields: ['is_industry'] },
       { fields: ['match_count'] },
       { fields: ['last_computed_at'] },
+      { fields: ['strategic_score'] },
+      { fields: ['commercialization_score'] },
+      { fields: ['strategic_priority'] },
     ],
   });
   return KeywordTrend;

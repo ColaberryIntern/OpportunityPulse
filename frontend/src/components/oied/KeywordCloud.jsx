@@ -8,10 +8,48 @@
 //   tilt  = age (most-recent = horizontal; older articles tilt more)
 //   click = navigate to /admin/opportunities/my?q=<word>
 //           cross-channel search (no channel filter — show every match)
+//
+// Strategic Intelligence Overlay (additive):
+//   - mode selector reorders the cloud by strategic axis
+//   - tooltip includes strategic + commercialization + procurement scores
+//   - click on a strategic-priority keyword offers "Run Deep Research"
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getKeywordCloud } from '../../services/oiedService';
+
+// Strategic modes — keep labels human-readable, values match backend
+// STRATEGIC_MODE_SORT keys exactly.
+const STRATEGIC_MODES = [
+  { value: 'market_heat',           label: 'Market Heat (frequency)' },
+  { value: 'strategic',             label: 'Strategic Composite' },
+  { value: 'procurement',           label: 'Procurement' },
+  { value: 'venture_discovery',     label: 'Venture Discovery' },
+  { value: 'operational_pain',      label: 'Operational Pain' },
+  { value: 'modernization',         label: 'Modernization' },
+  { value: 'ai_infrastructure',     label: 'AI Infrastructure' },
+  { value: 'emerging_research',     label: 'Emerging Research' },
+  { value: 'commercialization',     label: 'Commercialization' },
+  { value: 'regulated_industries',  label: 'Regulated Industries' },
+  { value: 'workforce_pressure',    label: 'Workforce Pressure' },
+  { value: 'convergence',           label: 'Cross-Channel Convergence' },
+];
+
+const PRIORITY_BADGE = {
+  critical: { bg: '#fef2f2', fg: '#991b1b', label: 'critical' },
+  high:     { bg: '#fff7ed', fg: '#9a3412', label: 'high' },
+  standard: { bg: '#f3f4f6', fg: '#374151', label: 'standard' },
+  low:      { bg: '#f9fafb', fg: '#6b7280', label: 'low' },
+};
+
+const STAGE_LABEL = {
+  unknown: 'unknown',
+  research_only: 'research-only',
+  early_signal: 'early signal',
+  commercializing: 'commercializing',
+  production_ready: 'production-ready',
+  mainstream: 'mainstream',
+};
 
 // v9.8: pure red→green gradient. Hue 0 (red) → 120 (green). No olive
 // midpoint. Gray for words with no sentiment-bearing source so users
@@ -69,21 +107,43 @@ export default function KeywordCloud() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [industriesOnly, setIndustriesOnly] = useState(false);
+  const [mode, setMode] = useState('market_heat');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const params = { max: 50 };
     if (industriesOnly) params.industries_only = true;
+    if (mode && mode !== 'market_heat') params.mode = mode;
     getKeywordCloud(params)
       .then((d) => { if (!cancelled) setData(d || { words: [] }); })
       .catch((e) => { if (!cancelled) setErr(e.message || 'Failed to load keyword cloud'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [industriesOnly]);
+  }, [industriesOnly, mode]);
 
   const words = data.words || [];
-  const maxCount = words.reduce((m, w) => Math.max(m, w.count || 0), 0);
+  // In strategic modes, the score-axis drives font size; in market_heat
+  // the legacy frequency count drives it. This is the key user-visible
+  // behavior change when switching modes.
+  function sizingValueFor(w) {
+    if (mode === 'market_heat') return w.count || 0;
+    if (mode === 'strategic' || mode === 'convergence' || mode === 'venture_discovery') {
+      return w.strategic_score || w.count || 0;
+    }
+    const m = {
+      procurement: 'procurement_score',
+      operational_pain: 'operational_pain_score',
+      modernization: 'modernization_score',
+      emerging_research: 'research_velocity_score',
+      commercialization: 'commercialization_score',
+      ai_infrastructure: 'strategic_score',
+      regulated_industries: 'strategic_score',
+      workforce_pressure: 'strategic_score',
+    };
+    return w[m[mode]] || w.count || 0;
+  }
+  const maxCount = words.reduce((m, w) => Math.max(m, sizingValueFor(w)), 0);
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5 mb-8">
@@ -91,7 +151,20 @@ export default function KeywordCloud() {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           🔭 What's hot — across every channel
         </h3>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-1 cursor-pointer">
+            Mode:
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              className="text-xs border border-gray-200 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-gray-100"
+              data-testid="keyword-cloud-mode-selector"
+            >
+              {STRATEGIC_MODES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-1 cursor-pointer">
             <input
               type="checkbox"
@@ -139,34 +212,71 @@ export default function KeywordCloud() {
           {words.map((w, i) => {
             const known = w.sentiment_known !== false && w.sentiment_label !== 'unknown';
             const color = colorForSentiment(w.sentiment_score, known);
-            const fontSize = countToFontSize(w.count, maxCount);
+            const fontSize = countToFontSize(sizingValueFor(w), maxCount);
             const tilt = ageToTilt(w.avg_age_days, i);
             const channelHint = ChannelAttributionTooltip({ channels: w.channels });
             const matchPart = w.match_count != null
               ? ` · ${w.match_count} opp matches${w.tool_count ? ` + ${w.tool_count} tools` : ''}`
               : '';
+            const tagsPart = Array.isArray(w.strategic_tags) && w.strategic_tags.length > 0
+              ? ` · tags: ${w.strategic_tags.slice(0, 4).join(', ')}`
+              : '';
+            const stratPart = (w.strategic_score != null && w.strategic_score > 0)
+              ? `\n[strategic ${w.strategic_score}/100 · ${w.strategic_priority || 'standard'}`
+                + ` · stage ${STAGE_LABEL[w.commercialization_stage] || w.commercialization_stage}`
+                + ` · proc ${w.procurement_score || 0} · pain ${w.operational_pain_score || 0}`
+                + ` · mod ${w.modernization_score || 0} · comm ${w.commercialization_score || 0}`
+                + ` · conv ${w.convergence_score || 0} · venture ${w.venture_score || 0}`
+                + ` · research ${w.research_velocity_score || 0}]`
+              : '';
             const tooltip = `"${w.word}" — ${w.count} mentions${matchPart}` +
               ` · age ${w.avg_age_days}d` +
               ` · sentiment ${w.sentiment_score} (${w.sentiment_label})` +
-              (channelHint ? ` · channels: ${channelHint}` : '');
+              (channelHint ? ` · channels: ${channelHint}` : '') +
+              tagsPart + stratPart;
             const label = w.display_word || w.word;
+            const priority = PRIORITY_BADGE[w.strategic_priority] || null;
+            const isElevated = w.strategic_priority === 'critical' || w.strategic_priority === 'high';
+            // When the user is in a strategic mode AND the word ranks high, the click goes to a Deep Research run
+            // seeded with the strategic context. Otherwise legacy click → My Opportunities search.
+            const deepResearchTarget = isElevated && mode !== 'market_heat'
+              ? `/admin/deep-research?seed=${encodeURIComponent(w.word)}`
+              + `&origin=keyword_cloud&mode=${encodeURIComponent(mode)}`
+              + `&tags=${encodeURIComponent((w.strategic_tags || []).join(','))}`
+              + `&stage=${encodeURIComponent(w.commercialization_stage || 'unknown')}`
+              + `&strategic_score=${w.strategic_score || 0}`
+              : null;
+            const linkTo = deepResearchTarget
+              || `/admin/opportunities/my?q=${encodeURIComponent(w.word)}`;
             return (
-              <Link
-                key={w.word}
-                to={`/admin/opportunities/my?q=${encodeURIComponent(w.word)}`}
-                title={tooltip}
-                className="inline-block hover:underline transition-all"
-                style={{
-                  color,
-                  fontSize: `${fontSize}px`,
-                  fontWeight: fontSize >= 24 ? 700 : 600,
-                  transform: `rotate(${tilt}deg)`,
-                  padding: '0 2px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </Link>
+              <span key={w.word} className="inline-flex items-baseline">
+                <Link
+                  to={linkTo}
+                  title={tooltip}
+                  className="inline-block hover:underline transition-all"
+                  style={{
+                    color,
+                    fontSize: `${fontSize}px`,
+                    fontWeight: fontSize >= 24 ? 700 : 600,
+                    transform: `rotate(${tilt}deg)`,
+                    padding: '0 2px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  data-strategic-priority={w.strategic_priority || 'standard'}
+                  data-strategic-score={w.strategic_score || 0}
+                >
+                  {label}
+                </Link>
+                {priority && (w.strategic_priority === 'critical' || w.strategic_priority === 'high') && (
+                  <span
+                    className="ml-1 align-baseline rounded px-1 py-px text-[9px] uppercase font-semibold"
+                    style={{ background: priority.bg, color: priority.fg }}
+                    title={`Strategic priority: ${priority.label}`}
+                  >
+                    {priority.label}
+                  </span>
+                )}
+              </span>
             );
           })}
         </div>

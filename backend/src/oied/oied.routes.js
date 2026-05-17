@@ -34,6 +34,10 @@ router.post(
   '/keywords/recompute',
   verifyToken, checkPermissions(ROLES.ADMIN), intel.recomputeKeywordTrendsHandler,
 );
+// Strategic Intelligence Overlay (additive — does not affect existing routes).
+router.get('/keywords/strategic/discovery', BRIDGE, intel.getStrategicDiscoveryHandler);
+router.get('/keywords/strategic/summary',   BRIDGE, intel.getStrategicSummaryHandler);
+router.get('/keywords/strategic/:word',     BRIDGE, intel.getStrategicKeywordDetailHandler);
 
 // ---- Research Intelligence (Phase 2-3) --------------------------------
 router.get('/research/search',                       BRIDGE, research.search);

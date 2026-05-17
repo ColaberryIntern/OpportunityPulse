@@ -198,6 +198,20 @@ export async function getKeywordCloud(params = {}) {
   return res.data?.data || { words: [], article_count: 0 };
 }
 
+// Strategic Intelligence Overlay
+export async function getStrategicDiscovery(params = {}) {
+  const res = await api.get(`${base}/keywords/strategic/discovery`, { params });
+  return res.data?.data || null;
+}
+export async function getStrategicSummary() {
+  const res = await api.get(`${base}/keywords/strategic/summary`);
+  return res.data?.data || null;
+}
+export async function getStrategicKeywordDetail(word) {
+  const res = await api.get(`${base}/keywords/strategic/${encodeURIComponent(word)}`);
+  return res.data?.data || null;
+}
+
 // ---- v9.6: Related AI tools for cross-channel keyword search -----------------
 export async function getRelatedTools(q, max = 10) {
   if (!q) return { tools: [], count: 0 };

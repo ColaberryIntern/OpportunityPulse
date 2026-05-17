@@ -17,6 +17,10 @@ const { Op } = require('sequelize');
 const logger = require('../logging/logger');
 const { Opportunity, AiTool, KeywordTrend } = require('../models');
 const keywordCloudSvc = require('./keywordCloud.service');
+// Strategic Intelligence Overlay — additive enrichment run AFTER the
+// existing aggregation. Preserves all legacy behavior; populates the new
+// strategic_* columns added in migration 20260517000002.
+const strategicIntel = require('./strategicKeywordIntelligence.service');
 
 const MIN_MATCH_COUNT = 3; // word must match >= 3 opp rows OR >= 1 tool
 const MAX_CANDIDATES = 200; // cap candidates pre-validation; the real
@@ -159,6 +163,38 @@ async function runKeywordTrendCompute({
     });
   }
 
+  // 2b. Strategic Intelligence Overlay — additive enrichment over the
+  // already-aggregated persisted rows. Computes strategic_score +
+  // per-axis sub-scores + tags + category + priority + commercialization
+  // stage. Soft-fails: if enrichment errors, the legacy fields still
+  // persist so the descriptive cloud keeps working.
+  try {
+    const enriched = strategicIntel.enrichKeywords(persisted);
+    for (let i = 0; i < persisted.length; i += 1) {
+      const e = enriched[i];
+      if (!e) continue;
+      persisted[i].strategicScore = e.strategic_score;
+      persisted[i].commercializationScore = e.sub_scores.commercialization_score;
+      persisted[i].procurementScore = e.sub_scores.procurement_score;
+      persisted[i].modernizationScore = e.sub_scores.modernization_score;
+      persisted[i].operationalPainScore = e.sub_scores.operational_pain_score;
+      persisted[i].ventureScore = e.sub_scores.venture_score;
+      persisted[i].researchVelocityScore = e.sub_scores.research_velocity_score;
+      persisted[i].convergenceScore = e.sub_scores.convergence_score;
+      persisted[i].strategicTags = e.strategic_tags;
+      persisted[i].strategicCategory = e.strategic_category;
+      persisted[i].strategicPriority = e.strategic_priority;
+      persisted[i].commercializationStage = e.commercialization_stage;
+    }
+    logger.info('keywordTrendCompute: strategic enrichment complete', {
+      runId, enriched_count: enriched.length,
+    });
+  } catch (e) {
+    logger.warn('keywordTrendCompute: strategic enrichment failed (continuing without)', {
+      runId, error: e.message,
+    });
+  }
+
   // 3. Atomic-ish replace: bulkCreate with updateOnDuplicate, then mark
   //    rows from prior runs as zero-match so the read path filters them.
   if (persisted.length > 0) {
@@ -167,6 +203,12 @@ async function runKeywordTrendCompute({
         'displayWord', 'matchCount', 'toolCount', 'totalMentions',
         'channelCounts', 'sentimentScore', 'sentimentLabel', 'avgAgeDays',
         'isIndustry', 'runId', 'lastComputedAt', 'updatedAt',
+        // Strategic overlay columns (additive — preserved when null).
+        'strategicScore', 'commercializationScore', 'procurementScore',
+        'modernizationScore', 'operationalPainScore', 'ventureScore',
+        'researchVelocityScore', 'convergenceScore',
+        'strategicTags', 'strategicCategory', 'strategicPriority',
+        'commercializationStage',
       ],
     });
   }
