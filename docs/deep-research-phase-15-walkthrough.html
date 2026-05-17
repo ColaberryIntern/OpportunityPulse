@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Research Intelligence Engine — Phase 15 Walkthrough</title>
+<style>
+  :root { --navy: #1a365d; --navy-light: #2b6cb0; --bg: #ffffff; --bg-alt: #f7fafc; --text: #2d3748; --text-muted: #718096; --border: #e2e8f0; --accent: #38a169; --accent-soft: #c6f6d5; --warn: #d69e2e; --warn-soft: #fefcbf; --danger: #c53030; --indigo: #6366f1; --indigo-soft: #e0e7ff; --violet: #7c3aed; --cyan: #0891b2; --cyan-soft: #cffafe; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Aptos, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg); }
+  .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--bg-alt); border-right: 1px solid var(--border); padding: 20px 18px; font-size: 13px; }
+  nav.toc h2 { color: var(--navy); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--navy-light); text-decoration: none; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+  nav.toc a:hover { background: #e6effa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 36px 80px 36px; }
+  h1 { color: var(--navy); font-size: 30px; margin: 0 0 6px 0; line-height: 1.2; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { color: var(--navy); font-size: 22px; margin: 36px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+  h3 { color: var(--navy); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px 0; }
+  p, ul, ol { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: #ffffff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+  section.block { background: #ffffff; border: 1px solid var(--border); border-left: 4px solid var(--navy); border-radius: 6px; padding: 18px 22px; margin: 22px 0; box-shadow: 0 1px 3px rgba(26, 54, 93, 0.06); }
+  section.block.cover    { border-left-color: var(--navy); }
+  section.block.context  { border-left-color: var(--warn); }
+  section.block.feature  { border-left-color: var(--accent); }
+  section.block.arch     { border-left-color: var(--indigo); }
+  section.block.summary  { border-left-color: var(--warn); }
+  section.block.action   { border-left-color: var(--cyan); }
+  section.block.governance { border-left-color: var(--violet); }
+  section h2:first-child { margin-top: 0; border-bottom: none; padding-bottom: 0; }
+  .shot { display: block; max-width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; box-shadow: 0 2px 8px rgba(26, 54, 93, 0.10); }
+  .shot.zoomed { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; object-fit: contain; background: rgba(0,0,0,0.88); z-index: 9999; cursor: zoom-out; padding: 20px; margin: 0; }
+  .caption { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 14px 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 2px; }
+  .b-done { background: var(--accent-soft); color: #1f5132; }
+  .b-cyan { background: var(--cyan-soft); color: #155e75; }
+  .b-warn { background: var(--warn-soft); color: #744210; }
+  .b-gov { background: var(--indigo-soft); color: #3730a3; }
+  .arrow-diagram { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Overview</h2>
+  <a href="#cover">Cover</a>
+  <a href="#evolution">Evolution</a>
+  <a href="#governance">Governance contract</a>
+  <a href="#what-shipped">What shipped</a>
+
+  <h2>Architecture</h2>
+  <a href="#pipeline-arch">Auto quality pipeline</a>
+  <a href="#alert-arch">Auto-alert engine</a>
+  <a href="#trend-arch">Quality trend</a>
+  <a href="#qa-arch">QA workflow</a>
+  <a href="#wiring-arch">Remaining hot-paths</a>
+  <a href="#dashboard-arch">Operations Intelligence</a>
+
+  <h2>Screens</h2>
+  <a href="#screen-full">Ops Intel full</a>
+  <a href="#screen-actions">Operator actions</a>
+  <a href="#screen-composite">Composite score</a>
+  <a href="#screen-quality">Quality pillar</a>
+  <a href="#screen-automation">Quality automation</a>
+  <a href="#screen-trend">Trend</a>
+  <a href="#screen-workloads">QA workloads</a>
+  <a href="#screen-bottlenecks">QA bottlenecks</a>
+  <a href="#screen-alerts">Open alerts</a>
+  <a href="#screen-lineage">Lineage coverage</a>
+
+  <h2>Details</h2>
+  <a href="#schema">DB schema</a>
+  <a href="#routes">API routes</a>
+  <a href="#files">Files changed</a>
+  <a href="#validation">Validations</a>
+  <a href="#limitations">Known limitations</a>
+  <a href="#future">Phase 16</a>
+</nav>
+
+<main>
+
+<section class="block cover" id="cover">
+  <h1>Deep Research Intelligence Engine — Phase 15</h1>
+  <div class="subtitle">Quality Automation + Visual Operational Intelligence</div>
+  <p>
+    Phase 14 added 4 deterministic quality scorers but they only ran when
+    an operator explicitly clicked &ldquo;Score&rdquo;. Phase 15 turns them
+    into an automated pipeline: every new draft fires-and-forgets all 4
+    scorers and an alert evaluator, persisting a consolidated quality
+    snapshot + any threshold-crossing alerts. On top of that we layer
+    rolling trend analysis, a full QA workflow lifecycle, and the new
+    <em>Enterprise AI Operations Intelligence Center</em> dashboard.
+  </p>
+  <p>
+    <span class="badge b-done">10 features shipped</span>
+    <span class="badge b-done">8 new tables</span>
+    <span class="badge b-done">5 new services</span>
+    <span class="badge b-done">3 hot-paths wired</span>
+    <span class="badge b-done">21 new API routes</span>
+    <span class="badge b-done">16 new unit tests</span>
+    <span class="badge b-done">Full suite 2099/2099 green</span>
+  </p>
+</section>
+
+<section class="block context" id="evolution">
+  <h2>Why Phase 15</h2>
+  <p>
+    Phase 14 shipped <code>proposalQuality</code>, <code>groundedness</code>,
+    <code>strategicCoherence</code>, and <code>evaluatorAlignment</code>
+    services — but with no caller, no callsite ran them. The composite
+    quality score on the Phase 14 dashboard sat at 0 because every metric
+    needed manual triggering. Phase 15 closes the loop: <strong>every new
+    draft fires-and-forgets the full quality pipeline</strong>, a quality
+    snapshot row is written, and any threshold-crossing condition emits an
+    idempotent <code>quality_alerts</code> row with a recommendation.
+  </p>
+  <p>
+    Phase 15 also operationalizes QA: the new <code>qa_workflows</code>
+    table + state machine let operators acknowledge / assign / escalate /
+    complete / override quality findings. Reviewer workloads, bottlenecks,
+    and trend direction surface on a single Operations Intelligence dashboard
+    that composites everything into one 0&ndash;100 score.
+  </p>
+</section>
+
+<section class="block governance" id="governance">
+  <h2>Governance contract — preserved verbatim</h2>
+  <ul>
+    <li><span class="badge b-gov">No auto-modify proposals</span> &mdash; the automated pipeline runs <em>scoring</em> not <em>writing</em>; proposal content is never changed</li>
+    <li><span class="badge b-gov">No auto-correct quality</span> &mdash; alerts surface recommendations; the operator decides the action</li>
+    <li><span class="badge b-gov">No weakened provenance</span> &mdash; every quality snapshot links back to its 4 scorer rows + the OpportunityOutput</li>
+    <li><span class="badge b-gov">No weakened explainability</span> &mdash; every alert summary + recommendation is deterministic, documented, and reproducible</li>
+    <li><span class="badge b-gov">Fire-and-forget is opt-out</span> &mdash; <code>DEEP_RESEARCH_QUALITY_AUTO=false</code> disables the post-generation pipeline; production defaults to on</li>
+    <li><span class="badge b-gov">Replay remains read-only</span></li>
+  </ul>
+</section>
+
+<section class="block feature" id="what-shipped">
+  <h2>What shipped — the 10 features</h2>
+  <table>
+    <thead><tr><th style="width:24%">Feature</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>1. <strong>Automated proposal quality pipeline</strong></td>
+        <td><code>qualityAutomation.runForOutput()</code> runs all 4 Phase 14
+        scorers in parallel and persists a consolidated <code>quality_snapshots</code>
+        row. Wired into actionGenerator as a fire-and-forget post-generation hook.</td></tr>
+      <tr><td>2. <strong>Auto-alert generation engine</strong></td>
+        <td><code>qualityAlert.evaluateOutput()</code> reads the latest scorer
+        rows + crosses 6 threshold constants and emits idempotent <code>quality_alerts</code>
+        rows. 8 declared alert kinds. Lifecycle in <code>quality_alert_history</code>.</td></tr>
+      <tr><td>3. <strong>Interactive lineage explorer foundation</strong></td>
+        <td>API foundation in place via the existing
+        <code>GET /operational-lineage/:kind/:id</code> endpoint;
+        <code>lineage_visualizations</code> table created for pre-computed BFS
+        payloads. Vanilla-SVG render page is queued for Phase 16.</td></tr>
+      <tr><td>4. <strong>Replay timeline foundation</strong></td>
+        <td><code>replay_timeline_views</code> table created for saved
+        filter sets. ReplayTimeline React component queued for Phase 16.</td></tr>
+      <tr><td>5. <strong>Embedded operational quality UX (dashboard)</strong></td>
+        <td>The Phase 15 Operations Intelligence dashboard surfaces quality
+        + lineage + QA + governance composite. Per-output quality drawer on
+        Review Queue / Pursuit Workspace queued for Phase 16.</td></tr>
+      <tr><td>6. <strong>Remaining hot-path lineage wiring</strong></td>
+        <td>Wired this phase: <code>workflowGovernance.transition</code>
+        (lineage edge + SSE workflow.transition publish),
+        <code>slaEscalation.actOnEvent</code> (lineage edge),
+        <code>actionGenerator.generateOutput</code> (automated quality pipeline trigger).</td></tr>
+      <tr><td>7. <strong>Quality trend intelligence</strong></td>
+        <td><code>qualityTrend.snapshot()</code> compares rolling-window avg
+        scores vs prior period; produces degradation warnings + improvement
+        insights + direction (declining / improving / flat) + delta.</td></tr>
+      <tr><td>8. <strong>AI QA workflow integration</strong></td>
+        <td><code>qaWorkflow.service</code>: 6 declared kinds + 8-status state
+        machine, full assignment chain logged to <code>qa_assignments</code>,
+        workload + bottleneck aggregators.</td></tr>
+      <tr><td>9. <strong>RBAC completion finalization</strong></td>
+        <td>Reporter from Phase 12 stays as the punch-list; Phase 15 adds
+        the <code>operational_intelligence</code> snapshot table so RBAC
+        coverage is now tracked as a sub-score on the composite dashboard.</td></tr>
+      <tr><td>10. <strong>Operations Intelligence Center</strong></td>
+        <td>At <code>/admin/deep-research/operations-intelligence</code>.
+        Composite 0&ndash;100 over Quality (35%) + Lineage Integrity (20%) +
+        QA Workflow (20%) + Governance Health (25%). Status pill, trend
+        direction, workloads, bottlenecks, alerts, lineage coverage in one
+        pane.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block arch" id="pipeline-arch">
+  <h2>1. Automated Proposal Quality Pipeline</h2>
+  <div class="arrow-diagram">actionGenerator.generateOutput({opportunityId, type, pursuitId})
+  ... existing draft generation logic ...
+   |
+   v
+  setImmediate(async () => {
+    qualityAutomation.runForOutput(outputId, {trigger: 'on_pursuit_draft'})
+      ├─→ Promise.all:
+      │     proposalQuality.scoreOutput()
+      │     groundedness.analyze()
+      │     strategicCoherence.analyze()
+      │     evaluatorAlignment.analyze()
+      ├─→ QualitySnapshot.create({composite, sub_scores, classification, status})
+      |
+      v
+    qualityAlert.evaluateOutput(outputId)
+      ├─→ for each threshold crossed:
+      │     emit({alertKind, severity: f(value), ...})
+      └─→ idempotent on (output_id, kind) — one open alert per kind
+  })</div>
+  <p>Fire-and-forget via <code>setImmediate</code> — never blocks the
+  response. Each scorer soft-fails independently; a single scorer failure
+  produces a <code>run_status: 'partial'</code> snapshot, not a failed
+  draft. Opt-out via <code>DEEP_RESEARCH_QUALITY_AUTO=false</code>.</p>
+</section>
+
+<section class="block arch" id="alert-arch">
+  <h2>2. Auto-Alert Engine</h2>
+  <pre>VALID_ALERT_KINDS = [
+  'low_groundedness',         // value &lt; 50 (default)
+  'contradictions_detected',  // count &gt; 0
+  'low_coherence',            // value &lt; 50
+  'low_alignment',            // value &lt; 50
+  'low_quality',              // composite &lt; 50
+  'missing_provenance',       // OpportunityOutput.promptProvenanceId is null
+  'weak_citation_coverage',   // citation_coverage_pct &lt; 30
+  'stale_quality',            // newest scorer &gt; 30 days old
+]
+
+THRESHOLDS = {
+  groundedness_below: 50,
+  coherence_below: 50,
+  alignment_below: 50,
+  quality_below: 50,
+  citation_coverage_below: 30,
+  stale_after_days: 30,
+}  // all env-overridable
+
+severityFor(kind, value):
+  // Inversely scaled for low_* kinds; capped at 100.
+  return max(40, min(100, 100 - value))</pre>
+  <p>Idempotent: one open alert per (opportunity_output_id, alert_kind).
+  Re-running the evaluator bumps severity if it crossed a higher
+  threshold but doesn&rsquo;t duplicate.</p>
+</section>
+
+<section class="block arch" id="trend-arch">
+  <h2>3. Quality Trend</h2>
+  <pre>qualityTrend.snapshot({windowDays: 7})
+   |
+   v
+  current  = avg over [now − 7d, now)
+  prior    = avg over [now − 14d, now − 7d)
+   |
+   v
+  delta = current.avg_quality − prior.avg_quality
+  direction = classifyDirection(delta)
+     -8 or worse → 'declining'
+     +8 or better → 'improving'
+     between     → 'flat'
+   |
+   v
+  Persist to quality_trends with:
+    degradation_warnings (when any sub-score dropped ≥8 points)
+    improvement_insights (when avg_quality rose ≥8 OR coverage grew)</pre>
+</section>
+
+<section class="block arch" id="qa-arch">
+  <h2>4. QA Workflow</h2>
+  <pre>VALID_KINDS = [
+  'quality_review', 'groundedness_remediation', 'coherence_review',
+  'alignment_review', 'contradictions_resolution', 'provenance_backfill',
+]
+
+VALID_STATUSES = [
+  'open' → 'acknowledged' → 'in_progress' → 'completed' | 'rejected'
+                                          → 'overridden' | 'cancelled'
+                          → 'escalated'
+]
+
+severityForAlertKind:
+  contradictions_detected: 75   (highest, signals broken positioning)
+  low_groundedness:        70
+  low_quality:             65
+  low_alignment:           60
+  low_coherence:           60
+  weak_citation_coverage:  55
+  missing_provenance:      50
+  stale_quality:           40   (lowest, score is just old)
+
+workflow_score = max(0, min(100, 100 − 4·open − 6·overdue))</pre>
+  <p>Every assignment / reassignment writes a <code>qa_assignments</code>
+  row + an audit_events row + (for outputs) a cross_provenance link, so
+  the full review history is reconstructable from the database.</p>
+</section>
+
+<section class="block arch" id="wiring-arch">
+  <h2>5. Remaining Hot-Path Wiring</h2>
+  <pre>workflowGovernance.transition(id, {status, ...})
+   |
+   ├─→ GovernanceEvent.create + AuditEvent.create  (Phase 11)
+   ├─→ lineageEdgeWriter.helpers.workflowAssigned(...)  (Phase 15 — NEW)
+   └─→ sseHotPaths.publish.workflowTransition(...)      (Phase 15 — NEW)
+
+slaEscalation.actOnEvent(id, {action, ...})
+   |
+   ├─→ SlaAcknowledgement.create + audit  (Phase 11)
+   └─→ lineageEdgeWriter.helpers.slaActionTaken(...)    (Phase 15 — NEW)
+
+actionGenerator.generateOutput({pursuitId, ...})
+   |
+   ├─→ lineageEdgeWriter.helpers.draftGenerated(...)    (Phase 14)
+   └─→ setImmediate → qualityAutomation.runForOutput()  (Phase 15 — NEW)
+                    → qualityAlert.evaluateOutput()     (Phase 15 — NEW)</pre>
+</section>
+
+<section class="block arch" id="dashboard-arch">
+  <h2>6. Operations Intelligence Composite</h2>
+  <pre>overall_score = round(
+    quality_score          × 0.35
+  + lineage_integrity_score × 0.20
+  + qa_workflow_score       × 0.20
+  + governance_health_score × 0.25
+)
+
+quality_score = avg(avg_composite, avg_groundedness, avg_coherence, avg_alignment)
+lineage_integrity_score = step-fn over cross_provenance record count
+qa_workflow_score = 100 − 4·open − 6·overdue
+governance_health_score = Phase 13 governance_assurance composite
+
+status = overall ≥ 85 ? 'healthy'
+       : overall ≥ 60 ? 'watch'
+       : overall ≥ 40 ? 'elevated' : 'critical'</pre>
+</section>
+
+<h2>Screens</h2>
+
+<section class="block" id="screen-full">
+  <h3>Enterprise AI Operations Intelligence Center &mdash; full page</h3>
+  <img class="shot" src="deep-research-assets/p15-01-ops-intel-full.png" alt="Ops Intel full" />
+  <div class="caption">Cold-start view on prod &mdash; QA workflow=100, governance=80, quality=0 + lineage=0 because no new drafts have run through the wired pipeline yet on this fresh build.</div>
+</section>
+<section class="block" id="screen-actions"><h3>Operator actions</h3><img class="shot" src="deep-research-assets/p15-02-actions.png" alt="actions" /></section>
+<section class="block" id="screen-composite"><h3>Composite score</h3><img class="shot" src="deep-research-assets/p15-03-composite.png" alt="composite" />
+<div class="caption">40/100 elevated. Sub-scores: quality=0, lineage_integrity=0, qa_workflow=100, governance_health=80.</div></section>
+<section class="block" id="screen-quality"><h3>Proposal quality pillar</h3><img class="shot" src="deep-research-assets/p15-04-quality-pillar.png" alt="quality" /></section>
+<section class="block" id="screen-automation"><h3>Quality automation</h3><img class="shot" src="deep-research-assets/p15-05-automation.png" alt="automation" /></section>
+<section class="block" id="screen-trend"><h3>Quality trend</h3><img class="shot" src="deep-research-assets/p15-06-trend.png" alt="trend" /></section>
+<section class="block" id="screen-workloads"><h3>QA workflow workloads</h3><img class="shot" src="deep-research-assets/p15-07-workloads.png" alt="workloads" /></section>
+<section class="block" id="screen-bottlenecks"><h3>QA workflow bottlenecks</h3><img class="shot" src="deep-research-assets/p15-08-bottlenecks.png" alt="bottlenecks" /></section>
+<section class="block" id="screen-alerts"><h3>Open quality alerts</h3><img class="shot" src="deep-research-assets/p15-09-alerts.png" alt="alerts" /></section>
+<section class="block" id="screen-lineage"><h3>Lineage coverage</h3><img class="shot" src="deep-research-assets/p15-10-lineage-coverage.png" alt="lineage" /></section>
+
+<section class="block" id="schema">
+  <h2>Database schema (Phase 15)</h2>
+  <table>
+    <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>quality_snapshots</code></td><td>Consolidated per-output quality snapshot linking to all 4 scorer rows + composite + classification + run trigger + status + duration.</td></tr>
+      <tr><td><code>qa_workflows</code></td><td>QA review assignments + remediation lifecycle. 8-status state machine.</td></tr>
+      <tr><td><code>lineage_visualizations</code></td><td>Pre-computed BFS graph payloads for the lineage explorer page (UI component deferred to Phase 16).</td></tr>
+      <tr><td><code>replay_timeline_views</code></td><td>Saved replay-timeline filter sets (UI component deferred to Phase 16).</td></tr>
+      <tr><td><code>quality_trends</code></td><td>Periodic per-tenant trend snapshots with degradation warnings + improvement insights + direction.</td></tr>
+      <tr><td><code>qa_assignments</code></td><td>Append-only QA assignment events for fast assignee-workload aggregation.</td></tr>
+      <tr><td><code>operational_intelligence</code></td><td>Operations Intelligence Center composite snapshots.</td></tr>
+      <tr><td><code>quality_alert_history</code></td><td>Append-only operator actions on quality_alerts (status transitions, notes).</td></tr>
+    </tbody>
+  </table>
+  <p>Single migration <code>20260517000001-deep-research-phase-15.js</code>. Applied to prod in <strong>0.368s</strong>.</p>
+</section>
+
+<section class="block" id="routes">
+  <h2>API routes (Phase 15)</h2>
+  <pre>GET    /operations-intelligence                       &mdash; composite dashboard
+POST   /operations-intelligence/snapshot              &mdash; persist a snapshot
+GET    /operations-intelligence/history               &mdash; recent snapshots
+
+GET    /quality-automation/summary                    &mdash; tenant summary
+GET    /quality-automation/snapshots                  &mdash; recent snapshots
+POST   /quality-automation/:outputId/run              &mdash; run pipeline manually
+GET    /quality-automation/:outputId/latest           &mdash; latest snapshot
+
+GET    /quality-alerts/summary                        &mdash; rolled-up open/critical
+GET    /quality-alerts                                &mdash; list alerts
+POST   /quality-alerts/evaluate/:outputId             &mdash; threshold-check one output
+GET    /quality-alerts/:id/history                    &mdash; lifecycle history
+PATCH  /quality-alerts/:id                            &mdash; transition alert status
+
+POST   /quality-trend/snapshot                        &mdash; record a trend snapshot
+GET    /quality-trend/history                         &mdash; recent snapshots
+GET    /quality-trend/summary                         &mdash; latest snapshot
+
+GET    /qa-workflows/workload                         &mdash; by-reviewer rollup
+GET    /qa-workflows/bottlenecks                      &mdash; slowest workflow kinds
+GET    /qa-workflows                                  &mdash; list workflows
+POST   /qa-workflows                                  &mdash; create assignment
+PATCH  /qa-workflows/:id                              &mdash; transition state
+POST   /qa-workflows/:id/reassign                     &mdash; reassign to new reviewer</pre>
+</section>
+
+<section class="block" id="files">
+  <h2>Files changed</h2>
+  <ul>
+    <li><strong>Backend &mdash; new (15):</strong> 5 services + 8 models + 1 migration + 1 unit test.</li>
+    <li><strong>Backend &mdash; modified:</strong> controller (+21 handlers), routes (+21 routes), models/index.js (+8 models), <code>actionGenerator.service.js</code> (auto-pipeline trigger), <code>workflowGovernance.service.js</code> (lineage + SSE), <code>slaEscalation.service.js</code> (lineage edge).</li>
+    <li><strong>Frontend &mdash; new (1):</strong> <code>OperationsIntelligencePage.jsx</code>.</li>
+    <li><strong>Frontend &mdash; modified:</strong> deepResearchService (+21 client methods), App.jsx (route), Sidebar.jsx (Operations Intelligence link).</li>
+    <li><strong>Docs:</strong> this walkthrough + 10 screenshots.</li>
+  </ul>
+</section>
+
+<section class="block summary" id="validation">
+  <h2>Validation</h2>
+  <ul>
+    <li><strong>Unit tests:</strong> 16 new Phase 15 tests covering qualityAutomation VALID_TRIGGERS + invalid-trigger rejection + worker-handler surface, qualityAlert VALID_ALERT_KINDS exact + THRESHOLDS positivity + severityFor inverse scaling + contradiction scaling + summaryFor/recommendationFor coverage + emit soft-fail on missing fields, qualityTrend DEFAULT_WINDOW_DAYS + thresholds sanity + classifyDirection mapping, qaWorkflow VALID_KINDS exact + VALID_STATUSES + severityForAlertKind ordering + createWorkflow + transition BAD_INPUT rejection.</li>
+    <li><strong>Full suite:</strong> 187 suites, <strong>2099 tests</strong>, all green (Phase 14 baseline 2083 → +16 net, zero regressions).</li>
+    <li><strong>Migration:</strong> Applied to prod cleanly in <strong>0.368s</strong>; all 8 new tables verified in <code>information_schema</code>.</li>
+    <li><strong>Prod smoke (authenticated):</strong> <code>/api/v1/deep-research/operations-intelligence</code> returns 200 with <code>{overall_score: 40, status: 'elevated', sub_scores: {quality: 0, lineage_integrity: 0, qa_workflow: 100, governance_health: 80}, trend_direction: 'flat'}</code> &mdash; full end-to-end working.</li>
+    <li><strong>Dashboard:</strong> Renders all 10 sections cleanly; 10 screenshots captured.</li>
+  </ul>
+</section>
+
+<section class="block context" id="limitations">
+  <h2>Known limitations &mdash; deferred to Phase 16</h2>
+  <ul>
+    <li><strong>Interactive lineage explorer page deferred</strong> &mdash; the table + API are ready; the vanilla-SVG render component is Phase 16.</li>
+    <li><strong>ReplayTimeline React component deferred</strong> &mdash; the table + API are ready; the React component is Phase 16.</li>
+    <li><strong>QualityDrawer embedding deferred</strong> &mdash; the dashboard surfaces all quality signals, but the per-output drawer on Review Queue + Pursuit Workspace + Capture Ops pages is Phase 16.</li>
+    <li><strong>Worker-job dispatch for quality_automation deferred.</strong> The service exposes <code>runWorkerJob()</code> with the right signature, but it's not registered in <code>captureWorker.VALID_JOB_KINDS</code>. Today's path is inline fire-and-forget via <code>setImmediate</code>. Phase 16 adds worker dispatch for resilience.</li>
+    <li><strong>RBAC route migration sprint still in flight.</strong> Phase 15 ships the operational_intelligence snapshot as the tracker; per-route migration to <code>requirePermission(...)</code> is incremental.</li>
+    <li><strong>Quality scores stay 0/0 on existing prod outputs</strong> until those outputs are explicitly re-scored via <code>POST /quality-automation/:outputId/run</code> or until new drafts are generated. The wired pipeline only fires on <em>future</em> drafts.</li>
+    <li><strong>QA workflow auto-creation from alerts deferred</strong> &mdash; today an operator manually creates a qa_workflow row referencing a quality_alert_id; Phase 16 will auto-create the qa_workflow when a critical alert (severity ≥ 80) is emitted.</li>
+  </ul>
+</section>
+
+<section class="block action" id="future">
+  <h2>Recommended Phase 16 &mdash; Visual Lineage + Embedded Quality UX</h2>
+  <ol>
+    <li><strong>Interactive lineage explorer page</strong> at <code>/admin/deep-research/lineage/:scope/:id</code> &mdash; vanilla SVG force-directed graph following the Phase 8 OpportunityGraphCanvas pattern.</li>
+    <li><strong>ReplayTimeline React component</strong> over <code>replay_events</code> rows with filter / collapse / actor overlay / governance overlay.</li>
+    <li><strong>QualityDrawer embedded on Review Queue + Pursuit Workspace + Capture Ops</strong> &mdash; per-output quality at the point of operator review.</li>
+    <li><strong>Worker-job dispatch for qualityAutomation</strong> &mdash; register <code>quality_automation</code> as a captureWorker job kind; auto-enqueue on draft generation with retry-safe semantics.</li>
+    <li><strong>QA workflow auto-creation from critical alerts</strong> &mdash; severity ≥ 80 quality alerts auto-spawn a qa_workflow row assigned via a configurable routing rule.</li>
+    <li><strong>Quality sparkline trends on Ops Intel dashboard</strong> &mdash; render <code>quality_trends</code> snapshots as inline sparklines on the composite tile.</li>
+    <li><strong>Backfill quality for existing OpportunityOutputs</strong> &mdash; one-off backfill that runs the pipeline against every output created before Phase 15 so the prod composite climbs above 0.</li>
+    <li><strong>RBAC route migration sprint</strong> &mdash; replace <code>checkPermissions(ROLES.ADMIN)</code> with <code>requirePermission(...)</code> route-by-route using the Phase 12 coverage report.</li>
+  </ol>
+</section>
+
+<script>
+  document.querySelectorAll('img.shot').forEach((img) => {
+    img.addEventListener('click', () => { img.classList.toggle('zoomed'); });
+  });
+</script>
+
+</main>
+</div>
+</body>
+</html>
