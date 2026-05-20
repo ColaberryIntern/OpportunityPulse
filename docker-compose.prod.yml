@@ -79,6 +79,9 @@ services:
       BONFIRE_SCRAPER_HEADLESS: ${BONFIRE_SCRAPER_HEADLESS:-true}
       BONFIRE_SCRAPER_USERNAME: ${BONFIRE_SCRAPER_USERNAME:-}
       BONFIRE_SCRAPER_PASSWORD: ${BONFIRE_SCRAPER_PASSWORD:-}
+      # Multi-account JSON; falls back to USERNAME/PASSWORD above when empty.
+      # Example: [{"label":"que","username":"u1","password":"p1"},{"label":"colaberry","username":"u2","password":"p2"}]
+      BONFIRE_SCRAPER_ACCOUNTS: ${BONFIRE_SCRAPER_ACCOUNTS:-}
       BONFIRE_SCRAPER_PHASE: ${BONFIRE_SCRAPER_PHASE:-C}
       # Empty default = iterate the full vendor-network result (all ~92 agencies).
       # To restrict to a subset, set BONFIRE_SCRAPER_AGENCY_ALLOWLIST=sub1,sub2 in .env.prod.
