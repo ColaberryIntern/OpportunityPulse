@@ -1,5 +1,17 @@
 // Phase A/B/C orchestration. Pure-ish: takes a context and a set of "deps"
 // (parsers + service) so tests can mock them without launching a browser.
+//
+// Multi-account: when more than one account is configured via
+// BONFIRE_SCRAPER_ACCOUNTS, we run an independent (browser, context) per
+// account for the dashboard + network parse — that way AI-recommended cards
+// (which are PER VENDOR ACCOUNT in Bonfire) get pulled from every account.
+// We then build a UNION of unique agency subdomains across accounts and
+// iterate each unique subdomain trying every account's authenticated session
+// in turn. Bonfire opportunities can be invitation-only (private), so the
+// same agency portal can show different open opps to different vendors —
+// iterating all accounts surfaces those. The `external_id` upsert key
+// (`bonfire:agency:<sub>:<ref>`) is account-agnostic, so cross-account
+// duplicates dedup naturally at the DB layer.
 
 const logger = require('../../logging/logger');
 const service = require('../bonfire.service');
@@ -7,7 +19,7 @@ const { syncBonfireToOpportunities } = require('../bonfireSync.service');
 const models = require('../../models');
 const { getScraperConfig } = require('./config');
 const { ensureLoggedIn, openAgencyPortal } = require('./session');
-const { jitter } = require('./browser');
+const browserMod = require('./browser');
 const vendorDashboard = require('./pages/vendorDashboard');
 const networkList = require('./pages/networkList');
 const agencyOpportunities = require('./pages/agencyOpportunities');
@@ -42,6 +54,24 @@ function sortAndShuffle(agencies, shuffle) {
     out.push(...(shuffle ? shuffleCopy(group) : group));
   }
   return out;
+}
+
+// Union agencies across accounts by subdomain. The first observation wins
+// for the `name` / `region` fields — accounts that see the same agency under
+// slightly different display strings (rare but possible) reconcile to the
+// first-seen labels. Logs deduped count for observability.
+function unionAgenciesAcrossAccounts(perAccountAgencies) {
+  const seen = new Map();
+  let totalSeen = 0;
+  for (const list of perAccountAgencies) {
+    for (const a of list) {
+      totalSeen += 1;
+      const sub = a.subdomain;
+      if (!sub) continue;
+      if (!seen.has(sub)) seen.set(sub, a);
+    }
+  }
+  return { agencies: [...seen.values()], totalSeen, unique: seen.size };
 }
 
 // Look up per-agency state. Returns a map { subdomain -> { lastScrapedAt, ... } }.
@@ -109,18 +139,106 @@ async function recordAgencyOutcome(agency, outcome, deps) {
 }
 
 // Catastrophic-failure heuristics, per the plan:
-// - Login fails (signaled by ensureLoggedIn throwing).
-// - Vendor dashboard yields no records when phase >= A.
-// - Network parser yields fewer than NETWORK_MIN_AGENCIES (82 expected).
-// - 100% of attempted agency portals are blocked.
+// - Login fails (signaled by ensureLoggedIn throwing) FOR ALL ACCOUNTS.
+// - Vendor dashboard yields no records when phase >= A on every account.
+// - Network parser yields fewer than NETWORK_MIN_AGENCIES across all accounts.
+// - 100% of attempted agency portals are blocked for every account.
 const NETWORK_MIN_AGENCIES = 10;
+
+// Resolve the set of accounts to scrape with. Tests can inject deps.accounts;
+// production reads from getScraperConfig().accounts. Falls back to a single
+// implicit "default" account when legacy single-credential env is set.
+function resolveAccountsToRun(opts, deps) {
+  if (Array.isArray(deps.accounts) && deps.accounts.length) return deps.accounts;
+  const cfg = getScraperConfig();
+  if (cfg.accounts && cfg.accounts.length) return cfg.accounts;
+  if (cfg.username && cfg.password) {
+    return [{ label: 'default', username: cfg.username, password: cfg.password }];
+  }
+  return [];
+}
+
+// Per-account phase A: log in, parse the vendor dashboard, upsert AI-recommended
+// cards, parse the My Network agency list. Returns { agencies, summaryDelta }.
+async function runAccountDashboardAndNetwork(account, opts, deps, $) {
+  const cfg = getScraperConfig();
+  const summaryDelta = {
+    label: account.label,
+    counts: null,
+    aiRecommendedFound: 0,
+    aiRecommendedHref: null,
+    networkAgenciesFound: 0,
+    errors: [],
+    opportunitiesUpserted: 0,
+    opportunitiesInsertedNoId: 0,
+  };
+
+  let browser, context, agencies = [];
+  try {
+    browser = await $.launchBrowser();
+    context = await $.createContext(browser, { label: account.label });
+    await $.ensureLoggedIn(context, account);
+
+    // Phase A — vendor hub dashboard (counts + AI-recommended cards).
+    const dashboardPage = await context.newPage();
+    try {
+      await dashboardPage.goto(cfg.vendorHubUrl, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
+      await dashboardPage.waitForTimeout(4000);
+      const dash = await $.parseDashboard(dashboardPage);
+      summaryDelta.counts = dash.counts || {};
+      summaryDelta.aiRecommendedFound = (dash.aiRecommended || []).length;
+      summaryDelta.aiRecommendedHref = dash.aiRecommendedHref || null;
+
+      const recRows = (dash.aiRecommended || [])
+        .map((c) => normalize.fromVendorRecCard(c))
+        .filter(Boolean);
+      if (recRows.length && !opts.dryRun) {
+        const out = await $.upsert(recRows);
+        summaryDelta.opportunitiesUpserted += (out.upserted || 0);
+        summaryDelta.opportunitiesInsertedNoId += (out.insertedWithoutExternalId || 0);
+      }
+    } finally {
+      await dashboardPage.close().catch(() => {});
+    }
+
+    const phase = (opts.phase || cfg.phase || 'C').toUpperCase();
+    if (phase === 'A') {
+      // Phase A — no network parse. Caller closes context.
+      summaryDelta.context = context;
+      summaryDelta.browser = browser;
+      return { agencies: [], summaryDelta };
+    }
+
+    // Phase B / C — agency network list.
+    try {
+      agencies = await $.parseNetwork(context, cfg.vendorNetworkUrl, {
+        navTimeoutMs: cfg.navTimeoutMs,
+        postNavWaitMs: 8000,
+      });
+      summaryDelta.networkAgenciesFound = agencies.length;
+    } catch (e) {
+      summaryDelta.errors.push({ stage: 'network', reason: e.message });
+    }
+
+    // Keep the context + browser ALIVE — the agency loop reuses this account's
+    // authenticated session. The caller is responsible for closing both.
+    summaryDelta.context = context;
+    summaryDelta.browser = browser;
+    return { agencies, summaryDelta };
+  } catch (e) {
+    summaryDelta.errors.push({ stage: 'account-init', reason: e.message });
+    if (context) await context.close().catch(() => {});
+    if (browser) await browser.close().catch(() => {});
+    summaryDelta.context = null;
+    summaryDelta.browser = null;
+    return { agencies: [], summaryDelta };
+  }
+}
 
 async function runScrape(opts = {}, deps = {}) {
   const cfg = getScraperConfig();
   const phase = (opts.phase || cfg.phase || 'C').toUpperCase();
   const dryRun = !!opts.dryRun;
-  // Allow opts to override the scraper-config flag — useful for tests and for
-  // a one-off `/scrape/run { autoEnrich: false }` admin call.
   const autoEnrich = opts.autoEnrich != null ? !!opts.autoEnrich : !!cfg.autoEnrich;
   const agencyFreshnessHours = opts.agencyFreshnessHours != null
     ? Number(opts.agencyFreshnessHours)
@@ -131,8 +249,8 @@ async function runScrape(opts = {}, deps = {}) {
 
   // Dependency injection. Tests pass in mocks; production uses the real modules.
   const $ = {
-    launchBrowser: deps.launchBrowser || (() => require('./browser').launchBrowser()),
-    createContext: deps.createContext || (async (b) => require('./browser').createContext(b)),
+    launchBrowser: deps.launchBrowser || ((args) => browserMod.launchBrowser(args)),
+    createContext: deps.createContext || ((b, args) => browserMod.createContext(b, args)),
     ensureLoggedIn: deps.ensureLoggedIn || ensureLoggedIn,
     openAgencyPortal: deps.openAgencyPortal || openAgencyPortal,
     parseDashboard: deps.parseDashboard || vendorDashboard.parse,
@@ -146,10 +264,17 @@ async function runScrape(opts = {}, deps = {}) {
     sleep: deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
   };
 
+  const accounts = resolveAccountsToRun(opts, deps);
+  if (!accounts.length) {
+    throw new Error('Bonfire scrape: no accounts configured (set BONFIRE_SCRAPER_ACCOUNTS or BONFIRE_SCRAPER_USERNAME/PASSWORD)');
+  }
+
   const summary = {
     phase,
     dryRun,
     startedAt: new Date().toISOString(),
+    accounts: accounts.map((a) => a.label),
+    perAccount: [],
     counts: null,
     aiRecommendedFound: 0,
     networkAgenciesFound: 0,
@@ -160,37 +285,54 @@ async function runScrape(opts = {}, deps = {}) {
     errors: [],
   };
 
-  let browser, context;
+  // Hold every account's (browser, context) open through the agency loop so
+  // we can iterate accounts per agency without re-launching browsers.
+  const liveAccounts = [];
   try {
-    browser = await $.launchBrowser();
-    context = await $.createContext(browser);
-    await $.ensureLoggedIn(context);
-
-    // Phase A — vendor hub dashboard (counts + AI-recommended cards).
-    const dashboardPage = await context.newPage();
-    try {
-      await dashboardPage.goto(cfg.vendorHubUrl, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
-      await dashboardPage.waitForTimeout(4000);
-      const dash = await $.parseDashboard(dashboardPage);
-      summary.counts = dash.counts || {};
-      summary.aiRecommendedFound = (dash.aiRecommended || []).length;
-      summary.aiRecommendedHref = dash.aiRecommendedHref || null;
-      // AI-recommended cards live on a separate page (/opportunities/recommended)
-      // in current Bonfire. We log the link if present and let a future iteration
-      // fetch it; the absence of inline cards is NOT an error.
-
-      const recRows = (dash.aiRecommended || [])
-        .map((c) => normalize.fromVendorRecCard(c))
-        .filter(Boolean);
-      if (recRows.length && !dryRun) {
-        const out = await $.upsert(recRows);
-        summary.opportunitiesUpserted += (out.upserted || 0);
-        summary.opportunitiesInsertedNoId += (out.insertedWithoutExternalId || 0);
+    // Step 1: per-account dashboard + network parse.
+    for (const account of accounts) {
+      logger.info('Bonfire scrape: starting account', { label: account.label, username: account.username });
+      const { agencies, summaryDelta } = await runAccountDashboardAndNetwork(account, opts, deps, $);
+      summary.perAccount.push({
+        label: summaryDelta.label,
+        counts: summaryDelta.counts,
+        aiRecommendedFound: summaryDelta.aiRecommendedFound,
+        aiRecommendedHref: summaryDelta.aiRecommendedHref,
+        networkAgenciesFound: summaryDelta.networkAgenciesFound,
+        opportunitiesUpserted: summaryDelta.opportunitiesUpserted,
+        opportunitiesInsertedNoId: summaryDelta.opportunitiesInsertedNoId,
+        errors: summaryDelta.errors,
+      });
+      summary.aiRecommendedFound += summaryDelta.aiRecommendedFound;
+      summary.opportunitiesUpserted += summaryDelta.opportunitiesUpserted;
+      summary.opportunitiesInsertedNoId += summaryDelta.opportunitiesInsertedNoId;
+      if (!summary.counts && summaryDelta.counts) summary.counts = summaryDelta.counts;
+      if (summaryDelta.errors.length) summary.errors.push(...summaryDelta.errors.map((e) => ({ ...e, account: account.label })));
+      if (summaryDelta.context && summaryDelta.browser) {
+        liveAccounts.push({
+          account,
+          browser: summaryDelta.browser,
+          context: summaryDelta.context,
+          agencies,
+        });
       }
-    } finally {
-      await dashboardPage.close().catch(() => {});
     }
 
+    // Early escalation: if EVERY account failed init (e.g. all logins blocked
+    // / credentials wrong / Cloudflare-at-login), the run is dead. Surface the
+    // first account-init error verbatim so escalation messages stay readable.
+    if (!liveAccounts.length) {
+      const firstInitErr = summary.errors.find((e) => e.stage === 'account-init');
+      const reason = firstInitErr ? firstInitErr.reason : 'all accounts failed to initialize';
+      escalation.recordFailure(reason);
+      summary.errors.push({ stage: 'top', reason });
+      summary.escalated = true;
+      summary.endedAt = new Date().toISOString();
+      logger.error('Bonfire scrape: all accounts failed to initialize', { reason });
+      return summary;
+    }
+
+    // Phase A early-return.
     if (phase === 'A') {
       escalation.recordSuccess();
       await maybeAutoEnrich(summary, $, autoEnrich, dryRun);
@@ -198,54 +340,34 @@ async function runScrape(opts = {}, deps = {}) {
       return summary;
     }
 
-    // Phase B / C — agency portal scrape. First parse the network list.
-    // parseNetwork manages its own page so it can attach a response listener
-    // BEFORE navigation (the agency XHR fires during hydration).
-    let agencies = [];
-    try {
-      agencies = await $.parseNetwork(context, cfg.vendorNetworkUrl, {
-        navTimeoutMs: cfg.navTimeoutMs,
-        postNavWaitMs: 8000,
-      });
-      summary.networkAgenciesFound = agencies.length;
-    } catch (e) {
-      summary.errors.push({ stage: 'network', reason: e.message });
-    }
+    // Step 2: union of agencies across accounts.
+    const perAccountAgencies = liveAccounts.map((la) => la.agencies);
+    const { agencies: unionedAgencies, totalSeen, unique } = unionAgenciesAcrossAccounts(perAccountAgencies);
+    summary.networkAgenciesFound = unique;
+    summary.networkAgenciesSeenAcrossAccounts = totalSeen;
 
-    if (agencies.length < NETWORK_MIN_AGENCIES) {
+    if (unionedAgencies.length < NETWORK_MIN_AGENCIES) {
       summary.errors.push({
         stage: 'network',
-        reason: `parser returned ${agencies.length} agencies; expected at least ${NETWORK_MIN_AGENCIES}`,
+        reason: `union returned ${unionedAgencies.length} agencies; expected at least ${NETWORK_MIN_AGENCIES}`,
       });
     }
 
-    // Apply allow-list with fallback. If the allow-list is set we iterate
-    // exactly those subdomains regardless of whether the (sometimes-flaky)
-    // network list surfaced them. If empty we use whatever the network list
-    // returned. Phase B implies allow-list defaults to ['dhantx'] when empty.
+    // Apply allow-list with fallback. If set, iterate exactly those subdomains
+    // regardless of whether the (sometimes-flaky) network parse surfaced them.
     let targetAgencies;
-    let allowList = cfg.agencyAllowlist.length ? cfg.agencyAllowlist : (phase === 'B' ? ['dhantx'] : null);
+    const allowList = cfg.agencyAllowlist.length ? cfg.agencyAllowlist : (phase === 'B' ? ['dhantx'] : null);
     if (allowList) {
-      // Prefer network metadata when we have it, but fall back to bare subdomain.
       targetAgencies = allowList.map((sub) => {
-        const found = agencies.find((a) => a.subdomain === sub);
+        const found = unionedAgencies.find((a) => a.subdomain === sub);
         return found || { subdomain: sub, name: sub };
       });
     } else {
-      // Phase C, no allow-list = whatever the network list returned.
-      targetAgencies = agencies;
+      targetAgencies = unionedAgencies;
     }
 
-    // Order strategy:
-    // 1. Always sort by priority_score DESC first — best-fit agencies for our
-    //    situation (TX-region + high-volume + good fit) get scraped before
-    //    a partial run gets killed.
-    // 2. Within each priority bucket, optionally shuffle for anti-detection
-    //    so two consecutive runs don't always hit identical sequences.
-    const agencyState = await loadAgencyState(
-      targetAgencies.map((a) => a.subdomain),
-      $,
-    );
+    // Step 3: order by priority + load per-agency state.
+    const agencyState = await loadAgencyState(targetAgencies.map((a) => a.subdomain), $);
     const withScore = targetAgencies.map((a) => {
       const state = agencyState[a.subdomain];
       const score = state && state.priorityScore != null
@@ -262,14 +384,15 @@ async function runScrape(opts = {}, deps = {}) {
       phase,
       shuffle: shuffleAgencies,
       freshnessHours: agencyFreshnessHours,
+      accounts: liveAccounts.length,
     });
 
+    // Step 4: iterate each unique agency. For each, try every account in turn.
+    // Aggregate openCount across accounts (different accounts may see different
+    // invitation-only opps at the same portal); external_id dedup at upsert.
     for (let idx = 0; idx < orderedAgencies.length; idx++) {
       const agency = orderedAgencies[idx];
 
-      // Skip-if-recent: if this agency was successfully scraped within the
-      // freshness window, don't re-hit the portal. We still iterate the loop
-      // so the index/total log is accurate for observability.
       const state = agencyState[agency.subdomain];
       if (freshnessMs > 0 && state && state.lastScrapedAt) {
         const ageMs = Date.now() - new Date(state.lastScrapedAt).getTime();
@@ -283,18 +406,14 @@ async function runScrape(opts = {}, deps = {}) {
       }
 
       summary.agenciesAttempted += 1;
-      // Per-agency progress log — also keeps long SSH sessions from going
-      // silent for 60+s (which can trigger client-side timeouts).
       logger.info('Bonfire scrape: agency', {
         index: idx + 1,
         total: orderedAgencies.length,
         subdomain: agency.subdomain,
       });
-      await $.sleep(cfg.perAgencyDelayMs + Math.floor(Math.random() * 2000));
 
       const priorBlocks = (state && state.consecutiveBlocks) || 0;
-      let portal;
-      let outcome = {
+      const outcome = {
         blocked: false,
         openCount: 0,
         reason: null,
@@ -302,83 +421,79 @@ async function runScrape(opts = {}, deps = {}) {
         priorAgency: state || null,
         highFitCount: 0,
       };
-      try {
-        portal = await $.openAgencyPortal(context, agency.subdomain);
-      } catch (e) {
-        summary.errors.push({ stage: 'portal', subdomain: agency.subdomain, reason: e.message });
-        outcome.blocked = true;
-        outcome.reason = e.message;
-        await recordAgencyOutcome(agency, outcome, $);
-        continue;
-      }
+      // Tracks per-account result so block reporting is accurate ONLY when
+      // every account failed at this agency.
+      const accountResults = [];
 
-      try {
-        if (portal.blocked) {
-          summary.agenciesBlocked.push({ subdomain: agency.subdomain, reason: portal.reason });
-          outcome.blocked = true;
-          outcome.reason = portal.reason;
+      for (const la of liveAccounts) {
+        await $.sleep(cfg.perAgencyDelayMs + Math.floor(Math.random() * 2000));
+        let portal;
+        try {
+          portal = await $.openAgencyPortal(la.context, la.account, agency.subdomain);
+        } catch (e) {
+          accountResults.push({ account: la.account.label, blocked: true, reason: e.message });
           continue;
         }
-        const result = await $.parseAgencyOpps(portal.page);
-        if (result.blocked) {
-          summary.agenciesBlocked.push({ subdomain: agency.subdomain, reason: 'parser-flagged' });
-          outcome.blocked = true;
-          outcome.reason = 'parser-flagged';
-          continue;
+        try {
+          if (portal.blocked) {
+            accountResults.push({ account: la.account.label, blocked: true, reason: portal.reason });
+            continue;
+          }
+          const result = await $.parseAgencyOpps(portal.page);
+          if (result.blocked) {
+            accountResults.push({ account: la.account.label, blocked: true, reason: 'parser-flagged' });
+            continue;
+          }
+          const rows = result.records
+            .map((r) => normalize.fromAgencyOpportunity(r, agency.subdomain, { agencyName: agency.name }))
+            .filter(Boolean);
+          outcome.openCount += rows.length;
+          outcome.highFitCount += result.records.filter((r) => {
+            const refLooksRecent = /^(20)?2[5-7]/i.test(String(r.refNumber || ''));
+            return refLooksRecent;
+          }).length;
+          if (rows.length && !dryRun) {
+            const out = await $.upsert(rows);
+            summary.opportunitiesUpserted += (out.upserted || 0);
+            summary.opportunitiesInsertedNoId += (out.insertedWithoutExternalId || 0);
+          }
+          accountResults.push({ account: la.account.label, blocked: false, rowCount: rows.length });
+        } catch (e) {
+          const detail = (e.errors && Array.isArray(e.errors))
+            ? e.errors.map((err) => `${err.path}: ${err.message}`).join('; ')
+            : e.message;
+          summary.errors.push({ stage: 'agency-parse', subdomain: agency.subdomain, account: la.account.label, reason: detail });
+          accountResults.push({ account: la.account.label, blocked: true, reason: detail });
+        } finally {
+          if (portal && portal.page) await portal.page.close().catch(() => {});
         }
-
-        const rows = result.records
-          .map((r) => normalize.fromAgencyOpportunity(r, agency.subdomain, { agencyName: agency.name }))
-          .filter(Boolean);
-
-        outcome.openCount = rows.length;
-        // Count rows that are likely to be high-fit. We don't have priority
-        // scores yet at scrape time (enrichment happens later) — use volume
-        // alone as a soft signal here, and the scoring fn will pick up the
-        // sharper post-enrichment signal on subsequent runs via priorAgency.
-        outcome.highFitCount = result.records.filter((r) => {
-          const refLooksRecent = /^(20)?2[5-7]/i.test(String(r.refNumber || ''));
-          return refLooksRecent;
-        }).length;
-
-        if (rows.length && !dryRun) {
-          const out = await $.upsert(rows);
-          summary.opportunitiesUpserted += (out.upserted || 0);
-          summary.opportunitiesInsertedNoId += (out.insertedWithoutExternalId || 0);
-        }
-      } catch (e) {
-        // Surface inner Sequelize validation messages — the bare message often
-        // says only "Validation error" without naming the failing field.
-        const detail = (e.errors && Array.isArray(e.errors))
-          ? e.errors.map((err) => `${err.path}: ${err.message}`).join('; ')
-          : e.message;
-        summary.errors.push({ stage: 'agency-parse', subdomain: agency.subdomain, reason: detail });
-      } finally {
-        if (portal && portal.page) await portal.page.close().catch(() => {});
-        // Persist per-agency outcome regardless of success/failure so
-        // skip-if-recent has a record for the next run.
-        if (!dryRun) await recordAgencyOutcome(agency, outcome, $);
       }
+
+      // Mark agency blocked only when EVERY account was blocked here.
+      const allBlocked = accountResults.length > 0 && accountResults.every((r) => r.blocked);
+      outcome.blocked = allBlocked;
+      outcome.reason = allBlocked ? accountResults[0].reason : null;
+      if (allBlocked) {
+        summary.agenciesBlocked.push({
+          subdomain: agency.subdomain,
+          reason: accountResults.map((r) => `${r.account}: ${r.reason}`).join(' | '),
+        });
+      }
+      if (!dryRun) await recordAgencyOutcome(agency, outcome, $);
     }
 
-    // A run is "fatal" only if NO useful data came in. We tolerate isolated
-    // gaps (e.g. AI-rec cards moved to a separate page, network list broken,
-    // partial Cloudflare blocks) as long as something concrete was upserted
-    // OR we got valid dashboard counts back.
+    // Fatal-failure heuristic: run was fatal only if NOTHING useful came in.
     const upsertedSomething = summary.opportunitiesUpserted > 0;
     const dashboardWorked = summary.counts && Object.keys(summary.counts).length > 0;
     const allAttemptedBlocked = summary.agenciesAttempted > 0
       && summary.agenciesBlocked.length === summary.agenciesAttempted;
-
     const fatal =
-      // We attempted agencies and ALL were blocked, AND dashboard didn't help.
       (allAttemptedBlocked && !dashboardWorked)
-      // OR we got nothing at all.
       || (!upsertedSomething && !dashboardWorked);
 
     if (fatal) {
       const reason = allAttemptedBlocked
-        ? '100% of attempted agency portals blocked by Cloudflare'
+        ? '100% of attempted agency portals blocked across all accounts'
         : 'no opportunities upserted and no dashboard data';
       escalation.recordFailure(reason);
       summary.escalated = true;
@@ -400,22 +515,17 @@ async function runScrape(opts = {}, deps = {}) {
     logger.error('Bonfire scrape run failed', { error: e.message });
     return summary;
   } finally {
-    if (context) await context.close().catch(() => {});
-    if (browser) await browser.close().catch(() => {});
+    for (const la of liveAccounts) {
+      if (la.context) await la.context.close().catch(() => {});
+      if (la.browser) await la.browser.close().catch(() => {});
+    }
   }
 }
 
 // Shared by Phase A (early-return) and Phase B/C (post-loop) success paths.
-// Runs the existing enrichAllUnenriched flow so the UI shows scored data
-// without requiring an admin click. Failures are logged + recorded on the
-// summary but never escalate the scrape itself.
 async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
   if (!autoEnrich || dryRun || summary.opportunitiesUpserted <= 0) return;
   try {
-    // 500-row cap accommodates a full network scrape (92 agencies × ~5 Open
-    // bids each ≈ 460 max). After first-day saturation, daily delta is small.
-    // enrichAllUnenriched only picks rows with enrichedAt IS NULL, so cost
-    // is bounded by genuinely-new opportunities, not total row count.
     const enrichResult = await $.enrichAll({ concurrency: 2, maxRows: 500 });
     summary.enrichment = {
       processed: enrichResult.processed,
@@ -427,11 +537,6 @@ async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
     summary.errors.push({ stage: 'enrich', reason: e.message });
     logger.error('Bonfire auto-enrich failed', { error: e.message });
   }
-
-  // Mirror enriched bonfire opps into the unified opportunities table so they
-  // show up in the main /opportunities view. Idempotent on (source, source_id).
-  // Failures here are non-fatal — the canonical data is in bonfire_opportunities;
-  // this is just a presentation shadow.
   try {
     const syncResult = await $.syncToOpportunities({});
     summary.opportunityTableSync = syncResult;
@@ -441,4 +546,9 @@ async function maybeAutoEnrich(summary, $, autoEnrich, dryRun) {
   }
 }
 
-module.exports = { runScrape, NETWORK_MIN_AGENCIES };
+module.exports = {
+  runScrape,
+  unionAgenciesAcrossAccounts,
+  resolveAccountsToRun,
+  NETWORK_MIN_AGENCIES,
+};

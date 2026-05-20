@@ -7,11 +7,23 @@
 
 const fs = require('fs');
 const path = require('path');
-const { getScraperConfig } = require('./config');
+const { getScraperConfig, sanitizeLabel } = require('./config');
 
-function loadStorageStateIfFresh() {
+// Per-account storage-state filename. The legacy single-account path
+// (storageState.json with no suffix) is preserved as the "default" label so
+// existing deploys don't lose their cached session on the next deploy.
+function storageStatePath(label) {
   const cfg = getScraperConfig();
-  const file = path.join(cfg.storageDir, 'storageState.json');
+  const safe = sanitizeLabel(label || 'default');
+  if (safe === 'default') {
+    return path.join(cfg.storageDir, 'storageState.json');
+  }
+  return path.join(cfg.storageDir, `storageState-${safe}.json`);
+}
+
+function loadStorageStateIfFresh(label) {
+  const cfg = getScraperConfig();
+  const file = storageStatePath(label);
   if (!fs.existsSync(file)) return null;
   const ageMs = Date.now() - fs.statSync(file).mtimeMs;
   const ttlMs = cfg.sessionTtlMin * 60 * 1000;
@@ -21,11 +33,6 @@ function loadStorageStateIfFresh() {
   } catch {
     return null;
   }
-}
-
-function storageStatePath() {
-  const cfg = getScraperConfig();
-  return path.join(cfg.storageDir, 'storageState.json');
 }
 
 function ensureStorageDir() {
@@ -70,10 +77,10 @@ async function launchBrowser({ headless } = {}) {
   });
 }
 
-async function createContext(browser, { useStoredSession = true } = {}) {
+async function createContext(browser, { useStoredSession = true, label } = {}) {
   const cfg = getScraperConfig();
   ensureStorageDir();
-  const storageState = useStoredSession ? loadStorageStateIfFresh() : null;
+  const storageState = useStoredSession ? loadStorageStateIfFresh(label) : null;
   return browser.newContext({
     viewport: cfg.viewport,
     userAgent: cfg.userAgent,
@@ -81,13 +88,13 @@ async function createContext(browser, { useStoredSession = true } = {}) {
   });
 }
 
-async function persistStorageState(context) {
+async function persistStorageState(context, label) {
   ensureStorageDir();
-  await context.storageState({ path: storageStatePath() });
+  await context.storageState({ path: storageStatePath(label) });
 }
 
-function clearStorageState() {
-  const file = storageStatePath();
+function clearStorageState(label) {
+  const file = storageStatePath(label);
   if (fs.existsSync(file)) fs.unlinkSync(file);
 }
 

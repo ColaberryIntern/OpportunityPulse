@@ -78,6 +78,11 @@ const env = {
       headless: String(process.env.BONFIRE_SCRAPER_HEADLESS || 'true').toLowerCase() !== 'false',
       username: process.env.BONFIRE_SCRAPER_USERNAME || '',
       password: process.env.BONFIRE_SCRAPER_PASSWORD || '',
+      // Multi-account JSON: [{"label":"que","username":"...","password":"..."}, ...]
+      // When unset OR empty, falls back to legacy single-account env (USERNAME/PASSWORD)
+      // for back-compat. Parsing happens in config.js so a malformed JSON value
+      // here doesn't crash boot — we degrade to legacy + log.
+      accountsRaw: process.env.BONFIRE_SCRAPER_ACCOUNTS || '',
       phase: (process.env.BONFIRE_SCRAPER_PHASE || 'C').toUpperCase(),
       agencyAllowlist: (process.env.BONFIRE_SCRAPER_AGENCY_ALLOWLIST || '')
         .split(',').map((s) => s.trim()).filter(Boolean),

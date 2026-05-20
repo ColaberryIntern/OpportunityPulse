@@ -163,7 +163,7 @@ describe('runner.runScrape', () => {
         aiRecommended: [{ title: 'C', agency: 'A' }],
       }),
       parseNetwork: jest.fn().mockResolvedValue(agencies),
-      openAgencyPortal: jest.fn().mockImplementation(async (_ctx, sub) => {
+      openAgencyPortal: jest.fn().mockImplementation(async (_ctx, _account, sub) => {
         if (sub.startsWith('blocked')) return { page: makePage(), blocked: true, reason: 'cloudflare' };
         return { page: makePage(), blocked: false };
       }),
@@ -313,7 +313,8 @@ describe('runner.runScrape', () => {
     expect(summary.agenciesSkippedFresh).toHaveLength(2);
     expect(summary.agenciesSkippedFresh.map((a) => a.subdomain).sort()).toEqual(['fresh-a', 'fresh-b']);
     expect(openSpy).toHaveBeenCalledTimes(1);
-    expect(openSpy.mock.calls[0][1]).toBe('stale-c');
+    // New signature: (context, account, subdomain). Subdomain is arg index 2.
+    expect(openSpy.mock.calls[0][2]).toBe('stale-c');
   });
 
   it('persists per-agency outcome via upsertAgency dep', async () => {
@@ -343,7 +344,7 @@ describe('runner.runScrape', () => {
     expect(persisted.consecutiveBlocks).toBe(0);
   });
 
-  it('escalates and surfaces error when ensureLoggedIn throws', async () => {
+  it('escalates and surfaces error when ensureLoggedIn throws for the only account', async () => {
     const context = makeContext();
     const summary = await runScrape({ phase: 'A' }, {
       launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
@@ -352,7 +353,93 @@ describe('runner.runScrape', () => {
       sleep: () => Promise.resolve(),
     });
     expect(summary.escalated).toBe(true);
-    expect(summary.errors[0].stage).toBe('top');
+    // Multi-account runner surfaces the per-account init error and re-promotes
+    // it to a top-level stage when no live accounts remain.
+    expect(summary.errors.find((e) => e.stage === 'top')).toBeTruthy();
     expect(escalation.recordFailure).toHaveBeenCalledWith('login intercepted');
+  });
+
+  it('multi-account: unions agencies across accounts, scrapes each unique agency with every account, dedups via external_id', async () => {
+    const context = makeContext();
+    const accounts = [
+      { label: 'que', username: 'q@x', password: 'p1' },
+      { label: 'colaberry', username: 'c@x', password: 'p2' },
+    ];
+
+    // Que sees [a, b]; Colaberry sees [b, c]. Union = [a, b, c] with b only once.
+    const parseNetwork = jest.fn()
+      .mockResolvedValueOnce([{ subdomain: 'a', name: 'A' }, { subdomain: 'b', name: 'B' }])
+      .mockResolvedValueOnce([{ subdomain: 'b', name: 'B' }, { subdomain: 'c', name: 'C' }]);
+
+    // Each agency returns one synthetic open opp keyed by subdomain+account, so we
+    // can verify both accounts visited each agency.
+    const parseAgencyOpps = jest.fn().mockImplementation(async () => ({
+      records: [{ refNumber: 'RFP-1', projectName: 'P1', status: 'Open' }],
+      blocked: false,
+    }));
+
+    const openSpy = jest.fn().mockResolvedValue({ page: makePage(), blocked: false });
+
+    const summary = await runScrape({ phase: 'C' }, {
+      accounts,
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({ counts: { invitations: 1 }, aiRecommended: [] }),
+      parseNetwork,
+      openAgencyPortal: openSpy,
+      parseAgencyOpps,
+      findAgencyState: jest.fn().mockResolvedValue([]),
+      upsertAgency: jest.fn(),
+      sleep: () => Promise.resolve(),
+    });
+
+    expect(summary.perAccount).toHaveLength(2);
+    expect(summary.perAccount.map((p) => p.label).sort()).toEqual(['colaberry', 'que']);
+    // 3 unique agencies × 2 accounts each = 6 openAgencyPortal calls.
+    expect(openSpy).toHaveBeenCalledTimes(6);
+    // 3 distinct subdomains visited.
+    expect(summary.agenciesAttempted).toBe(3);
+    expect(summary.networkAgenciesFound).toBe(3); // unique count
+    expect(summary.networkAgenciesSeenAcrossAccounts).toBe(4); // before dedup
+  });
+
+  it('multi-account: an agency blocked for one account still succeeds via the other (private invite scenario)', async () => {
+    const context = makeContext();
+    const accounts = [
+      { label: 'que', username: 'q@x', password: 'p1' },
+      { label: 'colaberry', username: 'c@x', password: 'p2' },
+    ];
+
+    const parseNetwork = jest.fn().mockResolvedValue([{ subdomain: 'southlake', name: 'City of Southlake' }]);
+    const openSpy = jest.fn().mockImplementation(async (_ctx, account) => {
+      if (account.label === 'que') return { page: makePage(), blocked: true, reason: 'cloudflare' };
+      return { page: makePage(), blocked: false };
+    });
+    const parseAgencyOpps = jest.fn().mockResolvedValue({
+      records: [{ refNumber: '235973', projectName: 'Private RFP for Colaberry', status: 'Open' }],
+      blocked: false,
+    });
+
+    const summary = await runScrape({ phase: 'C' }, {
+      accounts,
+      launchBrowser: jest.fn().mockResolvedValue(makeBrowser(context)),
+      createContext: jest.fn().mockResolvedValue(context),
+      ensureLoggedIn: jest.fn().mockResolvedValue(undefined),
+      parseDashboard: jest.fn().mockResolvedValue({ counts: { invitations: 1 }, aiRecommended: [] }),
+      parseNetwork,
+      openAgencyPortal: openSpy,
+      parseAgencyOpps,
+      findAgencyState: jest.fn().mockResolvedValue([]),
+      upsertAgency: jest.fn(),
+      sleep: () => Promise.resolve(),
+    });
+
+    // Southlake should NOT be in blocked list because colaberry succeeded.
+    expect(summary.agenciesBlocked).toEqual([]);
+    // upsertJsonArray gets called for the southlake opp (one good record).
+    const calls = service.upsertJsonArray.mock.calls;
+    const southlakeCall = calls.find((c) => c[0].some((r) => /^bonfire:agency:southlake:/.test(r.external_id)));
+    expect(southlakeCall).toBeDefined();
   });
 });

@@ -15,6 +15,10 @@
 // The redirect-bounce per-portal helper opens an agency subdomain via the auth
 // query string so cookies set on the main domain are honored without re-prompting
 // for credentials.
+//
+// Multi-account: every function takes an `account = {label, username, password}`
+// arg. The legacy single-account call path resolves the account from the
+// scraper config's first entry, so older callers keep working unchanged.
 
 const logger = require('../../logging/logger');
 const { getScraperConfig } = require('./config');
@@ -22,18 +26,32 @@ const { persistStorageState, clearStorageState, jitter } = require('./browser');
 const { isChallengePage } = require('./cloudflare');
 
 class LoginFailed extends Error {
-  constructor(message, { url } = {}) {
+  constructor(message, { url, label } = {}) {
     super(message);
     this.name = 'LoginFailed';
     this.url = url;
+    this.label = label;
   }
 }
 
-async function performLogin(context) {
+// Resolve a default account when the caller didn't pass one. Returns the first
+// account in the configured list, which mirrors legacy single-account semantics.
+function resolveAccount(account) {
+  if (account && account.username && account.password) return account;
   const cfg = getScraperConfig();
-  if (!cfg.username || !cfg.password) {
+  const first = (cfg.accounts && cfg.accounts[0])
+    || (cfg.username && cfg.password
+        ? { label: 'default', username: cfg.username, password: cfg.password }
+        : null);
+  if (!first) {
     throw new LoginFailed('Bonfire credentials are not configured');
   }
+  return first;
+}
+
+async function performLogin(context, account) {
+  const cfg = getScraperConfig();
+  const acct = resolveAccount(account);
 
   const page = await context.newPage();
   try {
@@ -41,12 +59,12 @@ async function performLogin(context) {
     await page.waitForTimeout(3000);
 
     // Step 1: email page
-    await page.fill('#input-email', cfg.username);
+    await page.fill('#input-email', acct.username);
     await page.click('button[type=submit]');
     await page.waitForTimeout(3000);
 
     // Step 2: password page (separate render)
-    await page.fill('input[type=password]', cfg.password);
+    await page.fill('input[type=password]', acct.password);
     await page.click('button[type=submit]');
     await page.waitForTimeout(5000);
 
@@ -60,26 +78,31 @@ async function performLogin(context) {
         blocked
           ? 'login intercepted by Cloudflare/captcha'
           : `login did not reach /settings/dashboard (got ${finalUrl})`,
-        { url: finalUrl }
+        { url: finalUrl, label: acct.label }
       );
     }
 
-    await persistStorageState(context);
-    logger.info('Bonfire login successful', { url: finalUrl });
+    await persistStorageState(context, acct.label);
+    logger.info('Bonfire login successful', { url: finalUrl, account: acct.label });
   } finally {
     await page.close().catch(() => {});
   }
 }
 
 // Verify the cached storageState still works. Cheaper than a full login when valid.
-async function verifyExistingSession(context) {
+async function verifyExistingSession(context, account) {
   const cfg = getScraperConfig();
+  // resolveAccount is only used for label-resolution telemetry here; not required
+  // for the page navigation itself, but useful for logging in callers.
+  const acct = account || (cfg.accounts && cfg.accounts[0]) || { label: 'default' };
   const page = await context.newPage();
   try {
     await page.goto(cfg.dashboardUrl, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
     await page.waitForTimeout(2000);
     const url = page.url();
-    return url.includes('/settings/dashboard');
+    const ok = url.includes('/settings/dashboard');
+    if (ok) logger.info('Bonfire session verified', { account: acct.label });
+    return ok;
   } catch {
     return false;
   } finally {
@@ -87,22 +110,37 @@ async function verifyExistingSession(context) {
   }
 }
 
-async function ensureLoggedIn(context) {
-  const ok = await verifyExistingSession(context);
+async function ensureLoggedIn(context, account) {
+  const acct = resolveAccount(account);
+  const ok = await verifyExistingSession(context, acct);
   if (ok) {
-    logger.info('Bonfire session reused from cache');
+    logger.info('Bonfire session reused from cache', { account: acct.label });
     return;
   }
   // Cache stale or missing — log in fresh.
-  clearStorageState();
-  await performLogin(context);
+  clearStorageState(acct.label);
+  await performLogin(context, acct);
 }
 
 // Open an agency portal via the per-subdomain login redirect URL.
 // Returns the navigated page if authenticated; throws if Cloudflare blocks.
-async function openAgencyPortal(context, subdomain, { bouncePath = '/opportunities' } = {}) {
+async function openAgencyPortal(context, subdomainOrAccount, subdomainArg, opts) {
+  // Back-compat overload: legacy call sites pass (context, subdomain, opts).
+  // New call sites pass (context, account, subdomain, opts).
+  let account, subdomain, options;
+  if (typeof subdomainOrAccount === 'string') {
+    account = null;
+    subdomain = subdomainOrAccount;
+    options = subdomainArg || {};
+  } else {
+    account = subdomainOrAccount;
+    subdomain = subdomainArg;
+    options = opts || {};
+  }
   const cfg = getScraperConfig();
-  const enc = encodeURIComponent(cfg.username);
+  const acct = resolveAccount(account);
+  const { bouncePath = '/opportunities' } = options;
+  const enc = encodeURIComponent(acct.username);
   const bounceEnc = encodeURIComponent(bouncePath);
   const url = `https://${subdomain}.bonfirehub.com/login?email=${enc}&bounceUrl=${bounceEnc}`;
 
@@ -113,14 +151,14 @@ async function openAgencyPortal(context, subdomain, { bouncePath = '/opportuniti
     await jitter(5000, 5000);
 
     if (await isChallengePage(page)) {
-      return { page, blocked: true, reason: 'cloudflare' };
+      return { page, blocked: true, reason: 'cloudflare', account: acct.label };
     }
     if (page.url().includes('/login')) {
-      return { page, blocked: true, reason: 'redirect-stalled' };
+      return { page, blocked: true, reason: 'redirect-stalled', account: acct.label };
     }
-    return { page, blocked: false };
+    return { page, blocked: false, account: acct.label };
   } catch (e) {
-    return { page, blocked: true, reason: e.message };
+    return { page, blocked: true, reason: e.message, account: acct.label };
   }
 }
 
@@ -129,5 +167,6 @@ module.exports = {
   performLogin,
   verifyExistingSession,
   openAgencyPortal,
+  resolveAccount,
   LoginFailed,
 };
