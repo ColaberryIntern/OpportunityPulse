@@ -198,9 +198,14 @@ describe('listOpportunities — fromCluster', () => {
     primeHappyPath({ sourceIds: ['s1'], rows: [] });
     await svc.listOpportunities({ fromCluster: 'rec-1' });
     const call = lastFindCall();
-    // First sort tuple should be a Sequelize literal CASE expression.
-    expect(call.order[0][0].__literal).toContain('pursuit_status');
+    // First sort tuple references the projected _pursuitOrder virtual column.
+    expect(call.order[0][0].__literal).toContain('_pursuitOrder');
     expect(call.order[0][1]).toBe('ASC');
+    // The virtual column is projected into the inner SELECT so it survives
+    // Sequelize's subquery wrapping.
+    expect(call.attributes).toBeDefined();
+    expect(call.attributes.include[0][0].__literal).toContain('pursuit_status');
+    expect(call.attributes.include[0][1]).toBe('_pursuitOrder');
   });
 
   test('explicit order=close_asc overrides the cluster default', async () => {

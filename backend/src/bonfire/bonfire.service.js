@@ -173,13 +173,14 @@ async function listOpportunities(filters = {}) {
     case 'close_asc':       orderClause = [['closeDate', 'ASC']]; break;
     case 'created_desc':    orderClause = [['createdAt', 'DESC']]; break;
     case 'cluster_default':
+      // Active pursuits (pursuing/submitted) sort to position 0; everything
+      // else to 1. The hasMany `tags` include + distinct:true forces Sequelize
+      // to wrap the outer SELECT in a subquery, so a bare CASE expression in
+      // ORDER BY can't resolve `pursuit_status`. Workaround: project the CASE
+      // value into the inner SELECT as a virtual `_pursuitOrder` column, then
+      // order by that name in the outer scope.
       orderClause = [
-        // Sequelize literal — Postgres CASE expression evaluates inline. Active
-        // pursuits (pursuing/submitted) sort to position 0; everything else to 1.
-        // Table-qualified because Sequelize wraps the outer SELECT in a
-        // subquery (due to the hasMany `tags` include + distinct:true) and the
-        // bare column doesn't resolve in that scope.
-        [sequelize.literal(`CASE WHEN "BonfireOpportunity"."pursuit_status" IN ('pursuing','submitted') THEN 0 ELSE 1 END`), 'ASC'],
+        [sequelize.literal('"_pursuitOrder"'), 'ASC'],
         ['priorityScore', 'DESC'],
         ['createdAt', 'DESC'],
       ];
@@ -194,6 +195,18 @@ async function listOpportunities(filters = {}) {
   // pagination — a request for 25 rows was returning ~5 distinct opportunities
   // because LIMIT applied to (opportunity × tag) JOIN rows. Removing the flag
   // lets Sequelize do the right thing; `distinct: true` keeps the count clean.
+  // When the cluster_default sort is in play, project the CASE value as a
+  // virtual `_pursuitOrder` column so the ORDER BY can reference it across
+  // Sequelize's subquery wrapper. Other sort modes don't pay this cost.
+  const baseAttrs = effectiveOrder === 'cluster_default'
+    ? {
+        include: [[
+          sequelize.literal(`(CASE WHEN "BonfireOpportunity"."pursuit_status" IN ('pursuing','submitted') THEN 0 ELSE 1 END)`),
+          '_pursuitOrder',
+        ]],
+      }
+    : undefined;
+
   const { rows, count } = await BonfireOpportunity.findAndCountAll({
     where,
     order: orderClause,
@@ -201,6 +214,7 @@ async function listOpportunities(filters = {}) {
     offset: Number(offset) || 0,
     include: [{ model: BonfireOpportunityTag, as: 'tags', attributes: ['tag'] }],
     distinct: true,
+    ...(baseAttrs ? { attributes: baseAttrs } : {}),
   });
 
   // Tag each row with its origin relative to the cluster, so the UI can
