@@ -176,7 +176,10 @@ async function listOpportunities(filters = {}) {
       orderClause = [
         // Sequelize literal — Postgres CASE expression evaluates inline. Active
         // pursuits (pursuing/submitted) sort to position 0; everything else to 1.
-        [sequelize.literal("CASE WHEN pursuit_status IN ('pursuing','submitted') THEN 0 ELSE 1 END"), 'ASC'],
+        // Table-qualified because Sequelize wraps the outer SELECT in a
+        // subquery (due to the hasMany `tags` include + distinct:true) and the
+        // bare column doesn't resolve in that scope.
+        [sequelize.literal(`CASE WHEN "BonfireOpportunity"."pursuit_status" IN ('pursuing','submitted') THEN 0 ELSE 1 END`), 'ASC'],
         ['priorityScore', 'DESC'],
         ['createdAt', 'DESC'],
       ];
