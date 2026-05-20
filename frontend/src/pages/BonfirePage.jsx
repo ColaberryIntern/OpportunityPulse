@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import {
   listOpportunities,
   enrichOne,
@@ -17,7 +18,15 @@ function BonfirePage() {
   const { user } = useSelector((state) => state.auth);
   const isAdmin = user?.role === 'admin';
 
-  const [filters, setFilters] = useState({});
+  // URL-driven entry point from the Strategic Opportunities drawer:
+  //   /bonfire?fromCluster=<strategicRecId>
+  // hydrates the filter on mount, drives the cluster context banner, and the
+  // user can click "Clear" to drop back to the full list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromClusterParam = searchParams.get('fromCluster') || '';
+
+  const [filters, setFilters] = useState(() => (fromClusterParam ? { fromCluster: fromClusterParam } : {}));
+  const [clusterContext, setClusterContext] = useState(null);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -55,6 +64,10 @@ function BonfirePage() {
       const res = await listOpportunities(params);
       setRows(res.data || []);
       setTotal(res.pagination?.total ?? (res.data || []).length);
+      // clusterContext is a top-level sibling on the response when the request
+      // included ?fromCluster=... — surfaces title, original-source count, and
+      // per-page source/matched split for the banner.
+      setClusterContext(res.clusterContext || null);
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || 'Failed to load');
     } finally {
@@ -63,6 +76,31 @@ function BonfirePage() {
   }, [params]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Keep the URL in sync with the fromCluster filter so the page is shareable
+  // and a browser refresh preserves the drilldown. We only manage the
+  // fromCluster param here; other filter state stays local (matches existing
+  // BonfirePage behavior).
+  useEffect(() => {
+    const current = searchParams.get('fromCluster') || '';
+    const desired = filters.fromCluster || '';
+    if (current === desired) return;
+    const next = new URLSearchParams(searchParams);
+    if (desired) next.set('fromCluster', desired);
+    else next.delete('fromCluster');
+    setSearchParams(next, { replace: true });
+  }, [filters.fromCluster, searchParams, setSearchParams]);
+
+  function clearClusterFilter() {
+    setFilters((prev) => {
+      // Drop the fromCluster key from the filter set; eslint-disable for the
+      // intentional rest-without-use pattern.
+      // eslint-disable-next-line no-unused-vars
+      const { fromCluster, ...rest } = prev;
+      return rest;
+    });
+    setClusterContext(null);
+  }
 
   // v0.1: bulk-fetch the readiness summary for the visible page only.
   // Cheap (single DB query joined against vault types) and the result
@@ -167,6 +205,55 @@ function BonfirePage() {
 
       {isAdmin && (
         <BonfireUploadDropzone onUploaded={() => load()} />
+      )}
+
+      {/* Cluster drilldown banner — surfaces when the page was opened from the
+          Strategic Opportunities drawer's "View matching Bonfire bids" CTA.
+          Shows the cluster title + how many of the original source bids are
+          still active + how many newly-ingested bids match the same product
+          signature. Clear button drops the filter and resets the list. */}
+      {clusterContext && !clusterContext.error && (
+        <div className="p-3 rounded-md border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/30 text-sm">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs uppercase tracking-wide text-purple-700 dark:text-purple-300 font-semibold mb-0.5">
+                {clusterContext.patternType === 'cluster' ? '📦 Cluster' : '🎯 Standalone'} drilldown
+              </div>
+              <div className="font-medium text-gray-900 dark:text-gray-100 leading-snug">
+                {clusterContext.title || 'Strategic opportunity'}
+              </div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                <span className="font-semibold">{total}</span> active bid{total === 1 ? '' : 's'} fit this product
+                {' '}({clusterContext.sourceShownInPage || 0} from the original {clusterContext.originalSourceCount}
+                {' '}+ {clusterContext.matchedShownInPage || 0} newly matched).
+                {clusterContext.aiCategory && (
+                  <span className="ml-1 text-gray-500">
+                    Matching on category &ldquo;{clusterContext.aiCategory}&rdquo; · value bracket {clusterContext.valueBracket}.
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearClusterFilter}
+              className="text-xs px-3 py-1.5 border border-purple-300 dark:border-purple-700 rounded text-purple-800 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/60 whitespace-nowrap"
+            >
+              ✕ Clear cluster filter
+            </button>
+          </div>
+        </div>
+      )}
+      {clusterContext && clusterContext.error === 'not_found' && (
+        <div className="p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/30 text-sm text-amber-900 dark:text-amber-200">
+          The strategic opportunity for this drilldown was not found. Showing the full Bonfire list instead.
+          <button
+            type="button"
+            onClick={clearClusterFilter}
+            className="ml-3 text-xs underline"
+          >
+            Clear
+          </button>
+        </div>
       )}
 
       <BonfireFilters value={filters} onChange={setFilters} />

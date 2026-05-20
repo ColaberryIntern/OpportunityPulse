@@ -3,12 +3,61 @@ const {
   sequelize,
   BonfireOpportunity,
   BonfireOpportunityTag,
+  BonfireStrategicOpportunity,
 } = require('../models');
 const logger = require('../logging/logger');
 const { validateRow, parseCsv, parseJsonArray } = require('./bonfire.util');
 const { enrichOpportunity, generateStrategy } = require('./bonfireAI.service');
 
+// Value brackets MUST mirror bonfireStrategist.service.valueBracket() exactly,
+// so the matching key we derive here lines up with how clusters were formed.
+// cents -> { bracket, range } where range is the inclusive lower bound and
+// exclusive upper bound in CENTS, or null for unbounded sides.
+function valueBracketBoundsFromCents(cents) {
+  if (cents == null) return { bracket: 'unknown', lo: null, hi: null };
+  const usd = cents / 100;
+  if (usd < 250_000)   return { bracket: 'sub-250k', lo: 0,            hi: 25_000_000 };
+  if (usd < 1_000_000) return { bracket: '250k-1m',  lo: 25_000_000,   hi: 100_000_000 };
+  if (usd < 5_000_000) return { bracket: '1m-5m',    lo: 100_000_000,  hi: 500_000_000 };
+  return                       { bracket: '5m+',     lo: 500_000_000,  hi: null };
+}
+
 // -------- queries --------
+
+// Resolve the (aiCategory, value-bracket) signature that a strategic
+// recommendation was built from. Returns { sourceIds, aiCategory, bracket }
+// or null when the rec / its source opps cannot be located.
+//
+// All opps inside a cluster share the same key by construction (see
+// bonfireStrategist.clusterCandidates), so reading the first surviving
+// source opp is sufficient.
+async function resolveClusterMatchKey(strategicRecId) {
+  if (!strategicRecId || !BonfireStrategicOpportunity) return null;
+  const rec = await BonfireStrategicOpportunity.findByPk(strategicRecId);
+  if (!rec) return null;
+  const sourceIds = Array.isArray(rec.sourceOpportunityIds) ? rec.sourceOpportunityIds : [];
+  if (!sourceIds.length) {
+    return {
+      rec, sourceIds: [],
+      aiCategory: null, bracket: 'unknown', lo: null, hi: null,
+    };
+  }
+  // Find ANY surviving source opp — closed/deleted ones get skipped.
+  const seed = await BonfireOpportunity.findOne({
+    where: { id: { [Op.in]: sourceIds } },
+    attributes: ['id', 'aiCategory', 'estimatedValue'],
+    order: [['createdAt', 'DESC']],
+  });
+  if (!seed) {
+    return { rec, sourceIds, aiCategory: null, bracket: 'unknown', lo: null, hi: null };
+  }
+  const { bracket, lo, hi } = valueBracketBoundsFromCents(seed.estimatedValue);
+  return {
+    rec, sourceIds,
+    aiCategory: seed.aiCategory || 'Other',
+    bracket, lo, hi,
+  };
+}
 
 async function listOpportunities(filters = {}) {
   const {
@@ -19,6 +68,12 @@ async function listOpportunities(filters = {}) {
     closeBefore,
     highAiFit,
     q,
+    // Drilldown from the Strategic Opportunities cluster drawer:
+    // load all opps that built this strategic recommendation PLUS any newly-
+    // ingested opps that match the same (aiCategory, value-bracket) signature.
+    // Closed/awarded opps drop unless the user is actively pursuing them
+    // (existing includeExpired=false default does this).
+    fromCluster,
     limit = 50,
     offset = 0,
     order = 'priority_desc',
@@ -28,6 +83,22 @@ async function listOpportunities(filters = {}) {
     // Pass includeExpired=true to opt in to the full historical list.
     includeExpired = false,
   } = filters;
+
+  // fromCluster path: resolve sourceIds + match key BEFORE building the where,
+  // so we can OR them into the same clause. Sourced and matched ids both go
+  // through the normal active-filter so closed bids drop off as expected.
+  let clusterContext = null;
+  if (fromCluster) {
+    clusterContext = await resolveClusterMatchKey(fromCluster);
+    if (!clusterContext) {
+      // Unknown cluster id — degrade gracefully: empty result, no crash.
+      return {
+        rows: [],
+        total: 0,
+        clusterContext: { error: 'not_found', strategicRecId: fromCluster },
+      };
+    }
+  }
 
   const where = {};
   if (agency) where.agency = { [Op.iLike]: `%${agency}%` };
@@ -42,6 +113,37 @@ async function listOpportunities(filters = {}) {
       { description: { [Op.iLike]: `%${q}%` } },
       { agency: { [Op.iLike]: `%${q}%` } },
     ];
+  }
+
+  // fromCluster filter is an OR of (original source ids) UNION (rows that
+  // match the same aiCategory + value-bracket signature). Either branch is
+  // valid evidence that an opp belongs in this cluster's universe.
+  if (clusterContext) {
+    const matchClause = clusterContext.aiCategory
+      ? {
+          [Op.and]: [
+            { aiCategory: clusterContext.aiCategory },
+            clusterContext.lo == null && clusterContext.hi == null
+              ? { estimatedValue: null }
+              : {
+                  estimatedValue: {
+                    ...(clusterContext.lo != null ? { [Op.gte]: clusterContext.lo } : {}),
+                    ...(clusterContext.hi != null ? { [Op.lt]: clusterContext.hi } : {}),
+                  },
+                },
+          ],
+        }
+      : null;
+    const orBranches = [];
+    if (clusterContext.sourceIds.length) {
+      orBranches.push({ id: { [Op.in]: clusterContext.sourceIds } });
+    }
+    if (matchClause) orBranches.push(matchClause);
+    if (!orBranches.length) {
+      // No source ids AND no resolvable match key — short-circuit.
+      return { rows: [], total: 0, clusterContext: { ...clusterContext, rec: undefined } };
+    }
+    where[Op.and] = [...(where[Op.and] || []), { [Op.or]: orBranches }];
   }
   // v0.11 — hide expired opps unless pursued/submitted. Always show opps
   // with no close_date set (we don't know they're expired).
@@ -61,13 +163,26 @@ async function listOpportunities(filters = {}) {
   // Tuple-based ORDER BY avoids Sequelize's literal-handling quirks with aliased joins.
   // We accept Postgres' default NULL placement (NULLS FIRST on DESC) for this prototype;
   // it is not user-facing until data is enriched (where priority_score will be non-null).
+  // When drilling from a cluster we default to a cluster-aware order: actively-
+  // pursued bids first (so already-decided work stays at the top), then by
+  // priority. Caller can override with order=... as usual.
+  const effectiveOrder = (clusterContext && order === 'priority_desc') ? 'cluster_default' : order;
   let orderClause;
-  switch (order) {
-    case 'priority_asc': orderClause = [['priorityScore', 'ASC']]; break;
-    case 'close_asc':    orderClause = [['closeDate', 'ASC']]; break;
-    case 'created_desc': orderClause = [['createdAt', 'DESC']]; break;
+  switch (effectiveOrder) {
+    case 'priority_asc':    orderClause = [['priorityScore', 'ASC']]; break;
+    case 'close_asc':       orderClause = [['closeDate', 'ASC']]; break;
+    case 'created_desc':    orderClause = [['createdAt', 'DESC']]; break;
+    case 'cluster_default':
+      orderClause = [
+        // Sequelize literal — Postgres CASE expression evaluates inline. Active
+        // pursuits (pursuing/submitted) sort to position 0; everything else to 1.
+        [sequelize.literal("CASE WHEN pursuit_status IN ('pursuing','submitted') THEN 0 ELSE 1 END"), 'ASC'],
+        ['priorityScore', 'DESC'],
+        ['createdAt', 'DESC'],
+      ];
+      break;
     case 'priority_desc':
-    default:             orderClause = [['priorityScore', 'DESC'], ['createdAt', 'DESC']];
+    default:                orderClause = [['priorityScore', 'DESC'], ['createdAt', 'DESC']];
   }
 
   // NOTE: with a hasMany tag include, Sequelize's default behavior wraps the
@@ -84,7 +199,37 @@ async function listOpportunities(filters = {}) {
     include: [{ model: BonfireOpportunityTag, as: 'tags', attributes: ['tag'] }],
     distinct: true,
   });
-  return { rows, total: count };
+
+  // Tag each row with its origin relative to the cluster, so the UI can
+  // visually distinguish "this was a source bid that built the cluster" from
+  // "this was ingested after — it's a new candidate the cluster's product
+  // could now also serve."
+  if (clusterContext) {
+    const sourceIdSet = new Set(clusterContext.sourceIds.map(String));
+    rows.forEach((r) => {
+      const isSource = sourceIdSet.has(String(r.id));
+      // We set a non-Sequelize property on the instance; dataValues makes it
+      // visible to JSON.stringify (which is what the controller serializes).
+      r.dataValues._origin = isSource ? 'source' : 'matched';
+    });
+  }
+
+  const result = { rows, total: count };
+  if (clusterContext) {
+    const sourceIdSet = new Set(clusterContext.sourceIds.map(String));
+    const sourceShown = rows.filter((r) => sourceIdSet.has(String(r.id))).length;
+    result.clusterContext = {
+      strategicRecId: clusterContext.rec.id,
+      title: clusterContext.rec.title,
+      patternType: clusterContext.rec.patternType,
+      aiCategory: clusterContext.aiCategory,
+      valueBracket: clusterContext.bracket,
+      originalSourceCount: clusterContext.sourceIds.length,
+      sourceShownInPage: sourceShown,
+      matchedShownInPage: rows.length - sourceShown,
+    };
+  }
+  return result;
 }
 
 async function getOpportunity(id) {
@@ -280,4 +425,7 @@ module.exports = {
   enrichOne,
   enrichAllUnenriched,
   generateStrategyForId,
+  // Exported for unit tests + cross-service callers.
+  resolveClusterMatchKey,
+  valueBracketBoundsFromCents,
 };

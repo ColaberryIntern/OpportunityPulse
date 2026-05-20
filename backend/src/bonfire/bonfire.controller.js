@@ -21,8 +21,26 @@ function getFlag(req, res) {
 
 async function listOpportunities(req, res) {
   try {
-    const { rows, total } = await service.listOpportunities(req.query);
+    const { rows, total, clusterContext } = await service.listOpportunities(req.query);
     const redacted = redactListForRole(rows, req.user);
+    // Default path uses the shared paginatedResponse so existing callers see
+    // the unchanged { status, message, data, pagination, code } shape. When a
+    // cluster drilldown is in play, append clusterContext as a top-level
+    // sibling so the banner can render without a second API hit.
+    if (clusterContext) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'Success',
+        data: redacted,
+        pagination: {
+          total,
+          limit: Number(req.query.limit) || 50,
+          offset: Number(req.query.offset) || 0,
+        },
+        clusterContext,
+        code: 200,
+      });
+    }
     return paginatedResponse(res, redacted, {
       total,
       limit: Number(req.query.limit) || 50,

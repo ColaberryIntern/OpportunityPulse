@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   listStrategic,
   getStrategic,
@@ -118,11 +119,19 @@ function KV({ label, value }) {
 }
 
 function StrategicDetail({ row, isAdmin, onClose, onPatch }) {
+  const navigate = useNavigate();
   if (!row) return null;
   const m = row.money || {};
   const r = row.roi || {};
   const a = row.aiSystem || {};
   const b = row.businessViability || {};
+  const sourceCount = (row.sourceOpportunityIds || []).length;
+
+  function viewMatchingBids() {
+    onClose && onClose();
+    navigate(`/bonfire?fromCluster=${encodeURIComponent(row.id)}`);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
       <div className="flex-1 bg-black/40" onClick={onClose} aria-hidden="true" />
@@ -142,6 +151,23 @@ function StrategicDetail({ row, isAdmin, onClose, onPatch }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
         </div>
+
+        {/* CTA — drills into the Bonfire opportunities list, filtered to every
+            active bid that fits this product (originals + newly-matched).
+            Closed bids drop off unless the user is pursuing/submitted on them. */}
+        {sourceCount > 0 && (
+          <button
+            type="button"
+            onClick={viewMatchingBids}
+            data-testid="view-matching-bids-button"
+            className="w-full mb-4 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition flex items-center justify-center gap-2"
+          >
+            <span>🔍 View matching Bonfire bids</span>
+            <span className="text-xs opacity-90">
+              ({sourceCount} original{sourceCount === 1 ? '' : 's'} + new matches, active only)
+            </span>
+          </button>
+        )}
 
         <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line mb-4 leading-relaxed">
           {row.summary}
@@ -175,10 +201,11 @@ function StrategicDetail({ row, isAdmin, onClose, onPatch }) {
           </PillarBlock>
         </div>
 
-        {(row.sourceOpportunityIds || []).length > 0 && (
+        {sourceCount > 0 && (
           <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
             <span className="text-gray-500 uppercase tracking-wide font-semibold">Source bids:</span>{' '}
-            {row.sourceOpportunityIds.length} bonfire opportunity ID(s) inspired this strategy.
+            {sourceCount} Bonfire bid{sourceCount === 1 ? '' : 's'} inspired this strategy.
+            {' '}Click the button above to see the still-active ones (plus any new bids that fit the same pattern).
           </div>
         )}
 
