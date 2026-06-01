@@ -3,8 +3,9 @@ const { AlertPreference, User, Opportunity, DataSource } = require('../models');
 const { assembleUserContext } = require('../personalMatch/personalMatch.service');
 const { getAIClient } = require('../analysis/ai.client');
 const { sendEmail } = require('../utils/email');
-const { digestEmailTemplate } = require('../utils/emailTemplates');
+const { digestEmailTemplate, richDigestEmailTemplate } = require('../utils/emailTemplates');
 const { getExecutiveBrief } = require('../actionEngine/executiveBrief.service');
+const { assembleRichDigest } = require('./richDigest.service');
 const logger = require('../logging/logger');
 
 const DIGEST_FREQUENCY_HOURS = {
@@ -198,6 +199,46 @@ async function sendDigestForUser(alertPref) {
     const since = alertPref.lastDigestSentAt || user.createdAt;
     const opportunities = await getNewOpportunities(since, alertPref);
 
+    const frequency = alertPref.digestFrequency || 'weekly';
+
+    // DAILY digest uses the rich, multi-section template (Bonfire + Strategic +
+    // gov + grants + jobs + freelance + capital + news + research + AI tools +
+    // counts of items added in the last 24h). The rich path runs even when the
+    // unified opportunities delta is empty — it pulls top-N from each surface
+    // so the email always has something to surface from the active pool.
+    if (frequency === 'daily') {
+      let richData;
+      try {
+        richData = await assembleRichDigest();
+      } catch (err) {
+        logger.error('Rich digest assembly failed; falling back to legacy template', {
+          userId, error: err.message,
+        });
+      }
+      if (richData) {
+        const { subject, html, text } = richDigestEmailTemplate({
+          name: user.name,
+          data: richData,
+          frontendUrl: process.env.FRONTEND_URL,
+        });
+        const result = await sendEmail({ to: user.email, subject, html, text });
+        if (result.sent) {
+          await alertPref.update({ lastDigestSentAt: new Date() });
+          logger.info('Rich daily digest sent', {
+            userId, email: user.email, totalAddedToday: richData.todayCounts?.total || 0,
+          });
+        } else {
+          logger.warn('Rich daily digest send failed', { userId, error: result.error });
+        }
+        return {
+          sent: result.sent,
+          opportunityCount: opportunities.length,
+          error: result.error,
+          variant: 'rich',
+        };
+      }
+    }
+
     if (opportunities.length === 0) {
       await alertPref.update({ lastDigestSentAt: new Date() });
       logger.info('Digest skipped (no new opportunities)', { userId });
@@ -213,7 +254,6 @@ async function sendDigestForUser(alertPref) {
       typeCounts[opp.type] = (typeCounts[opp.type] || 0) + 1;
     });
 
-    const frequency = alertPref.digestFrequency || 'weekly';
     const aiSummary = await generateDigestSummary(userContext, scored, typeCounts, frequency);
 
     // Fetch executive brief top opportunities (non-critical)
