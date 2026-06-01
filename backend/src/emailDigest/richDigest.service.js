@@ -24,7 +24,7 @@ const aiToolService = require('../aiTools/aiTool.service');
 const logger = require('../logging/logger');
 
 const TOP = {
-  bonfire: 5,
+  bonfire: 10,
   strategicCluster: 2,
   govContracts: 3,
   aiNews: 5,
@@ -37,14 +37,14 @@ const TOP = {
   deepResearch: 3,
 };
 
-// Minimum days before close_date that we'd still surface a Bonfire bid as
-// "ready to bid". Anything closing inside this window is too tight to prep a
-// proposal, so we hide it (unless we're already pursuing/submitted, where
-// status > deadline matters more). Configurable via env so the threshold can
-// be tuned without a code change.
+// Minimum days before close_date for a Bonfire bid to be surfaced. Bids
+// closing inside this window are too tight to prep a proposal, so they're
+// hidden. NO override for pursuit_status — closed contracts (negative days)
+// are always excluded per operator request. Configurable via env so the
+// threshold can be tuned without a code change.
 const BONFIRE_DIGEST_MIN_CLOSE_DAYS = Math.max(
   0,
-  parseInt(process.env.BONFIRE_DIGEST_MIN_CLOSE_DAYS, 10) || 5,
+  parseInt(process.env.BONFIRE_DIGEST_MIN_CLOSE_DAYS, 10) || 10,
 );
 
 // Helper: safe-call an async section fetch. Logs + swallows errors so a single
@@ -77,25 +77,17 @@ async function topByType(type, limit) {
   });
 }
 
-// Top N Bonfire opportunities to BID on — sorted by priority_score.
-// Excludes bids closing within `BONFIRE_DIGEST_MIN_CLOSE_DAYS` (default 5),
-// UNLESS we're already pursuing/submitted on them (in-flight work should
-// stay visible regardless of how close the deadline is). Bids with NULL
-// close_date are included — we can't prove they're tight, so they stay.
+// Top N Bonfire opportunities to BID on — sorted by priority_score then fit.
+// HARD filter: close_date must exist AND be at least
+// BONFIRE_DIGEST_MIN_CLOSE_DAYS in the future. No exceptions for pursuit
+// status (operator: "Don't add bonfires with negative days left, they are
+// closed. No closed contracts."). Bids with NULL close_date are also
+// excluded — we can't prove they have time to prep.
 async function topBonfire(limit) {
   const cutoff = new Date(Date.now() + BONFIRE_DIGEST_MIN_CLOSE_DAYS * 24 * 60 * 60 * 1000);
   return BonfireOpportunity.findAll({
     where: {
-      [Op.and]: [{
-        [Op.or]: [
-          // Active pursuits stay regardless of deadline (work in flight).
-          { pursuitStatus: { [Op.in]: ['pursuing', 'submitted'] } },
-          // No close date set — unknown deadline, keep visible.
-          { closeDate: null },
-          // Close date sufficiently far out to actually prep a proposal.
-          { closeDate: { [Op.gte]: cutoff } },
-        ],
-      }],
+      closeDate: { [Op.gte]: cutoff },
     },
     order: [['priorityScore', 'DESC NULLS LAST'], ['fitScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
     limit,

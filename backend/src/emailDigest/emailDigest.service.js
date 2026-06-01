@@ -221,11 +221,18 @@ async function sendDigestForUser(alertPref) {
           data: richData,
           frontendUrl: process.env.FRONTEND_URL,
         });
-        const result = await sendEmail({ to: user.email, subject, html, text });
+        // Comma-separated CC list (env-overridable). Defaults to Ram so both
+        // co-founders see the same daily picture without separate emails.
+        const ccRaw = (process.env.DIGEST_CC || 'ram@colaberry.com').trim();
+        const cc = ccRaw
+          ? ccRaw.split(',').map((s) => s.trim()).filter(Boolean)
+          : undefined;
+        const result = await sendEmail({ to: user.email, cc, subject, html, text });
         if (result.sent) {
           await alertPref.update({ lastDigestSentAt: new Date() });
           logger.info('Rich daily digest sent', {
-            userId, email: user.email, totalAddedToday: richData.todayCounts?.total || 0,
+            userId, email: user.email, cc,
+            totalAddedToday: richData.todayCounts?.total || 0,
           });
         } else {
           logger.warn('Rich daily digest send failed', { userId, error: result.error });

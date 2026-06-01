@@ -165,17 +165,21 @@ function startDailyResearchScheduler() {
     logger.info('Deep Research daily scan scheduler: disabled (set DEEP_RESEARCH_SCAN_ENABLED=true to enable)');
     return;
   }
-  const schedule = process.env.DEEP_RESEARCH_SCAN_SCHEDULE || '0 8 * * *';
+  // Default: 5 AM Central — runs ~1 hour BEFORE the 6 AM CT digest cron so the
+  // freshly-picked report is ready to surface in that morning's email.
+  // Timezone is configurable so ops can move the run window without code.
+  const schedule = process.env.DEEP_RESEARCH_SCAN_SCHEDULE || '0 5 * * *';
+  const timezone = process.env.DEEP_RESEARCH_SCAN_TIMEZONE || 'America/Chicago';
   cron.schedule(schedule, async () => {
-    logger.info('Scheduled: Deep Research daily scan starting');
+    logger.info('Scheduled: Deep Research daily scan starting', { schedule, timezone });
     try {
       const summary = await runDailyScan();
       logger.info('Scheduled: Deep Research daily scan complete', summary);
     } catch (error) {
       logger.error('Scheduled: Deep Research daily scan failed', { error: error.message });
     }
-  });
-  logger.info('Deep Research daily scan scheduler started', { schedule });
+  }, { timezone });
+  logger.info('Deep Research daily scan scheduler started', { schedule, timezone });
 }
 
 // On-demand: rank topics + run a Deep Research scan against the top pick.

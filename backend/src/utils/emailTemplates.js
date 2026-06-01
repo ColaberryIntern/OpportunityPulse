@@ -331,44 +331,52 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
       </div>`;
   };
 
-  // ----- Section: Bonfire — top 5 contracts to bid on -----
-  // Bonfire prefers the IN-APP link by default (per Ali's preference: bid
-  // ops route through the readiness page) but the raw bonfirehub.com link
-  // is still surfaced. Adds days-to-close as the primary urgency cue.
-  const bonfireRows = bonfireContracts.map((o) => {
+  // ----- Per-item renderers (one row per call). Earlier version pre-joined
+  // these into a single string and then passed `() => preJoined` to the
+  // section helper, which renders the full string ONCE PER ITEM — N×N output.
+  // Each renderer below now returns ONE row; the section helper handles the
+  // join correctly. -----
+  const bonfireRow = (o) => {
     const close = o.closeDate ? fmtDate(o.closeDate) : null;
     const dToClose = daysUntil(o.closeDate);
     const dueChip = dToClose != null
-      ? (dToClose <= 7
-        ? `<span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:3px;font-weight:600;">⏰ ${dToClose}d left</span>`
-        : `<span style="background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:3px;font-weight:600;">${dToClose}d</span>`)
+      ? (dToClose <= 14
+        ? `<span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:3px;font-weight:700;">⏰ ${dToClose}d left</span>`
+        : `<span style="background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:3px;font-weight:700;">${dToClose}d</span>`)
       : '';
     const val = fmtUSD(o.estimatedValue);
     const pri = o.priorityScore != null ? Math.round(Number(o.priorityScore)) : null;
     const fit = o.fitScore != null ? Math.round(Number(o.fitScore)) : null;
     const pursuit = o.pursuitStatus && o.pursuitStatus !== 'none'
-      ? `<span style="background:#DCFCE7;color:#15803D;padding:1px 6px;border-radius:3px;font-weight:600;">▶ ${escapeHtml(o.pursuitStatus)}</span> `
+      ? `<span style="background:#DCFCE7;color:#14532D;padding:1px 6px;border-radius:3px;font-weight:700;">▶ ${escapeHtml(o.pursuitStatus)}</span> `
       : '';
     const cat = o.aiCategory ? ` · ${escapeHtml(o.aiCategory)}` : '';
+    // Match/fit chip at the END of the row so it's always scannable even when
+    // the rest of the metadata line is long. Same chip style as the count strip.
+    const scoreChip = (pri != null || fit != null)
+      ? `<div style="margin-top:4px;">
+           ${pri != null ? `<span style="display:inline-block;background:#EEF2FF;color:#3730A3;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-right:4px;">🎯 priority ${pri}</span>` : ''}
+           ${fit != null ? `<span style="display:inline-block;background:#ECFDF5;color:#065F46;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">🤝 fit ${fit}</span>` : ''}
+         </div>`
+      : '';
     return `
-      <div style="padding: 10px 0; border-bottom: 1px solid #F3F4F6;">
-        <div style="font-weight: 600; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
+      <div style="padding: 12px 0; border-bottom: 1px solid #F3F4F6;">
+        <div style="font-weight: 700; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
           ${escapeHtml(o.title)}
         </div>
-        <div style="color: #374151; font-size: 11px; margin-bottom: 4px;">
+        <div style="color: #1F2937; font-size: 11px; margin-bottom: 4px;">
           ${pursuit}${escapeHtml(o.agency || '')}${cat}${val ? ` · 💵 ${val}` : ''}${close ? ` · 📅 ${close}` : ''} ${dueChip}
-          ${pri != null ? ` · 🎯 priority <strong>${pri}</strong>` : ''}${fit != null ? ` · 🤝 fit <strong>${fit}</strong>` : ''}
         </div>
+        ${scoreChip}
         ${dualLinks({
           sourceUrl: o.sourceUrl,
           appHref: `/admin/bonfire/${encodeURIComponent(o.id)}/submission-readiness`,
           appLabel: 'Open in Opp Pulse',
         })}
       </div>`;
-  }).join('');
+  };
 
-  // ----- Section: Strategic — top N clusters to build (default 2) -----
-  const strategicRows = strategicClusters.map((s) => {
+  const strategicRow = (s) => {
     const money = s.money || {};
     const roi = s.roi || {};
     const ai = s.aiSystem || {};
@@ -381,22 +389,24 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
     const margin = roi.margin_pct ? `${roi.margin_pct}% margin` : null;
     const buyer = biz.primary_buyer ? `🎯 ${escapeHtml(biz.primary_buyer)}` : '';
     const what = ai.what_to_build ? String(ai.what_to_build).slice(0, 180) : '';
+    const score = s.strategicScore || 0;
     return `
       <div style="padding: 14px; background: #FAF5FF; border: 1px solid #E9D5FF; border-radius: 8px; margin-bottom: 10px;">
         <div style="font-weight: 700; color: #4C1D95; font-size: 15px; margin-bottom: 6px;">
           ${escapeHtml(s.title)}
+          <span style="display:inline-block;background:#7C3AED;color:white;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle;">⭐ ${score}</span>
         </div>
-        ${what ? `<div style="color: #1F2937; font-size: 12px; margin-bottom: 8px; line-height: 1.5;">${escapeHtml(what)}${ai.what_to_build && String(ai.what_to_build).length > 180 ? '…' : ''}</div>` : ''}
-        <div style="font-size: 11px; color: #374151; margin-bottom: 6px;">
-          📦 <strong>${sourceCount}</strong> source bids · 🎯 score <strong>${s.strategicScore || 0}</strong>${initialBid ? ` · 💰 ${initialBid} initial` : ''}${clusterTotal ? ` · 📊 ${clusterTotal} cluster total` : ''}${market ? ` · 🌐 ${market} market` : ''}
+        ${what ? `<div style="color: #111827; font-size: 12px; margin-bottom: 8px; line-height: 1.5;">${escapeHtml(what)}${ai.what_to_build && String(ai.what_to_build).length > 180 ? '…' : ''}</div>` : ''}
+        <div style="font-size: 11px; color: #1F2937; margin-bottom: 6px;">
+          📦 <strong>${sourceCount}</strong> source bids${initialBid ? ` · 💰 ${initialBid} initial` : ''}${clusterTotal ? ` · 📊 ${clusterTotal} cluster total` : ''}${market ? ` · 🌐 ${market} market` : ''}
         </div>
-        ${(payback || margin || buyer) ? `<div style="font-size: 11px; color: #374151; margin-bottom: 8px;">${[buyer, payback, margin].filter(Boolean).join(' · ')}</div>` : ''}
+        ${(payback || margin || buyer) ? `<div style="font-size: 11px; color: #1F2937; margin-bottom: 8px;">${[buyer, payback, margin].filter(Boolean).join(' · ')}</div>` : ''}
         <div style="margin-top: 8px;">
-          <a href="${url}/bonfire?fromCluster=${encodeURIComponent(s.id)}" style="display: inline-block; padding: 6px 12px; background: #7C3AED; color: white; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600; margin-right: 6px;">🔍 See all bids that fit →</a>
-          <a href="${url}/bonfire/strategic" style="display: inline-block; padding: 6px 12px; background: transparent; color: #6B21A8; border: 1px solid #C4B5FD; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600;">📊 Open in Opp Pulse</a>
+          <a href="${url}/bonfire?fromCluster=${encodeURIComponent(s.id)}" style="display: inline-block; padding: 6px 12px; background: #7C3AED; color: white; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 700; margin-right: 6px;">🔍 See all bids that fit →</a>
+          <a href="${url}/bonfire/strategic" style="display: inline-block; padding: 6px 12px; background: transparent; color: #6B21A8; border: 1px solid #C4B5FD; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 700;">📊 Open in Opp Pulse</a>
         </div>
       </div>`;
-  }).join('');
+  };
 
   // ----- Generic unified-opportunity row renderer (gov/jobs/freelance/news/research/grants/investments) -----
   // Surfaces more pre-computed signal: actionType, saturationIndex, tags,
@@ -491,20 +501,29 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
       </span>`).join('');
 
   // ----- HTML body -----
+  // Outlook (Word rendering engine) strips CSS `background: linear-gradient(...)`,
+  // collapsing the header to a white background and making white text invisible.
+  // Use a solid bgcolor on a <table> with the bgcolor= attribute (which all
+  // email clients honor) — and keep the inline CSS as a belt-and-suspenders
+  // fallback for non-Word clients.
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Aptos, sans-serif; max-width: 680px; margin: 0 auto; padding: 16px; color: #111827; background-color: #F9FAFB;">
-  <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+  <div style="background: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
 
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); padding: 24px; text-align: center;">
-      <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 700;">🌅 Opportunity Pulse</h1>
-      <p style="color: #FFFFFF; opacity: 0.95; margin: 6px 0 0; font-size: 13px; font-weight: 500;">Daily Brief · ${escapeHtml(fmtFullDate(new Date()))} · 6 AM CT</p>
-    </div>
+    <!-- Header — Outlook-safe solid background via <table bgcolor> -->
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="#4F46E5" style="background-color:#4F46E5;">
+      <tr>
+        <td bgcolor="#4F46E5" style="background-color:#4F46E5;padding:24px;text-align:center;">
+          <h1 style="color:#FFFFFF;margin:0;font-size:24px;font-weight:700;line-height:1.2;">🌅 Opportunity Pulse</h1>
+          <p style="color:#FFFFFF;margin:6px 0 0;font-size:13px;font-weight:500;">Daily Brief · ${escapeHtml(fmtFullDate(new Date()))} · 6 AM CT</p>
+        </td>
+      </tr>
+    </table>
 
-    <div style="padding: 22px;">
-      <p style="font-size: 15px; color: #111827; margin: 0 0 14px; font-weight: 500;">Hi ${name ? escapeHtml(name) : 'there'} 👋</p>
+    <div style="padding: 22px; color: #111827;">
+      <p style="font-size: 15px; color: #111827; margin: 0 0 14px; font-weight: 600;">Hi ${name ? escapeHtml(name) : 'there'} 👋</p>
 
       <!-- Today's brief — dark background, light text, high-contrast.
            Deterministic summary built from the data we already have
@@ -532,7 +551,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
       ${section({
         emoji: '🎯', title: 'Top 2 Strategic Builds', accentColor: '#7C3AED',
         navHref: '/bonfire/strategic', navLabel: 'See all clusters',
-        items: strategicClusters, renderItem: () => strategicRows,
+        items: strategicClusters, renderItem: strategicRow,
         emptyText: 'No new strategic recommendations yet.',
       })}
 
@@ -540,7 +559,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
       ${section({
         emoji: '🔥', title: `Top ${bonfireContracts.length} Bonfire Contracts to Bid`, accentColor: '#DC2626',
         navHref: '/bonfire', navLabel: 'Go to Bonfire',
-        items: bonfireContracts, renderItem: () => bonfireRows,
+        items: bonfireContracts, renderItem: bonfireRow,
         emptyText: `No Bonfire bids with ≥${bonfireMinCloseDays} days to close right now.`,
       })}
 

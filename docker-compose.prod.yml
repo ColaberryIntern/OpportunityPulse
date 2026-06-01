@@ -94,6 +94,19 @@ services:
       BONFIRE_SCRAPER_SHUFFLE_AGENCIES: ${BONFIRE_SCRAPER_SHUFFLE_AGENCIES:-true}
       BONFIRE_STRATEGIST_CRON_ENABLED: ${BONFIRE_STRATEGIST_CRON_ENABLED:-false}
       BONFIRE_STRATEGIST_CRON: ${BONFIRE_STRATEGIST_CRON:-0 8 * * 1,3,5}
+      # Daily Deep Research auto-pick cron — runs the topic ranker each
+      # morning and produces ≥1 data-driven Deep Research report ahead of
+      # the 6 AM CT digest. Defaults: 5 AM Central, auto-pick enabled.
+      DEEP_RESEARCH_SCAN_ENABLED: ${DEEP_RESEARCH_SCAN_ENABLED:-false}
+      DEEP_RESEARCH_SCAN_SCHEDULE: ${DEEP_RESEARCH_SCAN_SCHEDULE:-0 5 * * *}
+      DEEP_RESEARCH_SCAN_TIMEZONE: ${DEEP_RESEARCH_SCAN_TIMEZONE:-America/Chicago}
+      DEEP_RESEARCH_AUTO_PICK_ENABLED: ${DEEP_RESEARCH_AUTO_PICK_ENABLED:-true}
+      # Bonfire digest filter knob — minimum days from now to close_date
+      # for a Bonfire bid to surface in the daily email.
+      BONFIRE_DIGEST_MIN_CLOSE_DAYS: ${BONFIRE_DIGEST_MIN_CLOSE_DAYS:-10}
+      # Daily digest CC list (comma-separated). Defaults to Ram so both
+      # founders see the same daily picture.
+      DIGEST_CC: ${DIGEST_CC:-ram@colaberry.com}
       OIED_DIGEST_ENABLED: ${OIED_DIGEST_ENABLED:-false}
       OIED_DIGEST_CRON: ${OIED_DIGEST_CRON:-0 8 * * *}
       OIED_DIGEST_TO: ${OIED_DIGEST_TO:-}

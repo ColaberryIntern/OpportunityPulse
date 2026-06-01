@@ -34,8 +34,10 @@ function createTransporter() {
 /**
  * Send a generic email via Gmail SMTP.
  * Gracefully degrades if email credentials are not configured.
+ * Accepts optional cc + bcc (string or array). Use cc for visible carbon
+ * copies (e.g. team leads on shared digests).
  */
-async function sendEmail({ to, subject, html, text }) {
+async function sendEmail({ to, subject, html, text, cc, bcc }) {
   const transporter = createTransporter();
 
   if (!transporter) {
@@ -44,16 +46,20 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   try {
-    const info = await transporter.sendMail({
+    const payload = {
       from: env.email.from,
       to,
       subject,
       html,
       text,
-    });
+    };
+    if (cc) payload.cc = cc;
+    if (bcc) payload.bcc = bcc;
+    const info = await transporter.sendMail(payload);
 
     logger.info('Email sent successfully', {
       to,
+      cc: cc || undefined,
       subject,
       messageId: info.messageId,
     });
