@@ -236,13 +236,28 @@ function escapeHtml(str) {
 // =====================================================================
 // Rich daily digest — aggregates every opportunity surface in the app
 // into one visually-appealing email with emojis + per-section deep links.
+// All dates display in America/Chicago (Central time) regardless of where
+// the server runs. Each opportunity row offers TWO clearly-labeled links:
+//   🔗 source  — the external link (bonfirehub.com, sam.gov, the article)
+//   📊 in app  — the Opportunity Pulse internal page for that item
+// so the operator can pick whichever destination fits the type.
 // =====================================================================
+const DIGEST_TZ = 'America/Chicago';
+const ACTION_COLORS = {
+  BUILD: '#4F46E5', BID: '#2563EB', APPLY: '#059669',
+  PARTNER: '#7C3AED', INVEST: '#D97706', TEACH: '#E11D48',
+  IGNORE: '#9CA3AF',
+};
+
 function richDigestEmailTemplate({ name, data, frontendUrl }) {
-  const url = frontendUrl || process.env.FRONTEND_URL || 'http://localhost:3000';
+  const url = (frontendUrl || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
   const {
     bonfireContracts = [], strategicClusters = [], govContracts = [],
     aiNews = [], freelance = [], aiJobs = [], investments = [], grants = [],
-    research = [], aiTools = [], todayCounts = { byType: {}, total: 0 },
+    research = [], aiTools = [], deepResearchReports = [],
+    todayCounts = { byType: {}, total: 0 },
+    summaryText = '',
+    bonfireMinCloseDays = 5,
   } = data || {};
 
   const totalAddedToday = todayCounts.total || 0;
@@ -263,9 +278,38 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
     if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
     return `$${Math.round(n)}`;
   };
+  // All dates render in America/Chicago, with DST handled by Intl. Format is
+  // "Jun 12" — short, scannable. Long header date uses weekday + year.
   const fmtDate = (d) => {
     if (!d) return '';
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: DIGEST_TZ, month: 'short', day: 'numeric',
+    }).format(new Date(d));
+  };
+  const fmtFullDate = (d) => new Intl.DateTimeFormat('en-US', {
+    timeZone: DIGEST_TZ, weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
+  }).format(d);
+  // Days remaining until a close date — used to add "X days" hint and the
+  // "closes soon" red flag for bids near the floor of the close-window
+  // filter. Returns null when there's no close date.
+  const daysUntil = (d) => {
+    if (!d) return null;
+    const ms = new Date(d).getTime() - Date.now();
+    return Math.ceil(ms / (24 * 60 * 60 * 1000));
+  };
+  // Render the dual-link pair (source + in-app). Both visible; the operator
+  // picks the destination per opportunity type. Internal link is omitted
+  // when there's no resolvable per-item Opp Pulse URL.
+  const dualLinks = ({ sourceUrl, appHref, appLabel = 'In Opp Pulse' }) => {
+    const parts = [];
+    if (sourceUrl) {
+      parts.push(`<a href="${escapeHtml(sourceUrl)}" style="color:#2563EB;text-decoration:none;font-weight:600;margin-right:10px;">🔗 Source</a>`);
+    }
+    if (appHref) {
+      parts.push(`<a href="${url}${appHref}" style="color:#7C3AED;text-decoration:none;font-weight:600;">📊 ${appLabel}</a>`);
+    }
+    if (!parts.length) return '';
+    return `<div style="margin-top:4px;font-size:11px;">${parts.join('')}</div>`;
   };
 
   // Each section block (header + section nav link + list of items).
@@ -288,72 +332,146 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
   };
 
   // ----- Section: Bonfire — top 5 contracts to bid on -----
+  // Bonfire prefers the IN-APP link by default (per Ali's preference: bid
+  // ops route through the readiness page) but the raw bonfirehub.com link
+  // is still surfaced. Adds days-to-close as the primary urgency cue.
   const bonfireRows = bonfireContracts.map((o) => {
     const close = o.closeDate ? fmtDate(o.closeDate) : null;
+    const dToClose = daysUntil(o.closeDate);
+    const dueChip = dToClose != null
+      ? (dToClose <= 7
+        ? `<span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:3px;font-weight:600;">⏰ ${dToClose}d left</span>`
+        : `<span style="background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:3px;font-weight:600;">${dToClose}d</span>`)
+      : '';
     const val = fmtUSD(o.estimatedValue);
     const pri = o.priorityScore != null ? Math.round(Number(o.priorityScore)) : null;
     const fit = o.fitScore != null ? Math.round(Number(o.fitScore)) : null;
+    const pursuit = o.pursuitStatus && o.pursuitStatus !== 'none'
+      ? `<span style="background:#DCFCE7;color:#15803D;padding:1px 6px;border-radius:3px;font-weight:600;">▶ ${escapeHtml(o.pursuitStatus)}</span> `
+      : '';
+    const cat = o.aiCategory ? ` · ${escapeHtml(o.aiCategory)}` : '';
     return `
       <div style="padding: 10px 0; border-bottom: 1px solid #F3F4F6;">
-        <div style="font-weight: 600; color: #111827; margin-bottom: 4px; font-size: 13px;">
-          ${o.sourceUrl ? `<a href="${o.sourceUrl}" style="color: #DC2626; text-decoration: none;">${escapeHtml(o.title)}</a>` : escapeHtml(o.title)}
+        <div style="font-weight: 600; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
+          ${escapeHtml(o.title)}
         </div>
-        <div style="color: #6B7280; font-size: 11px;">
-          ${escapeHtml(o.agency || '')}${val ? ` · ${val}` : ''}${close ? ` · 📅 ${close}` : ''}${pri != null ? ` · 🎯 priority ${pri}` : ''}${fit != null ? ` · 🤝 fit ${fit}` : ''}
+        <div style="color: #374151; font-size: 11px; margin-bottom: 4px;">
+          ${pursuit}${escapeHtml(o.agency || '')}${cat}${val ? ` · 💵 ${val}` : ''}${close ? ` · 📅 ${close}` : ''} ${dueChip}
+          ${pri != null ? ` · 🎯 priority <strong>${pri}</strong>` : ''}${fit != null ? ` · 🤝 fit <strong>${fit}</strong>` : ''}
         </div>
+        ${dualLinks({
+          sourceUrl: o.sourceUrl,
+          appHref: `/admin/bonfire/${encodeURIComponent(o.id)}/submission-readiness`,
+          appLabel: 'Open in Opp Pulse',
+        })}
       </div>`;
   }).join('');
 
-  // ----- Section: Strategic — the #1 cluster to build -----
+  // ----- Section: Strategic — top N clusters to build (default 2) -----
   const strategicRows = strategicClusters.map((s) => {
     const money = s.money || {};
+    const roi = s.roi || {};
     const ai = s.aiSystem || {};
+    const biz = s.businessViability || {};
     const sourceCount = (s.sourceOpportunityIds || []).length;
     const initialBid = fmtUSDPlain(money.initial_bid_value_usd);
+    const clusterTotal = fmtUSDPlain(money.cluster_total_usd);
     const market = fmtUSDPlain(money.addressable_market_usd);
+    const payback = roi.payback_months ? `${roi.payback_months}mo payback` : null;
+    const margin = roi.margin_pct ? `${roi.margin_pct}% margin` : null;
+    const buyer = biz.primary_buyer ? `🎯 ${escapeHtml(biz.primary_buyer)}` : '';
     const what = ai.what_to_build ? String(ai.what_to_build).slice(0, 180) : '';
     return `
-      <div style="padding: 12px; background: #FAF5FF; border: 1px solid #E9D5FF; border-radius: 6px;">
-        <div style="font-weight: 700; color: #6B21A8; font-size: 14px; margin-bottom: 6px;">
-          <a href="${url}/bonfire/strategic" style="color: #6B21A8; text-decoration: none;">${escapeHtml(s.title)}</a>
+      <div style="padding: 14px; background: #FAF5FF; border: 1px solid #E9D5FF; border-radius: 8px; margin-bottom: 10px;">
+        <div style="font-weight: 700; color: #4C1D95; font-size: 15px; margin-bottom: 6px;">
+          ${escapeHtml(s.title)}
         </div>
-        ${what ? `<div style="color: #4B5563; font-size: 12px; margin-bottom: 8px;">${escapeHtml(what)}${ai.what_to_build && String(ai.what_to_build).length > 180 ? '…' : ''}</div>` : ''}
-        <div style="font-size: 12px; color: #4B5563; margin-bottom: 8px;">
-          📦 <strong>${sourceCount}</strong> bids inspired this · 🎯 strategic score <strong>${s.strategicScore || 0}</strong>${initialBid ? ` · 💰 initial bid ${initialBid}` : ''}${market ? ` · 🌐 market ${market}` : ''}
+        ${what ? `<div style="color: #1F2937; font-size: 12px; margin-bottom: 8px; line-height: 1.5;">${escapeHtml(what)}${ai.what_to_build && String(ai.what_to_build).length > 180 ? '…' : ''}</div>` : ''}
+        <div style="font-size: 11px; color: #374151; margin-bottom: 6px;">
+          📦 <strong>${sourceCount}</strong> source bids · 🎯 score <strong>${s.strategicScore || 0}</strong>${initialBid ? ` · 💰 ${initialBid} initial` : ''}${clusterTotal ? ` · 📊 ${clusterTotal} cluster total` : ''}${market ? ` · 🌐 ${market} market` : ''}
         </div>
-        <a href="${url}/bonfire?fromCluster=${encodeURIComponent(s.id)}" style="display: inline-block; padding: 6px 12px; background: #7C3AED; color: white; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600;">🔍 See all bids that fit this product →</a>
+        ${(payback || margin || buyer) ? `<div style="font-size: 11px; color: #374151; margin-bottom: 8px;">${[buyer, payback, margin].filter(Boolean).join(' · ')}</div>` : ''}
+        <div style="margin-top: 8px;">
+          <a href="${url}/bonfire?fromCluster=${encodeURIComponent(s.id)}" style="display: inline-block; padding: 6px 12px; background: #7C3AED; color: white; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600; margin-right: 6px;">🔍 See all bids that fit →</a>
+          <a href="${url}/bonfire/strategic" style="display: inline-block; padding: 6px 12px; background: transparent; color: #6B21A8; border: 1px solid #C4B5FD; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600;">📊 Open in Opp Pulse</a>
+        </div>
       </div>`;
   }).join('');
 
-  // ----- Generic unified-opportunity row renderer -----
-  const oppRow = (emoji, accent) => (o) => {
+  // ----- Generic unified-opportunity row renderer (gov/jobs/freelance/news/research/grants/investments) -----
+  // Surfaces more pre-computed signal: actionType, saturationIndex, tags,
+  // location, value, date — all already in the row, no extra fetch.
+  const oppRow = (emoji, accent, opts = {}) => (o) => {
     const val = o.value ? fmtUSDPlain(o.value) : null;
     const date = fmtDate(o.publishedAt || o.createdAt);
     const score = o.aiScore != null ? Math.round(Number(o.aiScore)) : null;
     const loc = o.location ? ` · 📍 ${escapeHtml(o.location)}` : '';
+    const cat = o.category ? ` · ${escapeHtml(o.category)}` : '';
+    const action = o.actionType
+      ? `<span style="background:${ACTION_COLORS[o.actionType] || '#6B7280'};color:white;padding:1px 6px;border-radius:3px;font-weight:600;font-size:10px;margin-right:4px;">${o.actionType}</span> `
+      : '';
+    const tags = Array.isArray(o.tags) && o.tags.length
+      ? `<div style="margin-top:3px;color:#6B7280;font-size:10px;">${o.tags.slice(0, 4).map((t) => `#${escapeHtml(t)}`).join(' ')}</div>`
+      : '';
     return `
-      <div style="padding: 8px 0; border-bottom: 1px solid #F3F4F6;">
-        <div style="font-weight: 600; color: #111827; margin-bottom: 3px; font-size: 13px;">
-          ${o.sourceUrl ? `<a href="${escapeHtml(o.sourceUrl)}" style="color: ${accent}; text-decoration: none;">${emoji} ${escapeHtml(o.title)}</a>` : `${emoji} ${escapeHtml(o.title)}`}
+      <div style="padding: 10px 0; border-bottom: 1px solid #F3F4F6;">
+        <div style="font-weight: 600; color: #111827; margin-bottom: 3px; font-size: 13px; line-height: 1.4;">
+          ${emoji} ${escapeHtml(o.title)}
         </div>
-        <div style="color: #6B7280; font-size: 11px;">
-          ${escapeHtml(o.source || '')}${val ? ` · ${val}` : ''}${date ? ` · ${date}` : ''}${score != null ? ` · ⭐ ${score}` : ''}${loc}
+        <div style="color: #374151; font-size: 11px;">
+          ${action}${escapeHtml(o.source || '')}${cat}${val ? ` · ${val}` : ''}${date ? ` · ${date}` : ''}${score != null ? ` · ⭐ <strong>${score}</strong>` : ''}${loc}
         </div>
+        ${tags}
+        ${dualLinks({
+          sourceUrl: o.sourceUrl,
+          appHref: `/opportunities/${o.id}`,
+          appLabel: opts.appLabel || 'In Opp Pulse',
+        })}
       </div>`;
   };
 
-  // ----- AI Tools row (separate model) -----
+  // ----- AI Tools row (separate model — its own slug-based detail page) -----
   const aiToolRow = (t) => {
     const dir = t.trendDirection;
     const arrow = dir === 'up' ? '📈' : dir === 'down' ? '📉' : '➡️';
     const mom = t.momentumScore != null ? Math.round(Number(t.momentumScore)) : null;
+    const slug = t.slug || String(t.id);
     return `
-      <div style="padding: 8px 0; border-bottom: 1px solid #F3F4F6;">
+      <div style="padding: 10px 0; border-bottom: 1px solid #F3F4F6;">
         <div style="font-weight: 600; color: #111827; margin-bottom: 3px; font-size: 13px;">
-          <a href="${url}/ai-tools/${escapeHtml(t.slug || String(t.id))}" style="color: #2563EB; text-decoration: none;">${arrow} ${escapeHtml(t.name)}</a>
+          ${arrow} ${escapeHtml(t.name)}
         </div>
-        <div style="color: #6B7280; font-size: 11px;">
-          ${escapeHtml(t.category || '')}${t.industry ? ` · ${escapeHtml(t.industry)}` : ''}${mom != null ? ` · ⚡ momentum ${mom}` : ''}
+        <div style="color: #374151; font-size: 11px;">
+          ${escapeHtml(t.category || '')}${t.industry ? ` · ${escapeHtml(t.industry)}` : ''}${mom != null ? ` · ⚡ momentum <strong>${mom}</strong>` : ''}
+        </div>
+        ${dualLinks({
+          sourceUrl: t.websiteUrl || t.homepageUrl || t.url,
+          appHref: `/ai-tools/${encodeURIComponent(slug)}`,
+          appLabel: 'Open in Opp Pulse',
+        })}
+      </div>`;
+  };
+
+  // ----- Deep Research row — link to the full report inside Opp Pulse -----
+  const deepResearchRow = (r) => {
+    const conf = r.confidenceScore != null ? Math.round(Number(r.confidenceScore) * 100) : null;
+    const comm = r.commercializationScore != null ? Math.round(Number(r.commercializationScore)) : null;
+    const stage = r.marketStage ? escapeHtml(r.marketStage) : '';
+    const summary = r.executiveSummary
+      ? String(r.executiveSummary).replace(/\s+/g, ' ').slice(0, 200)
+      : '';
+    const fav = r.isFavorite ? '⭐ ' : '';
+    return `
+      <div style="padding: 10px 0; border-bottom: 1px solid #F3F4F6;">
+        <div style="font-weight: 600; color: #111827; margin-bottom: 4px; font-size: 13px;">
+          ${fav}<a href="${url}/admin/deep-research/${encodeURIComponent(r.id)}" style="color:#0F766E;text-decoration:none;">📑 ${escapeHtml(r.searchTerm)}</a>
+        </div>
+        ${summary ? `<div style="color:#374151;font-size:11px;margin-bottom:4px;line-height:1.45;">${escapeHtml(summary)}${r.executiveSummary && String(r.executiveSummary).length > 200 ? '…' : ''}</div>` : ''}
+        <div style="color: #374151; font-size: 11px;">
+          ${stage ? `${stage} · ` : ''}${conf != null ? `🎯 confidence <strong>${conf}%</strong>` : ''}${comm != null ? ` · 💼 commercial <strong>${comm}</strong>` : ''}${r.sourceCount ? ` · 📚 ${r.sourceCount} sources` : ''}
+        </div>
+        <div style="margin-top:4px;font-size:11px;">
+          <a href="${url}/admin/deep-research/${encodeURIComponent(r.id)}" style="color:#0F766E;text-decoration:none;font-weight:600;">📊 Open full report →</a>
         </div>
       </div>`;
   };
@@ -376,31 +494,43 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Aptos, sans-serif; max-width: 680px; margin: 0 auto; padding: 16px; color: #1F2937; background-color: #F9FAFB;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Aptos, sans-serif; max-width: 680px; margin: 0 auto; padding: 16px; color: #111827; background-color: #F9FAFB;">
   <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
 
     <!-- Header -->
     <div style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); padding: 24px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 700;">🌅 Opportunity Pulse</h1>
-      <p style="color: #DDD6FE; margin: 6px 0 0; font-size: 13px;">Daily Brief · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+      <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 700;">🌅 Opportunity Pulse</h1>
+      <p style="color: #FFFFFF; opacity: 0.95; margin: 6px 0 0; font-size: 13px; font-weight: 500;">Daily Brief · ${escapeHtml(fmtFullDate(new Date()))} · 6 AM CT</p>
     </div>
 
     <div style="padding: 22px;">
-      <p style="font-size: 15px; color: #111827; margin: 0 0 16px;">Hi ${name ? escapeHtml(name) : 'there'} 👋</p>
+      <p style="font-size: 15px; color: #111827; margin: 0 0 14px; font-weight: 500;">Hi ${name ? escapeHtml(name) : 'there'} 👋</p>
 
-      <!-- Added today strip -->
-      <div style="background: #F3F4F6; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
-        <div style="font-size: 11px; font-weight: 700; color: #4F46E5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
-          ✨ Added in the last 24h${totalAddedToday > 0 ? ` · ${totalAddedToday} new items` : ''}
+      <!-- Today's brief — dark background, light text, high-contrast.
+           Deterministic summary built from the data we already have
+           (no extra LLM call). -->
+      <div style="background: #111827; border-radius: 10px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #7C3AED;">
+        <div style="font-size: 11px; font-weight: 700; color: #C4B5FD; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;">
+          📌 Today's Brief
         </div>
-        <div>
-          ${countChips || '<span style="color: #6B7280; font-size: 12px; font-style: italic;">Nothing new ingested today (yet — sources refresh on cron).</span>'}
+        <div style="font-size: 14px; color: #F9FAFB; line-height: 1.55;">
+          ${summaryText ? escapeHtml(summaryText) : 'No fresh items yet — sources refresh on cron.'}
         </div>
       </div>
 
-      <!-- Section: Best-fit Strategic cluster -->
+      <!-- Added today strip -->
+      <div style="background: #F3F4F6; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+        <div style="font-size: 11px; font-weight: 700; color: #4338CA; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+          ✨ Added in the last 24h${totalAddedToday > 0 ? ` · ${totalAddedToday} new items` : ''}
+        </div>
+        <div>
+          ${countChips || '<span style="color: #4B5563; font-size: 12px; font-style: italic;">Nothing new ingested today (yet — sources refresh on cron).</span>'}
+        </div>
+      </div>
+
+      <!-- Section: Best-fit Strategic clusters (top 2) -->
       ${section({
-        emoji: '🎯', title: 'Best-Fit Strategic Build', accentColor: '#7C3AED',
+        emoji: '🎯', title: 'Top 2 Strategic Builds', accentColor: '#7C3AED',
         navHref: '/bonfire/strategic', navLabel: 'See all clusters',
         items: strategicClusters, renderItem: () => strategicRows,
         emptyText: 'No new strategic recommendations yet.',
@@ -408,10 +538,18 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
 
       <!-- Section: Bonfire contracts to bid -->
       ${section({
-        emoji: '🔥', title: 'Top 5 Bonfire Contracts to Bid', accentColor: '#DC2626',
+        emoji: '🔥', title: `Top ${bonfireContracts.length} Bonfire Contracts to Bid`, accentColor: '#DC2626',
         navHref: '/bonfire', navLabel: 'Go to Bonfire',
         items: bonfireContracts, renderItem: () => bonfireRows,
-        emptyText: 'No active Bonfire bids matched your filters today.',
+        emptyText: `No Bonfire bids with ≥${bonfireMinCloseDays} days to close right now.`,
+      })}
+
+      <!-- Section: Deep Research — 3 best reports with direct links -->
+      ${section({
+        emoji: '📑', title: 'Top 3 Deep Research Reports', accentColor: '#0F766E',
+        navHref: '/admin/deep-research', navLabel: 'See all reports',
+        items: deepResearchReports, renderItem: deepResearchRow,
+        emptyText: 'No completed Deep Research reports yet.',
       })}
 
       <!-- Section: Gov contracts (SAM.gov etc) -->

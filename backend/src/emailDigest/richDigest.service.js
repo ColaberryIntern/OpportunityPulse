@@ -18,13 +18,14 @@ const {
   Opportunity,
   BonfireOpportunity,
   BonfireStrategicOpportunity,
+  DeepResearchReport,
 } = require('../models');
 const aiToolService = require('../aiTools/aiTool.service');
 const logger = require('../logging/logger');
 
 const TOP = {
   bonfire: 5,
-  strategicCluster: 1,
+  strategicCluster: 2,
   govContracts: 3,
   aiNews: 5,
   freelance: 3,
@@ -33,7 +34,18 @@ const TOP = {
   grants: 3,
   research: 3,
   aiTools: 5,
+  deepResearch: 3,
 };
+
+// Minimum days before close_date that we'd still surface a Bonfire bid as
+// "ready to bid". Anything closing inside this window is too tight to prep a
+// proposal, so we hide it (unless we're already pursuing/submitted, where
+// status > deadline matters more). Configurable via env so the threshold can
+// be tuned without a code change.
+const BONFIRE_DIGEST_MIN_CLOSE_DAYS = Math.max(
+  0,
+  parseInt(process.env.BONFIRE_DIGEST_MIN_CLOSE_DAYS, 10) || 5,
+);
 
 // Helper: safe-call an async section fetch. Logs + swallows errors so a single
 // broken upstream doesn't blank the entire email.
@@ -65,21 +77,27 @@ async function topByType(type, limit) {
   });
 }
 
-// Top N Bonfire opportunities to BID on — active only, sorted by priority_score.
-// Reuses the existing bonfire opportunities table (richer fields than the
-// unified opportunities mirror).
+// Top N Bonfire opportunities to BID on — sorted by priority_score.
+// Excludes bids closing within `BONFIRE_DIGEST_MIN_CLOSE_DAYS` (default 5),
+// UNLESS we're already pursuing/submitted on them (in-flight work should
+// stay visible regardless of how close the deadline is). Bids with NULL
+// close_date are included — we can't prove they're tight, so they stay.
 async function topBonfire(limit) {
+  const cutoff = new Date(Date.now() + BONFIRE_DIGEST_MIN_CLOSE_DAYS * 24 * 60 * 60 * 1000);
   return BonfireOpportunity.findAll({
     where: {
       [Op.and]: [{
         [Op.or]: [
-          { closeDate: null },
-          { closeDate: { [Op.gte]: new Date() } },
+          // Active pursuits stay regardless of deadline (work in flight).
           { pursuitStatus: { [Op.in]: ['pursuing', 'submitted'] } },
+          // No close date set — unknown deadline, keep visible.
+          { closeDate: null },
+          // Close date sufficiently far out to actually prep a proposal.
+          { closeDate: { [Op.gte]: cutoff } },
         ],
       }],
     },
-    order: [['priorityScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
+    order: [['priorityScore', 'DESC NULLS LAST'], ['fitScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
     limit,
   });
 }
@@ -131,6 +149,78 @@ async function topAiTools(limit) {
   return aiToolService.getTopTrendingTools({ limit });
 }
 
+// Top N completed Deep Research reports — sorted by confidence_score desc,
+// then by recency. We surface a deep-link to /admin/deep-research/:id so the
+// user lands directly on the full report.
+async function topDeepResearchReports(limit) {
+  return DeepResearchReport.findAll({
+    where: {
+      status: { [Op.in]: ['success', 'completed'] },
+      isArchived: false,
+    },
+    order: [
+      ['isFavorite', 'DESC'],
+      ['confidenceScore', 'DESC NULLS LAST'],
+      ['createdAt', 'DESC'],
+    ],
+    limit,
+    attributes: [
+      'id', 'searchTerm', 'executiveSummary', 'marketStage',
+      'confidenceScore', 'commercializationScore', 'sourceCount',
+      'isFavorite', 'createdAt',
+    ],
+  });
+}
+
+// Deterministic 2-3 sentence brief over today's intake + top picks. No LLM
+// call — we already have the data and the user explicitly asked to keep
+// LLM costs flat. Mention: (1) total ingested today, (2) the dominant source
+// type, (3) the single highest-leverage pick to surface attention.
+function buildSummaryParagraph(data) {
+  const totalNew = data.todayCounts?.total || 0;
+  const byType = data.todayCounts?.byType || {};
+  const friendly = {
+    gov_contract: 'gov contracts', ai_job: 'AI jobs', investment: 'capital deployments',
+    grant: 'grants', ai_news: 'AI news items', freelance: 'freelance gigs',
+    bonfire: 'Bonfire bids', bonfire_strategic: 'strategic clusters', research: 'research papers',
+  };
+  // Dominant source today (by count).
+  const dominant = Object.entries(byType)
+    .sort((a, b) => b[1] - a[1])
+    .find(([t, n]) => n > 0 && t !== 'bonfire_strategic'); // exclude strategic — derivative
+
+  const parts = [];
+  if (totalNew > 0) {
+    if (dominant) {
+      parts.push(`Last 24h: ${totalNew} new items ingested, led by ${dominant[1]} ${friendly[dominant[0]] || dominant[0]}.`);
+    } else {
+      parts.push(`Last 24h: ${totalNew} new items ingested across the network.`);
+    }
+  } else {
+    parts.push('No fresh items ingested in the last 24h — sources refresh on cron.');
+  }
+
+  // Top-leverage callout: prefer Strategic > Bonfire > Gov.
+  const topStrategic = data.strategicClusters?.[0];
+  const topBonfireBid = data.bonfireContracts?.[0];
+  if (topStrategic) {
+    const score = topStrategic.strategicScore || 0;
+    const sources = (topStrategic.sourceOpportunityIds || []).length;
+    parts.push(`Strongest signal: the "${topStrategic.title}" cluster (score ${score}, ${sources} source bids) is the top product-to-build opportunity.`);
+  } else if (topBonfireBid) {
+    const pri = topBonfireBid.priorityScore != null ? Math.round(Number(topBonfireBid.priorityScore)) : null;
+    parts.push(`Strongest signal: "${topBonfireBid.title}" — priority ${pri || '?'} from ${topBonfireBid.agency || 'an active agency'}.`);
+  }
+
+  // How many Bonfire bids are ready (passed the close-window filter).
+  const bonfireReady = (data.bonfireContracts || []).length;
+  if (bonfireReady > 0) {
+    parts.push(`${bonfireReady} Bonfire bid${bonfireReady === 1 ? '' : 's'} flagged ready to pursue (≥${BONFIRE_DIGEST_MIN_CLOSE_DAYS} days to close).`);
+  }
+
+  return parts.join(' ');
+}
+
 // Main entry point. Returns an envelope with each section + counts. Designed
 // to be passed directly into richDigestEmailTemplate().
 async function assembleRichDigest() {
@@ -145,6 +235,7 @@ async function assembleRichDigest() {
     grants,
     research,
     aiTools,
+    deepResearchReports,
     todayCounts,
   ] = await Promise.all([
     safe('bonfire',        () => topBonfire(TOP.bonfire), []),
@@ -157,10 +248,11 @@ async function assembleRichDigest() {
     safe('grant',          () => topByType('grant', TOP.grants), []),
     safe('research',       () => topByType('research', TOP.research), []),
     safe('ai_tools',       () => topAiTools(TOP.aiTools), []),
+    safe('deep_research',  () => topDeepResearchReports(TOP.deepResearch), []),
     safe('today_counts',   () => todayCountsByType(), { byType: {}, total: 0, since: new Date() }),
   ]);
 
-  return {
+  const envelope = {
     bonfireContracts,
     strategicClusters,
     govContracts,
@@ -171,18 +263,25 @@ async function assembleRichDigest() {
     grants,
     research,
     aiTools,
+    deepResearchReports,
     todayCounts,
     generatedAt: new Date(),
+    bonfireMinCloseDays: BONFIRE_DIGEST_MIN_CLOSE_DAYS,
   };
+  envelope.summaryText = buildSummaryParagraph(envelope);
+  return envelope;
 }
 
 module.exports = {
   assembleRichDigest,
   TOP,
+  BONFIRE_DIGEST_MIN_CLOSE_DAYS,
+  buildSummaryParagraph,
   // Exported for tests.
   topByType,
   topBonfire,
   topStrategicCluster,
   topAiTools,
+  topDeepResearchReports,
   todayCountsByType,
 };
