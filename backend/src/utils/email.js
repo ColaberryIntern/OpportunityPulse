@@ -6,6 +6,12 @@ const { verificationEmailTemplate, resetPasswordEmailTemplate } = require('./ema
 /**
  * Create a reusable Nodemailer transporter for Gmail SMTP.
  * Returns null if credentials are not configured.
+ *
+ * Explicitly uses smtp.gmail.com:587 + STARTTLS instead of the
+ * `service: 'gmail'` shorthand. Nodemailer's gmail shorthand defaults to
+ * port 465 (SSL-on-connect), which Hetzner blocks for outbound traffic.
+ * Port 587 is open and is Google's recommended modern path anyway.
+ * connectionTimeout caps the dead-port hang at 15s instead of the OS default.
  */
 function createTransporter() {
   if (!env.email.user || !env.email.appPassword) {
@@ -13,7 +19,11 @@ function createTransporter() {
   }
 
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // upgrade via STARTTLS
+    requireTLS: true,
+    connectionTimeout: 15000,
     auth: {
       user: env.email.user,
       pass: env.email.appPassword,
