@@ -35,18 +35,48 @@ async function getUsersDueForDigest() {
     }],
   });
 
-  const now = new Date();
-  return preferences.filter((pref) => {
-    const frequency = pref.digestFrequency || 'weekly';
-    const hoursRequired = DIGEST_FREQUENCY_HOURS[frequency];
-    if (!hoursRequired) return false;
+  return preferences.filter((pref) => isDueForDigest(pref));
+}
 
-    const lastSent = pref.lastDigestSentAt;
-    if (!lastSent) return true;
+// Determine if a user is due for a digest right now. For 'daily', the check
+// is "no digest sent so far on the current Central calendar day" — this
+// matches a fixed cron-at-6am-CT semantic so the morning send fires once
+// per calendar day regardless of whether a manual test went out yesterday
+// afternoon. For other frequencies, fall back to the legacy "hours since
+// last send" check which still works correctly for weekly/biweekly/monthly.
+//
+// This rule is the load-bearing one: get it wrong and the user either
+// double-sends or silently misses a day. Exported for tests.
+function isDueForDigest(pref, { now = new Date(), timezone = 'America/Chicago' } = {}) {
+  const frequency = pref.digestFrequency || 'weekly';
+  if (frequency === 'daily') {
+    if (!pref.lastDigestSentAt) return true;
+    // Compare the YYYY-MM-DD strings of "now" vs "last sent" in the user's
+    // timezone. Different day → due. Same day → already sent, skip.
+    const today = formatYmdInTz(now, timezone);
+    const lastDay = formatYmdInTz(new Date(pref.lastDigestSentAt), timezone);
+    return today !== lastDay;
+  }
+  const hoursRequired = DIGEST_FREQUENCY_HOURS[frequency];
+  if (!hoursRequired) return false;
+  if (!pref.lastDigestSentAt) return true;
+  const hoursSinceLastSent = (now - new Date(pref.lastDigestSentAt)) / (1000 * 60 * 60);
+  return hoursSinceLastSent >= hoursRequired;
+}
 
-    const hoursSinceLastSent = (now - new Date(lastSent)) / (1000 * 60 * 60);
-    return hoursSinceLastSent >= hoursRequired;
-  });
+// Format a Date as YYYY-MM-DD in the given IANA timezone. Used to compare
+// calendar days for the daily eligibility rule. We hand-roll instead of
+// using Date.prototype.toLocaleDateString so the format is unambiguous and
+// timezone-stable across Node versions.
+function formatYmdInTz(date, timezone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === 'year').value;
+  const m = parts.find((p) => p.type === 'month').value;
+  const d = parts.find((p) => p.type === 'day').value;
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -314,13 +344,44 @@ async function sendDigestForUser(alertPref) {
 /**
  * Main entry point: process all users due for a digest email.
  * Processes in batches with delays to respect Gmail rate limits.
+ *
+ * Options:
+ *   - forceSendForUserId: bypass the eligibility check for one user (manual
+ *     recovery / health-check). Use sparingly; respects RBAC at controller.
+ *   - force: bypass eligibility check for EVERY user with daily/weekly/etc
+ *     digest_frequency != 'never'. Operator escape hatch.
  */
-async function processDigests() {
+async function processDigests({ forceSendForUserId, force } = {}) {
   const startTime = Date.now();
-  logger.info('Email digest processing started');
+  logger.info('Email digest processing started', { forceSendForUserId, force });
 
-  const dueUsers = await getUsersDueForDigest();
-  logger.info(`Found ${dueUsers.length} users due for digest`);
+  let dueUsers;
+  if (forceSendForUserId) {
+    // Single-user manual recovery path. Pulls the prefs + user row directly.
+    const prefs = await AlertPreference.findOne({
+      where: { userId: forceSendForUserId, emailNotify: true },
+      include: [{
+        model: User, as: 'user',
+        attributes: ['id', 'email', 'name', 'company', 'interests', 'profileData', 'createdAt', 'emailVerified'],
+        where: { emailVerified: true },
+      }],
+    });
+    dueUsers = prefs ? [prefs] : [];
+    logger.info(`Force-send for user ${forceSendForUserId}: ${dueUsers.length} match`);
+  } else if (force) {
+    dueUsers = await AlertPreference.findAll({
+      where: { emailNotify: true, digestFrequency: { [Op.ne]: 'never' } },
+      include: [{
+        model: User, as: 'user',
+        attributes: ['id', 'email', 'name', 'company', 'interests', 'profileData', 'createdAt', 'emailVerified'],
+        where: { emailVerified: true },
+      }],
+    });
+    logger.info(`Force-send all: ${dueUsers.length} users`);
+  } else {
+    dueUsers = await getUsersDueForDigest();
+    logger.info(`Found ${dueUsers.length} users due for digest`);
+  }
 
   if (dueUsers.length === 0) {
     return { processed: 0, sent: 0, skipped: 0, failed: 0, durationMs: Date.now() - startTime };
@@ -363,10 +424,33 @@ async function processDigests() {
   return { processed, sent, skipped, failed, durationMs };
 }
 
+// Health check: returns the set of daily-enabled users whose last digest is
+// NOT in the current Central-time calendar day. If non-empty when the cron
+// has already fired today, something went wrong — log loudly and surface to
+// the admin endpoint. Used by the post-fire heartbeat.
+async function findMissingTodayUsers({ now = new Date(), timezone = 'America/Chicago' } = {}) {
+  const all = await AlertPreference.findAll({
+    where: { emailNotify: true, digestFrequency: 'daily' },
+    include: [{
+      model: User, as: 'user',
+      attributes: ['id', 'email', 'name', 'emailVerified'],
+      where: { emailVerified: true },
+    }],
+  });
+  const today = formatYmdInTz(now, timezone);
+  return all.filter((p) => {
+    if (!p.lastDigestSentAt) return true;
+    return formatYmdInTz(new Date(p.lastDigestSentAt), timezone) !== today;
+  });
+}
+
 module.exports = {
   processDigests,
   sendDigestForUser,
   getUsersDueForDigest,
+  isDueForDigest,
+  formatYmdInTz,
+  findMissingTodayUsers,
   getNewOpportunities,
   generateDigestSummary,
   scoreOpportunitiesForUser,
