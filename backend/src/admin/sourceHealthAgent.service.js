@@ -19,6 +19,10 @@ const dataSourceHealth = require('./dataSourceHealth.controller');
 // the documents subsystem isn't initialized (tests, partial smoke, etc.).
 const documentService = require('../documents/document.service');
 const documentTypes = require('../documents/documentTypes');
+// v9.11: channel-level freshness. Per-source health can't see a whole surface
+// going stale while its individual sources still look "fine" (the capital
+// channel outage hid here for 4 months). This adds the surface-level signal.
+const { checkChannelFreshness } = require('./channelFreshness.service');
 
 // Classifier rules. Order matters — first match wins. Each rule returns
 // a category + a one-liner human action. Patterns checked against the
@@ -152,6 +156,12 @@ async function runAgent({ retry = true } = {}) {
     return { expired: [], expiring_soon: [] };
   });
 
+  // Surface-level freshness — independent of per-source status.
+  const channelFreshness = await checkChannelFreshness().catch((e) => {
+    logger.warn('sourceHealthAgent: channel freshness scan failed (continuing without)', { error: e.message });
+    return { stale: [], fresh: [], stale_days: 14 };
+  });
+
   const report = {
     started_at: startedAt.toISOString(),
     ended_at: new Date().toISOString(),
@@ -163,12 +173,16 @@ async function runAgent({ retry = true } = {}) {
     zero_yield: zeroYieldClassified,
     expired_docs: expiringDocs.expired,
     expiring_docs: expiringDocs.expiring_soon,
+    stale_channels: channelFreshness.stale,
+    channel_stale_days: channelFreshness.stale_days,
     needs_human: failingClassified.length + zeroYieldClassified.length
-      + expiringDocs.expired.length + expiringDocs.expiring_soon.length,
+      + expiringDocs.expired.length + expiringDocs.expiring_soon.length
+      + channelFreshness.stale.length,
     should_email: failingClassified.length + zeroYieldClassified.length > 0
       || recoveredNames.size > 0
       || expiringDocs.expired.length > 0
-      || expiringDocs.expiring_soon.length > 0,
+      || expiringDocs.expiring_soon.length > 0
+      || channelFreshness.stale.length > 0,
   };
   return report;
 }
@@ -267,6 +281,16 @@ function buildEmailHtml(report, dashboardUrl) {
           <span style="color:#92400e;font-size:13px">Expires in ${d.days_until_expiry} day${d.days_until_expiry === 1 ? '' : 's'}.</span> Schedule renewal now.
         </li>`).join('')}</ul>`);
 
+  // v9.11 — surface-level staleness (a whole channel with no fresh rows).
+  const staleChannels = report.stale_channels || [];
+  const staleChannelsHtml = staleChannels.length === 0 ? '' :
+    sect(`🥶 Stale channels — no new rows in ${report.channel_stale_days || 14} days (${staleChannels.length})`,
+      `<ul>${staleChannels.map((c) => `
+        <li style="${liStyle}">
+          <strong>${c.label}</strong> <span style="color:#888">(${c.age_days == null ? 'no rows ever' : `newest ${c.age_days}d old`})</span><br/>
+          <span style="color:#444;font-size:13px">${c.action}</span>
+        </li>`).join('')}</ul>`);
+
   const summaryLine = summary
     ? `<p style="margin:0;color:#444;font-family:system-ui,sans-serif;font-size:14px">
         Current state: ${summary.healthy} healthy · ${summary.stale || 0} stale · ${summary.zero_yield || 0} zero_yield · ${summary.failing || 0} failing · ${summary.disabled || 0} disabled.
@@ -279,6 +303,7 @@ function buildEmailHtml(report, dashboardUrl) {
     ${recoveredHtml}
     ${failingHtml}
     ${zyHtml}
+    ${staleChannelsHtml}
     ${expiredHtml}
     ${expiringHtml}
     <p style="margin-top:18px;color:#666;font-size:12px">
@@ -303,6 +328,12 @@ function buildEmailText(report, dashboardUrl) {
     lines.push('', 'Zero yield (no fix attempted):');
     for (const s of report.zero_yield) {
       lines.push(`  - ${s.name}: ${s.consecutive_zero_runs} empty runs in a row. ${s.action}`);
+    }
+  }
+  if ((report.stale_channels || []).length > 0) {
+    lines.push('', `Stale channels (no new rows in ${report.channel_stale_days || 14}d):`);
+    for (const c of report.stale_channels) {
+      lines.push(`  - ${c.label}: ${c.age_days == null ? 'no rows ever' : `newest ${c.age_days}d old`}. ${c.action}`);
     }
   }
   if ((report.expired_docs || []).length > 0) {
@@ -331,7 +362,8 @@ async function emailReport(report, opts = {}) {
     return { sent: false, reason: 'nothing_to_report' };
   }
   const dashboardUrl = (process.env.OIED_PUBLIC_URL || 'http://95.216.199.47') + '/admin/data-sources';
-  const needsHuman = report.still_failing.length + report.zero_yield.length;
+  const needsHuman = report.still_failing.length + report.zero_yield.length
+    + (report.stale_channels || []).length;
   const recovered = report.recovered.length;
   const subject = needsHuman > 0
     ? `[Opportunity Pulse] ${needsHuman} source${needsHuman === 1 ? '' : 's'} need attention${recovered ? ` — ${recovered} auto-recovered` : ''}`

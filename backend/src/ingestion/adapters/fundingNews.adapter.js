@@ -3,6 +3,7 @@ const { OPPORTUNITY_TYPES } = require('../../config/constants');
 const logger = require('../../logging/logger');
 const Parser = require('rss-parser');
 const { extractFundingAmount } = require('../../utils/monetaryParser');
+const { scoreInvestment } = require('../../utils/investmentScore');
 
 // v9.8.2: TechCrunch's `/category/fundraise/feed/` started returning 404
 // in early 2026 — that was the only fresh source on the list, so the
@@ -10,11 +11,44 @@ const { extractFundingAmount } = require('../../utils/monetaryParser');
 // venture/startups feed and add Crunchbase News as a second source so
 // we're not single-sourced again. VentureBeat AI feed kept for AI-funding
 // mentions (low-volume but topical).
+//
+// v9.11: these defaults are now MERGED with any DB-configured feeds rather
+// than being a fallback that a stale DB config can fully shadow. The v9.8.2
+// fix above sat inert for a month because the seeded data_sources row pinned
+// config.feeds to the dead /fundraise/ URL and `config.feeds || DEFAULT_FEEDS`
+// meant the code default was never consulted. Merging makes the known-good
+// feeds authoritative even if the DB row is stale.
 const DEFAULT_FEEDS = [
   'https://techcrunch.com/category/venture/feed/',
   'https://news.crunchbase.com/feed/',
   'https://venturebeat.com/category/ai/feed/',
 ];
+
+// Feeds known to be dead/redirecting — pruned from the effective list even if
+// a stale DB config still references them, so we don't waste a request + log a
+// 404 every run. Add to this list when a feed dies; remove when it recovers.
+const DEAD_FEEDS = new Set([
+  'https://techcrunch.com/category/fundraise/feed/',
+]);
+
+/**
+ * Merge DB-configured feeds with the code defaults, drop known-dead feeds,
+ * and de-duplicate. The code defaults are authoritative (always included) so
+ * a stale DB row can ADD feeds but can't REMOVE the known-good ones.
+ * @param {string[]|undefined} configFeeds - feeds from dataSource.config.
+ * @returns {string[]} Effective, de-duplicated, live feed list.
+ */
+function resolveFeeds(configFeeds) {
+  const merged = [...DEFAULT_FEEDS, ...(Array.isArray(configFeeds) ? configFeeds : [])];
+  const seen = new Set();
+  const out = [];
+  for (const f of merged) {
+    if (!f || DEAD_FEEDS.has(f) || seen.has(f)) continue;
+    seen.add(f);
+    out.push(f);
+  }
+  return out;
+}
 
 const DEFAULT_KEYWORDS = [
   'AI', 'artificial intelligence', 'raised', 'funding',
@@ -44,7 +78,7 @@ class FundingNewsAdapter extends BaseAdapter {
     super(dataSource);
 
     const config = dataSource.config || {};
-    this.feeds = config.feeds || DEFAULT_FEEDS;
+    this.feeds = resolveFeeds(config.feeds);
     this.keywords = config.keywords || DEFAULT_KEYWORDS;
   }
 
@@ -131,6 +165,11 @@ class FundingNewsAdapter extends BaseAdapter {
         }
       }
 
+      const publishedAt = record.isoDate || record.pubDate
+        ? new Date(record.isoDate || record.pubDate)
+        : null;
+      const tags = record._matchedKeywords || [];
+
       return {
         type: OPPORTUNITY_TYPES.INVESTMENT,
         source: 'funding_news',
@@ -140,12 +179,19 @@ class FundingNewsAdapter extends BaseAdapter {
         sourceUrl: record.link || null,
         status: 'active',
         category: record.creator || 'Unknown',
-        tags: record._matchedKeywords || [],
+        tags,
         location: null,
         value: fundingAmount,
-        publishedAt: record.isoDate || record.pubDate
-          ? new Date(record.isoDate || record.pubDate)
-          : null,
+        publishedAt,
+        // Deterministic relevance score so fresh raises can rank in the digest
+        // instead of sorting below seeded rows under `aiScore DESC NULLS LAST`.
+        aiScore: scoreInvestment({
+          value: fundingAmount,
+          publishedAt,
+          title: record.title,
+          description: cleanDescription,
+          tags,
+        }),
         expiresAt: null,
         sourceData: record,
       };

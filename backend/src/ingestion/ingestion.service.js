@@ -18,6 +18,7 @@ const SbirAdapter = require('./adapters/sbir.adapter');
 const UsaJobsAdapter = require('./adapters/usaJobs.adapter');
 const AdzunaAdapter = require('./adapters/adzuna.adapter');
 const FundingNewsAdapter = require('./adapters/fundingNews.adapter');
+const SecEdgarFormDAdapter = require('./adapters/secEdgarFormD.adapter');
 const GoogleNewsAdapter = require('./adapters/googleNews.adapter');
 const HackerNewsAdapter = require('./adapters/hackerNews.adapter');
 const DevToAdapter = require('./adapters/devto.adapter');
@@ -77,6 +78,8 @@ function getAdapter(dataSource) {
       return new AdzunaAdapter(dataSource);
     case 'funding_news':
       return new FundingNewsAdapter(dataSource);
+    case 'sec_edgar_formd':
+      return new SecEdgarFormDAdapter(dataSource);
     case 'google_news':
       return new GoogleNewsAdapter(dataSource);
     case 'hacker_news':

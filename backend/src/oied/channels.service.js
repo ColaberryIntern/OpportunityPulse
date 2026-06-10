@@ -70,7 +70,7 @@ const CHANNELS = [
     icon: '💰',
     color: 'amber',
     types: ['investment'],
-    sources: ['funding_news', 'mock_investments'],
+    sources: ['funding_news', 'sec_edgar_formd', 'mock_investments'],
     description: 'Investment opportunities, funding rounds, and capital allocation.',
   },
   {
