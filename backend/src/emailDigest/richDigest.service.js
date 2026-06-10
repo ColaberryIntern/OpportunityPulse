@@ -26,7 +26,7 @@ const logger = require('../logging/logger');
 const TOP = {
   bonfire: 10,
   strategicCluster: 2,
-  govContracts: 3,
+  govContracts: 5,
   aiNews: 5,
   freelance: 3,
   aiJobs: 5,
@@ -73,6 +73,52 @@ async function topByType(type, limit) {
       }],
     },
     order: [['aiScore', 'DESC NULLS LAST'], ['publishedAt', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
+    limit,
+  });
+}
+
+// Top N gov contracts to BID on — uses the new fit_score persisted at
+// ai_analysis.govFit.fit_score by the gov contract scoring service. Hard
+// filters:
+//  - source = 'sam_gov' ONLY. The usa_spending mirror is historical
+//    AWARDS (already won by other companies); they have no place in a
+//    "to bid on" list.
+//  - id >= 100. Excludes the seed/test data (low IDs with suspiciously
+//    perfect "AI in [domain]" titles) that was polluting the rankings.
+//  - expires_at must be in the future. Closed solicitations drop.
+//  - fit_score (from JSONB) must be >= GOV_CONTRACT_MIN_FIT_SCORE so noise
+//    falls away and the cream rises to the top.
+//
+// Sort: fit_score DESC. Bidders see the AI-Systems-aligned contracts first.
+async function topGovContracts(limit) {
+  const minFit = Math.max(
+    0,
+    parseInt(process.env.GOV_CONTRACT_MIN_FIT_SCORE, 10) || 50,
+  );
+  return Opportunity.findAll({
+    where: {
+      type: 'gov_contract',
+      source: 'sam_gov',
+      status: 'active',
+      id: { [Op.gte]: 100 },
+      [Op.and]: [
+        // active (not closed)
+        { expiresAt: { [Op.gte]: new Date() } },
+        // fit_score is at ai_analysis.govFit.fit_score → use raw Postgres
+        // JSON arrow. Tests run with mocked findAll so this never executes
+        // there; on prod it gets the JSONB index path planner.
+        Opportunity.sequelize.literal(
+          `(ai_analysis #> '{govFit,fit_score}')::numeric >= ${minFit}`
+        ),
+      ],
+    },
+    order: [
+      [
+        Opportunity.sequelize.literal(`(ai_analysis #> '{govFit,fit_score}')::numeric`),
+        'DESC NULLS LAST',
+      ],
+      ['expiresAt', 'ASC'],
+    ],
     limit,
   });
 }
@@ -232,7 +278,7 @@ async function assembleRichDigest() {
   ] = await Promise.all([
     safe('bonfire',        () => topBonfire(TOP.bonfire), []),
     safe('strategic',      () => topStrategicCluster(TOP.strategicCluster), []),
-    safe('gov_contract',   () => topByType('gov_contract', TOP.govContracts), []),
+    safe('gov_contract',   () => topGovContracts(TOP.govContracts), []),
     safe('ai_news',        () => topByType('ai_news', TOP.aiNews), []),
     safe('freelance',      () => topByType('freelance', TOP.freelance), []),
     safe('ai_job',         () => topByType('ai_job', TOP.aiJobs), []),

@@ -408,7 +408,64 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
       </div>`;
   };
 
-  // ----- Generic unified-opportunity row renderer (gov/jobs/freelance/news/research/grants/investments) -----
+  // ----- Gov contract row — uses the deterministic fit score persisted at
+  // ai_analysis.govFit. Mirrors the Bonfire row shape: title + agency +
+  // NAICS + set-aside + value + due date, then a chip line for fit_score
+  // + signals (AI_CORE / PRIME_NAICS / etc), then dual links.
+  const govContractRow = (o) => {
+    const fit = o.aiAnalysis?.govFit || {};
+    const fitScore = fit.fit_score != null ? Math.round(Number(fit.fit_score)) : null;
+    const sub = fit.sub_scores || {};
+    const signals = Array.isArray(fit.signals) ? fit.signals : [];
+    const action = fit.recommended_action || o.actionType || null;
+    const sd = o.sourceData || {};
+    const due = o.expiresAt ? fmtDate(o.expiresAt) : null;
+    const dToClose = daysUntil(o.expiresAt);
+    const dueChip = dToClose != null
+      ? (dToClose <= 14
+        ? `<span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:3px;font-weight:700;">⏰ ${dToClose}d left</span>`
+        : `<span style="background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:3px;font-weight:700;">${dToClose}d</span>`)
+      : '';
+    const agency = sd.fullParentPathName
+      ? String(sd.fullParentPathName).split('.').slice(0, 2).join(' / ')
+      : (o.source || '');
+    const naics = sd.naicsCode || sd.naics_code || '';
+    const setAside = sd.typeOfSetAside && sd.typeOfSetAside !== 'NONE' ? sd.typeOfSetAside : '';
+    const val = o.value ? fmtUSDPlain(o.value) : null;
+    const fitChip = fitScore != null
+      ? `<span style="display:inline-block;background:#EEF2FF;color:#3730A3;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-right:4px;">🎯 fit ${fitScore}</span>`
+      : '';
+    const subScoreLine = sub.ai_alignment != null
+      ? `<div style="margin-top:3px;color:#374151;font-size:10px;">
+           AI ${Math.round(sub.ai_alignment)} · NAICS ${Math.round(sub.naics)} · Agency ${Math.round(sub.agency_maturity)} · Set-aside ${Math.round(sub.set_aside)} · Value ${Math.round(sub.value_fit)}
+         </div>`
+      : '';
+    const signalBadges = signals.length
+      ? `<div style="margin-top:3px;">${signals.slice(0, 4).map((s) => `<span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;margin-right:3px;">${escapeHtml(s)}</span>`).join('')}</div>`
+      : '';
+    const actionBadge = action
+      ? `<span style="background:${ACTION_COLORS[action] || '#6B7280'};color:white;padding:1px 6px;border-radius:3px;font-weight:700;font-size:10px;margin-right:4px;">${action}</span> `
+      : '';
+    return `
+      <div style="padding: 12px 0; border-bottom: 1px solid #F3F4F6;">
+        <div style="font-weight: 700; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
+          ${escapeHtml(o.title)}
+        </div>
+        <div style="color: #1F2937; font-size: 11px; margin-bottom: 4px;">
+          ${actionBadge}${escapeHtml(agency)}${naics ? ` · NAICS ${escapeHtml(naics)}` : ''}${setAside ? ` · ${escapeHtml(setAside)}` : ''}${val ? ` · 💵 ${val}` : ''}${due ? ` · 📅 ${due}` : ''} ${dueChip}
+        </div>
+        <div style="margin-top:4px;">${fitChip}</div>
+        ${subScoreLine}
+        ${signalBadges}
+        ${dualLinks({
+          sourceUrl: o.sourceUrl,
+          appHref: `/opportunities/${o.id}`,
+          appLabel: 'Open in Opp Pulse',
+        })}
+      </div>`;
+  };
+
+  // ----- Generic unified-opportunity row renderer (jobs/freelance/news/research/grants/investments) -----
   // Surfaces more pre-computed signal: actionType, saturationIndex, tags,
   // location, value, date — all already in the row, no extra fetch.
   const oppRow = (emoji, accent, opts = {}) => (o) => {
@@ -571,12 +628,12 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
         emptyText: 'No completed Deep Research reports yet.',
       })}
 
-      <!-- Section: Gov contracts (SAM.gov etc) -->
+      <!-- Section: Gov contracts (SAM.gov solicitations — fit-scored for AI Systems) -->
       ${section({
-        emoji: '🏛️', title: 'Top 3 Gov Contracts', accentColor: '#2563EB',
+        emoji: '🏛️', title: `Top ${govContracts.length} Gov Contracts to Bid`, accentColor: '#2563EB',
         navHref: '/opportunities?type=gov_contract', navLabel: 'See all gov contracts',
-        items: govContracts, renderItem: oppRow('📜', '#2563EB'),
-        emptyText: 'No new gov contracts ingested.',
+        items: govContracts, renderItem: govContractRow,
+        emptyText: 'No SAM.gov solicitations passed the fit threshold today.',
       })}
 
       <!-- Section: Grants -->

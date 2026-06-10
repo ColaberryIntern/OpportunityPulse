@@ -93,6 +93,22 @@ function startActionEngineScheduler() {
     }
   });
 
+  // Gov contract fit scoring: daily, well before the 6 AM CT digest fires
+  // so the digest reads freshly-scored data. Deterministic, ~100ms even
+  // for the full prod row set (~435 rows).
+  const govFitSchedule = process.env.GOV_FIT_SCHEDULE || '0 9 * * *'; // 9 UTC = 4 AM CDT
+  const govFitTimezone = process.env.GOV_FIT_TIMEZONE || 'UTC';
+  cron.schedule(govFitSchedule, async () => {
+    logger.info('Scheduled: Gov contract fit scoring starting');
+    try {
+      const { backfillGovContractFit } = require('../govContracts/govContractScoring.backfill');
+      const summary = await backfillGovContractFit();
+      logger.info('Scheduled: Gov contract fit scoring complete', summary);
+    } catch (error) {
+      logger.error('Scheduled: Gov contract fit scoring failed', { error: error.message });
+    }
+  }, { timezone: govFitTimezone });
+
   // Action Recommendations: daily at 5:30 AM UTC
   cron.schedule(actionRecSchedule, async () => {
     logger.info('Scheduled: Action recommendations starting');
