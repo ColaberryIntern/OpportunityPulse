@@ -90,23 +90,28 @@ async function topByType(type, limit) {
 //    falls away and the cream rises to the top.
 //
 // Sort: fit_score DESC. Bidders see the AI-Systems-aligned contracts first.
+//
+// **Defensive dedup**: the SAM.gov ingestion produces multiple rows for the
+// same notice (each scrape pass gets a fresh hashed source_id rather than
+// the SAM noticeId), so identical (title, agency) pairs would otherwise
+// duplicate in the email. We over-fetch (3× the limit), collapse to one
+// row per (title, agency) keeping the highest-fit representative, then
+// take the top N. This is a digest-layer guard; the underlying ingest
+// dedup is a separate cleanup.
 async function topGovContracts(limit) {
   const minFit = Math.max(
     0,
     parseInt(process.env.GOV_CONTRACT_MIN_FIT_SCORE, 10) || 50,
   );
-  return Opportunity.findAll({
+  const overFetch = Math.max(limit * 3, limit + 10);
+  const rows = await Opportunity.findAll({
     where: {
       type: 'gov_contract',
       source: 'sam_gov',
       status: 'active',
       id: { [Op.gte]: 100 },
       [Op.and]: [
-        // active (not closed)
         { expiresAt: { [Op.gte]: new Date() } },
-        // fit_score is at ai_analysis.govFit.fit_score → use raw Postgres
-        // JSON arrow. Tests run with mocked findAll so this never executes
-        // there; on prod it gets the JSONB index path planner.
         Opportunity.sequelize.literal(
           `(ai_analysis #> '{govFit,fit_score}')::numeric >= ${minFit}`
         ),
@@ -119,8 +124,25 @@ async function topGovContracts(limit) {
       ],
       ['expiresAt', 'ASC'],
     ],
-    limit,
+    limit: overFetch,
   });
+
+  // Dedup by normalized (title, agency). The first occurrence wins because
+  // the rows already arrived in fit_score DESC order.
+  const seen = new Set();
+  const unique = [];
+  for (const r of rows) {
+    const titleKey = String(r.title || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const agencyKey = String(
+      r.sourceData?.fullParentPathName || r.sourceData?.organizationName || ''
+    ).trim().toLowerCase().replace(/\s+/g, ' ');
+    const key = `${titleKey}|${agencyKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(r);
+    if (unique.length >= limit) break;
+  }
+  return unique;
 }
 
 // Top N Bonfire opportunities to BID on — sorted by priority_score then fit.
