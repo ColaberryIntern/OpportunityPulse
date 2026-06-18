@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { Op } = require('sequelize');
 const { Opportunity } = require('../models');
 const { scoreGovContract } = require('./govContractScoring.service');
+const { scoreSamWithBonfire } = require('./bonfireScoreSamGov.service');
 const logger = require('../logging/logger');
 
 // Skip seed/test rows (id < 100) — they have suspiciously perfect titles
@@ -38,7 +39,7 @@ async function backfillGovContractFit({ source = 'sam_gov', limit = 5000 } = {})
       status: 'active',
       id: { [Op.gte]: SEED_ID_CUTOFF },
     },
-    attributes: ['id', 'title', 'description', 'value', 'sourceData', 'aiAnalysis'],
+    attributes: ['id', 'title', 'description', 'value', 'sourceData', 'aiAnalysis', 'expiresAt'],
     limit,
   });
 
@@ -51,28 +52,36 @@ async function backfillGovContractFit({ source = 'sam_gov', limit = 5000 } = {})
     try {
       const hash = inputHash(opp);
       const existing = opp.aiAnalysis?.govFit;
-      if (existing && existing.input_hash === hash) {
+      const fitUnchanged = existing && existing.input_hash === hash;
+      const hasBonfire = opp.aiAnalysis?.bonfireScore?.priority_score != null;
+      // Skip only when BOTH scores are already present and the fit inputs match.
+      if (fitUnchanged && hasBonfire) {
         unchanged += 1;
         continue;
       }
-      const fit = scoreGovContract({
-        title: opp.title,
-        description: opp.description,
-        value: opp.value,
-        source_data: opp.sourceData,
-      });
-      const newAnalysis = {
-        ...(opp.aiAnalysis || {}),
-        govFit: {
-          ...fit,
+      const fit = fitUnchanged
+        ? existing
+        : {
+          ...scoreGovContract({
+            title: opp.title,
+            description: opp.description,
+            value: opp.value,
+            source_data: opp.sourceData,
+          }),
           input_hash: hash,
           scored_at: new Date().toISOString(),
           scorer_version: 1,
-        },
+        };
+      // Same Bonfire scorer used for state/local bids, so SAM ranks comparably.
+      const bonfireScore = scoreSamWithBonfire(opp);
+      const newAnalysis = {
+        ...(opp.aiAnalysis || {}),
+        govFit: fit,
+        bonfireScore,
       };
       // eslint-disable-next-line no-await-in-loop
       await Opportunity.update(
-        { aiAnalysis: newAnalysis },
+        { aiAnalysis: newAnalysis, aiScore: bonfireScore.priority_score },
         { where: { id: opp.id }, hooks: false }
       );
       scored += 1;

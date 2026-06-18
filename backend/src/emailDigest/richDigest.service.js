@@ -47,6 +47,18 @@ const BONFIRE_DIGEST_MIN_CLOSE_DAYS = Math.max(
   parseInt(process.env.BONFIRE_DIGEST_MIN_CLOSE_DAYS, 10) || 10,
 );
 
+// Winnability filter for federal (SAM.gov) bids:
+//  - need at least N days to prep a proposal (operator's 14-day grace rule)
+//  - exclude set-asides we are not certified to compete for (8(a), WOSB/EDWOSB,
+//    HUBZone, SDVOSB). Total-Small-Business (SBA/SBP), SBIR/STTR, and full-and-
+//    open (NONE/null) stay in — those are biddable for a small, SAM-registered
+//    firm with no special certifications yet.
+const SAM_GOV_MIN_DAYS_TO_CLOSE = Math.max(
+  0,
+  parseInt(process.env.SAM_GOV_MIN_DAYS_TO_CLOSE, 10) || 14,
+);
+const CERT_WALLED_SET_ASIDES = ['8A', '8AN', 'WOSB', 'EDWOSB', 'HZC', 'HZS', 'SDVOSBC', 'SDVOSBS', 'VSA', 'VSS'];
+
 // Helper: safe-call an async section fetch. Logs + swallows errors so a single
 // broken upstream doesn't blank the entire email.
 async function safe(label, fn, fallback) {
@@ -104,6 +116,8 @@ async function topGovContracts(limit) {
     parseInt(process.env.GOV_CONTRACT_MIN_FIT_SCORE, 10) || 50,
   );
   const overFetch = Math.max(limit * 3, limit + 10);
+  const minCloseDate = new Date(Date.now() + SAM_GOV_MIN_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000);
+  const certWalledList = CERT_WALLED_SET_ASIDES.map((c) => `'${c}'`).join(',');
   const rows = await Opportunity.findAll({
     where: {
       type: 'gov_contract',
@@ -111,15 +125,26 @@ async function topGovContracts(limit) {
       status: 'active',
       id: { [Op.gte]: 100 },
       [Op.and]: [
-        { expiresAt: { [Op.gte]: new Date() } },
+        // Winnability: enough lead time to prepare a proposal.
+        { expiresAt: { [Op.gte]: minCloseDate } },
+        // Relevance floor (AI-systems fit).
         Opportunity.sequelize.literal(
           `(ai_analysis #> '{govFit,fit_score}')::numeric >= ${minFit}`
         ),
+        // Winnability: drop set-asides we cannot legally compete for yet.
+        Opportunity.sequelize.literal(
+          `((source_data->>'typeOfSetAside') IS NULL OR (source_data->>'typeOfSetAside') NOT IN (${certWalledList}))`
+        ),
       ],
     },
+    // Rank by the SAME Bonfire priority_score now persisted on SAM rows
+    // (ai_analysis.bonfireScore.priority_score), falling back to fit_score for
+    // any not-yet-rescored row. Both are 0-100 so the feed is comparable.
     order: [
       [
-        Opportunity.sequelize.literal(`(ai_analysis #> '{govFit,fit_score}')::numeric`),
+        Opportunity.sequelize.literal(
+          `COALESCE((ai_analysis #> '{bonfireScore,priority_score}')::numeric, (ai_analysis #> '{govFit,fit_score}')::numeric)`
+        ),
         'DESC NULLS LAST',
       ],
       ['expiresAt', 'ASC'],
@@ -128,7 +153,7 @@ async function topGovContracts(limit) {
   });
 
   // Dedup by normalized (title, agency). The first occurrence wins because
-  // the rows already arrived in fit_score DESC order.
+  // the rows already arrived in Bonfire priority_score DESC order.
   const seen = new Set();
   const unique = [];
   for (const r of rows) {
