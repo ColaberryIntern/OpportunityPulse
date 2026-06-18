@@ -41,6 +41,14 @@ class SamGovAdapter extends BaseAdapter {
     this.keywords = config.keywords || DEFAULT_KEYWORDS;
     this.naicsCode = config.naicsCode || null;
 
+    // SAM.gov's `ncode` param accepts a SINGLE NAICS code — a comma-list silently
+    // matches nothing. Support a list by issuing one query per code and merging.
+    // Accepts config.naicsCodes (array) or a comma-separated config.naicsCode string.
+    const rawNaics = config.naicsCodes || config.naicsCode || null;
+    this.naicsCodes = Array.isArray(rawNaics)
+      ? rawNaics.map((c) => String(c).trim()).filter(Boolean)
+      : (rawNaics ? String(rawNaics).split(',').map((c) => c.trim()).filter(Boolean) : []);
+
     // Reliability knobs (see DEFAULT_* above).
     this.maxRetries = config.maxRetries != null ? config.maxRetries : DEFAULT_MAX_RETRIES;
     this.baseBackoffMs = config.backoffMs || DEFAULT_BACKOFF_MS;
@@ -162,49 +170,62 @@ class SamGovAdapter extends BaseAdapter {
       return `${mm}/${dd}/${yyyy}`;
     };
 
-    let allRecords = [];
-    let offset = 0;
-    let hasMore = true;
+    // Build the query set: one query per NAICS code (each code already scopes to a
+    // relevant industry), or a single keyword query when no NAICS is configured.
+    const queries = this.naicsCodes.length > 0
+      ? this.naicsCodes.map((code) => ({ ncode: code, label: `naics ${code}` }))
+      : [{
+        keyword: (this.keywords && this.keywords.length > 0) ? this.keywords.join(' OR ') : null,
+        label: 'keyword',
+      }];
 
-    while (hasMore) {
-      const params = new URLSearchParams({
-        api_key: this.apiKey,
-        postedFrom: formatDate(postedFrom),
-        postedTo: formatDate(postedTo),
-        limit: String(this.pageLimit),
-        offset: String(offset),
-      });
+    // Dedup across queries by noticeId (the same opportunity can match >1 NAICS).
+    const byId = new Map();
 
-      // Add keyword search if configured
-      if (this.keywords && this.keywords.length > 0) {
-        params.set('keyword', this.keywords.join(' OR '));
+    for (const query of queries) {
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const params = new URLSearchParams({
+          api_key: this.apiKey,
+          postedFrom: formatDate(postedFrom),
+          postedTo: formatDate(postedTo),
+          limit: String(this.pageLimit),
+          offset: String(offset),
+        });
+        if (query.ncode) params.set('ncode', query.ncode);
+        if (query.keyword) params.set('keyword', query.keyword);
+
+        const url = `${SAM_GOV_BASE_URL}?${params.toString()}`;
+        logger.info(`SAM.gov fetch: ${query.label} offset=${offset}, limit=${this.pageLimit}`);
+
+        const data = await this._fetchJsonWithRetry(url, `${query.label} offset ${offset}`);
+        const records = data.opportunitiesData || [];
+
+        for (const rec of records) {
+          if (!rec) continue;
+          const key = rec.noticeId || `${query.label}:${offset}:${byId.size}`;
+          byId.set(key, rec);
+        }
+
+        if (records.length < this.pageLimit) {
+          hasMore = false;
+        } else {
+          offset += this.pageLimit;
+          // Pace requests to stay under SAM.gov's rate limit between pages
+          await sleep(this.interPageDelayMs);
+        }
       }
 
-      // Add NAICS code filter if configured
-      if (this.naicsCode) {
-        params.set('ncode', this.naicsCode);
-      }
-
-      const url = `${SAM_GOV_BASE_URL}?${params.toString()}`;
-
-      logger.info(`SAM.gov fetch: offset=${offset}, limit=${this.pageLimit}`);
-
-      const data = await this._fetchJsonWithRetry(url, `offset ${offset}`);
-      const records = data.opportunitiesData || [];
-
-      allRecords = allRecords.concat(records);
-
-      // If fewer records returned than the limit, we have reached the last page
-      if (records.length < this.pageLimit) {
-        hasMore = false;
-      } else {
-        offset += this.pageLimit;
-        // Pace requests to stay under SAM.gov's rate limit between pages
-        await sleep(this.interPageDelayMs);
-      }
+      // Brief pause between per-NAICS queries as well
+      if (queries.length > 1) await sleep(this.interPageDelayMs);
     }
 
-    logger.info(`SAM.gov fetch complete: ${allRecords.length} records retrieved.`);
+    const allRecords = Array.from(byId.values());
+    logger.info(
+      `SAM.gov fetch complete: ${allRecords.length} unique records across ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}.`
+    );
     return allRecords;
   }
 

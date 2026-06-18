@@ -79,6 +79,19 @@ describe('SamGovAdapter retry/backoff', () => {
   test('honors Retry-After header for backoff timing', async () => {
     const adapter = new SamGovAdapter(fastConfig);
     const delay = adapter._retryDelayMs(1, '2');
-    expect(delay).toBe(2000 > 5 ? 5 : 2000); // capped at maxBackoffMs (5)
+    expect(delay).toBe(5); // 2s requested, capped at maxBackoffMs (5ms in fastConfig)
+  });
+
+  test('iterates one query per NAICS code and dedups by noticeId', async () => {
+    // comma-separated NAICS must become two separate single-ncode queries
+    const adapter = new SamGovAdapter({ config: { ...fastConfig.config, naicsCode: 'A,B' } });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [{ noticeId: 'x1' }, { noticeId: 'x2' }] })) // A p1 (==limit)
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [] }))                                       // A p2 (end)
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [{ noticeId: 'x2' }, { noticeId: 'x3' }] })) // B p1 (dup x2)
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [] }));                                      // B p2 (end)
+    const out = await adapter.fetch();
+    expect(out.map((r) => r.noticeId).sort()).toEqual(['x1', 'x2', 'x3']);
+    expect(global.fetch).toHaveBeenCalledTimes(4);
   });
 });
