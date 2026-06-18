@@ -318,6 +318,11 @@ async function startServer() {
       const { startScheduler } = require('./ingestion/scheduler');
       startScheduler();
 
+      // Score SAM.gov solicitations (govFit + comparable Bonfire bid_score) just
+      // after ingestion so federal opps are ranked in the same day's digest.
+      const { startGovScoringScheduler } = require('./govContracts/govScoring.scheduler');
+      startGovScoringScheduler();
+
       // Research Intelligence Phase 2.4 — per-source ingestion tick loop
       // (higher-cadence runs for sources with ingest_interval_minutes set).
       const { startResearchScheduler } = require('./ingestion/research.scheduler');

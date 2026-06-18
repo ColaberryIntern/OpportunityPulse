@@ -137,13 +137,14 @@ async function topGovContracts(limit) {
         ),
       ],
     },
-    // Rank by the SAME Bonfire priority_score now persisted on SAM rows
-    // (ai_analysis.bonfireScore.priority_score), falling back to fit_score for
-    // any not-yet-rescored row. Both are 0-100 so the feed is comparable.
+    // Rank by bid_score — the Bonfire priority_score plus a winnability bonus that
+    // lifts the genuinely-winnable SBIR/STTR + Total-Small-Business lane (where a
+    // no-past-performance firm can actually win) above full-and-open. Falls back to
+    // priority_score, then fit_score, for any not-yet-rescored row. All 0-100.
     order: [
       [
         Opportunity.sequelize.literal(
-          `COALESCE((ai_analysis #> '{bonfireScore,priority_score}')::numeric, (ai_analysis #> '{govFit,fit_score}')::numeric)`
+          `COALESCE((ai_analysis #> '{bonfireScore,bid_score}')::numeric, (ai_analysis #> '{bonfireScore,priority_score}')::numeric, (ai_analysis #> '{govFit,fit_score}')::numeric)`
         ),
         'DESC NULLS LAST',
       ],

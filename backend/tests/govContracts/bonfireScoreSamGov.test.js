@@ -1,6 +1,8 @@
 // Unit tests for running SAM.gov opps through the Bonfire scorer (deterministic,
 // NAICS-derived category). No I/O.
-const { naicsToCategory, scoreSamWithBonfire } = require('../../src/govContracts/bonfireScoreSamGov.service');
+const {
+  naicsToCategory, scoreSamWithBonfire, winnabilityBonus,
+} = require('../../src/govContracts/bonfireScoreSamGov.service');
 
 describe('naicsToCategory', () => {
   test('maps known NAICS to Bonfire categories', () => {
@@ -53,5 +55,42 @@ describe('scoreSamWithBonfire', () => {
     expect(r.priority_score).toBeGreaterThanOrEqual(0);
     expect(r.priority_score).toBeLessThanOrEqual(100);
     expect(r.scorer).toBe('bonfire_on_samgov');
+  });
+});
+
+describe('winnability bonus + bid_score (SBIR/STTR lane)', () => {
+  test('SBIR/STTR get the strongest bonus', () => {
+    expect(winnabilityBonus('SBIR')).toBe(20);
+    expect(winnabilityBonus('STTR')).toBe(20);
+  });
+  test('Total Small Business gets a moderate bonus', () => {
+    expect(winnabilityBonus('SBA')).toBe(10);
+    expect(winnabilityBonus('SBP')).toBe(10);
+  });
+  test('full-and-open and cert-walled set-asides get no bonus', () => {
+    expect(winnabilityBonus('NONE')).toBe(0);
+    expect(winnabilityBonus(null)).toBe(0);
+    expect(winnabilityBonus('8A')).toBe(0);
+    expect(winnabilityBonus('WOSB')).toBe(0);
+  });
+  test('catches SBIR/STTR by title even when the set-aside code is generic', () => {
+    expect(winnabilityBonus('NONE', 'NASA SBIR/STTR FY26-27 BAA')).toBe(20);
+    expect(winnabilityBonus(null, 'Phase I STTR topic')).toBe(20);
+  });
+  test('bid_score = priority_score + bonus (SBIR lifts 48 -> 68)', () => {
+    const r = scoreSamWithBonfire({ value: null, sourceData: { naicsCode: '541512', typeOfSetAside: 'SBIR' } });
+    expect(r.priority_score).toBe(48);
+    expect(r.winnability_bonus).toBe(20);
+    expect(r.bid_score).toBe(68);
+    expect(r.scorer_version).toBe(2);
+  });
+  test('full-and-open: bid_score equals priority_score', () => {
+    const r = scoreSamWithBonfire({ value: null, sourceData: { naicsCode: '541512', typeOfSetAside: 'NONE' } });
+    expect(r.bid_score).toBe(r.priority_score);
+  });
+  test('bid_score is capped at 100', () => {
+    // $5M+ value (revenue 100) Staffing-ish high seeds + SBIR could exceed 100
+    const r = scoreSamWithBonfire({ value: 10000000, sourceData: { naicsCode: '518210', typeOfSetAside: 'SBIR' } });
+    expect(r.bid_score).toBeLessThanOrEqual(100);
   });
 });

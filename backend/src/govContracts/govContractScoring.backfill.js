@@ -53,7 +53,8 @@ async function backfillGovContractFit({ source = 'sam_gov', limit = 5000 } = {})
       const hash = inputHash(opp);
       const existing = opp.aiAnalysis?.govFit;
       const fitUnchanged = existing && existing.input_hash === hash;
-      const hasBonfire = opp.aiAnalysis?.bonfireScore?.priority_score != null;
+      // Require bid_score (scorer v2) so a re-run upgrades v1 rows in place.
+      const hasBonfire = opp.aiAnalysis?.bonfireScore?.bid_score != null;
       // Skip only when BOTH scores are already present and the fit inputs match.
       if (fitUnchanged && hasBonfire) {
         unchanged += 1;

@@ -37,6 +37,25 @@ function naicsToCategory(naicsCode) {
   return NAICS_CATEGORY[code] || 'Consulting';
 }
 
+// Winnability bonus layered on top of the pure Bonfire priority_score, reflecting
+// how realistically a small, no-past-performance AI firm can WIN the work — which
+// the Bonfire revenue/automation dimensions don't capture for federal solicitations.
+//  - SBIR/STTR: the strongest fit. Merit-based, small-business-only, NO past-
+//    performance or installed-base requirement — the true federal on-ramp.
+//  - Total Small Business (SBA/SBP): reserved for small firms; needs SAM + "small".
+//  - Everything else (full-and-open NONE/null): no bonus. Cert-walled set-asides
+//    we can't compete for are filtered out upstream in the digest.
+const WINNABILITY_BONUS = { SBIR: 20, STTR: 20, SBA: 10, SBP: 10 };
+
+function winnabilityBonus(setAside, title) {
+  const code = String(setAside || '').toUpperCase().trim();
+  if (WINNABILITY_BONUS[code] != null) return WINNABILITY_BONUS[code];
+  // SBIR/STTR are often posted as Broad Agency Announcements without an SBIR
+  // set-aside code, so also catch them by title/program name.
+  if (/\bsbir\b|\bsttr\b/i.test(String(title || ''))) return 20;
+  return 0;
+}
+
 // Score a SAM.gov opportunity row with the Bonfire scoring formula.
 // Accepts a row-ish object: { value, sourceData|source_data, expiresAt|expires_at }.
 function scoreSamWithBonfire(opp = {}) {
@@ -70,8 +89,18 @@ function scoreSamWithBonfire(opp = {}) {
     close_date: opp.expiresAt || opp.expires_at || null,
   });
 
+  // bid_score = pure Bonfire priority_score + winnability bonus, capped at 100.
+  // priority_score stays pure so Bonfire/SAM remain comparable; bid_score is what
+  // the digest ranks on so the genuinely-winnable SBIR/STTR lane surfaces first.
+  const set_aside = sd.typeOfSetAside || null;
+  const winnability_bonus = winnabilityBonus(set_aside, opp.title);
+  const bid_score = Math.min(100, Math.max(0, priority_score + winnability_bonus));
+
   return {
     priority_score,
+    bid_score,
+    winnability_bonus,
+    set_aside,
     ai_category: category,
     revenue_weight,
     automation_potential,
@@ -80,8 +109,10 @@ function scoreSamWithBonfire(opp = {}) {
     recommended_product,
     signals,
     scorer: 'bonfire_on_samgov',
-    scorer_version: 1,
+    scorer_version: 2,
   };
 }
 
-module.exports = { naicsToCategory, scoreSamWithBonfire, NAICS_CATEGORY };
+module.exports = {
+  naicsToCategory, scoreSamWithBonfire, winnabilityBonus, NAICS_CATEGORY, WINNABILITY_BONUS,
+};
