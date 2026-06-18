@@ -147,6 +147,12 @@ async function topGovContracts(limit) {
         ),
         'DESC NULLS LAST',
       ],
+      // SAM solicitations rarely carry a dollar value, so their Bonfire score
+      // compresses; break ties on AI-fit so relevance ordering survives.
+      [
+        Opportunity.sequelize.literal(`(ai_analysis #> '{govFit,fit_score}')::numeric`),
+        'DESC NULLS LAST',
+      ],
       ['expiresAt', 'ASC'],
     ],
     limit: overFetch,
