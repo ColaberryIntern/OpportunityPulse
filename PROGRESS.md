@@ -8,6 +8,13 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Hide disqualified verdicts from the email digest
+
+- [x] Filter rows with a disqualified verdict out of the daily digest email (they stay in the DB + app). `richDigest.service.js`: `topBonfire` and `topGovContracts` now exclude rows whose verdict status is in `DIGEST_HIDE_VERDICTS` (default `no_bid,needs_review`) via a NULL-safe `NOT IN` clause; `conditional` (e.g. Infill Housing -> Que) and unflagged/`bid` rows still surface. Env-tunable + SQL-sanitized to `[a-z_]`.
+  - Date: 2026-06-20
+  - Verification: `node --check` clean; re-sent rich digest confirms the no-bid rows (building automation, UTD/TDHCA cert walls, TxDOT scale, property mgmt, social-services) no longer appear; the section back-fills with the next biddable rows.
+  - Notes: Filtering happens at query time so the email always shows N *biddable* rows, not N-minus-the-dead. The verdicts remain queryable and will render on the app card.
+
 ## Disqualification scrutiny — directive + verdict engine (display wiring queued)
 
 - [x] Authored the opportunity-vetting scrutiny process and the disqualification verdict engine so the digest/app can show WHY a high-scoring row is actually dead (scores measure relevance/value, not winnability). **Directive** `directives/OPPORTUNITY_VETTING_AND_DISQUALIFICATION.md`: the 4-stage process (OP score -> auto-screen -> download the full doc set -> deep-vet gate-check), the disqualifier taxonomy (CERT_WALL, DOMAIN_MISMATCH, SCALE_WALL, EXPERIENCE_GATE, PRODUCT_REQUIRED, PHYSICAL_INSTALL, SET_ASIDE_INELIGIBLE, DEADLINE_TIGHT, INCUMBENT_LOCK), and the verdict schema stored at `ai_analysis.vetVerdict` / `bonfire_opportunities.vet_verdict`. **Engine** `backend/src/govContracts/disqualification.service.js`: `verdictFor(opp)` returns the authoritative human/AI verdict from `KNOWN_VERDICTS` (17 real deep-vet results captured this engagement — building automation, UTD/TDHCA/Harris cert walls, TxDOT scale, property mgmt, AV, social-services, infill-housing conditional-on-Que, etc.) or falls back to cheap `autoFlag()` pre-download heuristics (auto:true, tentative).

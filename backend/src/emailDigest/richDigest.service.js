@@ -59,6 +59,18 @@ const SAM_GOV_MIN_DAYS_TO_CLOSE = Math.max(
 );
 const CERT_WALLED_SET_ASIDES = ['8A', '8AN', 'WOSB', 'EDWOSB', 'HZC', 'HZS', 'SDVOSBC', 'SDVOSBS', 'VSA', 'VSS'];
 
+// Verdict statuses hidden from the email digest (they stay in the system + app).
+// Default hides confirmed no-bids AND tentative "likely no-bid" auto-flags so the
+// email only surfaces biddable + conditional rows. Env-tunable (e.g. set to just
+// "no_bid" to keep auto-flagged rows visible). Sanitized to [a-z_] to be SQL-safe.
+const HIDDEN_VERDICTS = (process.env.DIGEST_HIDE_VERDICTS || 'no_bid,needs_review')
+  .split(',').map((s) => s.trim()).filter((s) => /^[a-z_]+$/i.test(s));
+const HIDDEN_VERDICTS_SQL = HIDDEN_VERDICTS.map((s) => `'${s}'`).join(',');
+// SQL fragment: true when a row's verdict status is NOT one of the hidden ones.
+const notHiddenVerdict = (jsonPathSql) => (HIDDEN_VERDICTS.length
+  ? `(${jsonPathSql} IS NULL OR ${jsonPathSql} NOT IN (${HIDDEN_VERDICTS_SQL}))`
+  : '1=1');
+
 // Helper: safe-call an async section fetch. Logs + swallows errors so a single
 // broken upstream doesn't blank the entire email.
 async function safe(label, fn, fallback) {
@@ -135,6 +147,8 @@ async function topGovContracts(limit) {
         Opportunity.sequelize.literal(
           `((source_data->>'typeOfSetAside') IS NULL OR (source_data->>'typeOfSetAside') NOT IN (${certWalledList}))`
         ),
+        // Hide disqualified verdicts from the email (still in system + app).
+        Opportunity.sequelize.literal(notHiddenVerdict(`(ai_analysis #>> '{vetVerdict,status}')`)),
       ],
     },
     // Rank by bid_score — the Bonfire priority_score plus a winnability bonus that
@@ -188,6 +202,8 @@ async function topBonfire(limit) {
   return BonfireOpportunity.findAll({
     where: {
       closeDate: { [Op.gte]: cutoff },
+      // Hide disqualified verdicts from the email (rows stay in the system + app).
+      [Op.and]: [BonfireOpportunity.sequelize.literal(notHiddenVerdict(`(vet_verdict->>'status')`))],
     },
     order: [['priorityScore', 'DESC NULLS LAST'], ['fitScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
     limit,
