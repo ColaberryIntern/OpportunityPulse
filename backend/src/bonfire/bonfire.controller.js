@@ -7,6 +7,7 @@ const attachmentFetcher = require('./attachmentFetcher.service');
 const submissionPackage = require('./submissionPackage.service');
 const pursuitSvc = require('./bonfirePursuit.service');
 const manualUpload = require('./bonfireManualUpload.service');
+const documentDeepVet = require('./documentDeepVet.service');
 const attachmentClassifier = require('./attachmentClassifier.service');
 const portalScreenshot = require('./portalScreenshotExtractor.service');
 const { BonfireOpportunity } = require('../models');
@@ -404,11 +405,34 @@ async function uploadAttachments(req, res) {
       files,
       uploadedBy: req.user?.id || null,
     });
-    return successResponse(res, out, `${out.saved} file${out.saved === 1 ? '' : 's'} uploaded`);
+    // Extra layer of scrutiny: now that the real RFP text is parsed, deep-vet it
+    // against the winnability gates and write the authoritative verdict. Best-effort
+    // (a vetting failure must not fail the upload itself).
+    let vet = null;
+    try {
+      vet = await documentDeepVet.deepVetFromDocuments(req.params.id);
+    } catch (e) {
+      logger.warn('Bonfire post-upload deep-vet failed', { id: req.params.id, error: e.message });
+    }
+    return successResponse(res, { ...out, vet }, `${out.saved} file${out.saved === 1 ? '' : 's'} uploaded`);
   } catch (e) {
     if (e.code === 'NOT_FOUND') return errorResponse(res, e.message, 404);
     logger.error('Bonfire manual upload failed', { id: req.params.id, error: e.message });
     return errorResponse(res, 'Upload failed: ' + e.message, 500);
+  }
+}
+
+// On-demand deep vet — runs the gate-check against the already-uploaded RFP text
+// and writes the verdict. Lets the UI (or an operator) re-run scrutiny without
+// re-uploading, e.g. after adding an addendum.
+async function deepVet(req, res) {
+  try {
+    const result = await documentDeepVet.deepVetFromDocuments(req.params.id);
+    if (result.skipped) return successResponse(res, result, result.reason);
+    return successResponse(res, result, `Deep vet complete: ${result.verdict.status}`);
+  } catch (e) {
+    logger.error('Bonfire deep vet failed', { id: req.params.id, error: e.message });
+    return errorResponse(res, 'Deep vet failed: ' + e.message, 500);
   }
 }
 
@@ -433,6 +457,7 @@ module.exports = {
   pursueBid,
   cancelPursuit,
   uploadAttachments,
+  deepVet,
   // v0.9
   reclassifyAttachments,
   // v0.10

@@ -109,6 +109,14 @@ router.post(
   controller.uploadAttachments,
 );
 
+// Deep-vet the uploaded RFP documents against Colaberry's winnability gates and
+// write the verdict (on demand; the upload route also runs this automatically).
+router.post(
+  '/opportunities/:id/deep-vet',
+  verifyToken, checkPermissions(ROLES.ADMIN),
+  controller.deepVet,
+);
+
 // v0.9 — re-classify all attachments (read_only_reference / vendor_form /
 // vendor_schedule / other). Used to backfill rows uploaded before v0.9 or
 // after a prompt change. Idempotent.
