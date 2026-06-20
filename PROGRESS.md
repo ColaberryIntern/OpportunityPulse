@@ -8,6 +8,12 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Bonfire digest: rank biddable rows to the top (show 10, verdicts visible)
+
+- [x] FINAL Bonfire-section behavior (per operator, supersedes the hide-filter below): show the top 10 again, but RANK to the top the rows that are both not-disqualified (`vet_verdict` status not in `DIGEST_HIDE_VERDICTS`) AND in Colaberry's domain (`BONFIRE_DOMAIN_RE` title match) — those are the download candidates. Disqualified / off-domain rows still appear below, each with its red ❌ no-bid / amber ⚠️ verdict label, so the operator sees the full list AND the reasoning at a glance. Implemented as an `ORDER BY CASE WHEN (biddable AND in-domain) THEN 0 ELSE 1 END, priority_score DESC` (no WHERE filter, so the count stays 10). Gov/SBIR section keeps its winnability + verdict-exclusion filters (SAM is NAICS-scoped, little junk).
+  - Date: 2026-06-20
+  - Verification: prod preview confirms top 2 = CCure software (clean) + Infill Housing (conditional), then the no_bid/needs_review rows by priority with labels. `node --check` clean. Re-sent digest reflects the order.
+
 ## Hide disqualified verdicts from the email digest
 
 - [x] Filter rows with a disqualified verdict out of the daily digest email (they stay in the DB + app). `richDigest.service.js`: `topBonfire` and `topGovContracts` now exclude rows whose verdict status is in `DIGEST_HIDE_VERDICTS` (default `no_bid,needs_review`) via a NULL-safe `NOT IN` clause; `conditional` (e.g. Infill Housing -> Que) and unflagged/`bid` rows still surface. Env-tunable + SQL-sanitized to `[a-z_]`.

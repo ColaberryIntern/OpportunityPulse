@@ -206,18 +206,22 @@ async function topGovContracts(limit) {
 // excluded — we can't prove they have time to prep.
 async function topBonfire(limit) {
   const cutoff = new Date(Date.now() + BONFIRE_DIGEST_MIN_CLOSE_DAYS * 24 * 60 * 60 * 1000);
+  // Show the top N again, but RANK to the top the rows that are BOTH not
+  // disqualified AND in Colaberry's domain — those are the ones worth downloading.
+  // Disqualified / off-domain rows still appear below, WITH their red/amber verdict
+  // label, so the "why it's dead" reasoning stays visible. (ai_category is NOT used
+  // in the domain test — OP's LLM over-assigns "IT Services" to junk.)
+  const biddableFirst = `CASE WHEN (${notHiddenVerdict("(vet_verdict->>'status')")}) AND (title ~* '${BONFIRE_DOMAIN_RE}') THEN 0 ELSE 1 END`;
   return BonfireOpportunity.findAll({
     where: {
       closeDate: { [Op.gte]: cutoff },
-      [Op.and]: [
-        // Hide disqualified verdicts (rows stay in the system + app).
-        BonfireOpportunity.sequelize.literal(notHiddenVerdict(`(vet_verdict->>'status')`)),
-        // Positive domain gate: only surface IT/data/AI/consulting-looking rows.
-        // (ai_category is NOT used — OP's LLM over-assigns "IT Services" to junk.)
-        BonfireOpportunity.sequelize.literal(`(title ~* '${BONFIRE_DOMAIN_RE}')`),
-      ],
     },
-    order: [['priorityScore', 'DESC NULLS LAST'], ['fitScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
+    order: [
+      [BonfireOpportunity.sequelize.literal(biddableFirst), 'ASC'],
+      ['priorityScore', 'DESC NULLS LAST'],
+      ['fitScore', 'DESC NULLS LAST'],
+      ['createdAt', 'DESC'],
+    ],
     limit,
   });
 }
