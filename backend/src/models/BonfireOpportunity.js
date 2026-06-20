@@ -143,6 +143,13 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'pursued_by',
     },
+    // Disqualification verdict (BID / NO_BID / CONDITIONAL + reason). Set by the
+    // disqualification engine; surfaced as a label on the card + in the digest.
+    vetVerdict: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      field: 'vet_verdict',
+    },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,

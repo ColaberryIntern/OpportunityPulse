@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const logger = require('../logging/logger');
 const { backfillGovContractFit } = require('./govContractScoring.backfill');
+const { backfillDisqualification } = require('./disqualification.backfill');
 
 // Re-score active SAM.gov solicitations daily, shortly after the 6 AM ingestion,
 // so newly-ingested federal opps carry both govFit.fit_score and the comparable
@@ -23,6 +24,12 @@ function startGovScoringScheduler(schedule) {
       logger.info('Scheduled gov-contract scoring complete.', result);
     } catch (error) {
       logger.error('Scheduled gov-contract scoring failed.', { error: error.message });
+    }
+    try {
+      const dq = await backfillDisqualification();
+      logger.info('Scheduled disqualification flagging complete.', dq);
+    } catch (error) {
+      logger.error('Scheduled disqualification flagging failed.', { error: error.message });
     }
   });
 

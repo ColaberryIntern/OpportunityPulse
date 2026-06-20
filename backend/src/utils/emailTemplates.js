@@ -336,6 +336,17 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
   // section helper, which renders the full string ONCE PER ITEM — N×N output.
   // Each renderer below now returns ONE row; the section helper handles the
   // join correctly. -----
+  // Disqualification verdict label (red = no_bid, amber = conditional/needs_review).
+  // Shows WHY a high-scoring row is dead. Nothing rendered for BID / null.
+  const verdictBadge = (v) => {
+    if (!v || !v.label || v.status === 'bid') return '';
+    const isHard = v.status === 'no_bid';
+    const bg = isHard ? '#FEE2E2' : '#FEF3C7';
+    const fg = isHard ? '#991B1B' : '#92400E';
+    const icon = isHard ? '❌' : '⚠️';
+    return `<div style="margin:2px 0 6px;"><span style="display:inline-block;background:${bg};color:${fg};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">${icon} ${escapeHtml(v.label)}</span></div>`;
+  };
+
   const bonfireRow = (o) => {
     const close = o.closeDate ? fmtDate(o.closeDate) : null;
     const dToClose = daysUntil(o.closeDate);
@@ -364,6 +375,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
         <div style="font-weight: 700; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
           ${escapeHtml(o.title)}
         </div>
+        ${verdictBadge(o.vetVerdict)}
         <div style="color: #1F2937; font-size: 11px; margin-bottom: 4px;">
           ${pursuit}${escapeHtml(o.agency || '')}${cat}${val ? ` · 💵 ${val}` : ''}${close ? ` · 📅 ${close}` : ''} ${dueChip}
         </div>
@@ -451,6 +463,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
         <div style="font-weight: 700; color: #111827; margin-bottom: 4px; font-size: 13px; line-height: 1.4;">
           ${escapeHtml(o.title)}
         </div>
+        ${verdictBadge(o.aiAnalysis && o.aiAnalysis.vetVerdict)}
         <div style="color: #1F2937; font-size: 11px; margin-bottom: 4px;">
           ${actionBadge}${escapeHtml(agency)}${naics ? ` · NAICS ${escapeHtml(naics)}` : ''}${setAside ? ` · ${escapeHtml(setAside)}` : ''}${val ? ` · 💵 ${val}` : ''}${due ? ` · 📅 ${due}` : ''} ${dueChip}
         </div>
