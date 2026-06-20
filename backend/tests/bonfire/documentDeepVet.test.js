@@ -8,7 +8,9 @@ jest.mock('../../src/models', () => ({
 }));
 jest.mock('../../src/analysis/ai.client', () => ({ getAIClient: () => ({ chat: mockChat }) }));
 
-const { deepVetFromDocuments, sanitizeVerdict, gatePassages } = require('../../src/bonfire/documentDeepVet.service');
+const {
+  deepVetFromDocuments, sanitizeVerdict, gatePassages, validateVerdictEvidence,
+} = require('../../src/bonfire/documentDeepVet.service');
 
 describe('documentDeepVet.deepVetFromDocuments', () => {
   beforeEach(() => { mockFindAll.mockReset(); mockFindByPk.mockReset(); mockChat.mockReset(); });
@@ -60,6 +62,22 @@ describe('gatePassages', () => {
   });
   test('returns [] when no gate language is present', () => {
     expect(gatePassages('we are seeking a vendor to paint the gymnasium bleachers')).toEqual([]);
+  });
+});
+
+describe('validateVerdictEvidence (CERT_WALL guardrail)', () => {
+  test('downgrades CERT_WALL no_bid to needs_review when evidence names no cert', () => {
+    const v = validateVerdictEvidence({ status: 'no_bid', disqualifier: 'CERT_WALL', evidence: 'Vendor must maintain all licenses and certifications required by law.', confidence: 1 });
+    expect(v.status).toBe('needs_review');
+    expect(v.confidence).toBeLessThanOrEqual(0.4);
+  });
+  test('keeps CERT_WALL no_bid when evidence names a real cert', () => {
+    const v = validateVerdictEvidence({ status: 'no_bid', disqualifier: 'CERT_WALL', evidence: 'The vendor must be TX-RAMP certified prior to award.', confidence: 1 });
+    expect(v.status).toBe('no_bid');
+  });
+  test('does not touch a no_bid with a different disqualifier', () => {
+    const v = validateVerdictEvidence({ status: 'no_bid', disqualifier: 'DOMAIN_MISMATCH', evidence: 'install the bleachers', confidence: 0.9 });
+    expect(v.status).toBe('no_bid');
   });
 });
 

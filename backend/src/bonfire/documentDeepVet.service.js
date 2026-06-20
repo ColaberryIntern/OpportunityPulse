@@ -111,6 +111,25 @@ function sanitizeVerdict(parsed) {
   };
 }
 
+// A CERT_WALL verdict must be backed by evidence that NAMES a specific security
+// certification. Models over-trigger CERT_WALL on generic "maintain all licenses
+// and certifications" boilerplate present in nearly every contract. This is a
+// deterministic guardrail: if a no_bid/CERT_WALL's evidence names no real cert,
+// downgrade to needs_review rather than wrongly burying the opportunity.
+const NAMED_CERT_RE = /tx-?ramp|soc ?2|soc 2 type|stateramp|govramp|fedramp|\bcjis\b|\bfips\b|hecvat|iso ?27001/i;
+
+function validateVerdictEvidence(v) {
+  if (v.status === 'no_bid' && v.disqualifier === 'CERT_WALL' && !NAMED_CERT_RE.test(v.evidence || '')) {
+    return {
+      ...v,
+      status: 'needs_review',
+      label: 'Possible cert requirement — evidence did not name a specific certification',
+      confidence: Math.min(v.confidence, 0.4),
+    };
+  }
+  return v;
+}
+
 function parseAiJson(content) {
   try { return JSON.parse(content); } catch (e) { /* fall through */ }
   const m = String(content || '').match(/\{[\s\S]*\}/);
@@ -149,10 +168,12 @@ async function deepVetFromDocuments(oppId) {
   }
   if (!parsed) return { skipped: true, reason: aiError || 'AI returned no parseable verdict.' };
 
-  const verdict = sanitizeVerdict(parsed);
+  const verdict = validateVerdictEvidence(sanitizeVerdict(parsed));
   await opp.update({ vetVerdict: verdict });
   logger.info('documentDeepVet wrote verdict', { id: oppId, status: verdict.status, disqualifier: verdict.disqualifier });
   return { verdict };
 }
 
-module.exports = { deepVetFromDocuments, loadRfpText, sanitizeVerdict, gatePassages, SYSTEM_PROMPT };
+module.exports = {
+  deepVetFromDocuments, loadRfpText, sanitizeVerdict, validateVerdictEvidence, gatePassages, SYSTEM_PROMPT,
+};
