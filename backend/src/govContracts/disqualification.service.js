@@ -24,8 +24,8 @@ const DISQUALIFIERS = {
 // Pre-download heuristics. First match wins. Kept conservative — these only triage.
 const AUTO_SIGNALS = [
   { code: 'CERT_WALL', re: /tx-?ramp|\bsoc ?2\b|stateramp|govramp|fedramp|\bcjis\b|\bfips\b|hecvat|criminal justice|housing and community affairs|\btdhca\b|\btdcj\b/i },
-  { code: 'PHYSICAL_INSTALL', re: /curbside|signage|\bIFB\b|furnish and install|bid bond|\bHVAC\b|building automation|construction|roofing|pavement/i },
-  { code: 'DOMAIN_MISMATCH', re: /property manag|real estate|residential|group home|\bDCFS\b|\bDHHS\b|foster|child care|audio ?visual|metering|transportation software|janitor|landscap|food service|fleet|uniform|massage/i },
+  { code: 'PHYSICAL_INSTALL', re: /curbside|signage|\bIFB\b|furnish and install|bid bond|\bHVAC\b|building automation|construction|general contractor|job order contract|pump station|paver|paving|pavement|plumbing|roofing|electrician|electrical work|demolition|\bconcrete\b|asphalt|fencing|sidewalk|\bbridge\b|sewer|water treatment|building (interior|improvement|renovation)|\bmechanical\b|elevator|\bboiler\b|hvac/i },
+  { code: 'DOMAIN_MISMATCH', re: /property manag|real estate|residential|group home|\bDCFS\b|\bDHHS\b|foster|child care|audio ?visual|metering|transportation software|janitor|custodial|landscap|grounds maintenance|food service|catering|\bfleet\b|uniform|massage|security guard|armed guard|guard services|\bvehicles?\b|light rail|\bbus(es)?\b|solid waste|recycl|refuse|\bfurniture\b|tree (removal|trim|service)|\bfuel\b|towing|pest control|\blaundry\b|locksmith|snow removal/i },
   { code: 'SCALE_WALL', re: /application services|managed services|\bERP\b|enterprise outsourc|parent guarantee|source code escrow/i },
   { code: 'PRODUCT_REQUIRED', re: /licensing system|financial reporting system|video creation|comprehensive .* software|agenda (and )?meeting/i },
   { code: 'EXPERIENCE_GATE', re: /minimum of (three|five|3|5|ten|10) \(?\d*\)? years|years of experience producing|prior (deployments|implementations)/i },

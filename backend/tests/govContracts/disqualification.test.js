@@ -28,4 +28,18 @@ describe('disqualification verdictFor', () => {
   test('autoFlag catches physical-install language', () => {
     expect(autoFlag({ title: 'Curbside Digital Signage Install', description: 'bid bond required' }).disqualifier).toBe('PHYSICAL_INSTALL');
   });
+  test('autoFlag catches construction / trades', () => {
+    expect(autoFlag({ title: 'Gerrish Pump Station Improvements' }).disqualifier).toBe('PHYSICAL_INSTALL');
+    expect(autoFlag({ title: 'Job Order Contracting - General Contractor Services' }).disqualifier).toBe('PHYSICAL_INSTALL');
+    expect(autoFlag({ title: 'Plumbing Services' }).disqualifier).toBe('PHYSICAL_INSTALL');
+  });
+  test('autoFlag catches non-IT goods/services', () => {
+    expect(autoFlag({ title: 'Armed Security Guard Services - TxDOT' }).disqualifier).toBe('DOMAIN_MISMATCH');
+    expect(autoFlag({ title: 'New Light Rail Vehicles' }).disqualifier).toBe('DOMAIN_MISMATCH');
+    expect(autoFlag({ title: 'Solid Waste and Recycling Services' }).disqualifier).toBe('DOMAIN_MISMATCH');
+  });
+  test('does NOT flag a real IT/AI services row', () => {
+    expect(autoFlag({ title: 'AI Readiness Assessment and Data Analytics Advisory' })).toBeNull();
+    expect(autoFlag({ title: 'Custom Software Development Services' })).toBeNull();
+  });
 });
