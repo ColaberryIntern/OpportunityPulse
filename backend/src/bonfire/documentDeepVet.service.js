@@ -58,6 +58,9 @@ Return ONLY this JSON:
 
 Rules:
 - no_bid REQUIRES a verbatim sentence in "evidence" copied exactly from the text that proves the failing gate (e.g. the sentence mandating TX-RAMP/SOC 2, or stating the N-year experience minimum). disqualifier = that gate's CODE.
+- Evidence must AFFIRMATIVELY impose the gate. A clause stating a requirement is "not applicable", "N/A", "waived", "not required", "none", or absent is the OPPOSITE of a gate — NEVER cite it as proof of a disqualification. If the security/qualification/bond section says it is not applicable, that gate does NOT fail.
+- Do NOT infer CERT_WALL from the words "security", "secure", "cyber", or a security-product name in the title or scope. CERT_WALL fails ONLY when an explicit clause MANDATES a named certification (SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT) as a condition of submission or award.
+- Re-read your chosen "evidence" before finalizing: on its own, it must prove the disqualifier. If it does not, pick different evidence, change the disqualifier, or change the status.
 - If it LOOKS like a no-bid but you CANNOT find a verbatim clause in the text proving a hard gate, return status "needs_review" (NOT no_bid) with your best-guess disqualifier and confidence — never assert a disqualification on the agency name or inference alone.
 - conditional -> clears every gate except one a partner can satisfy (Que for housing-finance experience, or a SOC2-certified host); set unblocked_by.
 - bid -> clears every gate.
