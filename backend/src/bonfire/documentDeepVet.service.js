@@ -12,6 +12,30 @@ const logger = require('../logging/logger');
 const MAX_PER_ATTACHMENT = 12000;
 const MAX_TOTAL = 30000;
 const MIN_TEXT = 500;
+const HEAD_CHARS = 1800;       // doc opening (scope/intro) for context
+const PASSAGE_WINDOW = 380;    // chars of context captured around each gate keyword
+
+// Language that triggers a hard gate. We pull windows around these so the exact
+// disqualifying clause is in the excerpt even when it sits deep in a long PDF
+// (otherwise a first-N-chars truncation hides it and the AI guesses from context).
+const GATE_RE = /tx-?ramp|soc ?2|soc 2 type|stateramp|govramp|fedramp|\bcjis\b|\bfips\b|hecvat|certif(y|ied|ication)|minimum qualif|years?\s+of\s+experience|prior (experience|deployment|implementation)|set-?aside|8\(a\)|\bwosb\b|hubzone|sdvosb|bid bond|performance bond|payment bond|professional liability|errors and omissions|parent guarant|source code escrow|furnish and install|installed base|on-?site|must (hold|be certified|provide proof|possess|have at least|demonstrate)/i;
+
+// Extract de-duplicated ~window-sized passages around each gate keyword.
+function gatePassages(text, { window = PASSAGE_WINDOW, maxPassages = 20 } = {}) {
+  const passages = [];
+  const ranges = [];
+  const re = new RegExp(GATE_RE.source, 'gi');
+  let m;
+  while ((m = re.exec(text)) !== null && passages.length < maxPassages) {
+    const start = Math.max(0, m.index - window);
+    const end = Math.min(text.length, m.index + m[0].length + window);
+    if (ranges.some(([s, e]) => start < e && end > s)) continue; // skip overlaps
+    ranges.push([start, end]);
+    passages.push(text.slice(start, end).replace(/\s+/g, ' ').trim());
+    re.lastIndex = end;
+  }
+  return passages;
+}
 
 const SYSTEM_PROMPT = `You are a government-contract capture analyst vetting an RFP for Colaberry Inc., a small AI/data/software services firm in Plano TX.
 Colaberry's delivery lane: custom software, AI/ML, RAG/document intelligence, data analytics, IT consulting, 508/accessibility, workforce/education technology.
@@ -27,9 +51,18 @@ Read the RFP text and decide whether Colaberry can SUBMIT and WIN this. Apply th
 - SET_ASIDE_INELIGIBLE: reserved for a set-aside Colaberry can't claim (8(a)/WOSB/HUBZone/SDVOSB).
 - DEADLINE_TIGHT: the real submission deadline is under 14 days from "Today" below.
 
+The text below is each document's opening plus [GATE-RELEVANT PASSAGES] — windows pulled around certification / qualification / insurance / set-aside / bond / experience language. Base the verdict on THESE.
+
 Return ONLY this JSON:
-{"status":"bid|no_bid|conditional","disqualifier":"<one taxonomy CODE or null>","label":"<one-line plain-English reason, <=90 chars>","evidence":"<verbatim quote from the RFP proving it, or null>","lane":"services|sbir|coop|null","unblocked_by":"<what/who would clear a conditional, or null>","confidence":0.0}
-Rules: no_bid -> disqualifier = the failing code, evidence = the exact verbatim quote. conditional -> clears every gate except one a partner can satisfy (e.g. Que for housing-finance experience, or a SOC2-certified host); unblocked_by = that. bid -> clears every gate. Quote evidence verbatim from the supplied text only. Never invent a requirement that is not in the text.`;
+{"status":"bid|no_bid|conditional|needs_review","disqualifier":"<one taxonomy CODE or null>","label":"<one-line plain-English reason, <=90 chars>","evidence":"<the EXACT verbatim sentence from the text that triggers the disqualifier, or null>","lane":"services|sbir|coop|null","unblocked_by":"<what/who would clear a conditional, or null>","confidence":0.0}
+
+Rules:
+- no_bid REQUIRES a verbatim sentence in "evidence" copied exactly from the text that proves the failing gate (e.g. the sentence mandating TX-RAMP/SOC 2, or stating the N-year experience minimum). disqualifier = that gate's CODE.
+- If it LOOKS like a no-bid but you CANNOT find a verbatim clause in the text proving a hard gate, return status "needs_review" (NOT no_bid) with your best-guess disqualifier and confidence — never assert a disqualification on the agency name or inference alone.
+- conditional -> clears every gate except one a partner can satisfy (Que for housing-finance experience, or a SOC2-certified host); set unblocked_by.
+- bid -> clears every gate.
+- confidence (0.0-1.0) = how strongly the QUOTED TEXT supports the verdict: 1.0 only when "evidence" is an explicit verbatim clause, lower when partial, near 0 when inferred.
+- Quote verbatim from the supplied text only. Never invent a requirement that is not in the text.`;
 
 async function loadRfpText(oppId) {
   const rows = await OpportunityAttachment.findAll({
@@ -41,9 +74,16 @@ async function loadRfpText(oppId) {
   for (const r of rows) {
     const text = String(r.parsedText || '').trim();
     if (!text) continue;
+    // Build a gate-focused excerpt: the document opening (scope) + every passage
+    // around a gate keyword, so the disqualifying clause is never truncated away.
+    const head = text.slice(0, HEAD_CHARS);
+    const passages = gatePassages(text);
+    let docExcerpt = head;
+    if (passages.length) docExcerpt += `\n[GATE-RELEVANT PASSAGES]\n${passages.join('\n...\n')}`;
+    docExcerpt = docExcerpt.slice(0, MAX_PER_ATTACHMENT);
     const remaining = MAX_TOTAL - total;
     if (remaining <= 200) break;
-    const slice = text.slice(0, Math.min(MAX_PER_ATTACHMENT, remaining));
+    const slice = docExcerpt.slice(0, remaining);
     total += slice.length;
     out.push({ name: r.name, text: slice });
   }
@@ -112,4 +152,4 @@ async function deepVetFromDocuments(oppId) {
   return { verdict };
 }
 
-module.exports = { deepVetFromDocuments, loadRfpText, sanitizeVerdict, SYSTEM_PROMPT };
+module.exports = { deepVetFromDocuments, loadRfpText, sanitizeVerdict, gatePassages, SYSTEM_PROMPT };

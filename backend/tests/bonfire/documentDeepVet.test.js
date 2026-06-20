@@ -8,7 +8,7 @@ jest.mock('../../src/models', () => ({
 }));
 jest.mock('../../src/analysis/ai.client', () => ({ getAIClient: () => ({ chat: mockChat }) }));
 
-const { deepVetFromDocuments, sanitizeVerdict } = require('../../src/bonfire/documentDeepVet.service');
+const { deepVetFromDocuments, sanitizeVerdict, gatePassages } = require('../../src/bonfire/documentDeepVet.service');
 
 describe('documentDeepVet.deepVetFromDocuments', () => {
   beforeEach(() => { mockFindAll.mockReset(); mockFindByPk.mockReset(); mockChat.mockReset(); });
@@ -47,6 +47,19 @@ describe('documentDeepVet.deepVetFromDocuments', () => {
     mockChat.mockRejectedValue(new Error('rate limited'));
     const r = await deepVetFromDocuments(1);
     expect(r.skipped).toBe(true);
+  });
+});
+
+describe('gatePassages', () => {
+  test('pulls a window around a cert clause buried deep in the text', () => {
+    const filler = 'lorem ipsum scope of work. '.repeat(400); // ~10k chars of noise
+    const text = `${filler} The vendor must be TX-RAMP certified prior to award. ${filler}`;
+    const passages = gatePassages(text);
+    expect(passages.length).toBeGreaterThan(0);
+    expect(passages.join(' ')).toMatch(/TX-RAMP certified/i);
+  });
+  test('returns [] when no gate language is present', () => {
+    expect(gatePassages('we are seeking a vendor to paint the gymnasium bleachers')).toEqual([]);
   });
 });
 
