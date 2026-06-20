@@ -137,6 +137,42 @@ function parseAiJson(content) {
   return null;
 }
 
+// Second, ADVERSARIAL pass. The first verdict can be confidently wrong (it cited a
+// "not applicable" clause as a cert wall). This reviewer is told to find that error
+// and return the corrected final verdict. Two passes + the deterministic guardrails
+// catch the bulk of the bad calls before a human ever sees them.
+const REVIEW_SYSTEM_PROMPT = `You are a SKEPTICAL senior reviewer auditing a draft bid/no-bid decision on a government RFP for Colaberry Inc. (a small AI/data/software services firm; does NOT hold SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT; no federal past performance; no SBA set-aside certifications; does not install hardware or manage property/people on-site).
+You are given (a) the DRAFT VERDICT and (b) the RFP text. Your job is to catch the draft's errors and return the CORRECT final verdict.
+Audit rigorously:
+1. EVIDENCE: does the draft's quote actually appear (in substance) in the text AND, on its own, AFFIRMATIVELY prove the stated disqualifier? A clause saying a requirement is "not applicable / waived / not required / N/A / none" proves the OPPOSITE — it cannot support a disqualification.
+2. CODE: is the disqualifier the correct gate? CERT_WALL requires a clause NAMING SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT as a condition of submission/award — never infer it from the word "security" or generic "maintain all certifications" boilerplate. Annual support of a proprietary product (e.g. a named access-control or ERP system) is PRODUCT_REQUIRED, not CERT_WALL.
+3. CONTRADICTION: is there a clause that contradicts the draft?
+Return ONLY JSON:
+{"agrees_with_draft":true|false,"status":"bid|no_bid|conditional|needs_review","disqualifier":"<CODE or null>","label":"<=90 chars","evidence":"<verbatim sentence that affirmatively proves the disqualifier, or null>","lane":"services|sbir|coop|null","unblocked_by":"<or null>","confidence":0.0,"reason":"<why you agreed or corrected, <=160 chars>"}
+Rules: if the draft's evidence does not affirmatively prove its disqualifier, you MUST correct it. If you cannot prove ANY hard gate from the text, return status "needs_review" (let a human decide) — never invent a gate. A no_bid REQUIRES a verbatim affirmative clause in "evidence".`;
+
+async function reviewVerdict({ opp, draft, excerpts }) {
+  const ai = getAIClient();
+  const userPrompt = [
+    `Opportunity: ${opp.title || ''}`,
+    `Agency: ${opp.agency || ''}`,
+    `Today: ${new Date().toISOString().slice(0, 10)}`,
+    '',
+    '=== DRAFT VERDICT TO AUDIT ===',
+    JSON.stringify({ status: draft.status, disqualifier: draft.disqualifier, label: draft.label, evidence: draft.evidence }),
+    '',
+    '=== RFP attachment text ===',
+    ...excerpts.map((e) => `--- ${e.name} ---\n${e.text}`),
+  ].join('\n');
+  try {
+    const { content } = await ai.chat(REVIEW_SYSTEM_PROMPT, userPrompt, { temperature: 0, maxTokens: 600 });
+    return parseAiJson(content);
+  } catch (e) {
+    logger.warn('documentDeepVet: review pass failed', { id: opp.id, error: e.message });
+    return null;
+  }
+}
+
 // Run the deep vet for one bonfire opportunity using its uploaded+parsed documents.
 async function deepVetFromDocuments(oppId) {
   const excerpts = await loadRfpText(oppId);
@@ -168,12 +204,35 @@ async function deepVetFromDocuments(oppId) {
   }
   if (!parsed) return { skipped: true, reason: aiError || 'AI returned no parseable verdict.' };
 
-  const verdict = validateVerdictEvidence(sanitizeVerdict(parsed));
-  await opp.update({ vetVerdict: verdict });
-  logger.info('documentDeepVet wrote verdict', { id: oppId, status: verdict.status, disqualifier: verdict.disqualifier });
-  return { verdict };
+  // Pass 1 — draft verdict (with deterministic guardrails).
+  const draft = validateVerdictEvidence(sanitizeVerdict(parsed));
+
+  // Pass 2 — skeptical AI review. Its corrected verdict (re-guarded) becomes final.
+  // If the review is unavailable, fall back to the guarded draft.
+  let final = draft;
+  let review = { agreed: null, reason: 'review unavailable', reviewer: 'ai_review', draft_status: draft.status, draft_disqualifier: draft.disqualifier };
+  const reviewed = await reviewVerdict({ opp, draft, excerpts });
+  if (reviewed) {
+    const corrected = validateVerdictEvidence(sanitizeVerdict(reviewed));
+    review = {
+      agreed: reviewed.agrees_with_draft !== false,
+      reason: String(reviewed.reason || '').slice(0, 200),
+      reviewer: 'ai_review',
+      draft_status: draft.status,
+      draft_disqualifier: draft.disqualifier,
+    };
+    final = corrected;
+  }
+  final = { ...final, review };
+
+  await opp.update({ vetVerdict: final });
+  logger.info('documentDeepVet wrote verdict', {
+    id: oppId, status: final.status, disqualifier: final.disqualifier, review_agreed: review.agreed,
+  });
+  return { verdict: final };
 }
 
 module.exports = {
-  deepVetFromDocuments, loadRfpText, sanitizeVerdict, validateVerdictEvidence, gatePassages, SYSTEM_PROMPT,
+  deepVetFromDocuments, loadRfpText, sanitizeVerdict, validateVerdictEvidence, reviewVerdict, gatePassages,
+  SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT,
 };

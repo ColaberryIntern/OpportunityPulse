@@ -22,25 +22,52 @@ describe('documentDeepVet.deepVetFromDocuments', () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
-  test('writes an authoritative no_bid verdict from the AI gate-check', async () => {
+  test('writes a no_bid verdict the reviewer confirms', async () => {
     mockFindAll.mockResolvedValue([{ name: 'rfp.pdf', parsedText: 'X'.repeat(800) }]);
     const update = jest.fn();
     mockFindByPk.mockResolvedValue({ id: 1, title: 'Hosted Platform', agency: 'TDHCA', update });
-    mockChat.mockResolvedValue({ content: JSON.stringify({ status: 'no_bid', disqualifier: 'CERT_WALL', label: 'TX-RAMP required at submission', evidence: 'vendor must be TX-RAMP certified', confidence: 0.9 }) });
+    mockChat
+      .mockResolvedValueOnce({ content: JSON.stringify({ status: 'no_bid', disqualifier: 'CERT_WALL', label: 'TX-RAMP required', evidence: 'vendor must be TX-RAMP certified prior to award', confidence: 0.9 }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ agrees_with_draft: true, status: 'no_bid', disqualifier: 'CERT_WALL', label: 'TX-RAMP required', evidence: 'vendor must be TX-RAMP certified prior to award', confidence: 0.95, reason: 'confirmed' }) });
     const r = await deepVetFromDocuments(1);
     expect(r.verdict.status).toBe('no_bid');
     expect(r.verdict.disqualifier).toBe('CERT_WALL');
-    expect(r.verdict.auto).toBe(false);
-    expect(r.verdict.scorer).toBe('document_deep_vet');
+    expect(r.verdict.review.agreed).toBe(true);
     expect(update).toHaveBeenCalledWith({ vetVerdict: expect.objectContaining({ status: 'no_bid', disqualifier: 'CERT_WALL' }) });
+  });
+
+  test('the reviewer OVERTURNS a wrong draft (this is the CCure-class bug)', async () => {
+    mockFindAll.mockResolvedValue([{ name: 'a', parsedText: 'Z'.repeat(800) }]);
+    const update = jest.fn();
+    mockFindByPk.mockResolvedValue({ id: 9, title: 'CCure 9000 Support', agency: 'TxDOT', update });
+    mockChat
+      .mockResolvedValueOnce({ content: JSON.stringify({ status: 'no_bid', disqualifier: 'CERT_WALL', label: 'security cert required', evidence: 'Security Requirements: Not applicable for this solicitation.', confidence: 1 }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ agrees_with_draft: false, status: 'needs_review', disqualifier: null, label: 'no hard gate proven in docs', evidence: null, confidence: 0.5, reason: 'draft cited a "not applicable" clause' }) });
+    const r = await deepVetFromDocuments(9);
+    expect(r.verdict.status).toBe('needs_review');
+    expect(r.verdict.review.agreed).toBe(false);
+    expect(r.verdict.review.draft_status).toBe('needs_review'); // draft was already guard-downgraded
   });
 
   test('tolerates fenced / wrapped JSON', async () => {
     mockFindAll.mockResolvedValue([{ name: 'a', parsedText: 'Y'.repeat(800) }]);
     mockFindByPk.mockResolvedValue({ update: jest.fn() });
-    mockChat.mockResolvedValue({ content: '```json\n{"status":"bid","confidence":0.8}\n```' });
+    mockChat
+      .mockResolvedValueOnce({ content: '```json\n{"status":"bid","confidence":0.8}\n```' })
+      .mockResolvedValueOnce({ content: '{"agrees_with_draft":true,"status":"bid","confidence":0.8,"reason":"ok"}' });
     const r = await deepVetFromDocuments(1);
     expect(r.verdict.status).toBe('bid');
+  });
+
+  test('falls back to the guarded draft when the review is unavailable', async () => {
+    mockFindAll.mockResolvedValue([{ name: 'a', parsedText: 'Q'.repeat(800) }]);
+    mockFindByPk.mockResolvedValue({ update: jest.fn() });
+    mockChat
+      .mockResolvedValueOnce({ content: JSON.stringify({ status: 'no_bid', disqualifier: 'DOMAIN_MISMATCH', label: 'construction', evidence: 'install the bleachers', confidence: 0.9 }) })
+      .mockRejectedValueOnce(new Error('review timeout'));
+    const r = await deepVetFromDocuments(1);
+    expect(r.verdict.status).toBe('no_bid');
+    expect(r.verdict.review.agreed).toBeNull();
   });
 
   test('skips gracefully when the AI errors', async () => {
