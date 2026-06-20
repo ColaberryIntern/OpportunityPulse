@@ -71,6 +71,13 @@ const notHiddenVerdict = (jsonPathSql) => (HIDDEN_VERDICTS.length
   ? `(${jsonPathSql} IS NULL OR ${jsonPathSql} NOT IN (${HIDDEN_VERDICTS_SQL}))`
   : '1=1');
 
+// Positive domain allowlist for the Bonfire section. Government procurement has an
+// infinite tail of non-IT categories (boats, snowplows, water mains, paving...) that
+// no blocklist catches and that priority_score still rates ~60-70. Rather than chase
+// them, require a Colaberry-domain signal in the title. Disqualified IT-looking rows
+// (building automation, records system) are still removed by the verdict filter.
+const BONFIRE_DOMAIN_RE = 'software|analytic|artificial intelligence|machine learning|information technolog|consulting|advisory|digital|chatbot|conversational|cybersecur|cyber secur| cloud |dashboard|website|web application|web-based|web portal|programming|geospatial|business intelligence|document management|document intelligence|case management|learning management|content management|workforce|upskill|elearning|e-learning|data analyt|data platform|data management|data science|data warehouse| crm | erp |saas|application development|intelligent automation|modernization|technology services|managed it';
+
 // Helper: safe-call an async section fetch. Logs + swallows errors so a single
 // broken upstream doesn't blank the entire email.
 async function safe(label, fn, fallback) {
@@ -202,8 +209,13 @@ async function topBonfire(limit) {
   return BonfireOpportunity.findAll({
     where: {
       closeDate: { [Op.gte]: cutoff },
-      // Hide disqualified verdicts from the email (rows stay in the system + app).
-      [Op.and]: [BonfireOpportunity.sequelize.literal(notHiddenVerdict(`(vet_verdict->>'status')`))],
+      [Op.and]: [
+        // Hide disqualified verdicts (rows stay in the system + app).
+        BonfireOpportunity.sequelize.literal(notHiddenVerdict(`(vet_verdict->>'status')`)),
+        // Positive domain gate: only surface IT/data/AI/consulting-looking rows.
+        // (ai_category is NOT used — OP's LLM over-assigns "IT Services" to junk.)
+        BonfireOpportunity.sequelize.literal(`(title ~* '${BONFIRE_DOMAIN_RE}')`),
+      ],
     },
     order: [['priorityScore', 'DESC NULLS LAST'], ['fitScore', 'DESC NULLS LAST'], ['createdAt', 'DESC']],
     limit,
