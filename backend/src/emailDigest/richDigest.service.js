@@ -121,7 +121,7 @@ async function topGovContracts(limit) {
   const rows = await Opportunity.findAll({
     where: {
       type: 'gov_contract',
-      source: 'sam_gov',
+      source: { [Op.in]: ['sam_gov', 'sbir_gov'] },
       status: 'active',
       id: { [Op.gte]: 100 },
       [Op.and]: [

@@ -30,12 +30,14 @@ function inputHash(opp) {
   return crypto.createHash('sha1').update(blob).digest('hex').slice(0, 16);
 }
 
-async function backfillGovContractFit({ source = 'sam_gov', limit = 5000 } = {}) {
+async function backfillGovContractFit({ source, sources, limit = 5000 } = {}) {
   const startTime = Date.now();
+  // Score federal solicitations from SAM.gov AND SBIR.gov on the same engine.
+  const srcList = sources || (source ? [source] : ['sam_gov', 'sbir_gov']);
   const rows = await Opportunity.findAll({
     where: {
       type: 'gov_contract',
-      source,
+      source: { [Op.in]: srcList },
       status: 'active',
       id: { [Op.gte]: SEED_ID_CUTOFF },
     },
@@ -94,7 +96,7 @@ async function backfillGovContractFit({ source = 'sam_gov', limit = 5000 } = {})
 
   const summary = {
     total_examined: rows.length, scored, unchanged, failed, skipped,
-    duration_ms: Date.now() - startTime, source,
+    duration_ms: Date.now() - startTime, sources: srcList,
   };
   logger.info('Gov contract fit backfill complete', summary);
   return summary;
