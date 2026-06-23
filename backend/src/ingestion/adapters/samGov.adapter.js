@@ -15,6 +15,24 @@ const DEFAULT_INTER_PAGE_DELAY_MS = 1000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Thrown when SAM.gov reports the API key's DAILY quota is exhausted (HTTP 429,
+ * body code 900804 / "exceeded your quota"). Unlike a transient burst-rate 429,
+ * this cannot be cured by retrying — the key is blocked until midnight UTC — so
+ * it aborts the run immediately instead of hammering the cap with retries.
+ */
+class SamQuotaExhaustedError extends Error {
+  constructor(message, nextAccessTime) {
+    super(message);
+    this.name = 'SamQuotaExhaustedError';
+    this.code = 'QUOTA_EXHAUSTED';
+    this.nextAccessTime = nextAccessTime || null;
+  }
+}
+
+// A 429 body is treated as daily-quota exhaustion (not transient) when it matches.
+const QUOTA_BODY_RE = /exceeded your quota|900804/i;
+
 const DEFAULT_KEYWORDS = [
   'artificial intelligence',
   'machine learning',
@@ -48,6 +66,18 @@ class SamGovAdapter extends BaseAdapter {
     this.naicsCodes = Array.isArray(rawNaics)
       ? rawNaics.map((c) => String(c).trim()).filter(Boolean)
       : (rawNaics ? String(rawNaics).split(',').map((c) => c.trim()).filter(Boolean) : []);
+
+    // Daily-quota fit: a low-tier (personal/non-federal) SAM.gov key is capped at
+    // a small number of requests/day, so fanning out every NAICS each run exhausts
+    // it on the first call. When `naicsPerRun` is set, only that many codes are
+    // queried per run, ROTATING by day so all codes are covered over several days.
+    // `maxPagesPerQuery` further bounds pagination so one NAICS can't drain the cap.
+    // Both default to "no limit" (correct behavior once a system-account key with a
+    // 1,000/day quota is provisioned). See OPPORTUNITY_PULSE_EXPOSURE_AUDIT.md.
+    this.naicsPerRun = config.naicsPerRun != null ? Number(config.naicsPerRun) : null;
+    this.maxPagesPerQuery = config.maxPagesPerQuery != null
+      ? Number(config.maxPagesPerQuery)
+      : Infinity;
 
     // Reliability knobs (see DEFAULT_* above).
     this.maxRetries = config.maxRetries != null ? config.maxRetries : DEFAULT_MAX_RETRIES;
@@ -127,7 +157,24 @@ class SamGovAdapter extends BaseAdapter {
         return response.json();
       }
 
-      // Rate limit (429) or server error (5xx) — retryable with backoff.
+      // Read the (error) body once and reuse it for both quota classification and
+      // the final error log — Response bodies can only be consumed a single time.
+      const body = await response.text().catch(() => '');
+
+      // Daily-quota exhaustion (429 + quota body) is NOT retryable — the key is
+      // blocked until midnight UTC. Detect it and abort immediately so we don't
+      // burn the remaining cap (and minutes of backoff) on doomed retries.
+      if (response.status === 429 && QUOTA_BODY_RE.test(body)) {
+        let nextAccessTime = null;
+        try { nextAccessTime = JSON.parse(body).nextAccessTime || null; } catch { /* non-JSON body */ }
+        logger.warn(
+          `SAM.gov ${label}: daily API quota exhausted${nextAccessTime ? ` (resets ${nextAccessTime})` : ''}`
+          + ' — aborting run. Provision a non-federal system-account key (1,000/day) or lower naicsPerRun.'
+        );
+        throw new SamQuotaExhaustedError(`SAM.gov daily quota exhausted (${label})`, nextAccessTime);
+      }
+
+      // Transient rate limit (429 burst) or server error (5xx) — retryable with backoff.
       const isRetryable = response.status === 429 || response.status >= 500;
       if (isRetryable && attempt <= this.maxRetries) {
         const wait = this._retryDelayMs(attempt, response.headers.get('retry-after'));
@@ -139,10 +186,29 @@ class SamGovAdapter extends BaseAdapter {
       }
 
       // Non-retryable 4xx, or retries exhausted.
-      const body = await response.text().catch(() => '');
       logger.error(`SAM.gov API error: ${response.status} - ${body.slice(0, 300)}`);
       throw new Error(`SAM.gov API returned ${response.status} (${label})`);
     }
+  }
+
+  /**
+   * Choose which NAICS codes to query this run. Returns all codes when
+   * `naicsPerRun` is unset; otherwise a rotating window of that size keyed on the
+   * current day, so every code is covered over ceil(total / naicsPerRun) days.
+   * @returns {string[]}
+   */
+  _selectNaicsForRun() {
+    const all = this.naicsCodes;
+    if (!this.naicsPerRun || this.naicsPerRun >= all.length || all.length === 0) {
+      return all;
+    }
+    const dayIndex = Math.floor(Date.now() / 86400000); // days since epoch (UTC)
+    const start = (dayIndex * this.naicsPerRun) % all.length;
+    const window = [];
+    for (let i = 0; i < this.naicsPerRun; i += 1) {
+      window.push(all[(start + i) % all.length]);
+    }
+    return window;
   }
 
   /**
@@ -170,21 +236,34 @@ class SamGovAdapter extends BaseAdapter {
       return `${mm}/${dd}/${yyyy}`;
     };
 
+    // Select the NAICS codes for THIS run. With naicsPerRun set, take a rotating
+    // window keyed on the day so a low-quota key covers all codes over several
+    // days instead of exhausting the cap on the first call each day.
+    const naicsForRun = this._selectNaicsForRun();
+
     // Build the query set: one query per NAICS code (each code already scopes to a
     // relevant industry), or a single keyword query when no NAICS is configured.
-    const queries = this.naicsCodes.length > 0
-      ? this.naicsCodes.map((code) => ({ ncode: code, label: `naics ${code}` }))
+    const queries = naicsForRun.length > 0
+      ? naicsForRun.map((code) => ({ ncode: code, label: `naics ${code}` }))
       : [{
         keyword: (this.keywords && this.keywords.length > 0) ? this.keywords.join(' OR ') : null,
         label: 'keyword',
       }];
+    if (this.naicsPerRun != null && this.naicsCodes.length > 0) {
+      logger.info(
+        `SAM.gov: querying ${naicsForRun.length}/${this.naicsCodes.length} NAICS this run `
+        + `(rotating, ${this.maxPagesPerQuery === Infinity ? 'no' : this.maxPagesPerQuery} page cap): ${naicsForRun.join(', ')}`
+      );
+    }
 
     // Dedup across queries by noticeId (the same opportunity can match >1 NAICS).
     const byId = new Map();
 
+    try {
     for (const query of queries) {
       let offset = 0;
       let hasMore = true;
+      let pagesFetched = 0;
 
       while (hasMore) {
         const params = new URLSearchParams({
@@ -209,7 +288,8 @@ class SamGovAdapter extends BaseAdapter {
           byId.set(key, rec);
         }
 
-        if (records.length < this.pageLimit) {
+        pagesFetched += 1;
+        if (records.length < this.pageLimit || pagesFetched >= this.maxPagesPerQuery) {
           hasMore = false;
         } else {
           offset += this.pageLimit;
@@ -220,6 +300,15 @@ class SamGovAdapter extends BaseAdapter {
 
       // Brief pause between per-NAICS queries as well
       if (queries.length > 1) await sleep(this.interPageDelayMs);
+    }
+    } catch (err) {
+      // Quota exhaustion aborts the run but keeps whatever we already collected,
+      // so the day isn't a total loss and the source row records partial success.
+      if (err && err.code === 'QUOTA_EXHAUSTED') {
+        logger.warn(`SAM.gov: stopping early on quota — returning ${byId.size} record(s) collected before the cap.`);
+      } else {
+        throw err;
+      }
     }
 
     const allRecords = Array.from(byId.values());
@@ -359,3 +448,4 @@ class SamGovAdapter extends BaseAdapter {
 }
 
 module.exports = SamGovAdapter;
+module.exports.SamQuotaExhaustedError = SamQuotaExhaustedError;

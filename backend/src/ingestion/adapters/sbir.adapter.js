@@ -22,6 +22,22 @@ const DEFAULT_KEYWORDS = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// SBIR.gov's public API has been returning a server-side "not available" outage
+// (HTTP 403/429 with this body) for an extended period. This is an UPSTREAM
+// problem, not a request-format issue (a browser User-Agent does not change it),
+// so retrying just storms a dead endpoint. When the body matches, we abort fast
+// and cleanly instead of running 9 keywords x 4 retries x 60s backoff every day.
+const OUTAGE_BODY_RE = /not available at this time|TooManyRequestsError/i;
+
+/** Thrown when SBIR.gov's public API is server-side unavailable (not our error). */
+class SbirUpstreamUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SbirUpstreamUnavailableError';
+    this.code = 'UPSTREAM_UNAVAILABLE';
+  }
+}
+
 /**
  * SBIR.gov adapter — pulls open SBIR/STTR solicitations from the public API
  * (GET, no key) across Colaberry's domain keywords, with retry/backoff. Output is
@@ -72,12 +88,16 @@ class SbirAdapter extends BaseAdapter {
         throw isTimeout ? new Error(`SBIR.gov request timed out (${label}) after ${this.maxRetries} retries.`) : networkError;
       }
       if (response.ok) return response.json();
+      const body = await response.text().catch(() => '');
+      // Known server-side outage signature — non-retryable, abort fast.
+      if (OUTAGE_BODY_RE.test(body)) {
+        throw new SbirUpstreamUnavailableError(`SBIR.gov public API unavailable upstream (HTTP ${response.status}).`);
+      }
       if ((response.status === 429 || response.status >= 500) && attempt <= this.maxRetries) {
         const wait = this._retryDelayMs(attempt, response.headers.get('retry-after'));
         logger.warn(`SBIR.gov ${label}: HTTP ${response.status} (retryable) — retry ${attempt}/${this.maxRetries} in ${wait}ms`);
         await sleep(wait); continue;
       }
-      const body = await response.text().catch(() => '');
       logger.error(`SBIR.gov API error: ${response.status} - ${body.slice(0, 200)}`);
       throw new Error(`SBIR.gov API returned ${response.status} (${label})`);
     }
@@ -102,6 +122,17 @@ class SbirAdapter extends BaseAdapter {
         }
         anySuccess = true;
       } catch (e) {
+        // Upstream outage: every keyword will fail the same way, so stop on the
+        // first one instead of storming the dead endpoint 9x. Degrade gracefully
+        // (return what we have, no hard failure) — SBIR topics for Colaberry's
+        // lanes are sourced directly from the NSF/IES portals, not this API.
+        if (e && e.code === 'UPSTREAM_UNAVAILABLE') {
+          logger.warn(
+            'SBIR.gov public API is currently unavailable upstream (server-side outage) — '
+            + 'skipping this run. Track NSF (seedfund.nsf.gov) and ED/IES SBIR portals directly.'
+          );
+          return [];
+        }
         lastError = e;
         logger.warn(`SBIR.gov keyword "${kw}" failed: ${e.message}`);
       }
@@ -153,3 +184,4 @@ class SbirAdapter extends BaseAdapter {
 }
 
 module.exports = SbirAdapter;
+module.exports.SbirUpstreamUnavailableError = SbirUpstreamUnavailableError;

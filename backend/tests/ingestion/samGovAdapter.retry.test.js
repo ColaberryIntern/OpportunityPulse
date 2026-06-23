@@ -82,6 +82,56 @@ describe('SamGovAdapter retry/backoff', () => {
     expect(delay).toBe(5); // 2s requested, capped at maxBackoffMs (5ms in fastConfig)
   });
 
+  // ---- Daily-quota exhaustion handling (low-tier key fits) ----
+  const quotaBody = { code: '900804', message: 'You have exceeded your quota .', nextAccessTime: '2026-Jun-23 00:00:00+0000 UTC' };
+
+  test('aborts on a daily-quota 429 without retrying and returns records collected so far', async () => {
+    const adapter = new SamGovAdapter({ config: { ...fastConfig.config, naicsCode: 'A,B' } });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [{ noticeId: 'x1' }, { noticeId: 'x2' }] })) // A p1 (==limit)
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [] })) // A p2 end
+      .mockResolvedValueOnce(makeRes(429, quotaBody)); // B p1 -> quota, abort
+    const out = await adapter.fetch();
+    expect(out.map((r) => r.noticeId).sort()).toEqual(['x1', 'x2']);
+    expect(global.fetch).toHaveBeenCalledTimes(3); // no retry storm on quota
+  });
+
+  test('quota exhaustion on the first call returns [] and does not retry', async () => {
+    const adapter = new SamGovAdapter(fastConfig);
+    global.fetch = jest.fn().mockResolvedValue(makeRes(429, quotaBody));
+    const out = await adapter.fetch();
+    expect(out).toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('a 429 WITHOUT the quota body is still treated as transient (retries)', async () => {
+    const adapter = new SamGovAdapter(fastConfig);
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(makeRes(429, { message: 'slow down' }))
+      .mockResolvedValueOnce(makeRes(200, { opportunitiesData: [{ noticeId: 'n' }] }));
+    const out = await adapter.fetch();
+    expect(out).toHaveLength(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  // ---- NAICS rotation + page cap (keep a low-quota key under its limit) ----
+  test('naicsPerRun queries only a rotating subset of the configured codes', async () => {
+    const adapter = new SamGovAdapter({ config: { ...fastConfig.config, naicsCode: 'A,B,C,D', naicsPerRun: 2, pageLimit: 5 } });
+    const sel = adapter._selectNaicsForRun();
+    expect(sel).toHaveLength(2);
+    sel.forEach((c) => expect(['A', 'B', 'C', 'D']).toContain(c));
+    global.fetch = jest.fn().mockResolvedValue(makeRes(200, { opportunitiesData: [{ noticeId: 'n' }] })); // <limit => 1 page each
+    await adapter.fetch();
+    expect(global.fetch).toHaveBeenCalledTimes(2); // 2 codes x 1 page, not all 4
+  });
+
+  test('maxPagesPerQuery caps pagination even when every page is full', async () => {
+    const adapter = new SamGovAdapter({ config: { ...fastConfig.config, naicsCode: 'A', pageLimit: 2, maxPagesPerQuery: 2 } });
+    global.fetch = jest.fn().mockResolvedValue(makeRes(200, { opportunitiesData: [{ noticeId: 'a' }, { noticeId: 'b' }] })); // always full
+    await adapter.fetch();
+    expect(global.fetch).toHaveBeenCalledTimes(2); // stops at the page cap
+  });
+
   test('iterates one query per NAICS code and dedups by noticeId', async () => {
     // comma-separated NAICS must become two separate single-ncode queries
     const adapter = new SamGovAdapter({ config: { ...fastConfig.config, naicsCode: 'A,B' } });

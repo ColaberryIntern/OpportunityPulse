@@ -57,4 +57,26 @@ describe('SbirAdapter fetch', () => {
     global.fetch = jest.fn().mockResolvedValue(code(429));
     await expect(a.fetch()).rejects.toThrow(/429|SBIR/);
   });
+
+  // Server-side outage signature ("not available at this time") — degrade fast.
+  const outage = (s) => ({
+    ok: false, status: s, headers: { get: () => null }, json: async () => ({}),
+    text: async () => JSON.stringify({ Code: 'TooManyRequestsError', Message: 'The SBIR Public API is not available at this time.' }),
+  });
+
+  test('known upstream outage: aborts on the first keyword and returns [] (no storm, no hard failure)', async () => {
+    const a = new SbirAdapter(fastCfg); // 2 keywords, maxRetries 3
+    global.fetch = jest.fn().mockResolvedValue(outage(429));
+    const out = await a.fetch();
+    expect(out).toEqual([]); // graceful skip, not a thrown failure
+    expect(global.fetch).toHaveBeenCalledTimes(1); // first keyword only, no retries, no 2nd keyword
+  });
+
+  test('treats a 403 with the outage body the same as the 429 outage', async () => {
+    const a = new SbirAdapter(fastCfg);
+    global.fetch = jest.fn().mockResolvedValue(outage(403));
+    const out = await a.fetch();
+    expect(out).toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });
