@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const logger = require('../logging/logger');
 const { runAllEnabled } = require('./ingestion.service');
+const { checkSourceHealth } = require('./sourceHealthMonitor');
 
 const DEFAULT_SCHEDULE = '0 6 * * *'; // 6:00 AM daily
 
@@ -35,6 +36,24 @@ function startScheduler(schedule) {
       });
     } catch (error) {
       logger.error('Scheduled ingestion failed.', { error: error.message });
+    }
+
+    // Runs even when the ingestion pass above threw: a source dying is exactly
+    // the case the monitor exists to surface. Never let it break the schedule.
+    try {
+      const health = await checkSourceHealth();
+      if (health.alerted.length) {
+        logger.warn('Ingestion failure alerts sent.', {
+          event: 'ingestion_health_alerts',
+          sources: health.alerted,
+        });
+      }
+    } catch (error) {
+      logger.error('Ingestion health check failed.', {
+        event: 'ingestion_health_check_failed',
+        error_class: error.name || 'Error',
+        error: error.message,
+      });
     }
   });
 
