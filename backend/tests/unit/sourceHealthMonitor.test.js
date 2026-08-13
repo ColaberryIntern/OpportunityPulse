@@ -104,6 +104,23 @@ describe('checkSourceHealth', () => {
     expect(res.alerted).toEqual([]);
   });
 
+  // Regression: inspecting prod with a no-op sender counted as a successful send
+  // and wrote the marker, silently suppressing the next real alert. Caught
+  // 2026-08-13 against live data on three sources.
+  it('dryRun reports what would alert without sending or marking', async () => {
+    const newest = log('failed');
+    mockDataSource.findAll.mockResolvedValue([source()]);
+    mockIngestionLog.findAll.mockResolvedValue([newest, log('failed'), log('failed')]);
+    const send = jest.fn();
+
+    const res = await checkSourceHealth({ send, dryRun: true });
+
+    expect(send).not.toHaveBeenCalled();
+    expect(newest.update).not.toHaveBeenCalled();
+    expect(res.wouldAlert).toEqual(['sam_gov']);
+    expect(res.alerted).toEqual([]);
+  });
+
   it('handles an empty log history without alerting', async () => {
     mockDataSource.findAll.mockResolvedValue([source()]);
     mockIngestionLog.findAll.mockResolvedValue([]);

@@ -79,12 +79,21 @@ function buildAlert({ source, logs, threshold }) {
  * @param {object}   [opts]
  * @param {number}   [opts.threshold=3]  Consecutive failures required to alert.
  * @param {Function} [opts.send]         Injectable sender (defaults to utils/email sendEmail).
- * @returns {Promise<{checked: number, alerted: string[], suppressed: string[]}>}
+ * @param {boolean}  [opts.dryRun=false] Report what would alert without sending or
+ *   recording anything. Required for inspecting production safely: a no-op sender
+ *   still counts as a successful send and would write the marker, silently
+ *   suppressing the next real alert.
+ * @returns {Promise<{checked: number, alerted: string[], suppressed: string[], wouldAlert: string[]}>}
  */
-async function checkSourceHealth({ threshold = DEFAULT_THRESHOLD, send = sendEmail } = {}) {
+async function checkSourceHealth({
+  threshold = DEFAULT_THRESHOLD,
+  send = sendEmail,
+  dryRun = false,
+} = {}) {
   const sources = await DataSource.findAll({ where: { enabled: true } });
   const alerted = [];
   const suppressed = [];
+  const wouldAlert = [];
 
   for (const source of sources) {
     const logs = await IngestionLog.findAll({
@@ -101,6 +110,11 @@ async function checkSourceHealth({ threshold = DEFAULT_THRESHOLD, send = sendEma
     const metadata = newest.metadata || {};
     if (metadata[ALERT_MARKER]) {
       suppressed.push(source.name);
+      continue;
+    }
+
+    if (dryRun) {
+      wouldAlert.push(source.name);
       continue;
     }
 
@@ -130,7 +144,7 @@ async function checkSourceHealth({ threshold = DEFAULT_THRESHOLD, send = sendEma
     alerted.push(source.name);
   }
 
-  return { checked: sources.length, alerted, suppressed };
+  return { checked: sources.length, alerted, suppressed, wouldAlert };
 }
 
 module.exports = { checkSourceHealth, ALERT_MARKER, DEFAULT_THRESHOLD };
