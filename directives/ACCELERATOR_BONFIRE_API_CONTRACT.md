@@ -6,9 +6,19 @@ No browser, no user session.
 
 **Status of this document:** Sections 2–4 are verified against source and safe to
 implement against. Owner approved option **B** (a narrow `read:bonfire_source` API-key
-scope) and the **`/best-fit`** endpoint on 2026-09-28; both are **implemented and tested
-in the working tree but NOT yet deployed, and no credential has been minted yet** — see
-Section 5 for the deploy + mint runbook and the pre-deploy checks.
+scope) and the **`/best-fit`** endpoint on 2026-09-28; both are implemented and tested,
+committed as **`66944c8`** on branch `feat/accelerator-bonfire-read-integration`.
+
+**Rollout state as of 2026-09-28 — NOT LIVE:**
+
+| Step | State |
+|---|---|
+| Deploy to prod | ❌ **Blocked.** Branch is local only; `git push` was not authorized. Prod also has 2 unpushed commits — see §5b. |
+| `api_keys` table | ✅ Verified present on prod (5 rows) |
+| `BONFIRE_ENGINE_ENABLED` | ✅ Verified `true`; `/bonfire/flag` returns `enabled:true` |
+| Base URL | ⚠️ **`op.colaberry.ai` does not exist (NXDOMAIN)** — see §5a-bis |
+| Credential minted | ❌ **No.** Would 400 until the scope deploys — see §5c |
+| Live smoke test | ❌ Not possible: no deploy, no key, no such hostname |
 
 **Verified against:** `f0c577c` (branch `main`), local working tree, 2026-09-28.
 Every claim below cites the file that establishes it. Values marked
@@ -343,8 +353,8 @@ X-API-Key: op_<64 hex>
 
 | Question | Answer |
 |---|---|
-| Reachable server-to-server from `95.216.199.47`? | **Yes, by design.** CORS explicitly allows origin-less requests: *"Allow requests with no origin (mobile apps, curl, server-to-server)"* (`backend/src/server.js:33-34`). No IP allowlist exists in app code or `nginx/`. Your existing gov-bid scripts already call OP. **Not re-verified live this pass** — prod reads were blocked; see Section 5. |
-| Rate limits | Global `generalLimiter`: **500 requests / 15 min**, `RATE_LIMIT_MAX_REQUESTS: "500"`, window `900000` ms (`docker-compose.prod.yml:54-55`). `/auth/login` additionally **50 / 15 min**. `app.set('trust proxy', 1)` (`server.js:23`), so limits key on your real IP via `X-Forwarded-For` — you get your own bucket, not one shared with browser traffic. Page-load polling is far inside this. Cache the JWT for 15 min so login is ~4/hr, not 1:1 with page loads. |
+| Reachable server-to-server from `95.216.199.47`? | **Yes — but not at `op.colaberry.ai`, which does not resolve (§5a-bis).** Verified live at `http://95.216.199.47:8091`: origin-less unauthenticated GETs succeed (`/bonfire/flag` → 200). CORS explicitly allows them (`server.js:33-34`). No IP allowlist exists in app code or `nginx/`, so there is nothing to add `95.216.199.47` to. Note the accelerator backend runs on the **same host**, so this is a same-box call — prefer a host-internal address over the public IP so the API key never crosses the public internet in clear text. |
+| Rate limits | **Verified in the running container's env**, not just compose: `RATE_LIMIT_MAX_REQUESTS=500`, `RATE_LIMIT_WINDOW_MS=900000` → **500 requests / 15 min** per IP. `/auth/login` additionally **50 / 15 min**. `app.set('trust proxy', 1)` (`server.js:23`), so limits key on the real client IP via `X-Forwarded-For` — the accelerator gets its own bucket, not one shared with browser traffic. Low-volume page-load polling is far inside this, and under option B there is no login call at all, so the 50/15min auth bucket does not apply. |
 | Feature-flag risk | **All `/api/v1/bonfire/*` routes return `404` when `BONFIRE_ENGINE_ENABLED !== 'true'`** (`bonfire.middleware.js`), and it **defaults to `false`** in `docker-compose.prod.yml:73`. The digest is demonstrably running, so `.env.prod` must set it `true` — **unverified in prod**. Practical consequence: **a `404` from these routes may mean "flag off", not "bad path".** Probe `GET /api/v1/bonfire/flag` → `{data:{enabled:bool}}`; it is public, unauthenticated, and exempt from the flag gate. Treat `enabled:false` as "degrade the page", not an error. |
 | Stability / versioning | Path is already versioned (`/api/v1`). These routes are young and have been iterated (v0.8–v0.11 markers in-tree), so **I will not claim the shape is frozen.** Proposed contract: additive changes (new fields) land without notice; any **removal, rename, type change, or semantic change** to the fields in §2b, or to the §3 ranking, gets a `/api/v2` path or an explicit heads-up to you before deploy, plus a PROGRESS.md entry. On our side, §2b needs a contract test so a drift breaks our build rather than your page — currently **no such test exists**. |
 
@@ -356,31 +366,109 @@ The code is in the working tree and tested. **Nothing has been deployed and no k
 exists yet.** The order matters: the scope must be deployed *before* a key can be minted
 with it, or `POST /api/v1/api-keys` will 400 on the unrecognized scope.
 
-### 5a. Pre-deploy checks (both were unverifiable locally — prod reads were blocked)
+### 5a. Pre-deploy checks — **BOTH VERIFIED ON PROD 2026-09-28, both pass**
 
-1. **`api_keys` table exists in prod.** The migration
-   `backend/src/migrations/20260218000001-create-api-keys.js` defines it, but
-   `server.js:299` runs `sequelize.sync({ alter: false })`, so Sequelize will **not**
-   create it — the migration must actually have been applied. If the table is missing,
-   every `X-API-Key` request 401s and minting fails. Verify first:
+1. **`api_keys` table exists.** ✅ **Verified: table present, 5 rows.** The migration
+   `20260218000001-create-api-keys.js` *was* applied, so the risk that
+   `server.js:299`'s `sync({ alter: false })` had left it uncreated did not materialize.
+   Minting will work once the scope is live. Check command, for future reference:
    ```
    docker exec op-backend node -e "require('./src/models').ApiKey.count().then(n=>console.log('api_keys rows:',n)).catch(e=>console.error('MISSING:',e.message))"
    ```
-2. **`BONFIRE_ENGINE_ENABLED=true` in `.env.prod`.** It defaults to `false` in
-   `docker-compose.prod.yml:73`, and when false **every** `/api/v1/bonfire/*` route 404s.
+2. **`BONFIRE_ENGINE_ENABLED=true`.** ✅ **Verified in the running container's env.**
+   Also confirmed live, and worth recording because §3 and §4 depend on them:
+   `BONFIRE_DIGEST_MIN_CLOSE_DAYS=10` (so the documented 10-day floor is what prod
+   actually applies), `DIGEST_HIDE_VERDICTS` **unset** (so the documented
+   `no_bid,needs_review` default is what prod applies), `JWT_ACCESS_EXPIRY=15m`,
+   `RATE_LIMIT_MAX_REQUESTS=500`, `RATE_LIMIT_WINDOW_MS=900000`, `NODE_ENV=production`.
+3. **`GET /api/v1/bonfire/flag`** → ✅ `{"status":"success","data":{"enabled":true},"code":200}`.
 
-### 5b. Deploy
+### 5a-bis. ⚠️ BASE URL CORRECTION — `op.colaberry.ai` DOES NOT EXIST
+
+**`op.colaberry.ai` returns NXDOMAIN.** Verified from two independent resolvers and from
+outside the host; the `colaberry.ai` zone (Cloudflare) has **no `op` record**, and the
+string `op.colaberry.ai` appears **nowhere** in this repo. Any consumer coded against
+`https://op.colaberry.ai/...` will fail at DNS, not at auth.
+
+OP is served **IP-only, on non-standard ports**. `op-nginx` publishes host
+`8091 -> 80` and `8444 -> 443` with `server_name _` (the repo's
+`deploy/nginx/nginx-ip-only.conf` variant, not the `${DOMAIN}` one). The working base
+URL, verified live from outside the host:
 
 ```
+http://95.216.199.47:8091/api/v1
+```
+
+Confirmed against it: `/bonfire/flag` → 200 `enabled:true`; `/bonfire/opportunities` →
+401 (route live, auth required); `/bonfire/best-fit` → 404 (not yet deployed — and since
+the flag is *on*, that 404 is a genuine "route not registered", which is the clean
+pre-deploy baseline).
+
+Two consequences for the integration:
+- The accelerator must target `http://95.216.199.47:8091`, or a real DNS record +
+  TLS must be provisioned for OP first. **This is a decision for Ali, not a doc fix:**
+  plain HTTP over the public internet would carry the API key in clear text. Since the
+  accelerator's backend runs on the *same host* (`accelerator-backend`), the safer
+  option is a host-internal address or a shared Docker network rather than the public IP.
+- The claim "our gov-bid scripts already call you" cannot be true via
+  `op.colaberry.ai`. Whatever those scripts use is a different address — worth
+  reconciling on the accelerator side before go-live.
+
+### 5b. Deploy — ⚠️ BLOCKED, and `git pull origin main` is the WRONG command here
+
+The work is committed locally as **`66944c8`** on branch
+**`feat/accelerator-bonfire-read-integration`** (off `f0c577c`). It is **not on GitHub**
+and **not on prod**.
+
+**The divergence PROGRESS.md warned about is real and confirmed:** prod
+`/opt/opportunity-pulse` is on `main` at **`79dde5e`**, which is **2 commits AHEAD of
+`origin/main`** (`a0fa456`, `79dde5e` — both ingestion/failure-monitor work, never
+pushed) and 0 behind. `git rev-list --left-right --count origin/main...HEAD` → `0  2`.
+**Those two commits exist only on that box — they are in no remote and no backup.**
+
+So a plain `git pull origin main` would pull nothing useful (origin/main is still
+`f0c577c`) while risking entanglement with prod-only history. The safe sequence, once
+the push is authorized:
+
+```
+# 1. local -> origin (feature branch only; do NOT push to main)
+git push -u origin feat/accelerator-bonfire-read-integration
+
+# 2. on prod: snapshot the unpushed commits FIRST so they cannot be lost
 ssh root@95.216.199.47
-cd /opt/opportunity-pulse && git pull origin main
+cd /opt/opportunity-pulse
+git branch prod-local-backup-$(date +%Y%m%d)      # safety net for a0fa456 + 79dde5e
+git fetch origin
+git merge --no-edit origin/feat/accelerator-bonfire-read-integration
+
+# 3. backend only -- this change touches no frontend file
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build backend
 ```
 
-Note: the prod checkout has been observed ahead of GitHub with unpushed commits
-(see the 2026-09-18 PROGRESS.md entry). **Reconcile before `git pull`.**
+A conflict is unlikely (this branch touches `bonfire/`, `apiKeys/`, `middleware/`,
+`emailDigest/`; the prod-only commits touch ingestion), but if one occurs,
+`git merge --abort` returns prod to `79dde5e` with no harm done.
 
-### 5c. Mint the credential
+**Separately, someone should decide what happens to `a0fa456` + `79dde5e`.** They were
+deliberately never pushed and I did not publish them — that is not my call. Until they
+are pushed, prod is the single copy.
+
+### 5c. Mint the credential — ⚠️ BLOCKED until 5b lands (by design)
+
+**No key has been minted, and minting now would fail.** Prod is still running code whose
+`ALLOWED_SCOPES` is `['read','write']`, so `POST /api/v1/api-keys` with
+`read:bonfire_source` returns **400** on the unrecognized scope. This is the exact
+ordering constraint recorded when the scope was designed — deploy first, then mint.
+
+Proof the scope is not live, from outside the host and without needing container access:
+`/bonfire/flag` returns `enabled:true` while `/bonfire/best-fit` returns `404`. With the
+feature flag *on*, that 404 can only mean the route is not registered — i.e. `66944c8`
+is not deployed, so neither is the scope.
+
+**Do not mint a `['read']`-only key as a stand-in.** It would authenticate and return
+rows, but `sourceUrl` would be `null` — the one field this integration exists to deliver.
+That failure is silent and would look like an OP data problem rather than a
+wrong-credential problem.
 
 Create a **dedicated non-admin service user** and mint the key under it — not under
 Ali's account. Rationale: the key inherits nothing from the user's role (we never attach
