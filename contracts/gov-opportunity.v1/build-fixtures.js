@@ -46,7 +46,8 @@ function base() {
     deadline: {
       originalText: null, wallClock: null, statedTimezone: null, resolvedZone: null,
       offsetMinutes: null, timezoneSource: 'absent', utc: null, utcConfidence: 'unknown',
-      uncertaintyReason: 'missing_timezone', verifiedAt: null, conflicts: [],
+      uncertaintyReason: 'missing_timezone', verifiedAt: null,
+      conservativePlanningUtc: null, conflicts: [],
     },
     value: { published: null, modelEstimate: null },
     documents: {
@@ -127,28 +128,43 @@ FIXTURES['rfi-va-enterprise-ai.json'] = merge(base(), {
     contractVehicle: { value: 'none_yet', programName: null, obligationsSummary: 'Vehicle not established; RFI asks respondents which vehicles they hold.', evidenceRef: null },
     selectableLots: null,
   },
+  // UNRESOLVED deadline conflict. The two sources denote DIFFERENT instants an
+  // hour apart, so `utc` is null:
+  //   literal "10:00 AM Eastern Standard Time" -> EST is UTC-05:00 -> 15:00Z
+  //   structured responseDeadLine -04:00 (EDT) ->                     14:00Z
+  // 7 October 2026 falls inside US Eastern DST, so the prose label "Standard"
+  // is almost certainly a drafting slip -- but "almost certainly" is not
+  // verification, and picking the later instant risks missing the deadline.
+  // Neither source is marked as superseding the other.
   deadline: {
     originalText: 'Responses shall be submitted electronically by 10:00 AM Eastern Standard Time, October 7, 2026',
     wallClock: '2026-10-07T10:00:00',
     statedTimezone: 'Eastern Standard Time',
     resolvedZone: 'America/New_York',
-    offsetMinutes: -240,
-    timezoneSource: 'offset',
-    utc: '2026-10-07T14:00:00.000Z',
-    utcConfidence: 'high',
-    uncertaintyReason: null,
+    offsetMinutes: null,
+    timezoneSource: 'named_zone',
+    utc: null,
+    utcConfidence: 'unknown',
+    uncertaintyReason: 'conflicting_sources',
     verifiedAt: '2026-09-28T21:42:56.000Z',
-    // The document says "Eastern Standard Time" but 7 Oct is EDT (UTC-04:00),
-    // and the machine field carries -04:00. Both are recorded; the structured
-    // source wins for `utc` and the literal text is preserved verbatim.
+    // Earliest candidate, for internal scheduling ONLY. Not a verified deadline.
+    conservativePlanningUtc: '2026-10-07T14:00:00.000Z',
     conflicts: [
+      {
+        originalText: '10:00 AM Eastern Standard Time, October 7, 2026',
+        utc: '2026-10-07T15:00:00.000Z',
+        source: 'RFI document prose (36C10B26Q0834), taken literally: EST = UTC-05:00',
+        observedAt: '2026-09-28T21:40:00.000Z',
+        supersedes: null,
+        note: 'Literal reading of the stated timezone. 7 Oct 2026 is inside US Eastern DST, so "Standard" may be a drafting slip - unverified either way.',
+      },
       {
         originalText: '2026-10-07T10:00:00-04:00',
         utc: '2026-10-07T14:00:00.000Z',
-        source: 'sam.gov responseDeadLine field',
+        source: 'sam.gov responseDeadLine structured field (UTC-04:00, EDT)',
         observedAt: '2026-09-28T21:42:56.000Z',
-        supersedes: true,
-        note: 'Machine field states UTC-04:00 (EDT). Document prose says "Eastern Standard Time". Same instant either way on this date; the discrepancy is in the label, not the value.',
+        supersedes: null,
+        note: 'Machine field. One hour EARLIER than the literal prose reading. Chosen as conservativePlanningUtc for that reason, not because it is verified.',
       },
     ],
   },

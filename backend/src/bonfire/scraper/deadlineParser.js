@@ -31,13 +31,35 @@
  *    close-date windows.
  *
  * FAILURE MODES
- *   unparseable          - no recognisable date/time in the input
- *   missing_timezone     - wall clock parsed, no zone token present
- *   ambiguous_timezone   - zone token present but not resolvable to one offset
- *   dst_ambiguous        - named zone lands in a repeated local hour (fall back)
+ *   unparseable            - no recognisable date/time in the input
+ *   invalid_time           - hour/minute/second out of range, or a 12-hour clock
+ *                            value that cannot exist (e.g. "13:00 PM")
+ *   invalid_offset         - numeric offset outside the real-world range
+ *   unsupported_precision  - more sub-second precision than we can represent
+ *                            without altering the instant
+ *   missing_timezone       - wall clock parsed, no zone token present
+ *   ambiguous_timezone     - zone token present but not resolvable to one offset
+ *   dst_ambiguous          - named zone lands in a REPEATED local hour (fall
+ *                            back): two real instants match the wall clock
+ *   dst_nonexistent        - named zone lands in a SKIPPED local hour (spring
+ *                            forward): no real instant matches the wall clock
  * In every case `utc` is null and `confidence` is 'unknown'; the original text
  * and whatever components we did recover are preserved for later re-resolution.
+ *
+ * WHY WE VALIDATE BEFORE Date.UTC
+ * Date.UTC silently NORMALISES out-of-range components: Date.UTC(2026,9,7,25)
+ * is 8 Oct 01:00, not an error. Accepting that would turn a malformed portal
+ * string into a confident, wrong instant. Every component is therefore range-
+ * checked first.
  */
+
+// Real-world UTC offsets span -12:00..+14:00. Anything outside that is not a
+// timezone, it is a parse error.
+const MIN_OFFSET_MINUTES = -12 * 60;
+const MAX_OFFSET_MINUTES = 14 * 60;
+// We represent instants to millisecond precision. More digits than this cannot
+// be carried without changing the instant, so we refuse rather than truncate.
+const MAX_FRACTIONAL_DIGITS = 3;
 
 // US portal abbreviations map directly to a fixed offset in minutes.
 // This is deliberately explicit rather than zone-derived: an abbreviation that
@@ -79,6 +101,9 @@ function result(fields) {
     utc: null,
     confidence: 'unknown', // high | unknown
     uncertainty: null,
+    // Populated only for dst_ambiguous: the real instants the wall clock could
+    // mean. Surfaced so a consumer can show both rather than be told "unknown".
+    candidates: null,
     ...fields,
   };
 }
@@ -86,13 +111,19 @@ function result(fields) {
 const pad = (n, w = 2) => String(Math.abs(n)).padStart(w, '0');
 
 /** Serialize wall-clock components to a naive ISO-like string (no zone). */
-function toWallClock({ year, month, day, hour, minute }) {
-  return `${pad(year, 4)}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00`;
+function toWallClock({ year, month, day, hour, minute, second = 0, ms = 0 }) {
+  const frac = ms ? `.${pad(ms, 3)}` : '';
+  return `${pad(year, 4)}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}${frac}`;
+}
+
+/** Naive wall clock as a millisecond value, treating components as if UTC. */
+function naiveMs({ year, month, day, hour, minute, second = 0, ms = 0 }) {
+  return Date.UTC(year, month - 1, day, hour, minute, second, ms);
 }
 
 /** Wall clock + offset -> UTC instant. Pure arithmetic; no local-time APIs. */
-function toUtcIso({ year, month, day, hour, minute }, offsetMinutes) {
-  const asUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+function toUtcIso(parts, offsetMinutes) {
+  const asUtcMs = naiveMs(parts);
   if (Number.isNaN(asUtcMs)) return null;
   return new Date(asUtcMs - offsetMinutes * 60000).toISOString();
 }
@@ -120,24 +151,51 @@ function zoneOffsetMinutesAt(zone, utcMs) {
 
 /**
  * Resolve a wall clock in a named zone to UTC.
- * Returns { utc, offsetMinutes } or { ambiguous: true } when the local time is
- * repeated (DST fall-back) or skipped (spring-forward).
+ *
+ * A single fixed-point pass is NOT sufficient. During a DST fall-back the same
+ * local time maps to TWO real instants, and a fixed-point check will happily
+ * settle on one of them and report high confidence -- which is exactly the
+ * defect this replaces. So we enumerate every offset the zone uses around that
+ * date, build a candidate instant for each, and keep only those candidates that
+ * actually render back as the requested wall clock.
+ *
+ * Returns one of:
+ *   { utc, offsetMinutes }        exactly one candidate matched
+ *   { ambiguous: true }           two or more matched (repeated local hour)
+ *   { nonexistent: true }         none matched (skipped local hour)
  */
 function resolveInZone(parts, zone) {
-  const naiveMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
-  // Two-pass fixed point: guess with the offset at the naive instant, then
-  // re-check with the offset at the candidate instant.
-  const guess = zoneOffsetMinutesAt(zone, naiveMs);
-  const candidateMs = naiveMs - guess * 60000;
-  const confirm = zoneOffsetMinutesAt(zone, candidateMs);
-  if (confirm !== guess) {
-    const second = naiveMs - confirm * 60000;
-    // If the second pass is self-consistent the first guess merely straddled a
-    // transition; otherwise the local time is genuinely ambiguous or skipped.
-    if (zoneOffsetMinutesAt(zone, second) !== confirm) return { ambiguous: true };
-    return { utc: new Date(second).toISOString(), offsetMinutes: confirm };
+  const naive = naiveMs(parts);
+  const DAY = 86400000;
+
+  // Sample well outside any transition so both the standard and DST offsets are
+  // represented, plus the naive instant itself for zones with unusual rules.
+  const candidateOffsets = new Set([
+    zoneOffsetMinutesAt(zone, naive - 200 * DAY),
+    zoneOffsetMinutesAt(zone, naive - 10 * DAY),
+    zoneOffsetMinutesAt(zone, naive),
+    zoneOffsetMinutesAt(zone, naive + 10 * DAY),
+    zoneOffsetMinutesAt(zone, naive + 200 * DAY),
+  ]);
+
+  const matches = new Map(); // utcMs -> offsetMinutes
+  for (const off of candidateOffsets) {
+    const candidateMs = naive - off * 60000;
+    // Does this instant genuinely present as the requested wall clock in `zone`?
+    if (zoneOffsetMinutesAt(zone, candidateMs) === off) matches.set(candidateMs, off);
   }
-  return { utc: new Date(candidateMs).toISOString(), offsetMinutes: guess };
+
+  if (matches.size === 0) return { nonexistent: true };
+  if (matches.size > 1) {
+    return {
+      ambiguous: true,
+      candidates: [...matches.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([ms, off]) => ({ utc: new Date(ms).toISOString(), offsetMinutes: off })),
+    };
+  }
+  const [[ms, off]] = [...matches.entries()];
+  return { utc: new Date(ms).toISOString(), offsetMinutes: off };
 }
 
 /** Pull a trailing zone token off the string. Returns {rest, token, kind}. */
@@ -148,8 +206,16 @@ function extractZoneToken(text) {
   const off = s.match(/(?:UTC|GMT)?\s*([+-])(\d{2}):?(\d{2})\s*$/i);
   if (off) {
     const sign = off[1] === '-' ? -1 : 1;
-    const minutes = sign * (Number(off[2]) * 60 + Number(off[3]));
-    return { rest: s.slice(0, off.index).trim(), kind: 'offset', offsetMinutes: minutes, label: off[0].trim() };
+    const oh = Number(off[2]);
+    const om = Number(off[3]);
+    const minutes = sign * (oh * 60 + om);
+    const rest = s.slice(0, off.index).trim();
+    // An offset whose components or total are out of range is a malformed
+    // string, not a timezone. Date arithmetic would happily absorb it.
+    if (om > 59 || minutes < MIN_OFFSET_MINUTES || minutes > MAX_OFFSET_MINUTES) {
+      return { rest, kind: 'invalid_offset', label: off[0].trim() };
+    }
+    return { rest, kind: 'offset', offsetMinutes: minutes, label: off[0].trim() };
   }
 
   // Trailing Z on an ISO timestamp.
@@ -179,6 +245,17 @@ function extractZoneToken(text) {
   return { rest: s, kind: 'none' };
 }
 
+/**
+ * Range-check time components. Must run BEFORE Date.UTC, which normalises
+ * out-of-range values into a different (valid-looking) instant.
+ */
+function isValidTime({ hour, minute, second = 0, ms = 0 }) {
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23
+    && Number.isInteger(minute) && minute >= 0 && minute <= 59
+    && Number.isInteger(second) && second >= 0 && second <= 59
+    && Number.isInteger(ms) && ms >= 0 && ms <= 999;
+}
+
 /** Parse wall-clock components from the zone-stripped remainder. */
 function extractWallClock(text) {
   const s = text
@@ -187,32 +264,50 @@ function extractWallClock(text) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // ISO-ish: 2026-10-07T10:00 / 2026-10-07 10:00:00
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  // ISO-ish: 2026-10-07T10:00[:00[.sss]] / 2026-10-07 10:00:00
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/);
   if (iso) {
-    return {
-      year: +iso[1], month: +iso[2], day: +iso[3], hour: +iso[4], minute: +iso[5],
+    const frac = iso[7];
+    if (frac !== undefined && frac.length > MAX_FRACTIONAL_DIGITS) {
+      // Truncating would move the instant. Refuse explicitly instead.
+      return { invalid: 'unsupported_precision' };
+    }
+    const parts = {
+      year: +iso[1], month: +iso[2], day: +iso[3],
+      hour: +iso[4], minute: +iso[5], second: iso[6] ? +iso[6] : 0,
+      ms: frac === undefined ? 0 : Number(frac.padEnd(3, '0')),
     };
+    if (!isValidTime(parts)) return { invalid: 'invalid_time' };
+    return parts;
   }
   // Date-only ISO
   const isoDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoDate) {
     return {
-      year: +isoDate[1], month: +isoDate[2], day: +isoDate[3], hour: 0, minute: 0, dateOnly: true,
+      year: +isoDate[1], month: +isoDate[2], day: +isoDate[3], hour: 0, minute: 0, second: 0, ms: 0, dateOnly: true,
     };
   }
 
-  // Bonfire style: "Apr 27 2026 2:00 PM" (comma already removed)
-  const m = s.match(/^([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{2})\s*([AP]M)?$/i);
+  // Bonfire style: "Apr 27 2026 2:00[:00] PM" (comma already removed)
+  const m = s.match(/^([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i);
   if (m) {
     const month = MONTHS[m[1].slice(0, 3).toUpperCase()];
     if (!month) return null;
-    let hour = +m[4];
-    const mer = (m[6] || '').toUpperCase();
-    if (mer === 'PM' && hour !== 12) hour += 12;
-    if (mer === 'AM' && hour === 12) hour = 0;
-    if (hour > 23 || +m[5] > 59) return null;
-    return { year: +m[3], month, day: +m[2], hour, minute: +m[5] };
+    const rawHour = +m[4];
+    const mer = (m[7] || '').toUpperCase();
+    let hour = rawHour;
+    if (mer) {
+      // A 12-hour clock only admits 1..12. "13:00 PM" / "0:00 AM" are malformed
+      // and must NOT be silently coerced into a valid instant.
+      if (rawHour < 1 || rawHour > 12) return { invalid: 'invalid_time' };
+      if (mer === 'PM' && rawHour !== 12) hour = rawHour + 12;
+      if (mer === 'AM' && rawHour === 12) hour = 0;
+    }
+    const parts = {
+      year: +m[3], month, day: +m[2], hour, minute: +m[5], second: m[6] ? +m[6] : 0, ms: 0,
+    };
+    if (!isValidTime(parts)) return { invalid: 'invalid_time' };
+    return parts;
   }
 
   // Date-only: "Apr 27 2026"
@@ -253,6 +348,11 @@ function parseDeadline(input) {
   const zone = extractZoneToken(originalText);
   const parts = extractWallClock(zone.rest);
 
+  // Component-level rejections carry their own reason so the caller can tell a
+  // malformed time from a missing timezone.
+  if (parts && parts.invalid) {
+    return result({ originalText, timezoneLabel: zone.label || null, uncertainty: parts.invalid });
+  }
   if (!parts || !isRealDate(parts)) {
     return result({ originalText, uncertainty: 'unparseable' });
   }
@@ -262,8 +362,12 @@ function parseDeadline(input) {
     originalText,
     wallClock,
     timezoneLabel: zone.label || null,
-    timezoneSource: zone.kind,
+    timezoneSource: zone.kind === 'invalid_offset' ? 'unresolvable' : zone.kind,
   };
+
+  if (zone.kind === 'invalid_offset') {
+    return result({ ...base, uncertainty: 'invalid_offset' });
+  }
 
   if (zone.kind === 'offset' || zone.kind === 'abbreviation') {
     return result({
@@ -279,8 +383,19 @@ function parseDeadline(input) {
       return result({ ...base, uncertainty: 'ambiguous_timezone' });
     }
     const r = resolveInZone(parts, zone.zone);
+    // A repeated local hour has two real instants and a skipped one has none.
+    // Either way we refuse to pick: an explicit offset or DST designation
+    // (e.g. "EST"/"EDT") is what disambiguates, and it was not supplied.
     if (r.ambiguous) {
-      return result({ ...base, resolvedZone: zone.zone, uncertainty: 'dst_ambiguous' });
+      return result({
+        ...base,
+        resolvedZone: zone.zone,
+        uncertainty: 'dst_ambiguous',
+        candidates: r.candidates,
+      });
+    }
+    if (r.nonexistent) {
+      return result({ ...base, resolvedZone: zone.zone, uncertainty: 'dst_nonexistent' });
     }
     return result({
       ...base,

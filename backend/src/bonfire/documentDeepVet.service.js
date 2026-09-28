@@ -6,7 +6,7 @@
 const { Op } = require('sequelize');
 const { OpportunityAttachment, BonfireOpportunity } = require('../models');
 const { getAIClient } = require('../analysis/ai.client');
-const { DISQUALIFIERS } = require('../govContracts/disqualification.service');
+const { DISQUALIFIERS, finalizeVerdict } = require('../govContracts/disqualification.service');
 const logger = require('../logging/logger');
 
 const MAX_PER_ATTACHMENT = 12000;
@@ -18,7 +18,7 @@ const PASSAGE_WINDOW = 380;    // chars of context captured around each gate key
 // Language that triggers a hard gate. We pull windows around these so the exact
 // disqualifying clause is in the excerpt even when it sits deep in a long PDF
 // (otherwise a first-N-chars truncation hides it and the AI guesses from context).
-const GATE_RE = /tx-?ramp|soc ?2|soc 2 type|stateramp|govramp|fedramp|\bcjis\b|\bfips\b|hecvat|certif(y|ied|ication)|minimum qualif|years?\s+of\s+experience|prior (experience|deployment|implementation)|set-?aside|8\(a\)|\bwosb\b|hubzone|sdvosb|bid bond|performance bond|payment bond|professional liability|errors and omissions|parent guarant|source code escrow|furnish and install|installed base|on-?site|must (hold|be certified|provide proof|possess|have at least|demonstrate)/i;
+const GATE_RE = /tx-?ramp|soc ?2|soc 2 type|stateramp|govramp|fedramp|\bcjis\b|\bfips\b|hecvat|certif(y|ied|ication)|minimum qualif|years?\s+of\s+experience|prior (experience|deployment|implementation)|set-?aside|8\(a\)|\bwosb\b|hubzone|sdvosb|bid bond|performance bond|payment bond|professional liability|errors and omissions|parent guarant|source code escrow|furnish and (install|deliver)|installed base|on-?site|data[- ]?cent(?:er|re)|hardware (install|buildout|procurement)|field (maintenance|technician|interview|survey|inspection)|survey interviewer|in-?person (interview|survey)|flood (warning|sensor|gauge)|must (hold|be certified|provide proof|possess|have at least|demonstrate)/i;
 
 // Extract de-duplicated ~window-sized passages around each gate keyword.
 function gatePassages(text, { window = PASSAGE_WINDOW, maxPassages = 20 } = {}) {
@@ -43,11 +43,12 @@ Colaberry does NOT hold: SOC 2 Type II, TX-RAMP, StateRAMP, FedRAMP, CJIS, FIPS,
 
 Read the RFP text and decide whether Colaberry can SUBMIT and WIN this. Apply these hard gates — ANY single one failing = no_bid:
 - CERT_WALL: a security certification (SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT) is MANDATORY at submission.
-- DOMAIN_MISMATCH: the scope is outside software/AI/data/consulting (construction, AV/hardware install, property management, social-services delivery, building automation/HVAC, field inspection, vehicles/equipment).
+- DOMAIN_MISMATCH: the scope is outside software/AI/data/consulting (construction, AV/hardware install, property management, social-services delivery, building automation/HVAC, field inspection, vehicles/equipment, or PHYSICAL FIELD LABOR such as in-person survey/interviewing, field data collection, or on-site staffing — the work itself is people in the field, not a software/AI build).
 - SCALE_WALL: enterprise outsourcing, parent guarantee, source-code escrow, or $20M+ financial capacity required.
 - EXPERIENCE_GATE: a mandatory minimum of N years of SPECIFIC prior experience or N prior like-for-like deployments.
 - PRODUCT_REQUIRED: requires an existing commercial product in a vertical Colaberry does not own.
-- PHYSICAL_INSTALL: furnish-and-install hardware, bid bond, or construction plans/drawings.
+- PHYSICAL_INSTALL: furnish-and-install hardware, bid bond, construction plans/drawings, a data-center/server hardware buildout, equipment procurement, structured cabling, or field maintenance of physical devices/sensors (e.g. flood-warning equipment).
+- LICENSE_GATE: a state PROFESSIONAL LICENSE is required to perform or stamp the work — a licensed Professional Engineer (PE), Certified General/Residential Appraiser, licensed land surveyor, or registered/licensed architect. This is a regulated profession Colaberry does not practice; it is NOT a security cert we can buy (that is CERT_WALL). Reachable only by teaming with a licensed firm, so it is no_bid unless a partner holds the license AND the core deliverable is still Colaberry's software/AI/data work (then conditional).
 - SET_ASIDE_INELIGIBLE: reserved for a set-aside Colaberry can't claim (8(a)/WOSB/HUBZone/SDVOSB).
 - DEADLINE_TIGHT: the real submission deadline is under 14 days from "Today" below.
 
@@ -62,7 +63,7 @@ Rules:
 - Do NOT infer CERT_WALL from the words "security", "secure", "cyber", or a security-product name in the title or scope. CERT_WALL fails ONLY when an explicit clause MANDATES a named certification (SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT) as a condition of submission or award.
 - Re-read your chosen "evidence" before finalizing: on its own, it must prove the disqualifier. If it does not, pick different evidence, change the disqualifier, or change the status.
 - If it LOOKS like a no-bid but you CANNOT find a verbatim clause in the text proving a hard gate, return status "needs_review" (NOT no_bid) with your best-guess disqualifier and confidence — never assert a disqualification on the agency name or inference alone.
-- conditional -> clears every gate except one a partner can satisfy (Que for housing-finance experience, or a SOC2-certified host); set unblocked_by.
+- conditional -> the CORE deliverable is in Colaberry's lane (software / AI / data) AND a partner's credential clears ONE ELIGIBILITY gate (Que's housing-finance EXPERIENCE_GATE, a licensed firm for a LICENSE_GATE, a SOC2-certified host for a CERT_WALL). A partner can clear ONLY an eligibility gate (experience / cert / license / set-aside) — NEVER a DOMAIN_MISMATCH / PRODUCT_REQUIRED / SCALE_WALL / PHYSICAL_INSTALL fit gate. If the actual work is the partner's wheelhouse (e.g. property management) and Colaberry would only bolt on a dashboard, that is NOT a Colaberry bid: return no_bid (disqualifier = the fit gate), never conditional. Set unblocked_by.
 - bid -> clears every gate.
 - confidence (0.0-1.0) = how strongly the QUOTED TEXT supports the verdict: 1.0 only when "evidence" is an explicit verbatim clause, lower when partial, near 0 when inferred.
 - Quote verbatim from the supplied text only. Never invent a requirement that is not in the text.`;
@@ -145,8 +146,9 @@ const REVIEW_SYSTEM_PROMPT = `You are a SKEPTICAL senior reviewer auditing a dra
 You are given (a) the DRAFT VERDICT and (b) the RFP text. Your job is to catch the draft's errors and return the CORRECT final verdict.
 Audit rigorously:
 1. EVIDENCE: does the draft's quote actually appear (in substance) in the text AND, on its own, AFFIRMATIVELY prove the stated disqualifier? A clause saying a requirement is "not applicable / waived / not required / N/A / none" proves the OPPOSITE — it cannot support a disqualification.
-2. CODE: is the disqualifier the correct gate? CERT_WALL requires a clause NAMING SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT as a condition of submission/award — never infer it from the word "security" or generic "maintain all certifications" boilerplate. Annual support of a proprietary product (e.g. a named access-control or ERP system) is PRODUCT_REQUIRED, not CERT_WALL.
-3. CONTRADICTION: is there a clause that contradicts the draft?
+2. CODE: is the disqualifier the correct gate? CERT_WALL requires a clause NAMING SOC 2 / TX-RAMP / StateRAMP / FedRAMP / CJIS / FIPS / HECVAT as a condition of submission/award — never infer it from the word "security" or generic "maintain all certifications" boilerplate. Annual support of a proprietary product (e.g. a named access-control or ERP system) is PRODUCT_REQUIRED, not CERT_WALL. A required state PROFESSIONAL LICENSE (PE, Certified General Appraiser, licensed surveyor/architect) is LICENSE_GATE, not CERT_WALL — a license is a regulated profession we don't practice, not a cert we can buy.
+3. TEAMING: a "conditional" is legitimate ONLY when the core deliverable is software/AI/data and a partner clears an ELIGIBILITY gate (experience / cert / license / set-aside). If the draft marked a DOMAIN_MISMATCH / PRODUCT_REQUIRED / SCALE_WALL / PHYSICAL_INSTALL as conditional-on-a-partner, that is wrong — teaming cannot fix a fit gate; correct it to no_bid with the fit gate's code.
+4. CONTRADICTION: is there a clause that contradicts the draft?
 Return ONLY JSON:
 {"agrees_with_draft":true|false,"status":"bid|no_bid|conditional|needs_review","disqualifier":"<CODE or null>","label":"<=90 chars","evidence":"<verbatim sentence that affirmatively proves the disqualifier, or null>","lane":"services|sbir|coop|null","unblocked_by":"<or null>","confidence":0.0,"reason":"<why you agreed or corrected, <=160 chars>"}
 Rules: if the draft's evidence does not affirmatively prove its disqualifier, you MUST correct it. If you cannot prove ANY hard gate from the text, return status "needs_review" (let a human decide) — never invent a gate. A no_bid REQUIRES a verbatim affirmative clause in "evidence".`;
@@ -223,6 +225,10 @@ async function deepVetFromDocuments(oppId) {
     };
     final = corrected;
   }
+  // Deterministic policy, applied AFTER the AI passes (not in the prompt): cert posture
+  // (a SOC-2-only no_bid -> watchlist conditional) + the teaming rule (a conditional on a
+  // non-teamable fit gate -> no_bid).
+  final = finalizeVerdict(final);
   final = { ...final, review };
 
   await opp.update({ vetVerdict: final });

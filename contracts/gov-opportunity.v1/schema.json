@@ -294,6 +294,11 @@
           "enum": ["missing_timezone", "ambiguous_timezone", "dst_ambiguous", "unparseable", "conflicting_sources", null]
         },
         "verifiedAt": { "type": ["string", "null"], "format": "date-time" },
+        "conservativePlanningUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "The EARLIEST candidate instant, offered for internal scheduling only when `utc` is null because sources conflict. It is NOT a verified buyer deadline and MUST NOT be presented as one: it is a deliberately pessimistic planning aid. Any consumer displaying it must label it as such and must also surface `conflicts`."
+        },
         "conflicts": {
           "type": "array",
           "description": "Competing deadline values from different sources. NEVER silently resolved. An amended deadline appears here alongside the original.",

@@ -55,6 +55,7 @@
     "utcConfidence": "unknown",
     "uncertaintyReason": "conflicting_sources",
     "verifiedAt": "2026-09-28T16:29:00.000Z",
+    "conservativePlanningUtc": null,
     "conflicts": [
       {
         "originalText": "All vendor proposals must be submitted by 3 p.m., Central Time on October 15, 2026.",

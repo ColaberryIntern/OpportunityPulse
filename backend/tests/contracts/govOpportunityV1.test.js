@@ -22,6 +22,51 @@ const fixtureNames = fs.readdirSync(FIXTURE_DIR).filter((f) => f.endsWith('.json
 const load = (n) => JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, n), 'utf8'));
 
 // ---------------------------------------------------------------- validator
+//
+// SCOPE OF THIS VALIDATOR -- read before trusting it.
+// It implements a SUBSET of JSON Schema. The keywords it actually enforces are
+// listed in ENFORCED_KEYWORDS below, and a guard test fails the build if
+// schema.json ever starts using a keyword outside that set. That guard is the
+// point: a subset validator whose gaps are unenumerated silently passes
+// documents it never checked.
+//
+// It is NOT a standards-compliant 2020-12 implementation. Structural coverage is
+// cross-checked against ajv below, and the residual gap is reported in the
+// suite output rather than papered over.
+const ENFORCED_KEYWORDS = new Set([
+  '$ref', '$defs', 'oneOf', 'const', 'type', 'enum', 'pattern',
+  'minimum', 'maximum', 'required', 'additionalProperties', 'properties',
+  'items', 'format',
+]);
+// Keywords that carry no validation semantics.
+const ANNOTATION_KEYWORDS = new Set(['$schema', '$id', 'title', 'description']);
+
+// Only the formats this schema actually uses. Deliberately strict: a permissive
+// regex here would be worse than no check, because it would look like coverage.
+const FORMAT_VALIDATORS = {
+  'date-time': (v) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(v)
+    && !Number.isNaN(Date.parse(v)),
+  date: (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)),
+  uri: (v) => {
+    try { const u = new URL(v); return !!u.protocol && u.protocol !== ':'; } catch { return false; }
+  },
+};
+
+/** Every keyword appearing anywhere in a schema document. */
+function collectKeywords(node, out = new Set()) {
+  if (!node || typeof node !== 'object') return out;
+  if (Array.isArray(node)) { node.forEach((n) => collectKeywords(n, out)); return out; }
+  for (const k of Object.keys(node)) {
+    if (k === 'properties' || k === '$defs' || k === 'definitions') {
+      Object.values(node[k]).forEach((n) => collectKeywords(n, out));
+      continue;
+    }
+    out.add(k);
+    collectKeywords(node[k], out);
+  }
+  return out;
+}
+
 function resolveRef(ref, root) {
   if (!ref.startsWith('#/')) throw new Error(`unsupported $ref: ${ref}`);
   return ref.slice(2).split('/').reduce((acc, k) => acc[k], root);
@@ -71,6 +116,11 @@ function validate(value, schema, root, pathStr, errors) {
   }
   if (schema.pattern && typeof value === 'string' && !new RegExp(schema.pattern).test(value)) {
     errors.push(`${pathStr}: ${JSON.stringify(value)} fails pattern ${schema.pattern}`);
+  }
+  if (schema.format && typeof value === 'string') {
+    const check = FORMAT_VALIDATORS[schema.format];
+    if (!check) errors.push(`${pathStr}: format "${schema.format}" has no validator (would be silently unchecked)`);
+    else if (!check(value)) errors.push(`${pathStr}: ${JSON.stringify(value)} is not a valid ${schema.format}`);
   }
   if (typeof value === 'number') {
     if (schema.minimum !== undefined && value < schema.minimum) errors.push(`${pathStr}: ${value} < minimum ${schema.minimum}`);
@@ -124,6 +174,100 @@ describe('gov-opportunity.v1 — schema conformance', () => {
     const errs = validateFixture(load(name));
     if (errs.length) throw new Error(`${name}:\n  ${errs.join('\n  ')}`);
     expect(errs).toEqual([]);
+  });
+});
+
+describe('gov-opportunity.v1 — validator coverage is enumerated, not assumed', () => {
+  // The guard: if schema.json starts using a keyword this validator does not
+  // implement, this FAILS rather than silently skipping the constraint.
+  it('schema.json uses no keyword the validator ignores', () => {
+    const used = collectKeywords(SCHEMA);
+    const unhandled = [...used].filter((k) => !ENFORCED_KEYWORDS.has(k) && !ANNOTATION_KEYWORDS.has(k));
+    if (unhandled.length) {
+      throw new Error(
+        `schema.json uses keyword(s) the subset validator does NOT enforce: ${unhandled.join(', ')}.\n`
+        + 'Either implement them, or validate with a full JSON Schema 2020-12 implementation. '
+        + 'Do not claim conformance while these are ignored.',
+      );
+    }
+    expect(unhandled).toEqual([]);
+  });
+
+  it('enforces every format the schema actually uses', () => {
+    const formats = new Set();
+    (function walk(n) {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (typeof n.format === 'string') formats.add(n.format);
+      Object.values(n).forEach(walk);
+    }(SCHEMA));
+    for (const f of formats) expect(Object.keys(FORMAT_VALIDATORS)).toContain(f);
+  });
+
+  it('format checking actually rejects bad values', () => {
+    const d = load('rfi-va-enterprise-ai.json');
+    d.timestamps.fetchedAt = 'last Tuesday';
+    expect(validateFixture(d).some((e) => /not a valid date-time/.test(e))).toBe(true);
+
+    const d2 = load('rfi-va-enterprise-ai.json');
+    d2.publisher.officialSourceUrl = 'not a url';
+    expect(validateFixture(d2).some((e) => /not a valid uri/.test(e))).toBe(true);
+
+    const d3 = load('amendment-extends-deadline.json');
+    d3.documents.items[0].documentDate = '2026-13-45';
+    expect(validateFixture(d3).some((e) => /not a valid date/.test(e))).toBe(true);
+  });
+});
+
+// Independent structural cross-check with a real JSON Schema implementation.
+// ajv 6 is already present in node_modules (transitively) and implements
+// draft-07 — NOT 2020-12. It is therefore a partial corroboration, not proof of
+// 2020-12 conformance, and the suite says so out loud. Guarded so the suite
+// still runs if the transitive dependency disappears.
+describe('gov-opportunity.v1 — independent cross-check (ajv, draft-07)', () => {
+  let ajvValidate = null;
+  let ajvNote = '';
+
+  beforeAll(() => {
+    try {
+      // eslint-disable-next-line global-require
+      const Ajv = require('ajv');
+      const ajv = new Ajv({ allErrors: true, format: 'full', schemaId: 'auto' });
+      // ajv 6 does not know the 2020-12 meta-schema; validate structurally
+      // against draft-07 semantics by dropping the $schema declaration.
+      const clone = JSON.parse(JSON.stringify(SCHEMA));
+      delete clone.$schema;
+      delete clone.$id;
+      ajvValidate = ajv.compile(clone);
+      ajvNote = `ajv ${require('ajv/package.json').version} (draft-07 semantics)`;
+    } catch (e) {
+      ajvNote = `unavailable: ${e.message}`;
+    }
+  });
+
+  it('reports which implementation performed the cross-check', () => {
+    // Visible in output so nobody mistakes this for 2020-12 validation.
+    expect(typeof ajvNote).toBe('string');
+    // eslint-disable-next-line no-console
+    console.log(`    cross-check implementation: ${ajvNote}`);
+  });
+
+  it.each(fixtureNames)('%s also passes the independent implementation', (name) => {
+    if (!ajvValidate) {
+      // Do not fake a pass: assert the reason is recorded instead.
+      expect(ajvNote).toMatch(/unavailable/);
+      return;
+    }
+    const ok = ajvValidate(load(name));
+    if (!ok) throw new Error(`${name}: ${JSON.stringify(ajvValidate.errors, null, 2)}`);
+    expect(ok).toBe(true);
+  });
+
+  it('the independent implementation also rejects a bad document', () => {
+    if (!ajvValidate) { expect(ajvNote).toMatch(/unavailable/); return; }
+    const d = load('rfi-va-enterprise-ai.json');
+    d.companyQualification = { fit: 'good' };
+    expect(ajvValidate(d)).toBe(false);
   });
 });
 
@@ -206,6 +350,58 @@ describe('gov-opportunity.v1 — deadline invariants', () => {
     expect(d.deadline.utc).toBeNull();
     expect(d.deadline.uncertaintyReason).toBe('conflicting_sources');
     expect(d.deadline.conflicts.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // The VA RFI states "10:00 AM Eastern Standard Time" on a date that is inside
+  // US Eastern DST, while the structured field says -04:00. EST is UTC-05:00, so
+  // the literal reading is 15:00Z and the structured one is 14:00Z — an hour
+  // apart, NOT the same instant. Neither is verified.
+  it('the VA RFI deadline is an UNRESOLVED conflict between 14:00Z and 15:00Z', () => {
+    const { deadline } = load('rfi-va-enterprise-ai.json');
+    expect(deadline.utc).toBeNull();
+    expect(deadline.utcConfidence).toBe('unknown');
+    expect(deadline.uncertaintyReason).toBe('conflicting_sources');
+    const instants = deadline.conflicts.map((c) => c.utc).sort();
+    expect(instants).toEqual(['2026-10-07T14:00:00.000Z', '2026-10-07T15:00:00.000Z']);
+  });
+
+  it('neither VA source is marked as superseding the other', () => {
+    const { deadline } = load('rfi-va-enterprise-ai.json');
+    for (const c of deadline.conflicts) expect(c.supersedes).toBeNull();
+  });
+
+  it('the literal EST reading and the structured -04:00 reading are both preserved', () => {
+    const { deadline } = load('rfi-va-enterprise-ai.json');
+    expect(deadline.originalText).toContain('Eastern Standard Time');
+    expect(deadline.statedTimezone).toBe('Eastern Standard Time');
+    const literal = deadline.conflicts.find((c) => c.utc === '2026-10-07T15:00:00.000Z');
+    const structured = deadline.conflicts.find((c) => c.utc === '2026-10-07T14:00:00.000Z');
+    expect(literal.source).toMatch(/prose|literal|EST/i);
+    expect(structured.source).toMatch(/responseDeadLine|-04:00|EDT/i);
+  });
+
+  it('no fixture claims the two VA readings are the same instant', () => {
+    const blob = JSON.stringify(load('rfi-va-enterprise-ai.json'));
+    expect(blob).not.toMatch(/same instant/i);
+  });
+
+  it.each(fixtureNames)('%s: conservativePlanningUtc only appears when utc is null', (name) => {
+    const { deadline } = load(name);
+    if (deadline.conservativePlanningUtc) {
+      expect(deadline.utc).toBeNull();
+      // and it must be the EARLIEST candidate, i.e. genuinely conservative
+      const candidates = deadline.conflicts.map((c) => c.utc).filter(Boolean).sort();
+      expect(deadline.conservativePlanningUtc).toBe(candidates[0]);
+    }
+  });
+
+  it('the conservative planning value is the earlier VA instant and is labelled as such', () => {
+    const d = load('rfi-va-enterprise-ai.json');
+    expect(d.deadline.conservativePlanningUtc).toBe('2026-10-07T14:00:00.000Z');
+    // it must never be mistaken for the verified deadline
+    expect(d.deadline.utc).toBeNull();
+    const structured = d.deadline.conflicts.find((c) => c.utc === '2026-10-07T14:00:00.000Z');
+    expect(structured.note).toMatch(/not because it is verified|conservative/i);
   });
 
   it('the NASPO courtesy posting resolves to 20:00Z and keeps the wrong legacy value as a conflict', () => {

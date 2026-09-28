@@ -36,6 +36,21 @@ describe('documentDeepVet.deepVetFromDocuments', () => {
     expect(update).toHaveBeenCalledWith({ vetVerdict: expect.objectContaining({ status: 'no_bid', disqualifier: 'CERT_WALL' }) });
   });
 
+  test('a SOC-2-only no_bid is postured into a conditional WATCHLIST row', async () => {
+    mockFindAll.mockResolvedValue([{ name: 'rfp.pdf', parsedText: 'S'.repeat(800) }]);
+    const update = jest.fn();
+    mockFindByPk.mockResolvedValue({ id: 5, title: 'Agenda Platform', agency: 'Salt Lake City', update });
+    const soc2 = { status: 'no_bid', disqualifier: 'CERT_WALL', label: 'SOC 2 required', evidence: 'Vendor must provide a current SOC 2 Type II report prior to award.', confidence: 0.9 };
+    mockChat
+      .mockResolvedValueOnce({ content: JSON.stringify(soc2) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ agrees_with_draft: true, ...soc2, confidence: 0.95, reason: 'confirmed' }) });
+    const r = await deepVetFromDocuments(5);
+    expect(r.verdict.status).toBe('conditional');
+    expect(r.verdict.cert_posture).toBe('acquiring');
+    expect(r.verdict.unblocked_by).toMatch(/SOC 2/);
+    expect(r.verdict.review).toBeDefined(); // posture preserves the review trail
+  });
+
   test('the reviewer OVERTURNS a wrong draft (this is the CCure-class bug)', async () => {
     mockFindAll.mockResolvedValue([{ name: 'a', parsedText: 'Z'.repeat(800) }]);
     const update = jest.fn();

@@ -53,7 +53,9 @@ router.post(
   '/research/build-briefs',
   verifyToken, checkPermissions(ROLES.ADMIN), express.json({ limit: '4kb' }), research.runBuildBriefs,
 );
-router.get('/profile',                  BRIDGE, c.getMyProfile);
+// Admin only: every customer shares org 1, so this would return Colaberry's
+// profile to them. The bridge API key authenticates as admin and keeps access.
+router.get('/profile',                  BRIDGE, checkPermissions(ROLES.ADMIN), c.getMyProfile);
 
 // ---- Bridge ACTION endpoints (dual-auth + admin) -----------------------
 router.post(
@@ -98,9 +100,15 @@ router.patch(
 // Events: any authenticated user can record (UI tracking).
 router.post('/opportunity-events', verifyToken, c.postEvent);
 
-// Per-org business profile.
-router.post('/profile',   verifyToken, c.postMyProfile);
-router.patch('/profile',  verifyToken, c.patchMyProfile);
+// Per-org business profile — admin only (read above, write here).
+// Registration never assigns an organization, so every customer account
+// lives in org 1 alongside Colaberry. Until each customer gets their own
+// organization, letting any signed-in user read or write "their" profile
+// means reading or overwriting Colaberry's — which drives fit scores,
+// My Opportunities, and Top Actions. See
+// directives/CUSTOMER_EXPERIENCE_REDESIGN.md (Known risks).
+router.post('/profile',   verifyToken, checkPermissions(ROLES.ADMIN), c.postMyProfile);
+router.patch('/profile',  verifyToken, checkPermissions(ROLES.ADMIN), c.patchMyProfile);
 
 // Bundles (rebuild is admin-only).
 router.post('/bundles/run', verifyToken, checkPermissions(ROLES.ADMIN), c.runBundler);

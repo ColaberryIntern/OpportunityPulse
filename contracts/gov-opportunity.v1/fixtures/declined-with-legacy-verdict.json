@@ -55,6 +55,7 @@
     "utcConfidence": "high",
     "uncertaintyReason": null,
     "verifiedAt": null,
+    "conservativePlanningUtc": null,
     "conflicts": []
   },
   "value": {

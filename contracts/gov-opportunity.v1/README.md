@@ -85,7 +85,25 @@ never sufficient for a pursuit decision.
 - `timezoneSource` ∈ `offset | abbreviation | named_zone | absent | unresolvable`.
 - `conflicts[]` holds competing values with source and timestamp. **Never silently resolved.** An
   amended deadline appears here alongside the original; so does a known-bad legacy value, retained
-  for audit (`supersedes: false`).
+  for audit (`supersedes: false`). When neither source has been established as authoritative,
+  `supersedes` is `null` on **both** and `utc` stays `null`.
+- `conservativePlanningUtc` is the **earliest** candidate instant, offered for internal scheduling
+  only while `utc` is null. It is **not a verified buyer deadline** and must be labelled as a
+  conservative planning choice wherever it is displayed.
+
+**Worked example — the VA RFI (`fixtures/rfi-va-enterprise-ai.json`).** The document says
+*"10:00 AM Eastern Standard Time, October 7, 2026"*; the SAM structured field says
+`2026-10-07T10:00:00-04:00`. These are **different instants**:
+
+| Reading | Offset | UTC |
+|---|---|---|
+| Literal prose, EST | −05:00 | **15:00Z** |
+| Structured field, EDT | −04:00 | **14:00Z** |
+
+7 October 2026 falls inside US Eastern DST, so "Standard" is *probably* a drafting slip — but
+probably is not verified, and choosing the later instant risks missing the deadline. So `utc` is
+`null`, `uncertaintyReason` is `conflicting_sources`, both readings are preserved with
+`supersedes: null`, and `conservativePlanningUtc` is `14:00Z` **as a planning aid only**.
 
 ### Value — published and estimated never merge
 
@@ -166,7 +184,7 @@ from one about the whole family. A `null` legacyVerdict means **not vetted** —
 | File | Demonstrates |
 |---|---|
 | `solicitation-verified.json` | Binding solicitation, buyer-stated **ceiling**, complete documents |
-| `rfi-va-enterprise-ai.json` | RFI with a detailed draft PWS; all four `bindingStatus` values; mixed procurement components |
+| `rfi-va-enterprise-ai.json` | RFI with a detailed draft PWS; all four `bindingStatus` values; mixed procurement components; **unresolved 14:00Z-vs-15:00Z deadline conflict** with a labelled conservative planning value |
 | `courtesy-posting-naspo-sw1045.json` | Poster ≠ lead buyer ≠ submission portal; master agreement as a vehicle; legacy wrong deadline retained as a conflict |
 | `missing-documents-bonfire-403.json` | `coverage: inaccessible`, `accessBarrier: bot_protection`, title-only basis |
 | `uncertain-value.json` | `published: null` + model estimate, never merged |
@@ -257,10 +275,55 @@ internal prompts, `rawText`. Document *bytes* are served via short-lived signed 
 
 ---
 
-## 5. Known gaps in v1
+## 5. How the artifacts are validated — and the limits of that
 
-1. `close_date_raw` / timezone columns do not exist in the database yet. The scraper now produces
-   them (`scraper/normalize.js`) but they are dropped at `validateRow`. A migration is Phase 2.
+Two independent passes run in `backend/tests/contracts/govOpportunityV1.test.js`:
+
+**(a) A subset validator, with its coverage enumerated.** It enforces `$ref`, `$defs`, `oneOf`,
+`const`, `type`, `enum`, `pattern`, `minimum`, `maximum`, `required`, `additionalProperties`,
+`properties`, `items` and `format` (`date-time`, `uri`, `date`). A **guard test fails the build** if
+`schema.json` ever starts using a keyword outside that set — so the gaps cannot grow silently. It
+does **not** implement `allOf`, `anyOf`, `if`/`then`/`else`, `patternProperties`, `prefixItems`,
+`minItems`/`maxItems`, `uniqueItems`, `dependentRequired`, `unevaluatedProperties` or `$dynamicRef`.
+None of those appear in this schema today.
+
+**(b) An independent cross-check with `ajv 6.12.6`**, already present in `node_modules` as a
+transitive dependency. This corroborates the structure with a real implementation rather than only
+my own code, and it also rejects a deliberately bad document so the check is proven live. The suite
+prints which implementation ran.
+
+**Honest limitation: neither pass is a JSON Schema 2020-12 conformance check.** `ajv 6` implements
+draft-07; the 2020-12 entrypoint (`ajv/dist/2020`, ajv ≥8) is not installed. The `$schema`
+declaration is dropped for the cross-check. In practice this schema uses only keywords whose
+draft-07 and 2020-12 semantics coincide, so the risk is low — but it is a real gap and is not
+claimed as conformance.
+
+**To close it properly**, `ajv@^8` + `ajv-formats` are needed as **devDependencies** (test-only; not
+a production runtime dependency). That requires approval under the CLAUDE.md rule:
+
+> **Strategic decisions (ESCALATE)** — "External dependency introduction, paid external services"
+
+Requested change, for the coordinator to approve or decline:
+
+```
+backend/package.json  devDependencies += { "ajv": "^8.17.1", "ajv-formats": "^3.0.1" }
+```
+
+Declining is reasonable; the consequence is that 2020-12-specific semantics stay unverified and
+this README must keep saying so.
+
+## 6. Known gaps in v1
+
+1. **Deadline provenance is not persisted.** The scraper produces `close_date_raw`,
+   `close_date_timezone`, `close_date_offset_minutes`, `close_date_confidence` and
+   `close_date_uncertainty`; `validateRow` copies an explicit allow-list and drops all five, so they
+   never reach the database. Pinned by `backend/tests/bonfire/deadlineIngestionBoundary.test.js`.
+
+   **Precise Phase 2 persistence requirement:** add those five columns to `bonfire_opportunities`
+   (`TEXT`, `TEXT`, `INTEGER`, `TEXT`, `TEXT`, all nullable), add them to the `validateRow`
+   allow-list and to the upsert's `updateOnDuplicate`, and expose `close_date_confidence` /
+   `close_date_uncertainty` through the read API so a consumer can distinguish "deadline unknown"
+   from "no deadline". Until then, a corrected instant is stored but **why** it is correct is not.
 2. Historical rows cannot be recomputed: **0 of 5,302** Bonfire rows retain their original deadline
    text. See `backend/src/scripts/deadlineImpactReport.js`.
 3. Bonfire notices have no `noticeType` at source, so most map to `unknown` — correctly, but it
