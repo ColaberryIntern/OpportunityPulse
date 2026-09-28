@@ -14,8 +14,14 @@ async function verifyApiKey(req, res, next) {
 
   try {
     const userInfo = await apiKeyService.validateApiKey(apiKey);
+    // NOTE: `role` is deliberately NOT set here. rbac.middleware.checkPermissions()
+    // gates every admin write on req.user.role, so attaching it would silently
+    // promote a machine credential to full admin. Capabilities for API keys are
+    // granted via `scopes` instead (e.g. bonfire.util.SOURCE_FIELDS_SCOPE).
+    // Do not "fix" this by adding a role.
     req.user = {
       userId: userInfo.userId,
+      id: userInfo.userId,
       email: userInfo.email,
       roleId: userInfo.roleId,
       scopes: userInfo.scopes,
@@ -45,7 +51,14 @@ function verifyTokenOrApiKey(req, res, next) {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
+      // Normalize identically to auth.middleware.verifyToken — the login flow
+      // signs `userId`, the older test path signed `id`. Without this, routes
+      // switched from verifyToken to verifyTokenOrApiKey would lose req.user.id.
+      req.user = {
+        ...decoded,
+        id: decoded.id != null ? decoded.id : decoded.userId,
+        userId: decoded.userId != null ? decoded.userId : decoded.id,
+      };
       return next();
     } catch (err) {
       // If JWT fails and no API key, return JWT error

@@ -1,5 +1,15 @@
 const { body, param } = require('express-validator');
 
+// Allowed API-key scopes.
+//   read / write          — generic, pre-existing.
+//   read:bonfire_source   — un-redacts sourceUrl / rawText on the Bonfire read
+//                           endpoints ONLY (see bonfire.util.canReadSourceFields).
+//                           Grants no write authority: an API-key request carries
+//                           no `role`, so rbac checkPermissions() still rejects it.
+const ALLOWED_SCOPES = ['read', 'write', 'read:bonfire_source'];
+const scopesAreValid = (arr) => Array.isArray(arr) && arr.every((s) => ALLOWED_SCOPES.includes(s));
+const SCOPE_MESSAGE = `Each scope must be one of: ${ALLOWED_SCOPES.join(', ')}`;
+
 const validateCreateApiKey = [
   body('name')
     .trim()
@@ -11,8 +21,8 @@ const validateCreateApiKey = [
     .optional()
     .isArray()
     .withMessage('Scopes must be an array')
-    .custom((arr) => arr.every((s) => ['read', 'write'].includes(s)))
-    .withMessage('Each scope must be either "read" or "write"'),
+    .custom(scopesAreValid)
+    .withMessage(SCOPE_MESSAGE),
 ];
 
 const validateUpdateApiKey = [
@@ -28,12 +38,17 @@ const validateUpdateApiKey = [
     .optional()
     .isArray()
     .withMessage('Scopes must be an array')
-    .custom((arr) => arr.every((s) => ['read', 'write'].includes(s)))
-    .withMessage('Each scope must be either "read" or "write"'),
+    .custom(scopesAreValid)
+    .withMessage(SCOPE_MESSAGE),
 ];
 
 const validateApiKeyId = [
   param('id').isInt({ min: 1 }).withMessage('API key ID must be a positive integer'),
 ];
 
-module.exports = { validateCreateApiKey, validateUpdateApiKey, validateApiKeyId };
+module.exports = {
+  validateCreateApiKey,
+  validateUpdateApiKey,
+  validateApiKeyId,
+  ALLOWED_SCOPES,
+};
