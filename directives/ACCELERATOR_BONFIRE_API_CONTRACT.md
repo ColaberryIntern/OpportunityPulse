@@ -9,16 +9,17 @@ implement against. Owner approved option **B** (a narrow `read:bonfire_source` A
 scope) and the **`/best-fit`** endpoint on 2026-09-28; both are implemented and tested,
 committed as **`66944c8`** on branch `feat/accelerator-bonfire-read-integration`.
 
-**Rollout state as of 2026-09-28 — NOT LIVE:**
+**Rollout state as of 2026-09-28 — ✅ LIVE IN PRODUCTION:**
 
 | Step | State |
 |---|---|
-| Deploy to prod | ❌ **Blocked.** Branch is local only; `git push` was not authorized. Prod also has 2 unpushed commits — see §5b. |
-| `api_keys` table | ✅ Verified present on prod (5 rows) |
-| `BONFIRE_ENGINE_ENABLED` | ✅ Verified `true`; `/bonfire/flag` returns `enabled:true` |
-| Base URL | ⚠️ **`op.colaberry.ai` does not exist (NXDOMAIN)** — see §5a-bis |
-| Credential minted | ❌ **No.** Would 400 until the scope deploys — see §5c |
-| Live smoke test | ❌ Not possible: no deploy, no key, no such hostname |
+| Deploy to prod | ✅ **Done.** Merge commit `6936c99`; backend rebuilt and serving. |
+| `api_keys` table | ✅ Present (5 rows before minting, 6 after) |
+| `BONFIRE_ENGINE_ENABLED` | ✅ `true`; `/bonfire/flag` → `enabled:true` |
+| Base URL | ✅ **Resolved: `http://172.17.0.1:8091/api/v1`** (docker bridge → host:8091 → op-nginx). `op.colaberry.ai` remains non-existent and is deliberately NOT being set up — see §5a-bis. |
+| Credential minted | ✅ Key id **6**, prefix `op_e40a3917`, scopes `["read:bonfire_source"]`, owner `accelerator-svc@colaberry.com` (role consultant, non-admin) |
+| Live smoke test | ✅ 200, 10 rows, `sourceUrl` non-null 10/10, writes 401 |
+| Prod-only commits | ✅ `a0fa456` + `79dde5e` preserved; snapshot branch `prod-local-backup-20260928-180211` |
 
 **Verified against:** `f0c577c` (branch `main`), local working tree, 2026-09-28.
 Every claim below cites the file that establishes it. Values marked
@@ -523,6 +524,74 @@ There is no IP allowlist to add anyone to — none exists in app code or `nginx/
   the admin UI's default view.
 - `validateApiKey` does not check whether the owning user is still active — only that the
   key is. Minor; worth tightening if service accounts proliferate.
+
+---
+
+## 5g. Deployment record — 2026-09-28
+
+Executed exactly per §5b, non-destructively:
+
+1. Pushed `feat/accelerator-bonfire-read-integration` (`6c490d0`) to origin.
+2. On prod, **snapshotted the 2 unpushed prod-only commits first**:
+   branch `prod-local-backup-20260928-180211` at `79dde5e`. Verified it contains both
+   `79dde5e` and `a0fa456` before touching anything else.
+3. `git fetch origin` → `git merge --no-edit origin/feat/...`. **Clean merge, no
+   conflicts**, merge commit `6936c99`. Confirmed afterwards that both prod-only commits
+   are still ancestors of HEAD (`git merge-base --is-ancestor` passes for both). No
+   force-push, no reset, no rebase at any point.
+4. `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build backend`
+   — backend only; frontend untouched.
+
+Note: the merge initially failed with "Committer identity unknown" — the prod checkout had
+no `user.email`/`user.name`. HEAD was untouched and no partial merge state was created.
+Set **repo-scoped** (`--local`, not `--global`, since the box is shared)
+`OP Deploy <deploy@colaberry.com>` and re-ran.
+
+**Verified live** at `http://127.0.0.1:8091` and `http://172.17.0.1:8091`:
+
+| Check | Result |
+|---|---|
+| `GET /bonfire/best-fit?limit=10` + key | **200**, 10 rows, envelope `status, message, data, ranking, code` |
+| `sourceUrl` un-redacted | **10/10 rows non-null** — the scope works |
+| `GET /bonfire/opportunities?limit=3` + key | 200 |
+| `POST /bonfire/enrich-all` + same key | **401** |
+| `POST /bonfire/upload/json` + same key | **401** |
+| `POST /bonfire/enrich/:id` + same key | **401** |
+| Bogus key | 401 |
+| No auth | 401 |
+| Bearer JWT (consultant) on both routes | 200 — the JWT branch still works after the dual-auth switch |
+| Non-admin JWT redaction | `sourceUrl` null 0/3 non-null — still correctly redacted |
+| Before deploy, same route | 404 → now 401/200, confirming registration |
+
+### ⚠️ Pre-existing defect surfaced by the restart (NOT caused by this change)
+
+Shortly after the rebuild, `op-backend` flapped to `unhealthy`, then **recovered to
+`healthy` on its own**. The API served 200s throughout; this was never an outage.
+
+Cause: `app.use(generalLimiter)` is at `server.js:47`, while `/metrics` (`:69`) and
+`/api/v1/health` (`:97`) are registered **after** it — so infrastructure probes consume
+the same 500-req/15-min client budget. Prometheus scrapes `/metrics` every 10s and the
+Docker healthcheck hits `/api/v1/health` every 30s, both arriving *directly* at the
+container rather than through nginx, so they share a bucket keyed off the internal
+address. When that bucket saturates inside a window the healthcheck gets **429** and
+Docker marks the container unhealthy; the next window resets it and it recovers. Hence
+the flap.
+
+Evidence it is pre-existing and not from this branch: this branch does not touch
+`server.js` (see the file list in `66944c8`), dependencies are lockfile-pinned
+(`npm ci --production`, `express-rate-limit@8.2.1` in both the old and new image), and
+the same route ordering predates the merge base. The restart merely cleared the
+in-memory counter and made the cycle observable.
+
+Impact is limited: `restart: unless-stopped` does **not** act on health status, and
+nothing `depends_on` backend health, so there is no restart loop or cascade. The real
+cost is a misleading health signal and monitoring noise.
+
+**Not fixed here — deliberately out of scope** (CLAUDE.md scope lock: log the proposal,
+don't expand the current change). Recommended fix, small and low-risk: register
+`/api/v1/health*` and `/metrics` **before** `app.use(generalLimiter)`, or give the
+limiter a `skip` for those paths. Infra probes should not draw down client quota. Worth a
+separate change with its own test.
 
 ---
 
