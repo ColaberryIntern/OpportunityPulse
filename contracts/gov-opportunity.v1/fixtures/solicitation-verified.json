@@ -1,0 +1,204 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 2,
+  "canonicalOpportunityId": "op:gov:414610b75e4d271b15a51ba5b3d39709",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "0844995c89404dfbbe638692a0d0f7e2",
+  "sourceAliases": [],
+  "solicitationFamily": {
+    "familyId": "opfam:45a136b766629c3c0487f9821416b5b6",
+    "solicitationNumber": "M6785426I4208",
+    "linkBasis": "solicitation_number",
+    "confidence": "high",
+    "memberSourceRecordIds": [
+      "0844995c89404dfbbe638692a0d0f7e2"
+    ]
+  },
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "SAM.gov",
+      "portal": "sam.gov",
+      "url": "https://sam.gov"
+    },
+    "leadBuyer": {
+      "name": "United States Marine Corps",
+      "office": "MCCE Program Office",
+      "requirementOwner": null,
+      "jurisdiction": "US-federal"
+    },
+    "officialSourceUrl": "https://sam.gov/opp/0844995c89404dfbbe638692a0d0f7e2/view",
+    "submissionPortal": {
+      "name": "SAM.gov",
+      "url": "https://sam.gov",
+      "method": "portal_upload",
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "L.1",
+        "page": 12,
+        "quote": "Offers shall be submitted through SAM.gov"
+      }
+    }
+  },
+  "notice": {
+    "title": "Marine Corps Cyberspace Environment Operational Support Services",
+    "noticeType": {
+      "value": "solicitation",
+      "raw": "Solicitation",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "cover",
+        "page": 1,
+        "quote": null
+      }
+    },
+    "procurementType": {
+      "value": "professional_services",
+      "basis": "document",
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "C.1",
+        "page": 5,
+        "quote": "The Contractor shall provide operational support services"
+      }
+    },
+    "contractVehicle": {
+      "value": "idiq",
+      "programName": null,
+      "obligationsSummary": "Single-award IDIQ, 5-year ordering period.",
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "B.1",
+        "page": 3,
+        "quote": null
+      }
+    },
+    "selectableLots": []
+  },
+  "deadline": {
+    "originalText": "Offers due 19 October 2026, 5:00 PM EDT",
+    "wallClock": "2026-10-19T17:00:00",
+    "statedTimezone": "EDT",
+    "resolvedZone": "America/New_York",
+    "offsetMinutes": -240,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-10-19T21:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": "2026-09-28T21:00:00.000Z",
+    "conflicts": []
+  },
+  "value": {
+    "published": {
+      "amountMinorUnits": 4500000000,
+      "currency": "USD",
+      "valueType": "ceiling",
+      "provenance": "buyer_stated",
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "B.2",
+        "page": 3,
+        "quote": "Total ceiling shall not exceed $45,000,000"
+      }
+    },
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "complete",
+    "accessBarrier": "none",
+    "counts": {
+      "listed": 1,
+      "downloaded": 1,
+      "parsed": 1,
+      "inaccessible": 0
+    },
+    "items": [
+      {
+        "docId": "doc:sol",
+        "filename": "M6785426I4208-solicitation.pdf",
+        "url": "https://sam.gov/example/download",
+        "role": "solicitation",
+        "documentVersion": "Rev 0",
+        "documentDate": "2026-09-18",
+        "sha256": "8db59feb4d217f26c79d6e76eea6ff80398e8b823e376bb783be870a96cab9e7",
+        "byteSize": 884321,
+        "mediaType": "application/pdf",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T21:00:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "pdf_text",
+          "reviewedBy": "model",
+          "reviewedAt": "2026-09-28T21:05:00.000Z"
+        },
+        "supersededByDocId": null
+      }
+    ],
+    "amendments": []
+  },
+  "requirements": [
+    {
+      "id": "req.clearance",
+      "text": "Key personnel shall hold an active Secret clearance at time of award",
+      "category": "citizenship",
+      "applicability": "always",
+      "applicabilityNote": null,
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "award",
+      "bindingStatus": "binding_solicitation_requirement",
+      "evidenceRef": {
+        "docId": "doc:sol",
+        "section": "H.3",
+        "page": 22,
+        "quote": "Key personnel shall hold an active Secret clearance"
+      }
+    }
+  ],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:00:00.000Z",
+    "fetchedAt": "2026-09-28T21:00:00.000Z",
+    "enrichedAt": "2026-09-28T07:10:00.000Z",
+    "documentReviewedAt": "2026-09-28T21:05:00.000Z",
+    "lastVerifiedAtSource": "2026-09-28T21:00:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "professional_services"
+    ],
+    "relevanceBasis": "document",
+    "assessedBy": "opportunity-pulse/document-review",
+    "method": "pdf-extract",
+    "evidenceRefs": [
+      {
+        "docId": "doc:sol",
+        "section": "C.1",
+        "page": 5,
+        "quote": null
+      }
+    ],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 46,
+    "priorityScore": 62,
+    "enrichmentVersion": 1,
+    "enrichmentHash": "abc123",
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "Advisory only.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}
