@@ -172,10 +172,35 @@ d('Phase 2 end-to-end: ingest -> persist -> API', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.canonicalOpportunityId).toBe(publicId);
     expect(res.body.meta.sourceSnapshotVersion).toBe(1);
-    // aliases are exposed, so a consumer can reconcile its own earlier records
+
+    // Aliases are exposed so a consumer can reconcile its own earlier records,
+    // and their idType must be a member of v1's FROZEN enum. The writer keys the
+    // primary alias on `bonfire_opportunity_id`; this assertion used to pin that
+    // internal token, which is how a post-ingestion payload that fails its own
+    // pinned contract passed review.
     expect(res.body.data.sourceAliases.map((a) => a.idType)).toEqual(
-      expect.arrayContaining(['bonfire_opportunity_id', 'portal_url']),
+      expect.arrayContaining(['legacy_row_id', 'portal_url']),
     );
+    // Nothing is lost: the internal type stays visible outside the contract.
+    // detail returns diagnostics as a one-element array, alongside `data`.
+    expect(res.body.diagnostics[0].internalAliasTypes)
+      .toEqual(expect.arrayContaining(['bonfire_opportunity_id']));
+
+    // THE GAP THIS CLOSES: validate the payload of a record that HAS a persisted
+    // identity against the pinned schema. Every other schema assertion in the
+    // suite runs against records whose alias table is empty, so the enum
+    // violation could not surface.
+    // eslint-disable-next-line global-require
+    const Ajv = require('ajv/dist/2020');
+    // eslint-disable-next-line global-require
+    const addFormats = require('ajv-formats');
+    const ajv = new Ajv({ strict: false, allErrors: true });
+    addFormats(ajv);
+    // eslint-disable-next-line global-require
+    const validate = ajv.compile(require('../../../contracts/gov-opportunity.v1/schema.json'));
+    const valid = validate(res.body.data);
+    expect(validate.errors || []).toEqual([]);
+    expect(valid).toBe(true);
   });
 
   // -------------------------------------------------------------- step 4

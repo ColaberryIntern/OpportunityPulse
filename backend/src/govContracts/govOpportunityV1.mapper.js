@@ -87,6 +87,29 @@ const PROPOSED_CONTRACT_CHANGES = [
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 const hex32 = (s) => crypto.createHash('md5').update(String(s)).digest('hex');
 
+/**
+ * Internal alias types -> v1's frozen `sourceAliases[].idType` enum.
+ *
+ * The writer keys the primary alias on `bonfire_opportunity_id` because that is
+ * the column it resolves rows by. v1's enum has no such member, so the moment a
+ * record HAD a persisted identity its detail payload failed the pinned contract
+ * — invisible until now because the unit mock leaves the alias table null and the
+ * end-to-end assertion pinned the internal value instead of validating it.
+ *
+ * Projected at the boundary, exactly as uncertainty reasons and conflict
+ * candidates already are. `legacy_row_id` is the honest target: that is what the
+ * Bonfire row id is. Anything unrecognised becomes `other` rather than leaking an
+ * internal token into a frozen enum.
+ */
+const ALIAS_TYPE_TO_V1 = {
+  bonfire_opportunity_id: 'legacy_row_id',
+  legacy_row_id: 'legacy_row_id',
+  source_record_id: 'source_record_id',
+  external_id: 'external_id',
+  portal_url: 'portal_url',
+};
+const toV1AliasType = (t) => ALIAS_TYPE_TO_V1[String(t)] || 'other';
+
 /** Opaque, stable canonical id. Never derived from title or solicitation number. */
 const canonicalIdFor = (canonicalUuid) => `op:gov:${hex32(canonicalUuid)}`;
 const familyIdFor = (familyUuid) => `opfam:${hex32(familyUuid)}`;
@@ -202,7 +225,7 @@ function toGovOpportunityV1(row, identity = {}) {
     sourceSystem: 'opportunity-pulse',
     sourceRecordId: String(row.externalId || row.id),
     sourceAliases: (identity.aliases || []).map((a) => ({
-      idType: a.idType || a.id_type,
+      idType: toV1AliasType(a.idType || a.id_type),
       idValue: String(a.idValue || a.id_value),
       observedAt: iso(a.observedAt || a.observed_at) || new Date(0).toISOString(),
       note: a.note || null,
@@ -317,6 +340,9 @@ function toGovOpportunityV1(row, identity = {}) {
   };
 
   const diagnostics = {
+    // The internal alias types, kept outside the contract object so projecting
+    // onto v1's frozen enum loses nothing an operator may need to debug with.
+    internalAliasTypes: (identity.aliases || []).map((a) => a.idType || a.id_type || null),
     canonicalOpportunityId: envelope.canonicalOpportunityId,
     effectiveState: state.state,
     internalUncertaintyReason: row.closeDateUncertainty || null,

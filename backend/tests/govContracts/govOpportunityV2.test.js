@@ -551,3 +551,60 @@ describe('v1 compatibility', () => {
     expect(src).not.toMatch(/router\.(post|put|patch|delete)\(/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Release-readiness: a record WITH a persisted identity must still validate.
+//
+// Every other schema assertion here runs against `{}` identity — no aliases —
+// so the alias enum was never exercised. The writer keys its primary alias on
+// `bonfire_opportunity_id`, which is NOT a member of v1's frozen
+// sourceAliases[].idType enum, so the first record to gain a persisted identity
+// would have emitted a payload that fails its own pinned contract.
+// ---------------------------------------------------------------------------
+describe('mapper — persisted aliases project onto the frozen v1 enum', () => {
+  const ALIAS_ENUM = SCHEMA.properties.sourceAliases.items.properties.idType.enum;
+  const at = '2026-09-29T18:00:00.000Z';
+  const identityWith = (aliases) => ({
+    canonicalPublicId: 'op:gov:04e92dfec7a6939d7b2f65a2c267abb8',
+    sourceSnapshotVersion: 1,
+    aliases,
+  });
+
+  it('a payload carrying the WRITER-minted aliases validates', () => {
+    const { envelope } = toGovOpportunityV1(rowVerified(), identityWith([
+      { idType: 'bonfire_opportunity_id', idValue: 'row-1', observedAt: at, note: 'Primary alias minted at first ingestion.' },
+      { idType: 'portal_url', idValue: 'https://utah.bonfirehub.com/opportunities/1', observedAt: at, note: null },
+    ]));
+    assertValid(envelope, 'persisted-aliases');
+    expect(envelope.sourceAliases.map((a) => a.idType)).toEqual(['legacy_row_id', 'portal_url']);
+  });
+
+  it('the internal type is retained in diagnostics, outside the contract', () => {
+    const { envelope, diagnostics } = toGovOpportunityV1(rowVerified(), identityWith([
+      { idType: 'bonfire_opportunity_id', idValue: 'row-1', observedAt: at },
+    ]));
+    expect(diagnostics.internalAliasTypes).toEqual(['bonfire_opportunity_id']);
+    // and it does NOT leak into the contract object
+    expect(JSON.stringify(envelope)).not.toContain('bonfire_opportunity_id');
+  });
+
+  it('an UNRECOGNISED internal type becomes `other`, never a raw token', () => {
+    const { envelope } = toGovOpportunityV1(rowVerified(), identityWith([
+      { idType: 'some_future_internal_key', idValue: 'x', observedAt: at },
+    ]));
+    expect(envelope.sourceAliases[0].idType).toBe('other');
+    assertValid(envelope, 'unknown-alias-type');
+  });
+
+  it('every projected value is a member of the schema enum, for every input we mint', () => {
+    // Guards the mapping table against drifting away from the writer.
+    // eslint-disable-next-line global-require
+    const { ALIAS_PRIMARY } = require('../../src/govContracts/govIngestion.service');
+    for (const internal of [ALIAS_PRIMARY, 'portal_url', 'source_record_id', 'external_id', 'legacy_row_id', 'nonsense']) {
+      const { envelope } = toGovOpportunityV1(rowVerified(), identityWith([
+        { idType: internal, idValue: 'x', observedAt: at },
+      ]));
+      expect(ALIAS_ENUM).toContain(envelope.sourceAliases[0].idType);
+    }
+  });
+});
