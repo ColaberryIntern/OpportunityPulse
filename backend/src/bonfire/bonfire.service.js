@@ -356,18 +356,119 @@ async function upsertJsonArray(arr) {
     plainInserted = created.length;
   }
 
+  // ---- Phase 2 source evidence ------------------------------------------
+  // The real ingestion path records canonical identity, aliases, an immutable
+  // source snapshot and the deadline observation. It runs from the RAW input
+  // because validateRow() strips deadline provenance via its allow-list, so the
+  // accepted rows no longer carry close_date_raw / timezone / confidence.
+  const evidence = await recordGovEvidence(arr);
+
   logger.info('Bonfire upsert complete', {
     processed: accepted.length,
     upserted: upsertCount,
     insertedNoId: plainInserted,
     errors: errors.length,
+    evidenceRecorded: evidence.recorded,
+    evidenceSkipped: evidence.skipped,
+    snapshotsWritten: evidence.snapshotsWritten,
   });
   return {
     processed: accepted.length,
     upserted: upsertCount,
     insertedWithoutExternalId: plainInserted,
     errors,
+    evidence,
   };
+}
+
+/**
+ * Record Phase 2 source evidence for freshly ingested rows.
+ *
+ * Deliberately NON-FATAL. Scraping is the product's lifeline; an evidence-write
+ * problem must degrade to "no evidence for this row" rather than abort the
+ * scrape. Every failure is logged with its external_id so the gap is visible.
+ *
+ * Also deliberately SKIPPED when the Phase 2 tables are absent, so the scraper
+ * keeps working against a database where the migration has not been applied.
+ *
+ * @param {Array} rawRows the pre-validation rows, which still carry provenance
+ */
+async function recordGovEvidence(rawRows) {
+  const out = {
+    recorded: 0, skipped: 0, failed: 0, snapshotsWritten: 0, verified: 0,
+  };
+  if (!Array.isArray(rawRows) || !rawRows.length) return out;
+
+  // eslint-disable-next-line global-require
+  const models = require('../models');
+  if (!models.GovCanonicalOpportunity || !models.GovSourceSnapshot) {
+    out.skipped = rawRows.length;
+    return out;
+  }
+
+  // eslint-disable-next-line global-require
+  const { ingestObservation } = require('../govContracts/govIngestion.service');
+  // eslint-disable-next-line global-require
+  const { parseDeadline } = require('./scraper/deadlineParser');
+
+  for (const raw of rawRows) {
+    const externalId = raw && raw.external_id ? String(raw.external_id).trim() : null;
+    if (!externalId) { out.skipped += 1; continue; }
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const row = await BonfireOpportunity.findOne({
+        where: { externalId }, attributes: ['id'],
+      });
+      if (!row) { out.skipped += 1; continue; }
+
+      const rawText = raw.close_date_raw || null;
+      // Re-parse rather than trusting the fields normalize() carried: this
+      // guarantees the observation reflects the CURRENT parser, including its
+      // candidate set, rather than whatever shape an older scrape produced.
+      const parse = rawText ? parseDeadline(rawText) : null;
+
+      // eslint-disable-next-line no-await-in-loop
+      const res = await ingestObservation({
+        opportunityId: row.id,
+        sourceSystem: 'bonfire',
+        aliases: raw.source_url
+          ? [{ idType: 'portal_url', idValue: raw.source_url, note: 'Portal URL observed during scrape.' }]
+          : [],
+        sourceFacts: {
+          deadlineText: rawText,
+          title: raw.title || null,
+          agency: raw.agency || null,
+          sourceUrl: raw.source_url || null,
+          externalId,
+        },
+        fetch: { status: 'success', attemptedAt: new Date() },
+        parse,
+        rawPresent: !!rawText,
+        // NOT asserted. An empty close-date cell is missing capture, not the
+        // buyer affirming there is no deadline — that distinction is defect B.
+        absentConfirmed: undefined,
+        candidates: parse && parse.candidates ? parse.candidates : null,
+        provenance: {
+          source: 'bonfire_portal_scrape',
+          basis: 'agency_portal_is_publisher_of_record',
+          sourceRef: raw.source_url || null,
+        },
+      }, { models, sequelize });
+
+      if (res && res.applied) {
+        out.recorded += 1;
+        if (res.snapshotWritten) out.snapshotsWritten += 1;
+        if (res.decision && res.decision.verified) out.verified += 1;
+      } else {
+        out.skipped += 1;
+      }
+    } catch (e) {
+      out.failed += 1;
+      logger.warn('Bonfire gov-evidence record failed', { externalId, error: e.message });
+    }
+  }
+  return out;
 }
 
 async function ingestCsvBuffer(buffer) {
@@ -457,6 +558,7 @@ async function generateStrategyForId(id) {
 
 module.exports = {
   listOpportunities,
+  recordGovEvidence,
   getOpportunity,
   ingestJsonArray,
   upsertJsonArray,

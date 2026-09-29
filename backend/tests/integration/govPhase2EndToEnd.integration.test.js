@@ -83,6 +83,13 @@ d('Phase 2 end-to-end: ingest -> persist -> API', () => {
       BEFORE UPDATE OR DELETE ON gov_source_snapshots
       FOR EACH ROW EXECUTE FUNCTION gov_source_snapshots_immutable();
     `);
+    // sync() does not create this: the model documents that the unique index on
+    // external_id lives in a migration (20260425000002). upsertJsonArray relies
+    // on it as the ON CONFLICT target, so without it the scraper path fails here
+    // for a reason that would never occur in production.
+    await sequelize.query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_bonfire_opps_external_id ON bonfire_opportunities (external_id);',
+    );
 
     await models.BonfireOpportunity.bulkCreate([
       { id: OPP, title: 'AI Analytics Platform', agency: 'State of Utah (U3P)', sourceUrl: 'https://utah.bonfirehub.com/opportunities/1', externalId: 'bonfire:agency:utah:R-1' },
@@ -351,5 +358,203 @@ d('Phase 2 end-to-end: ingest -> persist -> API', () => {
     expect(res.status).toBe(400);
     expect(res.body.errorCode).toBe('unsupported_parameter');
     expect(res.body.unsupportedParameters).toEqual(['bogusFilter']);
+  });
+
+  // =========================================================================
+  // 11. THE REAL INGESTION PATH.
+  //
+  // Everything above drives ingestObservation directly. That is not enough:
+  // "tables and standalone helpers without callers do not satisfy this
+  // requirement". This exercises the path the SCRAPER actually takes —
+  // normalize() output -> bonfire.service.upsertJsonArray -> evidence — so the
+  // wiring itself is under test, not just the helper.
+  // =========================================================================
+  describe('11. the scraper path records evidence', () => {
+    // Required lazily so the module-level destructure of ../models resolves
+    // AFTER global.__TEST_MODELS__ is populated by beforeAll.
+    let bonfireService;
+    let normalize;
+    let parseHtml;
+
+    const SCRAPED_REF = 'E2E-100';
+    let scrapedExternalId;
+
+    beforeAll(() => {
+      // eslint-disable-next-line global-require
+      bonfireService = require('../../src/bonfire/bonfire.service');
+      // eslint-disable-next-line global-require
+      normalize = require('../../src/bonfire/scraper/normalize');
+      // eslint-disable-next-line global-require
+      ({ parseHtml } = require('../../src/bonfire/scraper/pages/agencyOpportunities'));
+    });
+
+    const scrapeRows = (closeCell) => {
+      const html = `
+        <table class="dataTable">
+          <thead><tr><th>Status</th><th>Ref. #</th><th>Project</th><th>Close Date</th><th>Days Left</th><th>Action</th></tr></thead>
+          <tbody><tr>
+            <td>Open</td><td>${SCRAPED_REF}</td><td>Scraped Data Platform</td>
+            <td>${closeCell}</td><td>20</td><td><a href="/opportunities/900">x</a></td>
+          </tr></tbody>
+        </table>`;
+      return parseHtml(html).map((r) => normalize.fromAgencyOpportunity(r, 'utah', { agencyName: 'Utah' }));
+    };
+
+    it('upsertJsonArray persists identity, alias, snapshot and a VERIFIED deadline', async () => {
+      const rows = scrapeRows('Oct 15th 2026, 2:00 PM MDT');
+      scrapedExternalId = rows[0].external_id;
+      // provenance really did survive normalize()
+      expect(rows[0].close_date_raw).toBe('Oct 15th 2026, 2:00 PM MDT');
+
+      const out = await bonfireService.upsertJsonArray(rows);
+      expect(out.evidence.recorded).toBe(1);
+      expect(out.evidence.snapshotsWritten).toBe(1);
+      expect(out.evidence.verified).toBe(1);
+      expect(out.evidence.failed).toBe(0);
+
+      const row = await models.BonfireOpportunity.findOne({ where: { externalId: scrapedExternalId } });
+      expect(row.closeDate.toISOString()).toBe('2026-10-15T20:00:00.000Z');
+      expect(row.closeDateVerifiedAt).not.toBeNull();
+      expect(row.closeDateVerifiedSource).toBe('bonfire_portal_scrape');
+      expect(row.closeDateVerificationBasis).toBe('agency_portal_is_publisher_of_record');
+      expect(row.closeDateObservationOutcome).toBe('parsed');
+
+      const alias = await models.GovSourceAlias.findOne({
+        where: { idType: 'bonfire_opportunity_id', idValue: String(row.id) },
+      });
+      expect(alias).not.toBeNull();
+      const canonical = await models.GovCanonicalOpportunity.findByPk(alias.canonicalId);
+      expect(canonical.sourceSnapshotVersion).toBe(1);
+    }, 60000);
+
+    it('and the scraped row is reachable through list -> detail by its returned id', async () => {
+      const row = await models.BonfireOpportunity.findOne({ where: { externalId: scrapedExternalId } });
+      const alias = await models.GovSourceAlias.findOne({
+        where: { idType: 'bonfire_opportunity_id', idValue: String(row.id) },
+      });
+      const canonical = await models.GovCanonicalOpportunity.findByPk(alias.canonicalId);
+
+      const list = await request(app).get('/api/v2/gov-opportunities?deadlineState=verified&limit=100');
+      const item = list.body.data.find((x) => x.canonicalOpportunityId === canonical.canonicalPublicId);
+      expect(item).toBeDefined();
+
+      const detail = await request(app).get(`/api/v2/gov-opportunities/${item.canonicalOpportunityId}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body.data.canonicalOpportunityId).toBe(item.canonicalOpportunityId);
+      expect(detail.body.data.sourceAliases.map((a) => a.idType)).toContain('portal_url');
+    }, 60000);
+
+    it('re-scraping unchanged source writes no new snapshot', async () => {
+      const out = await bonfireService.upsertJsonArray(scrapeRows('Oct 15th 2026, 2:00 PM MDT'));
+      expect(out.evidence.recorded).toBe(1);
+      expect(out.evidence.snapshotsWritten).toBe(0); // unchanged
+    }, 60000);
+
+    it('a scraped cell with no timezone does NOT verify, and does not erase the stored deadline', async () => {
+      const out = await bonfireService.upsertJsonArray(scrapeRows('Oct 22nd 2026, 2:00 PM'));
+      expect(out.evidence.recorded).toBe(1);
+      expect(out.evidence.verified).toBe(0);
+
+      const row = await models.BonfireOpportunity.findOne({ where: { externalId: scrapedExternalId } });
+      // stored value retained, but no longer published
+      expect(row.closeDate.toISOString()).toBe('2026-10-15T20:00:00.000Z');
+      expect(row.closeDateObservationOutcome).toBe('unparsed');
+      expect(row.closeDateUncertainty).toBe('missing_timezone');
+    }, 60000);
+
+    it('evidence recording is non-fatal and never aborts a scrape', async () => {
+      // A row with no external_id cannot be resolved; it must be skipped, not throw.
+      const out = await bonfireService.upsertJsonArray([
+        { title: 'No external id', close_date_raw: 'Oct 15th 2026, 2:00 PM MDT' },
+      ]);
+      expect(out.evidence.failed).toBe(0);
+      expect(out.evidence.skipped).toBeGreaterThan(0);
+    }, 60000);
+  });
+
+  // =========================================================================
+  // 12. Bucket membership is consistent and documented across ALL buckets,
+  // not only `verified`. Every row must land in exactly one of the disjoint
+  // buckets, and each bucket must agree with the mapper's state.
+  // =========================================================================
+  describe('12. bucket membership is consistent across every bucket', () => {
+    const { readDeadlineState } = require('../../src/bonfire/deadlineEvidence.service');
+    const DISJOINT = ['verified', 'legacy_unverified', 'retained_unverified', 'unknown'];
+
+    const idsIn = async (bucket) => {
+      const res = await request(app).get(`/api/v2/gov-opportunities?deadlineState=${bucket}&limit=100`);
+      expect(res.status).toBe(200);
+      return res.body.data.map((x) => x.canonicalOpportunityId);
+    };
+
+    it('verified-only never returns a retained or unresolved record', async () => {
+      const res = await request(app).get('/api/v2/gov-opportunities?deadlineState=verified&limit=100');
+      for (const item of res.body.data) {
+        expect(item.deadline.utc).not.toBeNull();
+        expect(item.deadline.utcConfidence).toBe('high');
+      }
+      const dgs = res.body.diagnostics.map((d) => d.effectiveState);
+      expect(dgs.every((s) => s === 'verified')).toBe(true);
+      expect(dgs).not.toContain('retained_unverified');
+      expect(dgs).not.toContain('legacy_unverified');
+    });
+
+    it('the four primary buckets are mutually disjoint', async () => {
+      const sets = {};
+      for (const b of DISJOINT) sets[b] = await idsIn(b); // eslint-disable-line no-await-in-loop
+      for (let i = 0; i < DISJOINT.length; i += 1) {
+        for (let j = i + 1; j < DISJOINT.length; j += 1) {
+          const overlap = sets[DISJOINT[i]].filter((id) => sets[DISJOINT[j]].includes(id));
+          expect({ pair: `${DISJOINT[i]}/${DISJOINT[j]}`, overlap }).toEqual({
+            pair: `${DISJOINT[i]}/${DISJOINT[j]}`, overlap: [],
+          });
+        }
+      }
+    }, 60000);
+
+    it('the four primary buckets together cover every record', async () => {
+      const all = await idsIn('all');
+      const covered = new Set();
+      for (const b of DISJOINT) {
+        // eslint-disable-next-line no-await-in-loop
+        (await idsIn(b)).forEach((id) => covered.add(id));
+      }
+      expect([...all].filter((id) => !covered.has(id))).toEqual([]);
+    }, 60000);
+
+    it('`unverified` is exactly the union of the three non-verified buckets', async () => {
+      const unverified = new Set(await idsIn('unverified'));
+      const union = new Set();
+      for (const b of ['legacy_unverified', 'retained_unverified', 'unknown']) {
+        // eslint-disable-next-line no-await-in-loop
+        (await idsIn(b)).forEach((id) => union.add(id));
+      }
+      expect([...unverified].sort()).toEqual([...union].sort());
+    }, 60000);
+
+    it('`not_published` contains only AFFIRMED absences', async () => {
+      const res = await request(app).get('/api/v2/gov-opportunities?deadlineState=not_published&limit=100');
+      for (const d of res.body.diagnostics) {
+        expect(d.observationOutcome).toBe('absent_confirmed');
+      }
+      // capture_unknown must never appear here — that is defect B.
+      expect(res.body.diagnostics.map((d) => d.observationOutcome)).not.toContain('capture_unknown');
+    });
+
+    it('every bucket agrees row-for-row with the mapper state', async () => {
+      const rows = (await models.BonfireOpportunity.findAll()).map((r) => r.get({ plain: true }));
+      const expected = {
+        verified: rows.filter((r) => readDeadlineState(r).state === 'verified').length,
+        legacy_unverified: rows.filter((r) => readDeadlineState(r).state === 'legacy_unverified').length,
+        retained_unverified: rows.filter((r) => readDeadlineState(r).state === 'retained_unverified').length,
+        unknown: rows.filter((r) => readDeadlineState(r).state === 'unknown').length,
+        not_published: rows.filter((r) => readDeadlineState(r).state === 'not_published').length,
+      };
+      for (const [bucket, count] of Object.entries(expected)) {
+        // eslint-disable-next-line no-await-in-loop
+        const got = (await idsIn(bucket)).length;
+        expect({ bucket, got }).toEqual({ bucket, got: count });
+      }
+    }, 60000);
   });
 });
