@@ -77,33 +77,30 @@ jobs:
       - run: npm ci
         working-directory: backend
 
-      - name: Migration up/down + immutability + concurrency
-        run: npx jest tests/integration/govPhase2Migration --runInBand --forceExit
-        working-directory: backend
-        env:
-          PHASE2_TEST_DB_URL: postgres://testuser:testpw@localhost:5432/optest
-
-      - name: End-to-end ingest -> persist -> API
-        run: npx jest tests/integration/govPhase2EndToEnd --runInBand --forceExit
+      - name: Migration + end-to-end suites (single run, JSON captured)
+        id: pg
+        run: |
+          set -o pipefail
+          npx jest tests/integration/govPhase2 --runInBand --forceExit --json --outputFile=pg-results.json
         working-directory: backend
         env:
           PHASE2_TEST_DB_URL: postgres://testuser:testpw@localhost:5432/optest
 
       - name: Guard — the Postgres suites must NOT have skipped
-        # Without a database these suites self-skip. A silent skip would look
-        # identical to a pass, so fail the job if nothing ran.
+        # These suites self-skip without a database, and a silent skip looks
+        # exactly like a pass. This asserts on the run above rather than
+        # re-running them, which previously made suite order significant.
+        if: always()
         run: |
-          OUT=$(npx jest tests/integration/govPhase2 --runInBand --forceExit --json 2>/dev/null | tail -1)
-          SKIPPED=$(node -e "const j=JSON.parse(process.argv[1]);console.log(j.numPendingTests)" "$OUT")
-          PASSED=$(node -e "const j=JSON.parse(process.argv[1]);console.log(j.numPassedTests)" "$OUT")
-          echo "passed=$PASSED skipped=$SKIPPED"
-          if [ "$SKIPPED" != "0" ] || [ "$PASSED" -lt 20 ]; then
-            echo "::error::Postgres suites skipped or under-ran (passed=$PASSED skipped=$SKIPPED)"
-            exit 1
-          fi
+          node -e "
+            const j = require('./pg-results.json');
+            const passed = j.numPassedTests, pending = j.numPendingTests, failed = j.numFailedTests;
+            console.log('passed=' + passed + ' skipped=' + pending + ' failed=' + failed);
+            if (pending > 0) { console.log('::error::Postgres suites SKIPPED - no database was reachable'); process.exit(1); }
+            if (failed > 0)  { console.log('::error::Postgres suites had failures'); process.exit(1); }
+            if (passed < 24) { console.log('::error::Postgres suites under-ran (expected >= 24, got ' + passed + ')'); process.exit(1); }
+          "
         working-directory: backend
-        env:
-          PHASE2_TEST_DB_URL: postgres://testuser:testpw@localhost:5432/optest
 
   schema-integrity:
     name: Contract Schema Integrity

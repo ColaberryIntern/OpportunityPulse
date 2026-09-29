@@ -35,8 +35,11 @@ d('Phase 2 migration against real Postgres', () => {
     sequelize = new Sequelize(URL, { logging: false });
     qi = sequelize.getQueryInterface();
 
+    // Fully isolate: another Phase 2 suite may have left gov_* tables behind,
+    // and migration.up creates them, so dropping only bonfire_opportunities
+    // makes this suite order-dependent.
+    await sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     // Minimal stand-in for the real table: the migration only adds columns.
-    await sequelize.query('DROP TABLE IF EXISTS bonfire_opportunities CASCADE;');
     await qi.createTable('bonfire_opportunities', {
       id: { type: DataTypes.UUID, primaryKey: true },
       title: { type: DataTypes.STRING(500), allowNull: false },
