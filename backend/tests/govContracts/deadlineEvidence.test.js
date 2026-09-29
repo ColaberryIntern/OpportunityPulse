@@ -11,15 +11,24 @@ const {
   isVerifiable,
   hasCompetingEvidence,
   isVerificationCurrent,
+  verifiability,
+  AUTHORITY,
   OBSERVATION_OUTCOME,
   SOURCE_STATE,
   EFFECTIVE_STATE,
 } = require('../../src/bonfire/deadlineEvidence.service');
 
-// Verification now requires recorded provenance AND an explicit basis: parsing
-// cleanly, with nobody happening to pass competing candidates, is the absence
-// of contrary evidence rather than the presence of source authority.
-const PROV = { source: 'portal_scrape', basis: 'single_authoritative_source' };
+// Verification now requires recorded provenance AND an EVIDENCED authority that
+// can speak for the buyer: parsing cleanly, with nobody happening to pass
+// competing candidates, is the absence of contrary evidence rather than the
+// presence of source authority.
+const PROV = {
+  source: 'portal_scrape',
+  basis: 'single_authoritative_source',
+  authority: AUTHORITY.PUBLISHER_OF_RECORD,
+  authorityEvidence: 'Portal host "utah.bonfirehub.com" matches the ingest namespace "utah".',
+  sourceRef: 'https://utah.bonfirehub.com/opportunities/123',
+};
 
 const T0 = new Date('2026-09-01T00:00:00.000Z');
 const T1 = new Date('2026-09-10T00:00:00.000Z');

@@ -280,38 +280,71 @@ async function ingestJsonArray(arr) {
   return insertNormalizedRows(arr);
 }
 
-// Scraper-only path: idempotent upsert keyed on external_id.
+// Phase 2 capability, probed ONCE against the database.
 //
-// The partial unique index `idx_bonfire_opps_external_id` (created in migration
-// 20260425000001) covers the conflict target. Rows without external_id fall through
-// to plain insert (NULLs do not collide under partial unique indexes).
-//
-// updateOnDuplicate deliberately EXCLUDES enrichment + scoring fields. Re-scraping
-// must NOT clobber AI work — `enrichAllUnenriched()` only picks up rows with
-// enrichedAt IS NULL, and we preserve that invariant by not touching enrichment columns.
-async function upsertJsonArray(arr) {
-  if (!Array.isArray(arr)) throw new Error('payload must be an array');
-  const errors = [];
-  const accepted = [];
-  arr.forEach((raw, i) => {
-    const check = validateRow(raw, i);
-    if (!check.ok) errors.push({ index: i, reason: check.reason });
-    else accepted.push(check.row);
-  });
-  if (!accepted.length) {
-    return { processed: 0, inserted: 0, updated: 0, skippedNoExternalId: 0, errors };
+// Deliberately not "are the models registered": the models ship with the code,
+// the TABLES arrive with a migration, and prod currently runs the code without
+// the migration. Gating on model presence there would switch this path into
+// evidence-only publication while every evidence write failed on a missing
+// relation — deadlines would silently stop updating. Gating on a real query
+// means an unmigrated database keeps the legacy path exactly.
+let govEvidenceCapability = null;
+
+async function govEvidenceEnabled() {
+  if (govEvidenceCapability !== null) return govEvidenceCapability;
+  const models = require('../models');
+  if (!models.GovCanonicalOpportunity || !models.GovSourceSnapshot) {
+    govEvidenceCapability = false;
+    return false;
   }
+  try {
+    await models.GovCanonicalOpportunity.findOne({ attributes: ['canonicalId'] });
+    govEvidenceCapability = true;
+  } catch (e) {
+    logger.warn('Bonfire upsert: gov evidence tables unavailable, using legacy publication', {
+      error: e.message,
+    });
+    govEvidenceCapability = false;
+  }
+  return govEvidenceCapability;
+}
 
-  // Split: rows with external_id go through upsert, rows without go through plain insert.
-  // Without external_id we can't dedupe — the scraper logs a warning when this happens.
-  const withId = accepted.filter((r) => !!r.externalId);
-  const withoutId = accepted.filter((r) => !r.externalId);
+// Tests build and drop schemas inside one process; the probe result must not
+// outlive the schema it was taken against.
+function resetGovEvidenceCapability() { govEvidenceCapability = null; }
 
-  // Base columns refreshed on every upsert.
+/**
+ * The bulk half of the scraper upsert: INSERT new rows, and refresh whichever
+ * columns the active publication mode allows on an existing one.
+ *
+ * Two publication modes, and the difference is the whole point:
+ *
+ * LEGACY (no Phase 2 tables) — the bulk statement refreshes the source columns
+ * and, for rows whose deadline we actually resolved, closeDate.
+ *
+ * PHASE 2 — the bulk statement inserts new rows and, on conflict, touches
+ * nothing but updatedAt. Every source column of an existing row AND its deadline
+ * decision are applied together by the per-row evidence transaction. Publishing
+ * closeDate here as well ran it in a DIFFERENT transaction from the evidence
+ * write, which produced two defects:
+ *   * an evidence failure left a CHANGED closeDate beside an untouched
+ *     verified_at and observation id, so a deadline nobody verified read back
+ *     as verified;
+ *   * on success the evidence write read the ALREADY-OVERWRITTEN closeDate, so
+ *     the superseded history recorded the new value as if it were the old one.
+ *
+ * updateOnDuplicate deliberately EXCLUDES enrichment + scoring fields in both
+ * modes. Re-scraping must NOT clobber AI work — `enrichAllUnenriched()` only
+ * picks up rows with enrichedAt IS NULL, and we preserve that invariant by not
+ * touching enrichment columns.
+ */
+async function writeUpsertBatches(withId, withoutId, phase2) {
+  // Base columns refreshed on every upsert in legacy mode.
   const UPDATE_COLUMNS = [
     'title', 'agency', 'description', 'categoryRaw',
     'sourceUrl', 'rawText', 'updatedAt',
   ];
+  const ON_CONFLICT = phase2 ? ['updatedAt'] : UPDATE_COLUMNS;
 
   // closeDate is refreshed ONLY when we actually know it.
   //
@@ -332,7 +365,7 @@ async function upsertJsonArray(arr) {
   if (withKnownClose.length) {
     await BonfireOpportunity.bulkCreate(withKnownClose, {
       conflictAttributes: ['externalId'],
-      updateOnDuplicate: [...UPDATE_COLUMNS, 'closeDate'],
+      updateOnDuplicate: phase2 ? ON_CONFLICT : [...UPDATE_COLUMNS, 'closeDate'],
     });
     upsertCount += withKnownClose.length;
   }
@@ -342,7 +375,7 @@ async function upsertJsonArray(arr) {
     });
     await BonfireOpportunity.bulkCreate(withUnknownClose, {
       conflictAttributes: ['externalId'],
-      updateOnDuplicate: UPDATE_COLUMNS,
+      updateOnDuplicate: ON_CONFLICT,
     });
     upsertCount += withUnknownClose.length;
   }
@@ -356,12 +389,64 @@ async function upsertJsonArray(arr) {
     plainInserted = created.length;
   }
 
+  return { upsertCount, plainInserted };
+}
+
+// Scraper-only path: idempotent upsert keyed on external_id.
+//
+// The partial unique index `idx_bonfire_opps_external_id` (created in migration
+// 20260425000001) covers the conflict target. Rows without external_id fall through
+// to plain insert (NULLs do not collide under partial unique indexes).
+//
+// The bulk write itself, and which columns each publication mode is allowed to
+// refresh, live in writeUpsertBatches above.
+async function upsertJsonArray(arr) {
+  if (!Array.isArray(arr)) throw new Error('payload must be an array');
+  const errors = [];
+  const accepted = [];
+  // Accepted rows are paired with the RAW input they came from. validateRow's
+  // allow-list strips deadline provenance, and evidence recording must only
+  // ever see inputs that passed validation — previously the whole raw array,
+  // including rejected rows, was handed to it.
+  const acceptedPairs = [];
+  arr.forEach((raw, i) => {
+    const check = validateRow(raw, i);
+    if (!check.ok) { errors.push({ index: i, reason: check.reason }); return; }
+    accepted.push(check.row);
+    acceptedPairs.push({ raw, row: check.row });
+  });
+  if (!accepted.length) {
+    // Same shape as the success return. It used to differ (`inserted` /
+    // `updated` / `skippedNoExternalId`, and no `evidence` at all), so a caller
+    // reading `out.evidence.recorded` crashed on an all-rejected batch and the
+    // runner's counters silently read `undefined || 0`.
+    return {
+      processed: 0,
+      upserted: 0,
+      insertedWithoutExternalId: 0,
+      errors,
+      evidence: {
+        recorded: 0, skipped: 0, failed: 0, snapshotsWritten: 0, verified: 0,
+      },
+    };
+  }
+
+  // Split: rows with external_id go through upsert, rows without go through plain insert.
+  // Without external_id we can't dedupe — the scraper logs a warning when this happens.
+  const withId = accepted.filter((r) => !!r.externalId);
+  const withoutId = accepted.filter((r) => !r.externalId);
+
+  // Phase 2 present: the EVIDENCE PATH is the sole publisher of closeDate, and
+  // of every other source column on an existing row. See writeUpsertBatches.
+  const phase2 = await govEvidenceEnabled();
+  const { upsertCount, plainInserted } = await writeUpsertBatches(withId, withoutId, phase2);
+
   // ---- Phase 2 source evidence ------------------------------------------
   // The real ingestion path records canonical identity, aliases, an immutable
   // source snapshot and the deadline observation. It runs from the RAW input
   // because validateRow() strips deadline provenance via its allow-list, so the
   // accepted rows no longer carry close_date_raw / timezone / confidence.
-  const evidence = await recordGovEvidence(arr);
+  const evidence = await recordGovEvidence(acceptedPairs);
 
   logger.info('Bonfire upsert complete', {
     processed: accepted.length,
@@ -382,41 +467,44 @@ async function upsertJsonArray(arr) {
 }
 
 /**
- * Record Phase 2 source evidence for freshly ingested rows.
+ * Record Phase 2 source evidence for accepted rows.
  *
- * Deliberately NON-FATAL. Scraping is the product's lifeline; an evidence-write
- * problem must degrade to "no evidence for this row" rather than abort the
- * scrape. Every failure is logged with its external_id so the gap is visible.
+ * Takes PAIRS of {raw, row}: the raw scraped input, which still carries the
+ * deadline provenance validateRow's allow-list strips, and the validated row
+ * that is actually allowed to reach the database. A rejected input therefore
+ * cannot reach this function at all — it used to receive the whole raw array,
+ * so a row the validator refused could still mint identity, write a snapshot
+ * and move an existing row's deadline state.
  *
- * Also deliberately SKIPPED when the Phase 2 tables are absent, so the scraper
- * keeps working against a database where the migration has not been applied.
+ * Deliberately NON-FATAL PER ROW. Scraping is the product's lifeline; an
+ * evidence-write problem must degrade to "this row keeps its last consistent
+ * state" rather than abort the scrape or half-apply the row. Every failure is
+ * logged with its external_id so the gap is visible.
  *
- * @param {Array} rawRows the pre-validation rows, which still carry provenance
+ * @param {Array<{raw: object, row: object}>} pairs accepted rows with their inputs
  */
-async function recordGovEvidence(rawRows) {
+async function recordGovEvidence(pairs) {
   const out = {
     recorded: 0, skipped: 0, failed: 0, snapshotsWritten: 0, verified: 0,
   };
-  if (!Array.isArray(rawRows) || !rawRows.length) return out;
+  if (!Array.isArray(pairs) || !pairs.length) return out;
 
-  // eslint-disable-next-line global-require
   const models = require('../models');
   if (!models.GovCanonicalOpportunity || !models.GovSourceSnapshot) {
-    out.skipped = rawRows.length;
+    out.skipped = pairs.length;
     return out;
   }
 
-  // eslint-disable-next-line global-require
-  const { ingestObservation } = require('../govContracts/govIngestion.service');
-  // eslint-disable-next-line global-require
+  const { ingestObservation, classifySourceAuthority } = require('../govContracts/govIngestion.service');
   const { parseDeadline } = require('./scraper/deadlineParser');
 
-  for (const raw of rawRows) {
+  for (const pair of pairs) {
+    const raw = pair && pair.raw ? pair.raw : pair;
+    const validated = pair && pair.row ? pair.row : null;
     const externalId = raw && raw.external_id ? String(raw.external_id).trim() : null;
     if (!externalId) { out.skipped += 1; continue; }
 
     try {
-      // eslint-disable-next-line no-await-in-loop
       const row = await BonfireOpportunity.findOne({
         where: { externalId }, attributes: ['id'],
       });
@@ -428,7 +516,15 @@ async function recordGovEvidence(rawRows) {
       // candidate set, rather than whatever shape an older scrape produced.
       const parse = rawText ? parseDeadline(rawText) : null;
 
-      // eslint-disable-next-line no-await-in-loop
+      // Authority is DETERMINED from what we observed, not assumed. The old
+      // hardcoded basis string asserted publisher-of-record for every portal
+      // row, including courtesy re-posts of another body's solicitation.
+      const authority = classifySourceAuthority({
+        title: raw.title || null,
+        sourceUrl: raw.source_url || null,
+        externalId,
+      });
+
       const res = await ingestObservation({
         opportunityId: row.id,
         sourceSystem: 'bonfire',
@@ -442,6 +538,9 @@ async function recordGovEvidence(rawRows) {
           sourceUrl: raw.source_url || null,
           externalId,
         },
+        // The validated row's source columns, applied in the SAME transaction
+        // as the deadline decision and the snapshot.
+        sourceColumns: validated,
         fetch: { status: 'success', attemptedAt: new Date() },
         parse,
         rawPresent: !!rawText,
@@ -451,7 +550,9 @@ async function recordGovEvidence(rawRows) {
         candidates: parse && parse.candidates ? parse.candidates : null,
         provenance: {
           source: 'bonfire_portal_scrape',
-          basis: 'agency_portal_is_publisher_of_record',
+          authority: authority.authority,
+          authorityEvidence: authority.evidence,
+          basis: authority.authority,
           sourceRef: raw.source_url || null,
         },
       }, { models, sequelize });
@@ -559,6 +660,7 @@ async function generateStrategyForId(id) {
 module.exports = {
   listOpportunities,
   recordGovEvidence,
+  resetGovEvidenceCapability,
   getOpportunity,
   ingestJsonArray,
   upsertJsonArray,

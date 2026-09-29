@@ -98,7 +98,7 @@ jobs:
             console.log('passed=' + passed + ' skipped=' + pending + ' failed=' + failed);
             if (pending > 0) { console.log('::error::Postgres suites SKIPPED - no database was reachable'); process.exit(1); }
             if (failed > 0)  { console.log('::error::Postgres suites had failures'); process.exit(1); }
-            if (passed < 35) { console.log('::error::Postgres suites under-ran (expected >= 35, got ' + passed + ')'); process.exit(1); }
+            if (passed < 42) { console.log('::error::Postgres suites under-ran (expected >= 42, got ' + passed + ')'); process.exit(1); }
           "
         working-directory: backend
 

@@ -41,6 +41,27 @@
  *      SQL buckets use the identical predicate so query and mapper agree.
  */
 
+const crypto = require('crypto');
+
+/**
+ * Who published the thing we read, and therefore whether reading it can
+ * establish a buyer deadline at all.
+ *
+ * Only PUBLISHER_OF_RECORD permits verification. A courtesy posting republishes
+ * someone else's solicitation: parsing its deadline cleanly tells us what the
+ * re-publisher printed, not what the buyer set. NASPO SW1045 is the worked
+ * example — posted on Utah's portal, lead buyer Oklahoma.
+ */
+const AUTHORITY = {
+  PUBLISHER_OF_RECORD: 'publisher_of_record',
+  COURTESY_POSTING: 'courtesy_posting',
+  AGGREGATOR: 'aggregator',
+  UNKNOWN: 'unknown',
+};
+
+// Deliberately a one-element set. Widening it is a decision, not a typo.
+const VERIFIABLE_AUTHORITIES = new Set([AUTHORITY.PUBLISHER_OF_RECORD]);
+
 /** What the source actually told us on one observation. Recorded, never guessed. */
 const OBSERVATION_OUTCOME = {
   PARSED: 'parsed', // deadline text present and parsed to an instant
@@ -114,13 +135,33 @@ function classifyObservation({ fetchStatus, absentConfirmed, rawPresent, parse, 
  * explicit basis are required, because "nobody passed competing candidates" is
  * the absence of contrary evidence, not the presence of authority.
  */
-function isVerifiable({ outcome, parse, provenance }) {
-  if (outcome !== OBSERVATION_OUTCOME.PARSED) return false;
-  if (!parse || !parse.utc || parse.confidence !== 'high') return false;
-  if (!provenance || !provenance.source) return false;
-  if (!provenance.basis) return false;
-  return true;
+/**
+ * Why an observation may or may not verify.
+ *
+ * Returns the REASON, not just a boolean, so a row that declines to verify says
+ * which condition it failed. Collapsing every refusal into one reason made the
+ * common cases (unreachable authority vs. missing provenance) indistinguishable
+ * in the logs and in the read model.
+ */
+function verifiability({ outcome, parse, provenance }) {
+  if (outcome !== OBSERVATION_OUTCOME.PARSED) return { ok: false, reason: outcome };
+  if (!parse || !parse.utc || parse.confidence !== 'high') {
+    return { ok: false, reason: 'low_confidence_parse' };
+  }
+  if (!provenance || !provenance.source || !(provenance.basis || provenance.authority)) {
+    return { ok: false, reason: 'missing_provenance_or_basis' };
+  }
+  // A populated basis string is not proof. The authority must be an EVIDENCED
+  // classification, and it must be one that can speak for the buyer.
+  if (!VERIFIABLE_AUTHORITIES.has(provenance.authority)) {
+    return { ok: false, reason: 'unestablished_source_authority' };
+  }
+  if (!provenance.authorityEvidence) return { ok: false, reason: 'unevidenced_authority' };
+  if (!provenance.sourceRef) return { ok: false, reason: 'missing_source_ref' };
+  return { ok: true, reason: 'verified' };
 }
+
+function isVerifiable(input) { return verifiability(input).ok; }
 
 /**
  * Build the column patch for one ingestion event.
@@ -141,6 +182,32 @@ function isVerifiable({ outcome, parse, provenance }) {
 function buildObservationPatch(current, event) {
   const now = event.now || new Date();
   const fetch = event.fetch || {};
+  // Identity, not time. Two observations can share a millisecond, and
+  // `observed_at <= verified_at` then reads an unresolved outcome as verified.
+  const observationId = event.observationId || crypto.randomUUID();
+
+  // Out-of-order arrival: an observation OLDER than the one already applied
+  // must not demote a newer verification. It is recorded as an attempt and
+  // otherwise ignored, rather than being allowed to rewrite current state.
+  const prevObservedAt = current && current.closeDateObservedAt
+    ? new Date(current.closeDateObservedAt).getTime() : null;
+  if (fetch.status === 'success' && prevObservedAt !== null && now.getTime() < prevObservedAt) {
+    return {
+      patch: {
+        closeDateFetchAttemptedAt: fetch.attemptedAt || now,
+        closeDateFetchStatus: 'success',
+        closeDateFetchError: null,
+      },
+      decision: {
+        verified: false,
+        outcome: null,
+        reason: 'stale_observation',
+        observationId,
+        publishedDeadlineChanged: false,
+      },
+    };
+  }
+
   const patch = {
     closeDateFetchAttemptedAt: fetch.attemptedAt || now,
     closeDateFetchStatus: fetch.status || 'failed',
@@ -154,7 +221,18 @@ function buildObservationPatch(current, event) {
   if (fetch.status !== 'success') {
     patch.closeDateSourceState = SOURCE_STATE.FETCH_FAILED;
     patch.closeDateObservationOutcome = OBSERVATION_OUTCOME.FETCH_FAILED;
-    return { patch, decision: { verified: false, outcome: OBSERVATION_OUTCOME.FETCH_FAILED, reason: 'fetch_failed', publishedDeadlineChanged: false } };
+    // Deliberately does NOT set closeDateLastObservationId: our inability to
+    // reach the source is not evidence against a deadline we already verified.
+    return {
+      patch,
+      decision: {
+        verified: false,
+        outcome: OBSERVATION_OUTCOME.FETCH_FAILED,
+        reason: 'fetch_failed',
+        observationId,
+        publishedDeadlineChanged: false,
+      },
+    };
   }
 
   const parse = event.parse || null;
@@ -170,8 +248,14 @@ function buildObservationPatch(current, event) {
     candidates,
   });
 
+  const provenanceIn = event.provenance || null;
   Object.assign(patch, {
     closeDateObservedAt: now,
+    // Any applied observation becomes "the latest". Verification is current
+    // only while this still equals closeDateVerifiedObservationId.
+    closeDateLastObservationId: observationId,
+    closeDateAuthority: provenanceIn ? (provenanceIn.authority || null) : null,
+    closeDateAuthorityEvidence: provenanceIn ? (provenanceIn.authorityEvidence || null) : null,
     closeDateObservationOutcome: outcome,
     closeDateSourceState: OUTCOME_TO_SOURCE_STATE[outcome],
     closeDateRaw: parse ? parse.originalText : null,
@@ -191,21 +275,43 @@ function buildObservationPatch(current, event) {
   }
 
   const provenance = event.provenance || null;
-  const verified = isVerifiable({ outcome, parse, provenance });
+  const { ok: verified, reason: verifyReason } = verifiability({ outcome, parse, provenance });
 
   if (!verified) {
-    // RETAIN, do not publish. close_date and close_date_verified_at are left
-    // alone; because observed_at has moved past verified_at, the read model
-    // reports the retained value as unverified.
     patch.closeDateConservativeUtc = earliest(candidates)
       || (parse && parse.utc ? parse.utc : null);
+
+    // RETENTION IS A GUARANTEE ABOUT VERIFIED DEADLINES.
+    // A deadline we verified is never replaced by a reading we could not
+    // verify: close_date and close_date_verified_at are left alone, and
+    // because this observation is now the latest, the read model reports the
+    // retained value as no-longer-current.
+    //
+    // A deadline we never verified has no such claim to protect, and freezing
+    // it would leave a STALER unverified value standing in front of a fresher
+    // one — visible to /best-fit, which reads close_date directly. So an
+    // applied observation refreshes it, WITHOUT touching any verification
+    // column: the row stays unverified, it is just unverified about the
+    // current reading rather than an older one.
+    const currentIsVerified = !!(current && current.closeDateVerifiedAt);
+    let published = false;
+    if (!currentIsVerified && parse && parse.utc) {
+      const prevIso = current && current.closeDate
+        ? new Date(current.closeDate).toISOString() : null;
+      // Never null-erase: only a reading we actually have replaces a stored one.
+      patch.closeDate = parse.utc;
+      published = prevIso !== parse.utc;
+    }
+
     return {
       patch,
       decision: {
         verified: false,
         outcome,
-        reason: outcome === OBSERVATION_OUTCOME.PARSED ? 'missing_provenance_or_basis' : outcome,
-        publishedDeadlineChanged: false,
+        reason: verifyReason,
+        authority: provenance ? (provenance.authority || null) : null,
+        observationId,
+        publishedDeadlineChanged: published,
       },
     };
   }
@@ -226,16 +332,27 @@ function buildObservationPatch(current, event) {
 
   Object.assign(patch, {
     closeDate: parse.utc,
-    // Same instant as observed_at, so the read predicate
-    // (observed_at <= verified_at) holds until a NEWER observation arrives.
     closeDateVerifiedAt: now,
+    // THE state link: this observation both is the latest and is the one that
+    // verified. Any subsequent applied observation breaks the equality.
+    closeDateVerifiedObservationId: observationId,
     closeDateVerifiedSource: provenance.source,
-    closeDateVerificationBasis: provenance.basis,
+    closeDateVerificationBasis: provenance.basis || provenance.authority,
     closeDateConservativeUtc: null,
     closeDateCandidates: null,
   });
 
-  return { patch, decision: { verified: true, outcome, reason: 'verified', publishedDeadlineChanged: changed } };
+  return {
+    patch,
+    decision: {
+      verified: true,
+      outcome,
+      reason: 'verified',
+      authority: provenance.authority,
+      observationId,
+      publishedDeadlineChanged: changed,
+    },
+  };
 }
 
 async function applyObservation(Model, opportunityId, event, { sequelize }) {
@@ -256,7 +373,22 @@ async function applyObservation(Model, opportunityId, event, { sequelize }) {
 function isVerificationCurrent(row) {
   const r = row || {};
   if (!r.closeDateVerifiedAt) return false;
-  if (!r.closeDateObservedAt) return true; // verified, never re-observed
+
+  // Preferred: explicit observation identity. Robust to equal timestamps and to
+  // out-of-order arrival, neither of which a `<=` comparison can express.
+  if (r.closeDateVerifiedObservationId || r.closeDateLastObservationId) {
+    return !!r.closeDateVerifiedObservationId
+      && r.closeDateVerifiedObservationId === r.closeDateLastObservationId;
+  }
+
+  // Fallback for rows written before observation ids existed. Every row this
+  // code writes carries an id, so this is reachable only for pre-Phase-2 rows —
+  // and those were written by code that stamped observed_at and verified_at
+  // from the SAME clock read when it verified. An equal pair there is the
+  // verifying observation itself, not a later one, so `<=` is correct;
+  // demoting it would report every legacy verified row as stale. The ambiguity
+  // that `<=` genuinely cannot express is handled above, by identity.
+  if (!r.closeDateObservedAt) return true;
   return new Date(r.closeDateObservedAt).getTime() <= new Date(r.closeDateVerifiedAt).getTime();
 }
 
@@ -315,6 +447,9 @@ function readDeadlineState(row) {
 }
 
 module.exports = {
+  verifiability,
+  AUTHORITY,
+  VERIFIABLE_AUTHORITIES,
   OBSERVATION_OUTCOME,
   SOURCE_STATE,
   EFFECTIVE_STATE,

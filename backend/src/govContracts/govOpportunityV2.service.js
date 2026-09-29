@@ -53,12 +53,22 @@ function clampLimit(raw) {
 }
 
 // Column-level expression of "the stored verification is still current".
-const VERIFICATION_CURRENT = literal(
-  '(close_date_observed_at IS NULL OR close_date_observed_at <= close_date_verified_at)',
-);
-const VERIFICATION_SUPERSEDED = literal(
-  '(close_date_observed_at IS NOT NULL AND close_date_observed_at > close_date_verified_at)',
-);
+//
+// MUST stay identical to deadlineEvidence.isVerificationCurrent. Primary branch
+// is observation IDENTITY, which is robust to two observations sharing a
+// millisecond; the second branch is the bounded legacy fallback for rows written
+// before observation ids existed, and uses strict `<` so equal timestamps
+// resolve to NOT current.
+const CURRENT_SQL = `(
+  (close_date_verified_observation_id IS NOT NULL
+   AND close_date_verified_observation_id = close_date_last_observation_id)
+  OR (close_date_verified_observation_id IS NULL
+      AND close_date_last_observation_id IS NULL
+      AND (close_date_observed_at IS NULL
+           OR close_date_observed_at <= close_date_verified_at))
+)`;
+const VERIFICATION_CURRENT = literal(CURRENT_SQL);
+const VERIFICATION_SUPERSEDED = literal(`NOT ${CURRENT_SQL}`);
 
 function bucketWhere(bucket) {
   switch (bucket) {

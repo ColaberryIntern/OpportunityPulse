@@ -65,3 +65,6 @@ execution/reports/
 # Runtime document store (Docker volume in prod). Source procurement documents
 # and research artifacts live here and must never be committed.
 backend/uploads/
+
+# Jest --json output from the gov-phase2 workflow's Postgres guard step.
+backend/pg-results.json

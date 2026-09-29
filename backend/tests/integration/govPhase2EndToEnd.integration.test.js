@@ -40,7 +40,15 @@ const { ingestObservation } = require('../../src/govContracts/govIngestion.servi
 const v2Router = require('../../src/govContracts/govOpportunityV2.routes');
 
 const SCOPED = { userId: 1, scopes: ['read:gov_opportunities'], apiKey: true };
-const PROV = { source: 'portal_scrape', basis: 'single_authoritative_source' };
+// Verification requires an EVIDENCED authority that can speak for the buyer, so
+// the fixture carries the classification and the evidence for it, not a label.
+const PROV = {
+  source: 'portal_scrape',
+  basis: 'single_authoritative_source',
+  authority: 'publisher_of_record',
+  authorityEvidence: 'Portal host "utah.bonfirehub.com" matches the ingest namespace "utah".',
+  sourceRef: 'https://utah.bonfirehub.com/opportunities/1',
+};
 
 const parseOf = (utc, text = 'Oct 15th 2026, 2:00 PM MDT') => ({
   originalText: text,
@@ -416,7 +424,11 @@ d('Phase 2 end-to-end: ingest -> persist -> API', () => {
       expect(row.closeDate.toISOString()).toBe('2026-10-15T20:00:00.000Z');
       expect(row.closeDateVerifiedAt).not.toBeNull();
       expect(row.closeDateVerifiedSource).toBe('bonfire_portal_scrape');
-      expect(row.closeDateVerificationBasis).toBe('agency_portal_is_publisher_of_record');
+      // The basis is now the DETERMINED authority, with the comparison that
+      // established it stored alongside — not a hardcoded assertion.
+      expect(row.closeDateVerificationBasis).toBe('publisher_of_record');
+      expect(row.closeDateAuthority).toBe('publisher_of_record');
+      expect(row.closeDateAuthorityEvidence).toMatch(/utah\.bonfirehub\.com/);
       expect(row.closeDateObservationOutcome).toBe('parsed');
 
       const alias = await models.GovSourceAlias.findOne({
@@ -555,6 +567,235 @@ d('Phase 2 end-to-end: ingest -> persist -> API', () => {
         const got = (await idsIn(bucket)).length;
         expect({ bucket, got }).toEqual({ bucket, got: count });
       }
+    }, 60000);
+  });
+
+  // =========================================================================
+  // 13. Issue 1: a source update and its evidence publish together, or not at all.
+  //
+  // Before this, the bulk upsert wrote close_date in one transaction and the
+  // evidence write moved the observation state in another. Two wrong answers
+  // followed, and both are reproduced here as failures of the old split:
+  //   * an evidence failure left a CHANGED close_date beside an untouched
+  //     verified_at + observation id, so a deadline nobody verified read back
+  //     as verified;
+  //   * on success the evidence write read the ALREADY-OVERWRITTEN close_date,
+  //     so the superseded-history entry recorded the NEW value as the old one.
+  // =========================================================================
+  describe('13. source changes and evidence publish atomically', () => {
+    let bonfireService;
+    const EXT = 'bonfire:agency:utah:TX-1';
+
+    beforeAll(() => {
+      // eslint-disable-next-line global-require
+      bonfireService = require('../../src/bonfire/bonfire.service');
+    });
+
+    const row = (over = {}) => ({
+      external_id: EXT,
+      title: 'Transactional Row A',
+      agency: 'Utah',
+      source_url: 'https://utah.bonfirehub.com/opportunities/1001',
+      close_date: '2026-10-15T20:00:00.000Z',
+      close_date_raw: 'Oct 15th 2026, 2:00 PM MDT',
+      ...over,
+    });
+
+    const find = (externalId = EXT) => models.BonfireOpportunity.findOne({ where: { externalId } });
+    const versionOf = async (externalId = EXT) => {
+      const r = await find(externalId);
+      const alias = await models.GovSourceAlias.findOne({
+        where: { idType: 'bonfire_opportunity_id', idValue: String(r.id) },
+      });
+      if (!alias) return null;
+      const c = await models.GovCanonicalOpportunity.findByPk(alias.canonicalId);
+      return c.sourceSnapshotVersion;
+    };
+
+    let verifiedAtA;
+    let observationIdA;
+
+    it('publishes the source columns and the verified deadline together', async () => {
+      const out = await bonfireService.upsertJsonArray([row()]);
+      expect(out.evidence.verified).toBe(1);
+      expect(out.evidence.failed).toBe(0);
+
+      const r = await find();
+      expect(r.title).toBe('Transactional Row A');
+      expect(r.closeDate.toISOString()).toBe('2026-10-15T20:00:00.000Z');
+      expect(r.closeDateVerifiedAt).not.toBeNull();
+      expect(r.closeDateVerifiedObservationId).toBe(r.closeDateLastObservationId);
+      expect(await versionOf()).toBe(1);
+
+      verifiedAtA = r.closeDateVerifiedAt.toISOString();
+      observationIdA = r.closeDateVerifiedObservationId;
+    }, 60000);
+
+    it('a FAILED evidence write leaves the row wholly at its previous state', async () => {
+      const spy = jest.spyOn(models.GovSourceSnapshot, 'create')
+        .mockRejectedValueOnce(new Error('forced snapshot failure'));
+
+      const out = await bonfireService.upsertJsonArray([row({
+        title: 'Transactional Row B',
+        close_date: '2026-11-01T20:00:00.000Z',
+        close_date_raw: 'Nov 1st 2026, 2:00 PM MDT',
+      })]);
+      spy.mockRestore();
+
+      expect(out.evidence.failed).toBe(1);
+      expect(out.evidence.recorded).toBe(0);
+
+      const r = await find();
+      // NEITHER half landed. The old split applied the title and the deadline
+      // here and only the evidence rolled back.
+      expect(r.title).toBe('Transactional Row A');
+      expect(r.closeDate.toISOString()).toBe('2026-10-15T20:00:00.000Z');
+      expect(r.closeDateVerifiedAt.toISOString()).toBe(verifiedAtA);
+      expect(r.closeDateVerifiedObservationId).toBe(observationIdA);
+      expect(r.closeDateLastObservationId).toBe(observationIdA);
+      expect(await versionOf()).toBe(1);
+    }, 60000);
+
+    it('and the row still reads as VERIFIED, because nothing invalidated it', async () => {
+      // eslint-disable-next-line global-require
+      const { readDeadlineState } = require('../../src/bonfire/deadlineEvidence.service');
+      const r = await find();
+      expect(readDeadlineState(r.get({ plain: true })).state).toBe('verified');
+
+      // Same answer through the API, which decides the bucket in SQL.
+      const list = await request(app).get('/api/v2/gov-opportunities?deadlineState=verified&limit=200');
+      const alias = await models.GovSourceAlias.findOne({
+        where: { idType: 'bonfire_opportunity_id', idValue: String(r.id) },
+      });
+      const canonical = await models.GovCanonicalOpportunity.findByPk(alias.canonicalId);
+      expect(list.body.data.map((x) => x.canonicalOpportunityId))
+        .toContain(canonical.canonicalPublicId);
+    }, 60000);
+
+    it('then a successful re-scrape publishes both halves and supersedes the REAL old value', async () => {
+      const out = await bonfireService.upsertJsonArray([row({
+        title: 'Transactional Row B',
+        close_date: '2026-11-01T20:00:00.000Z',
+        close_date_raw: 'Nov 1st 2026, 2:00 PM MDT',
+      })]);
+      expect(out.evidence.verified).toBe(1);
+      expect(out.evidence.snapshotsWritten).toBe(1);
+
+      const r = await find();
+      expect(r.title).toBe('Transactional Row B');
+      expect(r.closeDate.toISOString()).toBe('2026-11-01T20:00:00.000Z');
+      expect(await versionOf()).toBe(2);
+
+      // The displaced value is the one the row ACTUALLY held. Under the old
+      // split the bulk upsert had already written the new value, so history
+      // recorded 2026-11-01 as the value it replaced.
+      expect(r.closeDateSuperseded).toHaveLength(1);
+      expect(r.closeDateSuperseded[0].utc).toBe('2026-10-15T20:00:00.000Z');
+      expect(r.closeDateSuperseded[0].verifiedAt).toBe(verifiedAtA);
+    }, 60000);
+
+    it('a REJECTED raw input cannot touch evidence for an existing row', async () => {
+      const beforeVersion = await versionOf();
+
+      // Same external_id, but no title: validateRow refuses it. It used to
+      // reach recordGovEvidence anyway, because the ENTIRE raw array was
+      // passed, so a row the validator had refused could still mint a snapshot
+      // and move the deadline state of a row that does exist.
+      const out = await bonfireService.upsertJsonArray([
+        { external_id: EXT, title: '', close_date_raw: 'Dec 1st 2026, 2:00 PM MDT' },
+      ]);
+      expect(out.errors).toHaveLength(1);
+      expect(out.processed).toBe(0);
+      expect(out.evidence.recorded).toBe(0);
+      expect(out.evidence.snapshotsWritten).toBe(0);
+
+      const r = await find();
+      expect(r.title).toBe('Transactional Row B');
+      expect(r.closeDate.toISOString()).toBe('2026-11-01T20:00:00.000Z');
+      expect(await versionOf()).toBe(beforeVersion);
+    }, 60000);
+
+    it('one failing row does not stop the rest of the batch', async () => {
+      const EXT2 = 'bonfire:agency:utah:TX-2';
+      const EXT3 = 'bonfire:agency:utah:TX-3';
+      const spy = jest.spyOn(models.GovSourceSnapshot, 'create')
+        .mockImplementationOnce(() => Promise.reject(new Error('forced failure, first row only')));
+
+      const out = await bonfireService.upsertJsonArray([
+        row({ external_id: EXT2, title: 'Batch Row 1', source_url: 'https://utah.bonfirehub.com/opportunities/1002' }),
+        row({ external_id: EXT3, title: 'Batch Row 2', source_url: 'https://utah.bonfirehub.com/opportunities/1003' }),
+      ]);
+      spy.mockRestore();
+
+      expect(out.evidence.failed).toBe(1);
+      expect(out.evidence.recorded).toBe(1);
+
+      // The failed row exists (the insert is what made it addressable) but
+      // carries no verification and no identity — it is not published as
+      // verified on the strength of a write that rolled back.
+      const bad = await find(EXT2);
+      expect(bad).not.toBeNull();
+      expect(bad.closeDateVerifiedAt).toBeNull();
+      expect(await versionOf(EXT2)).toBeNull();
+
+      const good = await find(EXT3);
+      expect(good.closeDateVerifiedAt).not.toBeNull();
+      expect(await versionOf(EXT3)).toBe(1);
+    }, 60000);
+
+    it('a changed CANDIDATE SET alone produces a new snapshot version', async () => {
+      // Material evidence can change with every published source fact
+      // unchanged. Hashing only the source facts left that change unversioned.
+      const id = '44444444-4444-4444-8444-444444444444';
+      await models.BonfireOpportunity.create({
+        id, title: 'Evidence Version Row', externalId: 'bonfire:agency:utah:TX-4',
+      });
+      const facts = {
+        deadlineText: 'Oct 15th 2026, 2:00 PM MDT',
+        title: 'Evidence Version Row',
+        agency: 'Utah',
+        sourceUrl: 'https://utah.bonfirehub.com/opportunities/1004',
+        externalId: 'bonfire:agency:utah:TX-4',
+      };
+      const base = {
+        opportunityId: id,
+        sourceSystem: 'bonfire',
+        sourceFacts: facts,
+        fetch: { status: 'success' },
+        parse: parseOf('2026-10-15T20:00:00.000Z'),
+        rawPresent: true,
+        provenance: PROV,
+      };
+
+      const first = await ingestObservation(
+        { ...base, now: new Date('2026-09-01T00:00:00.000Z') }, { models, sequelize },
+      );
+      expect(first.sourceSnapshotVersion).toBe(1);
+
+      const unchanged = await ingestObservation(
+        { ...base, now: new Date('2026-09-02T00:00:00.000Z') }, { models, sequelize },
+      );
+      expect(unchanged.snapshotWritten).toBe(false);
+      expect(unchanged.sourceSnapshotVersion).toBe(1);
+
+      const withCandidates = await ingestObservation({
+        ...base,
+        candidates: [
+          { utc: '2026-10-15T20:00:00.000Z', source: 'portal' },
+          { utc: '2026-10-15T21:00:00.000Z', source: 'lead document' },
+        ],
+        now: new Date('2026-09-03T00:00:00.000Z'),
+      }, { models, sequelize });
+      expect(withCandidates.snapshotWritten).toBe(true);
+      expect(withCandidates.sourceSnapshotVersion).toBe(2);
+
+      // And the snapshot that records it is retrievable with the evidence in it.
+      const snap = await models.GovSourceSnapshot.findOne({
+        where: { canonicalId: withCandidates.canonicalId, sourceSnapshotVersion: 2 },
+      });
+      expect(snap.payload.observation.candidates).toHaveLength(2);
+      expect(snap.payload.provenance.authority).toBe('publisher_of_record');
+      expect(snap.payload.provenance.authorityEvidence).toMatch(/namespace/i);
     }, 60000);
   });
 });

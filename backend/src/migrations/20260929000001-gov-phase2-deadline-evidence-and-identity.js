@@ -101,6 +101,30 @@ module.exports = {
         comment: 'Why the effective deadline counts as verified. Required alongside '
           + 'close_date_verified_source; parsing alone does not establish source authority.',
       });
+      await addCol('close_date_last_observation_id', {
+        type: Sequelize.UUID,
+        allowNull: true,
+        comment: 'Id of the most recent applied observation. Verification is current iff this '
+          + 'EQUALS close_date_verified_observation_id. Identity comparison, not timestamp '
+          + 'comparison: two observations can share a millisecond.',
+      });
+      await addCol('close_date_verified_observation_id', {
+        type: Sequelize.UUID,
+        allowNull: true,
+        comment: 'The observation that established the published deadline.',
+      });
+      await addCol('close_date_authority', {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        comment: 'publisher_of_record | courtesy_posting | aggregator | unknown. Only '
+          + 'publisher_of_record permits buyer-verification.',
+      });
+      await addCol('close_date_authority_evidence', {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        comment: 'What was OBSERVED to support the authority classification. A populated basis '
+          + 'string is not proof; this records the observation behind it.',
+      });
       await addCol('close_date_source_state', {
         type: Sequelize.TEXT,
         allowNull: true,
@@ -279,6 +303,8 @@ module.exports = {
         'close_date_superseded', 'close_date_conservative_utc', 'close_date_candidates',
         'close_date_fetch_error', 'close_date_fetch_status', 'close_date_fetch_attempted_at',
         'close_date_source_state', 'close_date_verification_basis',
+        'close_date_authority_evidence', 'close_date_authority',
+        'close_date_verified_observation_id', 'close_date_last_observation_id',
         'close_date_observation_outcome', 'close_date_uncertainty', 'close_date_offset_minutes',
         'close_date_timezone_source', 'close_date_timezone', 'close_date_raw',
         'close_date_observation_confidence', 'close_date_observation_utc', 'close_date_observed_at',

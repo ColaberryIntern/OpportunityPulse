@@ -34,6 +34,28 @@ Read the governing docs and answer each gate. **Any single hard gate = NO_BID.**
 
 > Deadlines: OP's `close_date` is unreliable. **Verify against the RFP cover page AND every addendum** before trusting it.
 
+**What the system now tells you about a deadline (Phase 2, not yet migrated in production).**
+`GET /api/v2/gov-opportunities` reports a `deadlineState` per opportunity. Read it as follows:
+
+| State | What it means for vetting |
+|---|---|
+| `verified` | A high-confidence parse of a notice published by the soliciting body itself, with the evidence for that claim stored. Still check addenda — see the limit below. |
+| `retained_unverified` | A deadline we once verified, plus a newer observation that did **not** verify. The value shown is the older verified one. Treat the date as stale, not wrong. |
+| `legacy_unverified` | A stored date from before deadline evidence existed, produced by the timezone-stripping parser. Treat as unverified. |
+| `unknown` | No deadline is known. **This is not "no deadline exists."** |
+| `not_published` | The buyer affirmatively stated there is no deadline. Rare. |
+
+Two limits that keep the human step mandatory:
+
+- **A courtesy posting never verifies.** When a portal re-publishes another body's solicitation
+  (NASPO/cooperative postings, "on behalf of"), the deadline it renders is the re-publisher's, not the
+  buyer's, so the system withholds verification. Absence of `verified` here is a statement about
+  *authority*, not about the date being wrong.
+- **Ingestion observes no solicitation documents at all.** Portal scraping captures none, so the system
+  cannot see an addendum that moves a deadline. `verified` therefore means "verified against the
+  notice", never "verified against the cover page and addenda". **The addendum check in the table
+  above remains entirely human work.**
+
 **Verdict logic:**
 - **NO_BID** — any hard gate fails. Record the code + a verbatim evidence quote.
 - **CONDITIONAL** — clears all gates *except* one that a partner can satisfy (e.g., Que holds the experience/cert). Record what unblocks it.
