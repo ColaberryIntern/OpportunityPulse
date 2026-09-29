@@ -258,6 +258,8 @@ app.use('/api/v1/resume-upload', require('./resumeUpload/resumeUpload.routes'));
 
 // Bonfire Opportunity Engine (prototype, gated by BONFIRE_ENGINE_ENABLED env flag)
 app.use('/api/v1/bonfire', require('./bonfire/bonfire.routes'));
+// Phase 2 — read-only, scoped government-opportunity contract API. v1 is untouched.
+app.use('/api/v2/gov-opportunities', require('./govContracts/govOpportunityV2.routes'));
 
 // OIED — Opportunity Intelligence & Execution Department
 // (My Opportunities, action generator, review queue, events)
