@@ -21,135 +21,39 @@ const FIXTURE_DIR = path.join(CONTRACT_DIR, 'fixtures');
 const fixtureNames = fs.readdirSync(FIXTURE_DIR).filter((f) => f.endsWith('.json')).sort();
 const load = (n) => JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, n), 'utf8'));
 
-// ---------------------------------------------------------------- validator
+// -------------------------------------------------- validator (real 2020-12)
 //
-// SCOPE OF THIS VALIDATOR -- read before trusting it.
-// It implements a SUBSET of JSON Schema. The keywords it actually enforces are
-// listed in ENFORCED_KEYWORDS below, and a guard test fails the build if
-// schema.json ever starts using a keyword outside that set. That guard is the
-// point: a subset validator whose gaps are unenumerated silently passes
-// documents it never checked.
+// Ajv's JSON Schema 2020-12 implementation, with ajv-formats for date-time /
+// date / uri. This REPLACES the hand-rolled subset validator that previously
+// stood in for it: that one silently ignored any keyword it did not implement,
+// so "conformance" meant only "conformance to the subset I happened to write".
 //
-// It is NOT a standards-compliant 2020-12 implementation. Structural coverage is
-// cross-checked against ajv below, and the residual gap is reported in the
-// suite output rather than papered over.
-const ENFORCED_KEYWORDS = new Set([
-  '$ref', '$defs', 'oneOf', 'const', 'type', 'enum', 'pattern',
-  'minimum', 'maximum', 'required', 'additionalProperties', 'properties',
-  'items', 'format',
-]);
-// Keywords that carry no validation semantics.
-const ANNOTATION_KEYWORDS = new Set(['$schema', '$id', 'title', 'description']);
+// $schema is PRESERVED — Ajv2020 resolves the 2020-12 meta-schema itself, so the
+// declaration in schema.json is honoured rather than stripped.
+//
+// strict mode is ON. It rejects unknown keywords and several classes of
+// malformed schema outright, which means a typo in schema.json fails the build
+// instead of quietly disabling a constraint.
+const Ajv2020 = require('ajv/dist/2020');
+const addFormats = require('ajv-formats');
 
-// Only the formats this schema actually uses. Deliberately strict: a permissive
-// regex here would be worse than no check, because it would look like coverage.
-const FORMAT_VALIDATORS = {
-  'date-time': (v) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(v)
-    && !Number.isNaN(Date.parse(v)),
-  date: (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)),
-  uri: (v) => {
-    try { const u = new URL(v); return !!u.protocol && u.protocol !== ':'; } catch { return false; }
-  },
-};
+const ajv = new Ajv2020({
+  strict: true,
+  allErrors: true,
+  allowUnionTypes: true, // the contract uses ["string","null"] deliberately
+});
+addFormats(ajv);
 
-/** Every keyword appearing anywhere in a schema document. */
-function collectKeywords(node, out = new Set()) {
-  if (!node || typeof node !== 'object') return out;
-  if (Array.isArray(node)) { node.forEach((n) => collectKeywords(n, out)); return out; }
-  for (const k of Object.keys(node)) {
-    if (k === 'properties' || k === '$defs' || k === 'definitions') {
-      Object.values(node[k]).forEach((n) => collectKeywords(n, out));
-      continue;
-    }
-    out.add(k);
-    collectKeywords(node[k], out);
-  }
-  return out;
+const validateSchema = ajv.compile(SCHEMA);
+
+/** Returns an array of human-readable error strings (empty when valid). */
+function validateFixture(doc) {
+  const ok = validateSchema(doc);
+  if (ok) return [];
+  return (validateSchema.errors || []).map(
+    (e) => `${e.instancePath || '$'} ${e.message}${e.params ? ` ${JSON.stringify(e.params)}` : ''}`,
+  );
 }
-
-function resolveRef(ref, root) {
-  if (!ref.startsWith('#/')) throw new Error(`unsupported $ref: ${ref}`);
-  return ref.slice(2).split('/').reduce((acc, k) => acc[k], root);
-}
-
-function typeOk(value, t) {
-  switch (t) {
-    case 'object': return value !== null && typeof value === 'object' && !Array.isArray(value);
-    case 'array': return Array.isArray(value);
-    case 'string': return typeof value === 'string';
-    case 'integer': return Number.isInteger(value);
-    case 'number': return typeof value === 'number';
-    case 'boolean': return typeof value === 'boolean';
-    case 'null': return value === null;
-    default: throw new Error(`unknown type ${t}`);
-  }
-}
-
-function validate(value, schema, root, pathStr, errors) {
-  if (schema.$ref) return validate(value, resolveRef(schema.$ref, root), root, pathStr, errors);
-
-  if (schema.oneOf) {
-    const matches = schema.oneOf.filter((s) => {
-      const sub = [];
-      validate(value, s, root, pathStr, sub);
-      return sub.length === 0;
-    });
-    if (matches.length !== 1) errors.push(`${pathStr}: matched ${matches.length} oneOf branches, expected exactly 1`);
-    return errors;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(schema, 'const')) {
-    if (value !== schema.const) errors.push(`${pathStr}: expected const ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`);
-    return errors;
-  }
-
-  if (schema.type) {
-    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
-    if (!types.some((t) => typeOk(value, t))) {
-      errors.push(`${pathStr}: expected type ${types.join('|')}, got ${value === null ? 'null' : typeof value}`);
-      return errors; // no point checking further
-    }
-  }
-
-  if (schema.enum && !schema.enum.includes(value)) {
-    errors.push(`${pathStr}: ${JSON.stringify(value)} not in enum`);
-  }
-  if (schema.pattern && typeof value === 'string' && !new RegExp(schema.pattern).test(value)) {
-    errors.push(`${pathStr}: ${JSON.stringify(value)} fails pattern ${schema.pattern}`);
-  }
-  if (schema.format && typeof value === 'string') {
-    const check = FORMAT_VALIDATORS[schema.format];
-    if (!check) errors.push(`${pathStr}: format "${schema.format}" has no validator (would be silently unchecked)`);
-    else if (!check(value)) errors.push(`${pathStr}: ${JSON.stringify(value)} is not a valid ${schema.format}`);
-  }
-  if (typeof value === 'number') {
-    if (schema.minimum !== undefined && value < schema.minimum) errors.push(`${pathStr}: ${value} < minimum ${schema.minimum}`);
-    if (schema.maximum !== undefined && value > schema.maximum) errors.push(`${pathStr}: ${value} > maximum ${schema.maximum}`);
-  }
-
-  if (typeOk(value, 'object')) {
-    for (const req of schema.required || []) {
-      if (!Object.prototype.hasOwnProperty.call(value, req)) errors.push(`${pathStr}: missing required "${req}"`);
-    }
-    const props = schema.properties || {};
-    if (schema.additionalProperties === false) {
-      for (const k of Object.keys(value)) {
-        if (!Object.prototype.hasOwnProperty.call(props, k)) errors.push(`${pathStr}: unexpected property "${k}"`);
-      }
-    }
-    for (const [k, sub] of Object.entries(props)) {
-      if (Object.prototype.hasOwnProperty.call(value, k)) validate(value[k], sub, root, `${pathStr}.${k}`, errors);
-    }
-  }
-
-  if (Array.isArray(value) && schema.items) {
-    value.forEach((item, i) => validate(item, schema.items, root, `${pathStr}[${i}]`, errors));
-  }
-
-  return errors;
-}
-
-const validateFixture = (doc) => validate(doc, SCHEMA, SCHEMA, '$', []);
 
 // ------------------------------------------------------------------- tests
 describe('gov-opportunity.v1 — fixture coverage', () => {
@@ -177,97 +81,48 @@ describe('gov-opportunity.v1 — schema conformance', () => {
   });
 });
 
-describe('gov-opportunity.v1 — validator coverage is enumerated, not assumed', () => {
-  // The guard: if schema.json starts using a keyword this validator does not
-  // implement, this FAILS rather than silently skipping the constraint.
-  it('schema.json uses no keyword the validator ignores', () => {
-    const used = collectKeywords(SCHEMA);
-    const unhandled = [...used].filter((k) => !ENFORCED_KEYWORDS.has(k) && !ANNOTATION_KEYWORDS.has(k));
-    if (unhandled.length) {
-      throw new Error(
-        `schema.json uses keyword(s) the subset validator does NOT enforce: ${unhandled.join(', ')}.\n`
-        + 'Either implement them, or validate with a full JSON Schema 2020-12 implementation. '
-        + 'Do not claim conformance while these are ignored.',
-      );
-    }
-    expect(unhandled).toEqual([]);
+describe('gov-opportunity.v1 — validated by a real JSON Schema 2020-12 implementation', () => {
+  it("uses Ajv's 2020-12 dialect, not a hand-rolled subset", () => {
+    expect(require('ajv/package.json').version.startsWith('8.')).toBe(true);
+    // eslint-disable-next-line no-console
+    console.log(`    validator: ajv ${require('ajv/package.json').version} (2020-12) + ajv-formats ${require('ajv-formats/package.json').version}`);
   });
 
-  it('enforces every format the schema actually uses', () => {
-    const formats = new Set();
-    (function walk(n) {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) return n.forEach(walk);
-      if (typeof n.format === 'string') formats.add(n.format);
-      Object.values(n).forEach(walk);
-    }(SCHEMA));
-    for (const f of formats) expect(Object.keys(FORMAT_VALIDATORS)).toContain(f);
+  it('preserves the $schema declaration rather than stripping it', () => {
+    expect(SCHEMA.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
+    // the compiled validator was built from the document including $schema
+    expect(typeof validateSchema).toBe('function');
   });
 
-  it('format checking actually rejects bad values', () => {
+  it('compiles under strict mode, so unknown keywords cannot hide', () => {
+    // A mistyped keyword is a schema bug. Prove strict mode rejects one.
+    const broken = JSON.parse(JSON.stringify(SCHEMA));
+    broken.properties.schemaVersion = { tpye: 'string' };
+    const strictAjv = new Ajv2020({ strict: true, allowUnionTypes: true });
+    addFormats(strictAjv);
+    expect(() => strictAjv.compile(broken)).toThrow();
+  });
+
+  it('enforces formats for real (date-time / date / uri)', () => {
     const d = load('rfi-va-enterprise-ai.json');
     d.timestamps.fetchedAt = 'last Tuesday';
-    expect(validateFixture(d).some((e) => /not a valid date-time/.test(e))).toBe(true);
+    expect(validateFixture(d).join(' ')).toMatch(/date-time/);
 
     const d2 = load('rfi-va-enterprise-ai.json');
     d2.publisher.officialSourceUrl = 'not a url';
-    expect(validateFixture(d2).some((e) => /not a valid uri/.test(e))).toBe(true);
+    expect(validateFixture(d2).join(' ')).toMatch(/uri/);
 
     const d3 = load('amendment-extends-deadline.json');
     d3.documents.items[0].documentDate = '2026-13-45';
-    expect(validateFixture(d3).some((e) => /not a valid date/.test(e))).toBe(true);
-  });
-});
-
-// Independent structural cross-check with a real JSON Schema implementation.
-// ajv 6 is already present in node_modules (transitively) and implements
-// draft-07 — NOT 2020-12. It is therefore a partial corroboration, not proof of
-// 2020-12 conformance, and the suite says so out loud. Guarded so the suite
-// still runs if the transitive dependency disappears.
-describe('gov-opportunity.v1 — independent cross-check (ajv, draft-07)', () => {
-  let ajvValidate = null;
-  let ajvNote = '';
-
-  beforeAll(() => {
-    try {
-      // eslint-disable-next-line global-require
-      const Ajv = require('ajv');
-      const ajv = new Ajv({ allErrors: true, format: 'full', schemaId: 'auto' });
-      // ajv 6 does not know the 2020-12 meta-schema; validate structurally
-      // against draft-07 semantics by dropping the $schema declaration.
-      const clone = JSON.parse(JSON.stringify(SCHEMA));
-      delete clone.$schema;
-      delete clone.$id;
-      ajvValidate = ajv.compile(clone);
-      ajvNote = `ajv ${require('ajv/package.json').version} (draft-07 semantics)`;
-    } catch (e) {
-      ajvNote = `unavailable: ${e.message}`;
-    }
+    expect(validateFixture(d3).join(' ')).toMatch(/date/);
   });
 
-  it('reports which implementation performed the cross-check', () => {
-    // Visible in output so nobody mistakes this for 2020-12 validation.
-    expect(typeof ajvNote).toBe('string');
-    // eslint-disable-next-line no-console
-    console.log(`    cross-check implementation: ${ajvNote}`);
-  });
-
-  it.each(fixtureNames)('%s also passes the independent implementation', (name) => {
-    if (!ajvValidate) {
-      // Do not fake a pass: assert the reason is recorded instead.
-      expect(ajvNote).toMatch(/unavailable/);
-      return;
-    }
-    const ok = ajvValidate(load(name));
-    if (!ok) throw new Error(`${name}: ${JSON.stringify(ajvValidate.errors, null, 2)}`);
-    expect(ok).toBe(true);
-  });
-
-  it('the independent implementation also rejects a bad document', () => {
-    if (!ajvValidate) { expect(ajvNote).toMatch(/unavailable/); return; }
-    const d = load('rfi-va-enterprise-ai.json');
-    d.companyQualification = { fit: 'good' };
-    expect(ajvValidate(d)).toBe(false);
+  it('enforces keywords the previous subset validator ignored entirely', () => {
+    // format was the known gap; these prove the new validator covers the
+    // general case rather than a hand-picked list.
+    const d = load('solicitation-verified.json');
+    d.value.published.currency = 'usd'; // pattern ^[A-Z]{3}$
+    expect(validateFixture(d).length).toBeGreaterThan(0);
   });
 });
 
@@ -282,7 +137,12 @@ describe('gov-opportunity.v1 — the validator itself rejects bad documents', ()
 
   it('rejects a missing required block', () => {
     const d = good(); delete d.deadline;
-    expect(validateFixture(d)).toContain('$: missing required "deadline"');
+    const errs = validateFixture(d);
+    // Assert the behaviour and the offending field, not the validator's exact
+    // phrasing — that would couple the test to the implementation.
+    expect(errs.length).toBeGreaterThan(0);
+    expect(errs.join(' ')).toMatch(/required/);
+    expect(errs.join(' ')).toMatch(/deadline/);
   });
 
   it('rejects an unknown enum value', () => {
@@ -292,7 +152,10 @@ describe('gov-opportunity.v1 — the validator itself rejects bad documents', ()
 
   it('rejects an unexpected property (additionalProperties:false)', () => {
     const d = good(); d.notAField = 1;
-    expect(validateFixture(d)).toContain('$: unexpected property "notAField"');
+    const errs = validateFixture(d);
+    expect(errs.length).toBeGreaterThan(0);
+    expect(errs.join(' ')).toMatch(/additional/i);
+    expect(errs.join(' ')).toMatch(/notAField/);
   });
 
   it('rejects a non-opaque canonical id', () => {

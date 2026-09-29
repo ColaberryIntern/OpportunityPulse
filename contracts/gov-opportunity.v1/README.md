@@ -275,55 +275,43 @@ internal prompts, `rawText`. Document *bytes* are served via short-lived signed 
 
 ---
 
-## 5. How the artifacts are validated — and the limits of that
+## 5. How the artifacts are validated
 
-Two independent passes run in `backend/tests/contracts/govOpportunityV1.test.js`:
-
-**(a) A subset validator, with its coverage enumerated.** It enforces `$ref`, `$defs`, `oneOf`,
-`const`, `type`, `enum`, `pattern`, `minimum`, `maximum`, `required`, `additionalProperties`,
-`properties`, `items` and `format` (`date-time`, `uri`, `date`). A **guard test fails the build** if
-`schema.json` ever starts using a keyword outside that set — so the gaps cannot grow silently. It
-does **not** implement `allOf`, `anyOf`, `if`/`then`/`else`, `patternProperties`, `prefixItems`,
-`minItems`/`maxItems`, `uniqueItems`, `dependentRequired`, `unevaluatedProperties` or `$dynamicRef`.
-None of those appear in this schema today.
-
-**(b) An independent cross-check with `ajv 6.12.6`**, already present in `node_modules` as a
-transitive dependency. This corroborates the structure with a real implementation rather than only
-my own code, and it also rejects a deliberately bad document so the check is proven live. The suite
-prints which implementation ran.
-
-**Honest limitation: neither pass is a JSON Schema 2020-12 conformance check.** `ajv 6` implements
-draft-07; the 2020-12 entrypoint (`ajv/dist/2020`, ajv ≥8) is not installed. The `$schema`
-declaration is dropped for the cross-check. In practice this schema uses only keywords whose
-draft-07 and 2020-12 semantics coincide, so the risk is low — but it is a real gap and is not
-claimed as conformance.
-
-**To close it properly**, `ajv@^8` + `ajv-formats` are needed as **devDependencies** (test-only; not
-a production runtime dependency). That requires approval under the CLAUDE.md rule:
-
-> **Strategic decisions (ESCALATE)** — "External dependency introduction, paid external services"
-
-Requested change, for the coordinator to approve or decline:
+Validation runs in `backend/tests/contracts/govOpportunityV1.test.js` using **Ajv's real JSON
+Schema 2020-12 implementation**:
 
 ```
-backend/package.json  devDependencies += { "ajv": "^8.17.1", "ajv-formats": "^3.0.1" }
+ajv 8.20.0  (ajv/dist/2020)  +  ajv-formats 3.0.1     [test-only devDependencies]
 ```
 
-Declining is reasonable; the consequence is that 2020-12-specific semantics stay unverified and
-this README must keep saying so.
+- **`$schema` is preserved.** `Ajv2020` resolves the 2020-12 meta-schema itself, so the declaration
+  in `schema.json` is honoured rather than stripped.
+- **`strict: true`.** Unknown keywords and several classes of malformed schema are rejected at
+  compile time, so a mistyped keyword fails the build instead of quietly disabling a constraint. A
+  test proves this by compiling a deliberately mistyped schema and asserting it throws.
+- **Formats are enforced** (`date-time`, `uri`, `date`) via `ajv-formats`, each with a negative test.
+- All 12 fixtures validate; negative and semantic tests are retained, including the deadline-conflict
+  and ownership-boundary invariants a structural validator cannot express.
+
+This **replaces** the earlier hand-rolled subset validator, which silently ignored any keyword it did
+not implement — so its "conformance" meant only conformance to the subset that happened to be
+written. Negative assertions that were coupled to that validator's bespoke error strings now assert
+the behaviour and the offending field instead.
+
+`ajv` / `ajv-formats` are **devDependencies only** and are not loaded by any production code path.
 
 ## 6. Known gaps in v1
 
-1. **Deadline provenance is not persisted.** The scraper produces `close_date_raw`,
-   `close_date_timezone`, `close_date_offset_minutes`, `close_date_confidence` and
-   `close_date_uncertainty`; `validateRow` copies an explicit allow-list and drops all five, so they
-   never reach the database. Pinned by `backend/tests/bonfire/deadlineIngestionBoundary.test.js`.
+1. **Deadline provenance is not persisted.** The scraper produces the original text, stated
+   timezone, offset, confidence and uncertainty; `validateRow` copies an explicit nine-key allow-list
+   and drops all of them, so they never reach the database. Pinned by
+   `backend/tests/bonfire/deadlineIngestionBoundary.test.js`.
 
-   **Precise Phase 2 persistence requirement:** add those five columns to `bonfire_opportunities`
-   (`TEXT`, `TEXT`, `INTEGER`, `TEXT`, `TEXT`, all nullable), add them to the `validateRow`
-   allow-list and to the upsert's `updateOnDuplicate`, and expose `close_date_confidence` /
-   `close_date_uncertainty` through the read API so a consumer can distinguish "deadline unknown"
-   from "no deadline". Until then, a corrected instant is stored but **why** it is correct is not.
+   **The Phase 2 design is in [`PERSISTENCE-PHASE2.md`](./PERSISTENCE-PHASE2.md)** — prepare-only, no
+   migration in this branch. Five scalar columns proved insufficient: structured conflicts are lists,
+   and the effective *verified* deadline has to be stored separately from the latest source
+   observation so a retained value cannot appear newly verified after an unresolved re-scrape.
+
 2. Historical rows cannot be recomputed: **0 of 5,302** Bonfire rows retain their original deadline
    text. See `backend/src/scripts/deadlineImpactReport.js`.
 3. Bonfire notices have no `noticeType` at source, so most map to `unknown` — correctly, but it

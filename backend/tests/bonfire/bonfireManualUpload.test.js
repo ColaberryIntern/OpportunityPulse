@@ -8,14 +8,43 @@
 // then override only the side-effecting methods we want to assert against.
 jest.mock('fs', () => {
   const real = jest.requireActual('fs');
+  // Uploaded bytes are never really written (writeFileSync is stubbed), so a
+  // read-back of an upload path would ENOENT and silently null out extraction.
+  // Stub reads for upload paths only; everything else (winston config etc.)
+  // delegates to the real fs so logging still works.
+  const isUploadPath = (p) => typeof p === 'string' && p.includes('uploads');
   return {
     ...real,
     mkdirSync: jest.fn(),
     writeFileSync: jest.fn(),
     existsSync: jest.fn(() => false),
     unlinkSync: jest.fn(),
+    readFileSync: jest.fn((p, ...rest) => (
+      isUploadPath(p) ? Buffer.from('STUB_BYTES') : real.readFileSync(p, ...rest)
+    )),
   };
 });
+
+// DETERMINISTIC ISOLATION OF THE TEXT EXTRACTORS.
+//
+// bonfireManualUpload.extractText() lazy-requires mammoth (.docx) and
+// utils/pdfText -> pdf-parse (.pdf) at call time. Cold-requiring those modules
+// on this filesystem measures at ~12.3 s (mammoth) and ~2.6 s (pdf-parse),
+// against Jest's 5 s default. In isolation the OS cache usually hides it; under
+// full-directory parallelism it does not, which is precisely the intermittent
+// failure this suite exhibited.
+//
+// The suite header already states it does not exercise pdf-parse / mammoth —
+// they have their own coverage — so stubbing them is the correct scope, not a
+// workaround. Every behavioural assertion below is unchanged, and extraction now
+// returns a deterministic value instead of ENOENT-ing because fs.writeFileSync
+// is mocked, which lets us assert that extracted text is actually persisted.
+jest.mock('mammoth', () => ({
+  extractRawText: jest.fn(async () => ({ value: 'STUB_DOCX_TEXT' })),
+}));
+jest.mock('../../src/utils/pdfText', () => ({
+  extractPdfText: jest.fn(async () => 'STUB_PDF_TEXT'),
+}));
 
 jest.mock('../../src/models', () => ({
   BonfireOpportunity: { findByPk: jest.fn() },
@@ -85,6 +114,18 @@ describe('bonfireManualUpload.ingestFiles', () => {
     expect(opp.submissionRequirements.last_attachment_fetch.status).toBe('manual_upload');
     expect(opp.submissionRequirements.last_attachment_fetch.via).toBe('manual');
     expect(opp.save).toHaveBeenCalled();
+
+    // NEW coverage, made possible by the deterministic extractor stubs: the
+    // extracted text is actually routed onto the persisted row, per file type.
+    // Previously extraction ENOENT'd (fs.writeFileSync is mocked, so the file it
+    // tried to re-read never existed) and this could not be asserted at all.
+    const rows = OpportunityAttachment.create.mock.calls.map(([r]) => r);
+    const pdfRow = rows.find((r) => r.name === 'rfp.pdf');
+    const docxRow = rows.find((r) => r.name === 'appendix.docx');
+    expect(pdfRow.parsedText).toBe('STUB_PDF_TEXT');
+    expect(docxRow.parsedText).toBe('STUB_DOCX_TEXT');
+    // and the per-file result reflects it
+    expect(out.files.every((f) => f.has_parsed_text === true)).toBe(true);
   });
 
   it('updates existing rows on re-upload with the same filename (idempotent)', async () => {
