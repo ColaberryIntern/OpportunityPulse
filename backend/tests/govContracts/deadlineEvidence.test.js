@@ -7,12 +7,19 @@
 const {
   buildObservationPatch,
   readDeadlineState,
-  classifySourceState,
+  classifyObservation,
   isVerifiable,
   hasCompetingEvidence,
+  isVerificationCurrent,
+  OBSERVATION_OUTCOME,
   SOURCE_STATE,
   EFFECTIVE_STATE,
 } = require('../../src/bonfire/deadlineEvidence.service');
+
+// Verification now requires recorded provenance AND an explicit basis: parsing
+// cleanly, with nobody happening to pass competing candidates, is the absence
+// of contrary evidence rather than the presence of source authority.
+const PROV = { source: 'portal_scrape', basis: 'single_authoritative_source' };
 
 const T0 = new Date('2026-09-01T00:00:00.000Z');
 const T1 = new Date('2026-09-10T00:00:00.000Z');
@@ -84,6 +91,7 @@ describe('legacy rows: a stored deadline with NULL verified_at is UNVERIFIED', (
     const state = readDeadlineState({
       closeDate: '2026-10-15T20:00:00.000Z',
       closeDateVerifiedAt: T1,
+      closeDateObservedAt: T1, // verified write sets both to the same instant
       closeDateUncertainty: null,
       closeDateObservationUtc: '2026-10-15T20:00:00.000Z',
     });
@@ -95,19 +103,15 @@ describe('legacy rows: a stored deadline with NULL verified_at is UNVERIFIED', (
 
 describe('parsing is not authority', () => {
   it('a clean parse with competing evidence is NOT verifiable', () => {
+    // A conflict is classified as outcome=conflict, which is not verifiable.
     expect(isVerifiable({
-      sourceState: SOURCE_STATE.PUBLISHED_PARSED,
-      parse: goodParse(),
-      candidates: [
-        { utc: '2026-10-15T20:00:00.000Z' },
-        { utc: '2026-10-15T21:00:00.000Z' },
-      ],
+      outcome: OBSERVATION_OUTCOME.CONFLICT, parse: goodParse(), provenance: PROV,
     })).toBe(false);
   });
 
   it('a clean parse with no competing evidence IS verifiable', () => {
     expect(isVerifiable({
-      sourceState: SOURCE_STATE.PUBLISHED_PARSED, parse: goodParse(), candidates: null,
+      outcome: OBSERVATION_OUTCOME.PARSED, parse: goodParse(), provenance: PROV,
     })).toBe(true);
   });
 
@@ -122,6 +126,7 @@ describe('parsing is not authority', () => {
     const { patch, decision } = buildObservationPatch(current, {
       fetch: { status: 'success', attemptedAt: T1 },
       parse: goodParse('2026-10-15T21:00:00.000Z'),
+      provenance: PROV,
       candidates: [
         { utc: '2026-10-15T20:00:00.000Z', source: 'portal' },
         { utc: '2026-10-15T21:00:00.000Z', source: 'lead document' },
@@ -129,11 +134,119 @@ describe('parsing is not authority', () => {
       now: T1,
     });
     expect(decision.verified).toBe(false);
-    expect(decision.reason).toBe('competing_evidence');
+    // The outcome is now recorded explicitly rather than described in prose.
+    expect(decision.outcome).toBe(OBSERVATION_OUTCOME.CONFLICT);
+    expect(decision.reason).toBe(OBSERVATION_OUTCOME.CONFLICT);
     expect(patch).not.toHaveProperty('closeDate');
     expect(patch).not.toHaveProperty('closeDateVerifiedAt');
     expect(patch.closeDateCandidates).toHaveLength(2);
     expect(patch.closeDateConservativeUtc).toBe('2026-10-15T20:00:00.000Z'); // earliest
+    // DEFECT A: the conflict must be DURABLE. The parse itself was clean, so
+    // parse.uncertainty is null; without this the read model saw no
+    // disagreement and reported the stale value as verified.
+    expect(patch.closeDateUncertainty).toBe('conflicting_sources');
+    expect(patch.closeDateObservationOutcome).toBe(OBSERVATION_OUTCOME.CONFLICT);
+  });
+});
+
+// ===========================================================================
+// The two defects the coordinator reproduced against c0d942ed. Both are
+// end-to-end through buildObservationPatch -> readDeadlineState, because both
+// passed at the writer and failed only when the row was read back.
+// ===========================================================================
+describe('reproduced defect A: unresolved conflict must withhold publication', () => {
+  const OLD = '2026-10-15T20:00:00.000Z';
+  const current = { closeDate: OLD, closeDateVerifiedAt: T0, closeDateObservedAt: T0 };
+
+  it('a high-confidence parse MATCHING the stored value, with a disagreeing candidate, is not verified', () => {
+    const { patch, decision } = buildObservationPatch(current, {
+      fetch: { status: 'success' },
+      parse: goodParse(OLD), // parses to exactly the stored instant
+      candidates: [{ utc: OLD }, { utc: '2026-10-16T20:00:00.000Z' }],
+      provenance: PROV,
+      now: T1,
+    });
+    expect(decision.verified).toBe(false);
+
+    const state = readDeadlineState({ ...current, ...patch });
+    expect(state.state).toBe(EFFECTIVE_STATE.RETAINED_UNVERIFIED); // was: verified
+    expect(state.isVerified).toBe(false);
+    expect(state.utc).toBeNull(); // was: the stale old value
+    expect(state.retainedUtc).toBe(OLD);
+    expect(state.supersededBy).toBe(OBSERVATION_OUTCOME.CONFLICT);
+  });
+});
+
+describe('reproduced defect B: missing capture is not evidence of absence', () => {
+  const OLD = '2026-10-15T20:00:00.000Z';
+  const current = { closeDate: OLD, closeDateVerifiedAt: T0, closeDateObservedAt: T0 };
+
+  it('a successful fetch with no parse and no rawPresent is capture_unknown, NOT not_published', () => {
+    const { patch } = buildObservationPatch(current, {
+      fetch: { status: 'success' }, provenance: PROV, now: T1,
+    });
+    expect(patch.closeDateObservationOutcome).toBe(OBSERVATION_OUTCOME.CAPTURE_UNKNOWN);
+    expect(patch.closeDateSourceState).toBe(SOURCE_STATE.CAPTURE_UNKNOWN);
+    expect(patch.closeDateSourceState).not.toBe(SOURCE_STATE.NOT_PUBLISHED);
+  });
+
+  it('and the stored verification is no longer reported as current', () => {
+    const { patch } = buildObservationPatch(current, {
+      fetch: { status: 'success' }, provenance: PROV, now: T1,
+    });
+    const state = readDeadlineState({ ...current, ...patch });
+    expect(state.state).toBe(EFFECTIVE_STATE.RETAINED_UNVERIFIED); // was: verified
+    expect(state.isVerified).toBe(false);
+    expect(state.supersededBy).toBe(OBSERVATION_OUTCOME.CAPTURE_UNKNOWN);
+  });
+
+  it('an AFFIRMED absence is different, and does read as not_published', () => {
+    const { patch } = buildObservationPatch({}, {
+      fetch: { status: 'success' }, absentConfirmed: true, provenance: PROV, now: T1,
+    });
+    expect(patch.closeDateObservationOutcome).toBe(OBSERVATION_OUTCOME.ABSENT_CONFIRMED);
+    expect(readDeadlineState(patch).state).toBe(EFFECTIVE_STATE.NOT_PUBLISHED);
+  });
+});
+
+describe('verification requires recorded provenance and an explicit basis', () => {
+  it('a clean parse WITHOUT provenance does not verify', () => {
+    const { decision } = buildObservationPatch({}, {
+      fetch: { status: 'success' }, parse: goodParse(), now: T1,
+    });
+    expect(decision.verified).toBe(false);
+    expect(decision.reason).toBe('missing_provenance_or_basis');
+  });
+
+  it('a clean parse with a source but NO basis does not verify', () => {
+    const { decision } = buildObservationPatch({}, {
+      fetch: { status: 'success' }, parse: goodParse(), provenance: { source: 'portal_scrape' }, now: T1,
+    });
+    expect(decision.verified).toBe(false);
+  });
+
+  it('with both, it verifies and records the basis', () => {
+    const { patch, decision } = buildObservationPatch({}, {
+      fetch: { status: 'success' }, parse: goodParse(), provenance: PROV, now: T1,
+    });
+    expect(decision.verified).toBe(true);
+    expect(patch.closeDateVerifiedSource).toBe('portal_scrape');
+    expect(patch.closeDateVerificationBasis).toBe('single_authoritative_source');
+  });
+});
+
+describe('isVerificationCurrent is the single state definition', () => {
+  it('true when never re-observed', () => {
+    expect(isVerificationCurrent({ closeDateVerifiedAt: T0, closeDateObservedAt: null })).toBe(true);
+  });
+  it('true when observed at the same instant as verification', () => {
+    expect(isVerificationCurrent({ closeDateVerifiedAt: T0, closeDateObservedAt: T0 })).toBe(true);
+  });
+  it('false once a newer observation lands', () => {
+    expect(isVerificationCurrent({ closeDateVerifiedAt: T0, closeDateObservedAt: T1 })).toBe(false);
+  });
+  it('false when never verified', () => {
+    expect(isVerificationCurrent({ closeDateVerifiedAt: null, closeDateObservedAt: T1 })).toBe(false);
   });
 });
 
@@ -141,7 +254,7 @@ describe('verified -> unresolved -> verified', () => {
   it('step 1: verifies and stamps verified_at', () => {
     const { patch, decision } = buildObservationPatch(
       { closeDate: null, closeDateVerifiedAt: null },
-      { fetch: { status: 'success', attemptedAt: T0 }, parse: goodParse(), source: 'portal_scrape', now: T0 },
+      { fetch: { status: 'success', attemptedAt: T0 }, parse: goodParse(), provenance: PROV, now: T0 },
     );
     expect(decision.verified).toBe(true);
     expect(patch.closeDate).toBe('2026-10-15T20:00:00.000Z');
@@ -187,7 +300,7 @@ describe('verified -> unresolved -> verified', () => {
     const { patch, decision } = buildObservationPatch(current, {
       fetch: { status: 'success', attemptedAt: T2 },
       parse: goodParse('2026-10-20T20:00:00.000Z'),
-      source: 'portal_scrape',
+      provenance: PROV,
       now: T2,
     });
     expect(decision.verified).toBe(true);
@@ -205,7 +318,7 @@ describe('verified -> unresolved -> verified', () => {
   it('re-verifying the SAME instant does not pollute history', () => {
     const { patch } = buildObservationPatch(
       { closeDate: '2026-10-15T20:00:00.000Z', closeDateVerifiedAt: T0, closeDateSuperseded: null },
-      { fetch: { status: 'success' }, parse: goodParse(), now: T2 },
+      { fetch: { status: 'success' }, parse: goodParse(), provenance: PROV, now: T2 },
     );
     expect(patch.closeDateSuperseded).toBeUndefined();
     expect(patch.closeDateVerifiedAt).toBe(T2); // re-confirmed
@@ -217,7 +330,7 @@ describe('verified -> unresolved -> verified', () => {
     }];
     const { patch } = buildObservationPatch(
       { closeDate: '2026-10-15T20:00:00.000Z', closeDateVerifiedAt: T0, closeDateSuperseded: existing },
-      { fetch: { status: 'success' }, parse: goodParse('2026-11-01T20:00:00.000Z'), now: T2 },
+      { fetch: { status: 'success' }, parse: goodParse('2026-11-01T20:00:00.000Z'), provenance: PROV, now: T2 },
     );
     expect(patch.closeDateSuperseded).toHaveLength(2);
     expect(patch.closeDateSuperseded[0]).toEqual(existing[0]); // prior entry preserved
@@ -252,34 +365,37 @@ describe('a failed fetch is not an observation', () => {
 
 describe('absent is not the same as unobserved', () => {
   it('a successful fetch with no deadline field is not_published', () => {
-    expect(classifySourceState({ fetchStatus: 'success', rawPresent: false, parse: null }))
-      .toBe(SOURCE_STATE.NOT_PUBLISHED);
+    // Only an AFFIRMED absence counts. This is defect B.
+    expect(classifyObservation({ fetchStatus: 'success', absentConfirmed: true, parse: null }))
+      .toBe(OBSERVATION_OUTCOME.ABSENT_CONFIRMED);
+    expect(classifyObservation({ fetchStatus: 'success', rawPresent: false, parse: null }))
+      .toBe(OBSERVATION_OUTCOME.CAPTURE_UNKNOWN);
   });
 
   it('a failed fetch is fetch_failed, NOT not_published', () => {
-    expect(classifySourceState({ fetchStatus: 'failed', rawPresent: false, parse: null }))
-      .toBe(SOURCE_STATE.FETCH_FAILED);
+    expect(classifyObservation({ fetchStatus: 'failed', rawPresent: false, parse: null }))
+      .toBe(OBSERVATION_OUTCOME.FETCH_FAILED);
   });
 
   it('never observed is distinct from both', () => {
-    expect(classifySourceState({ fetchStatus: null, rawPresent: false, parse: null }))
-      .toBe(SOURCE_STATE.NOT_OBSERVED);
+    expect(classifyObservation({ fetchStatus: null, rawPresent: false, parse: null }))
+      .toBe(OBSERVATION_OUTCOME.CAPTURE_UNKNOWN);
   });
 
   it('text present but unparseable is published_unparsed', () => {
-    expect(classifySourceState({ fetchStatus: 'success', rawPresent: true, parse: unresolvedParse() }))
-      .toBe(SOURCE_STATE.PUBLISHED_UNPARSED);
+    expect(classifyObservation({ fetchStatus: 'success', rawPresent: true, parse: unresolvedParse() }))
+      .toBe(OBSERVATION_OUTCOME.UNPARSED);
   });
 
   it('NULL raw text alone does not prove the buyer published nothing', () => {
     // Same NULL raw text, two different truths, distinguished by source_state.
     const notPublished = readDeadlineState({
       closeDate: null, closeDateVerifiedAt: null, closeDateRaw: null,
-      closeDateSourceState: SOURCE_STATE.NOT_PUBLISHED,
+      closeDateObservationOutcome: OBSERVATION_OUTCOME.ABSENT_CONFIRMED,
     });
     const neverLooked = readDeadlineState({
       closeDate: null, closeDateVerifiedAt: null, closeDateRaw: null,
-      closeDateSourceState: SOURCE_STATE.NOT_OBSERVED,
+      closeDateObservationOutcome: OBSERVATION_OUTCOME.CAPTURE_UNKNOWN,
     });
     expect(notPublished.state).toBe(EFFECTIVE_STATE.NOT_PUBLISHED);
     expect(neverLooked.state).toBe(EFFECTIVE_STATE.UNKNOWN);
@@ -316,7 +432,7 @@ describe('the confidence contradiction is resolved', () => {
 
   it('there is no single ambiguous confidence column at all', () => {
     const { patch } = buildObservationPatch(
-      {}, { fetch: { status: 'success' }, parse: goodParse(), now: T0 },
+      {}, { fetch: { status: 'success' }, parse: goodParse(), provenance: PROV, now: T0 },
     );
     expect(patch).not.toHaveProperty('closeDateConfidence');
     expect(patch).toHaveProperty('closeDateObservationConfidence');

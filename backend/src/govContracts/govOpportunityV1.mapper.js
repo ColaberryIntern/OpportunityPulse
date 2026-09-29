@@ -76,9 +76,10 @@ const PROPOSED_CONTRACT_CHANGES = [
     rationale:
       'v1 can say "no verified deadline" (utc null) but cannot say WHY: a legacy row that was '
       + 'never verified, a value retained because a newer observation was unresolved, and a buyer '
-      + 'who published no deadline are three different facts. Today we encode the first two by '
-      + 'placing the unverified value in conflicts[] with an explanatory source, which is faithful '
-      + 'but indirect.',
+      + 'who published no deadline are three different facts. Today the distinction is carried '
+      + 'outside the contract, in the envelope diagnostics and the deadlineState query buckets, '
+      + 'because inventing a conflicts[] entry for a single unverified value would assert '
+      + 'competing evidence that does not exist.',
     compatibility: 'Optional field; absent for consumers that ignore it.',
   },
 ];
@@ -118,46 +119,31 @@ function toV1Conflicts(candidates, { fallbackSource, fallbackObservedAt }) {
  *
  * The load-bearing decisions:
  *   - `utc` is populated ONLY for a genuinely verified deadline.
- *   - A legacy-unverified or retained value is NOT dropped: it is surfaced in
- *     conflicts[] with a source that says why it is not authoritative. That is
- *     representable in v1 today and keeps the record discoverable.
+ *   - A legacy-unverified or retained value is NOT published and is NOT turned
+ *     into a fabricated conflict. It is reported through the envelope's
+ *     diagnostics, and the record stays addressable via the deadlineState
+ *     buckets on the list endpoint.
  *   - conservativePlanningUtc is only ever the earliest candidate, never copied
  *     into utc.
  */
 function buildDeadline(row) {
   const state = readDeadlineState(row);
+
+  // conflicts[] carries ONLY instants the source actually produced. A single
+  // unverified stored value is not a conflict, and inventing a second "source"
+  // for it would manufacture disagreement that never existed. The retained
+  // value is reported through diagnostics instead — see
+  // PROPOSED_CONTRACT_CHANGES.v1.1-effective-state for the faithful fix.
   const conflicts = toV1Conflicts(row.closeDateCandidates, {
     fallbackSource: 'opportunity-pulse observation',
     fallbackObservedAt: row.closeDateObservedAt,
   });
 
-  // Surface an unverified stored value rather than letting it vanish.
-  if (state.retainedUtc) {
-    const why = state.state === EFFECTIVE_STATE.LEGACY_UNVERIFIED
-      ? 'opportunity-pulse legacy parser (never verified; timezone was stripped at parse time)'
-      : 'opportunity-pulse previously verified value, retained because a newer observation did not resolve';
-    conflicts.push({
-      originalText: row.closeDateRaw != null ? String(row.closeDateRaw) : '(source text not captured)',
-      utc: state.retainedUtc,
-      source: why,
-      // v1 requires observedAt. For a legacy row we never recorded one, so fall
-      // back to when OP first stored the record — a real moment associated with
-      // the value. Emitting the epoch would assert an observation in 1970.
-      observedAt: iso(state.verifiedAt || row.closeDateObservedAt || row.createdAt)
-        || new Date(0).toISOString(),
-      supersedes: false,
-      note: row.createdAt && !state.verifiedAt && !row.closeDateObservedAt
-        ? 'Not a verified deadline. observedAt is the record creation time; no source observation was ever recorded.'
-        : 'Not a verified deadline. Present so the record is not silently lost.',
-    });
-  }
-
   const internalReason = row.closeDateUncertainty || null;
-  let v1Reason = internalReason ? (UNCERTAINTY_TO_V1[internalReason] || 'unparseable') : null;
-  // An unverified state with no parse failure still is not "no uncertainty".
-  if (!v1Reason && !state.isVerified && (state.retainedUtc || conflicts.length)) {
-    v1Reason = 'conflicting_sources';
-  }
+  // null stays null: v1's null means "no recorded uncertainty", which is the
+  // truth for a legacy row. Reaching for conflicting_sources here would assert
+  // competing evidence we do not have.
+  const v1Reason = internalReason ? (UNCERTAINTY_TO_V1[internalReason] || 'unparseable') : null;
 
   return {
     originalText: row.closeDateRaw != null ? String(row.closeDateRaw) : null,
@@ -195,7 +181,12 @@ function buildDocuments(row) {
  * placed inside the contract object.
  */
 function toGovOpportunityV1(row, identity = {}) {
-  const canonicalUuid = identity.canonicalId || row.id;
+  // Prefer the PERSISTED public id. Deriving from identity.canonicalId (the
+  // internal UUID) would produce a different hash from the one ingestion stored
+  // — which is exactly how an id handed out by list failed to resolve through
+  // detail. The derivation from row.id is the pre-ingestion fallback and is
+  // equal by construction to what the writer persists.
+  const publicId = identity.canonicalPublicId || canonicalIdFor(row.id);
   const deadline = buildDeadline(row);
   const state = readDeadlineState(row);
 
@@ -207,7 +198,7 @@ function toGovOpportunityV1(row, identity = {}) {
   const envelope = {
     schemaVersion: 'gov-opportunity.v1',
     sourceSnapshotVersion: identity.sourceSnapshotVersion || 1,
-    canonicalOpportunityId: canonicalIdFor(canonicalUuid),
+    canonicalOpportunityId: publicId,
     sourceSystem: 'opportunity-pulse',
     sourceRecordId: String(row.externalId || row.id),
     sourceAliases: (identity.aliases || []).map((a) => ({
@@ -333,6 +324,11 @@ function toGovOpportunityV1(row, identity = {}) {
     sourceState: row.closeDateSourceState || SOURCE_STATE.NOT_OBSERVED,
     observationUtc: iso(row.closeDateObservationUtc),
     retainedUnverifiedUtc: state.retainedUtc,
+    // Why the stored verification is no longer current (conflict, capture_unknown,
+    // unparsed, absent_confirmed). Null when it IS current or was never verified.
+    supersededBy: state.supersededBy || null,
+    observationOutcome: row.closeDateObservationOutcome || null,
+    verificationBasis: row.closeDateVerificationBasis || null,
     fetchStatus: row.closeDateFetchStatus || null,
   };
 

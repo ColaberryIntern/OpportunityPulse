@@ -164,6 +164,8 @@ module.exports = (sequelize) => {
     closeDateTimezoneSource: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_timezone_source' },
     closeDateOffsetMinutes: { type: DataTypes.INTEGER, allowNull: true, field: 'close_date_offset_minutes' },
     closeDateUncertainty: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_uncertainty' },
+    closeDateObservationOutcome: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_observation_outcome' },
+    closeDateVerificationBasis: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_verification_basis' },
     closeDateSourceState: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_source_state' },
     // FETCH ATTEMPT — distinct from observation.
     closeDateFetchAttemptedAt: { type: DataTypes.DATE, allowNull: true, field: 'close_date_fetch_attempted_at' },

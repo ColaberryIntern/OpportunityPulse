@@ -236,15 +236,33 @@ describe('mapper — candidates become v1 conflict shape, not raw JSONB', () => 
 });
 
 describe('mapper — unverified values are surfaced, never silently dropped', () => {
-  it('a legacy value appears in conflicts with an explanatory source', () => {
-    const { envelope } = toGovOpportunityV1(rowLegacy(), {});
+  it('a legacy value is NOT published and NOT turned into a fabricated conflict', () => {
+    const { envelope, diagnostics } = toGovOpportunityV1(rowLegacy(), {});
     expect(envelope.deadline.utc).toBeNull();
     expect(envelope.deadline.utcConfidence).toBe('unknown');
-    const legacy = envelope.deadline.conflicts.find((c) => /legacy/i.test(c.source));
-    expect(legacy).toBeDefined();
-    expect(legacy.utc).toBe('2026-10-15T14:00:00.000Z');
-    expect(legacy.supersedes).toBe(false);
-    expect(legacy.note).toMatch(/not a verified deadline/i);
+    // A single unverified value is not competing evidence. Inventing a second
+    // "source" for it would assert disagreement that never existed.
+    expect(envelope.deadline.conflicts).toEqual([]);
+    expect(envelope.deadline.uncertaintyReason).toBeNull();
+    // It is reported faithfully through diagnostics instead, and stays
+    // addressable via the legacy_unverified bucket on the list endpoint.
+    expect(diagnostics.effectiveState).toBe('legacy_unverified');
+    expect(diagnostics.retainedUnverifiedUtc).toBe('2026-10-15T14:00:00.000Z');
+  });
+
+  it('real source candidates DO appear as conflicts', () => {
+    const row = rowVerified({
+      closeDate: null,
+      closeDateVerifiedAt: null,
+      closeDateUncertainty: 'dst_ambiguous',
+      closeDateCandidates: [
+        { utc: '2026-11-01T05:30:00.000Z', source: 'portal', observedAt: '2026-09-20T00:00:00.000Z', originalText: 'Nov 1 1:30 AM ET' },
+        { utc: '2026-11-01T06:30:00.000Z', source: 'portal', observedAt: '2026-09-20T00:00:00.000Z', originalText: 'Nov 1 1:30 AM ET' },
+      ],
+    });
+    const { envelope } = toGovOpportunityV1(row, {});
+    expect(envelope.deadline.conflicts).toHaveLength(2);
+    assertValid(envelope, 'genuine candidates');
   });
 
   it('a verified row publishes utc and verifiedAt', () => {
@@ -360,8 +378,13 @@ describe('API — authorization', () => {
   it('the contract endpoint is reachable without credentials', async () => {
     const res = await request(buildApp(null)).get('/api/v2/gov-opportunities/contract');
     expect(res.status).toBe(200);
-    expect(res.body.data.schemaSha256)
+    // One schema, two hashing contexts. The committed LF blob is authoritative;
+    // the CRLF value is what a Windows working-copy checkout hashes to.
+    expect(res.body.data.schemaSha256.committedBlobLf)
+      .toBe('26ff667ed6d669d35fc89dc13886042f23620b1b9cf97b0fc90f1597d6cdd6bb');
+    expect(res.body.data.schemaSha256.windowsCheckoutCrlf)
       .toBe('d2a100c810244221c01b5550c43e78731509d72ec444e7055b01d989d94d37c8');
+    expect(res.body.data.schemaSha256.authoritative).toBe('committedBlobLf');
     expect(res.body.data.requiredScope).toBe('read:gov_opportunities');
   });
 });
@@ -422,10 +445,16 @@ describe('API — unverified records stay discoverable', () => {
     expect(w.closeDate).toBeDefined();
   });
 
-  it('the verified bucket requires verified_at AND no uncertainty', () => {
+  it('the verified bucket requires a verification that is still current', () => {
     const w = svc.bucketWhere('verified');
-    expect(w.closeDateVerifiedAt).not.toBeNull();
-    expect(w.closeDateUncertainty).toBeNull();
+    expect(w.closeDateVerifiedAt).toBeDefined();
+    expect(w.closeDate).toBeDefined();
+    // The predicate is the column comparison, identical to
+    // deadlineEvidence.isVerificationCurrent -- not a proxy such as
+    // "uncertainty IS NULL", which is what let defect A through.
+    const sql = JSON.stringify(w[Object.getOwnPropertySymbols(w).find((x) => String(x) === 'Symbol(and)')] || '');
+    expect(sql).toMatch(/close_date_observed_at/);
+    expect(sql).toMatch(/close_date_verified_at/);
   });
 });
 

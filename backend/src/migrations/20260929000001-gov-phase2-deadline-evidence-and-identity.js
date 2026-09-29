@@ -89,6 +89,18 @@ module.exports = {
         allowNull: true,
         comment: 'Detailed INTERNAL parser reason. Mapped to the frozen v1 enum at the API edge.',
       });
+      await addCol('close_date_observation_outcome', {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        comment: 'EXPLICIT outcome of the latest successful observation: parsed | conflict | '
+          + 'unparsed | absent_confirmed | capture_unknown | fetch_failed. Recorded, never inferred.',
+      });
+      await addCol('close_date_verification_basis', {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        comment: 'Why the effective deadline counts as verified. Required alongside '
+          + 'close_date_verified_source; parsing alone does not establish source authority.',
+      });
       await addCol('close_date_source_state', {
         type: Sequelize.TEXT,
         allowNull: true,
@@ -141,11 +153,18 @@ module.exports = {
       // both of which change under us.
       await queryInterface.createTable('gov_canonical_opportunities', {
         canonical_id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
+        // Opaque PUBLIC id handed to consumers. Stored and uniquely indexed so
+        // detail lookups resolve by index instead of scanning and hashing rows.
+        canonical_public_id: { type: Sequelize.TEXT, allowNull: false },
         source_system: { type: Sequelize.TEXT, allowNull: false },
         source_snapshot_version: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 1 },
         created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn('NOW') },
         updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn('NOW') },
       }, { transaction });
+
+      await queryInterface.addIndex('gov_canonical_opportunities', ['canonical_public_id'], {
+        unique: true, name: 'uniq_gov_canonical_public_id', transaction,
+      });
 
       // Aliases record duplicates rather than merging them away. A notice keeps
       // its own identity; several aliases may point at one canonical record.
@@ -259,7 +278,8 @@ module.exports = {
       for (const col of [
         'close_date_superseded', 'close_date_conservative_utc', 'close_date_candidates',
         'close_date_fetch_error', 'close_date_fetch_status', 'close_date_fetch_attempted_at',
-        'close_date_source_state', 'close_date_uncertainty', 'close_date_offset_minutes',
+        'close_date_source_state', 'close_date_verification_basis',
+        'close_date_observation_outcome', 'close_date_uncertainty', 'close_date_offset_minutes',
         'close_date_timezone_source', 'close_date_timezone', 'close_date_raw',
         'close_date_observation_confidence', 'close_date_observation_utc', 'close_date_observed_at',
         'close_date_verified_source', 'close_date_verified_at',

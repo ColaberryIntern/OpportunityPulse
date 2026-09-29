@@ -6,6 +6,8 @@ module.exports = (sequelize) => {
     canonicalId: {
       type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4, field: 'canonical_id',
     },
+    // Opaque public id, stored + uniquely indexed so detail resolves by index.
+    canonicalPublicId: { type: DataTypes.TEXT, allowNull: false, field: 'canonical_public_id' },
     sourceSystem: { type: DataTypes.TEXT, allowNull: false, field: 'source_system' },
     // Advances only when SOURCE facts change. Deliberately independent of
     // enrichment_version, which tracks model output.

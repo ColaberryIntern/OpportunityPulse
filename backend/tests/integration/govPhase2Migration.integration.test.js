@@ -79,6 +79,7 @@ d('Phase 2 migration against real Postgres', () => {
       'close_date_observation_utc', 'close_date_observation_confidence', 'close_date_raw',
       'close_date_timezone', 'close_date_timezone_source', 'close_date_offset_minutes',
       'close_date_uncertainty', 'close_date_source_state', 'close_date_fetch_attempted_at',
+      'close_date_observation_outcome', 'close_date_verification_basis',
       'close_date_fetch_status', 'close_date_fetch_error', 'close_date_candidates',
       'close_date_conservative_utc', 'close_date_superseded',
     ]) {
@@ -123,8 +124,8 @@ d('Phase 2 migration against real Postgres', () => {
 
     beforeAll(async () => {
       await sequelize.query(
-        "INSERT INTO gov_canonical_opportunities (canonical_id, source_system, source_snapshot_version, created_at, updated_at) "
-        + "VALUES (:c, 'bonfire', 1, NOW(), NOW())", { replacements: { c: canonical } },
+        "INSERT INTO gov_canonical_opportunities (canonical_id, canonical_public_id, source_system, source_snapshot_version, created_at, updated_at) "
+        + "VALUES (:c, 'op:gov:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bonfire', 1, NOW(), NOW())", { replacements: { c: canonical } },
       );
       await sequelize.query(
         "INSERT INTO gov_source_snapshots (id, canonical_id, source_snapshot_version, content_hash, fetch_status, payload, created_at) "
@@ -174,8 +175,8 @@ d('Phase 2 migration against real Postgres', () => {
 
     it('accepts several aliases for one canonical record', async () => {
       await sequelize.query(
-        "INSERT INTO gov_canonical_opportunities (canonical_id, source_system, source_snapshot_version, created_at, updated_at) "
-        + "VALUES (:c, 'sam.gov', 1, NOW(), NOW())", { replacements: { c: canonical } },
+        "INSERT INTO gov_canonical_opportunities (canonical_id, canonical_public_id, source_system, source_snapshot_version, created_at, updated_at) "
+        + "VALUES (:c, 'op:gov:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'sam.gov', 1, NOW(), NOW())", { replacements: { c: canonical } },
       );
       for (const [t, v] of [['source_record_id', 'abc'], ['legacy_row_id', '96771'], ['legacy_row_id', '97872']]) {
         // eslint-disable-next-line no-await-in-loop
@@ -237,7 +238,8 @@ d('Phase 2 migration against real Postgres', () => {
     await migration.down(qi, Sequelize);
 
     const cols = await columns();
-    for (const c of ['close_date_verified_at', 'close_date_candidates', 'close_date_superseded']) {
+    for (const c of ['close_date_verified_at', 'close_date_candidates', 'close_date_superseded',
+      'close_date_observation_outcome', 'close_date_verification_basis']) {
       expect(cols).not.toContain(c);
     }
     const t = await tables();
