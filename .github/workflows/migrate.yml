@@ -1,82 +1,154 @@
 name: Migrate production database (manual)
 
-# Migrations are their own authorized action, never a step inside a code deploy.
+# Migrations run BEFORE the application rollout, and from an artifact that
+# actually contains them.
 #
-# The Phase 2 migration must be applied only after ingestion is paused and
-# drained, a backup has been RESTORE-tested, and fresh baseline counts have been
-# recorded. A deploy step cannot be gated on any of that, so it does not belong
-# in one.
+# Two defects in the first draft of this workflow, both fixed here:
 #
-# This workflow does not decide whether those prerequisites were met — a human
-# does, and records it here. What it does guarantee: the migration runs alone,
-# deliberately, against a named commit, with the pending list shown first and
-# the before/after counts captured.
+#   1. It asserted the DEPLOYED HEAD equalled the ref, which forced
+#      deploy-before-migrate. For an additive migration that is the wrong order:
+#      it opens a window where new code expects columns that do not exist yet.
+#      The correct order is migrate first, then roll out code.
+#
+#   2. It ran `docker exec op-backend npx sequelize-cli db:migrate`, i.e. inside
+#      the RUNNING container, which is built from the OLD image and therefore does
+#      not contain the new migration file. That step would have reported nothing
+#      pending and silently done nothing.
+#
+# This version builds the image from the reviewed commit and runs the migration in
+# a ONE-SHOT container from that image, leaving the serving container untouched.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Commit SHA already DEPLOYED to production (migrations run from the deployed tree)'
+        description: 'Reviewed commit SHA to migrate from (full SHA; must contain the migration)'
         required: true
       confirm:
         description: 'Type MIGRATE to confirm you intend to change the production schema'
         required: true
-      backup_evidence:
-        description: 'Where the restore-tested backup lives (path/host + how it was verified)'
+      backup_path:
+        description: 'Absolute path on the server to the restore-tested pg_dump artifact'
         required: true
-      ingestion_paused:
-        description: 'Type PAUSED-AND-DRAINED to confirm no ingestion is in flight'
+      backup_restore_evidence:
+        description: 'How the restore was verified (scratch DB name + row counts compared)'
         required: true
 
 concurrency:
-  group: production-migrate
+  group: production-release
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Apply pending migrations
+    name: Apply pending migrations (pre-rollout)
     runs-on: ubuntu-latest
+    # Requires the protected `production` environment with required reviewers.
     environment: production
     steps:
-      - name: Confirmations must be explicit
+      - name: Operator assertions must be explicit
         run: |
           set -euo pipefail
           [ "${{ inputs.confirm }}" = "MIGRATE" ] || { echo "::error::confirm must be MIGRATE"; exit 1; }
-          [ "${{ inputs.ingestion_paused }}" = "PAUSED-AND-DRAINED" ] \
-            || { echo "::error::ingestion_paused must be PAUSED-AND-DRAINED"; exit 1; }
-          [ -n "${{ inputs.backup_evidence }}" ] || { echo "::error::backup_evidence required"; exit 1; }
+          [ -n "${{ inputs.backup_path }}" ] || { echo "::error::backup_path required"; exit 1; }
+          [ -n "${{ inputs.backup_restore_evidence }}" ] || { echo "::error::backup_restore_evidence required"; exit 1; }
           {
-            echo "### Migration authorization"
-            echo "- ref: ${{ inputs.ref }}"
-            echo "- backup evidence: ${{ inputs.backup_evidence }}"
-            echo "- ingestion: ${{ inputs.ingestion_paused }}"
+            echo "### Migration authorization (operator assertions)"
+            echo "- ref: \`${{ inputs.ref }}\`"
+            echo "- backup artifact: \`${{ inputs.backup_path }}\`"
+            echo "- restore evidence: ${{ inputs.backup_restore_evidence }}"
+            echo ""
+            echo "Machine-verified preconditions follow. The reviewer must independently confirm"
+            echo "the restore was actually performed and that the row counts matched."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Migrate via SSH
+      - name: Verify preconditions and migrate via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Any failed command aborts. Nothing below is allowed to "continue anyway".
           script_stop: true
           script: |
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
 
-            # The deployed tree must be the one being migrated.
-            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
-              || { echo "deployed HEAD is not ${{ inputs.ref }} — deploy first" >&2; exit 1; }
+            DBU="$(docker exec op-backend printenv DB_USER)"
+            DBN="$(docker exec op-backend printenv DB_NAME)"
+            psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
+            # ---- PRECONDITION 1: the backup artifact exists and is non-trivial.
+            # This does NOT prove a restore was tested — only the reviewer can
+            # confirm that — but it does catch a path that is wrong or empty.
+            test -f "${{ inputs.backup_path }}" \
+              || { echo "backup artifact not found: ${{ inputs.backup_path }}" >&2; exit 1; }
+            BSIZE=$(stat -c%s "${{ inputs.backup_path }}")
+            [ "$BSIZE" -gt 1048576 ] \
+              || { echo "backup artifact suspiciously small: ${BSIZE} bytes" >&2; exit 1; }
+            echo "backup artifact: ${{ inputs.backup_path }} (${BSIZE} bytes)"
+
+            # ---- PRECONDITION 2: scheduled ingestion is OFF. Verified, not asserted.
+            FLAG="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
+            [ "$FLAG" != "true" ] \
+              || { echo "BONFIRE_ENGINE_ENABLED=true — pause ingestion before migrating" >&2; exit 1; }
+            echo "ingestion flag: ${FLAG}"
+
+            # ---- PRECONDITION 3: nothing in flight. Two reads, 60s apart.
+            R1=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
+            sleep 60
+            R2=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
+            [ "$R1" = "0" ] && [ "$R2" = "0" ] \
+              || { echo "ingestion in flight (running=${R1} then ${R2}) — drain before migrating" >&2; exit 1; }
+            echo "drained: running=0 across two reads"
+
+            # ---- BASELINE BEFORE (recorded so 'nothing was rewritten' is checkable)
             echo "--- baseline BEFORE ---"
-            docker exec op-backend npx sequelize-cli db:migrate:status | tail -20
-            docker exec op-postgres psql -U "$(docker exec op-backend printenv DB_USER)" \
-              -d "$(docker exec op-backend printenv DB_NAME)" -t -A -F'|' -c \
-              "select count(*), count(close_date), count(*) filter (where close_date_verified_at is not null) from bonfire_opportunities;" \
-              2>/dev/null || echo "(close_date_verified_at absent pre-migration, as expected)"
+            psql_t -F'|' -c "select count(*) total, count(close_date) with_close, count(*) filter (where close_date >= now()) still_open from bonfire_opportunities;"
 
-            docker exec op-backend npx sequelize-cli db:migrate
+            # ---- Obtain the migration: check out the reviewed commit and BUILD the
+            # image from it. The running container is the old image and does not
+            # contain the new migration file, which is why `docker exec` into it
+            # would silently find nothing pending.
+            git fetch origin --prune
+            git checkout --detach ${{ inputs.ref }}
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
+              || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
 
-            echo "--- baseline AFTER (verified count MUST still be 0) ---"
-            docker exec op-postgres psql -U "$(docker exec op-backend printenv DB_USER)" \
-              -d "$(docker exec op-backend printenv DB_NAME)" -t -A -F'|' -c \
-              "select count(*), count(close_date), count(*) filter (where close_date_verified_at is not null) from bonfire_opportunities;"
-            echo "Migrated at $(date -u)"
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+
+            # Build only. The serving container is NOT replaced by this step.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+
+            # Prove the artifact really contains the migration before running it.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              sh -c 'ls -1 src/migrations | tail -5'
+
+            echo "--- pending BEFORE ---"
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate:status | tail -20
+
+            # ---- MIGRATE from the one-shot container built from the reviewed commit.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate
+
+            echo "--- pending AFTER (must show none down) ---"
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate:status | tail -20
+
+            # ---- BASELINE AFTER: additive means these must be unchanged, and
+            # nothing may have been marked verified.
+            echo "--- baseline AFTER ---"
+            psql_t -F'|' -c "select count(*) total, count(close_date) with_close, count(*) filter (where close_date >= now()) still_open from bonfire_opportunities;"
+            VERIFIED=$(psql_t -c "select count(*) from bonfire_opportunities where close_date_verified_at is not null;")
+            [ "$VERIFIED" = "0" ] \
+              || { echo "MIGRATION MARKED ${VERIFIED} ROWS VERIFIED — expected 0" >&2; exit 1; }
+            echo "verified rows after migration: ${VERIFIED} (expected 0)"
+
+            # ---- Snapshot immutability trigger is live.
+            if docker exec op-postgres psql -U "$DBU" -d "$DBN" -c \
+                 "update gov_source_snapshots set content_hash = 'x';" >/dev/null 2>&1; then
+              echo "immutability trigger did NOT reject an UPDATE" >&2; exit 1
+            fi
+            echo "immutability trigger rejects UPDATE, as expected"
+
+            echo "Migrated from $(git rev-parse HEAD) at $(date -u). Serving container NOT restarted."

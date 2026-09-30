@@ -2,19 +2,21 @@ name: Release (manual)
 
 # Deploying is a decision, not a side effect of merging.
 #
-# The old arrangement ran a deploy from ci.yml on every push to main, SSHed to the
-# server, pulled, rebuilt every container and then ran `db:migrate` — with no
-# approval gate, no environment, and no branch protection. Merging PR #2 would
-# therefore have deployed Phase 1 alone and migrated production unattended.
+# The old arrangement ran a deploy from ci.yml on every push to main: SSH, `git
+# pull`, rebuild every container, then `db:migrate` — with no approval gate, no
+# environment and no branch protection. Merging Phase 1 would have deployed Phase 1
+# alone and migrated production unattended.
 #
-# This workflow replaces that. It runs ONLY when a human dispatches it, it refuses
-# trees that would regress production, it never migrates as part of a code deploy,
-# and it stops on the first failed command.
+# This workflow runs ONLY on manual dispatch, refuses trees that would regress
+# production, refuses to run BEFORE the schema it needs exists, keeps scheduled
+# ingestion off across the rollout, and stops on the first failed command.
+#
+# ORDER: migrate.yml first, then this. Enforced below, not merely documented.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Commit SHA or ref to deploy (use a full SHA for an auditable release)'
+        description: 'Reviewed commit SHA to deploy (full SHA for an auditable release)'
         required: true
       confirm:
         description: 'Type DEPLOY to confirm you intend to change production'
@@ -28,7 +30,7 @@ on:
         required: false
 
 concurrency:
-  # Two releases must never interleave on one server.
+  # A release and a migration must never interleave on one server.
   group: production-release
   cancel-in-progress: false
 
@@ -53,8 +55,12 @@ jobs:
       - name: Record exactly what is being released
         run: |
           set -euo pipefail
-          echo "release_sha=$(git rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
-          git log -1 --format='%H %an %ad %s' | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Release candidate"
+            echo "- sha: \`$(git rev-parse HEAD)\`"
+            echo "- $(git log -1 --format='%an, %ad')"
+            echo "- subject: $(git log -1 --format='%s')"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Release preflight gates
         if: ${{ !inputs.skip_preflight }}
@@ -78,9 +84,9 @@ jobs:
     name: Deploy to Production
     needs: [preflight]
     runs-on: ubuntu-latest
-    # Requires a GitHub environment named `production` with a required reviewer.
-    # Until that environment exists with reviewers configured, this job runs as
-    # soon as preflight passes — see the repository-settings note in the PR.
+    # Requires the protected `production` environment with required reviewers.
+    # Without that environment configured WITH reviewers, this name resolves to an
+    # unprotected environment and the job proceeds once preflight passes.
     environment: production
     steps:
       - name: Deploy via SSH
@@ -89,42 +95,73 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # Stop on the FIRST failed command. Previously unset, so a failed
-          # `git pull` on a divergent checkout did not stop the script: it went on
-          # to rebuild from the unchanged tree and printed "Deploy successful".
+          # Stop on the FIRST failed command. Previously unset, which is why a
+          # failed `git pull` on a divergent checkout did not stop the script: it
+          # rebuilt from the unchanged tree and printed "Deploy successful".
           script_stop: true
           script: |
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
 
-            # Deploy an explicit commit, and refuse rather than merge. A divergent
-            # checkout is a reconciliation problem for a human, not something a
-            # deploy should paper over.
+            DBU="$(docker exec op-backend printenv DB_USER)"
+            DBN="$(docker exec op-backend printenv DB_NAME)"
+            psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
+
+            # ---- Deploy an explicit commit, and REFUSE rather than merge. A
+            # divergent checkout is a reconciliation problem for a human, not
+            # something a deploy should paper over.
             git fetch origin --prune
             git checkout --detach ${{ inputs.ref }}
-            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
+              || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
 
             ENV_FLAG=""
             if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+
+            # ---- ORDER GATE: the schema this code needs must already exist.
+            # Build the candidate image and ask IT what is still pending. Anything
+            # pending means migrate.yml has not run: refuse rather than deploy code
+            # that expects columns the database does not have.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+            PENDING=$(docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+                        npx sequelize-cli db:migrate:status 2>/dev/null | grep -c '^down ' || true)
+            [ "$PENDING" = "0" ] \
+              || { echo "${PENDING} migration(s) still pending — run migrate.yml BEFORE deploying" >&2; exit 1; }
+            echo "no pending migrations: safe to roll out code"
+
+            # ---- INGESTION GATE: scheduled ingestion must be off across the
+            # rollout, so no scrape can write through a freshly changed code path
+            # before the pilot is authorised.
+            FLAG="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
+            [ "$FLAG" != "true" ] \
+              || { echo "BONFIRE_ENGINE_ENABLED=true — disable scheduled ingestion before rollout" >&2; exit 1; }
+            RUNNING=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
+            [ "$RUNNING" = "0" ] \
+              || { echo "ingestion in flight (running=${RUNNING}) — drain before rollout" >&2; exit 1; }
+            echo "ingestion disabled (flag=${FLAG}) and nothing in flight"
+
+            # ---- Roll out.
             docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
 
-            # Readiness, not liveness: /api/v1/health returns 200 unconditionally
-            # and cannot detect an unready service. /ready returns 503 when the
-            # database is unreachable.
+            # ---- READINESS, not liveness. /api/v1/health returns 200
+            # unconditionally and cannot detect an unready service; /ready returns
+            # 503 when the database is unreachable.
+            READY=0
             for i in $(seq 1 30); do
               if curl -sf http://localhost:3001/api/v1/health/ready >/dev/null; then
-                echo "ready after ${i} attempt(s)"
-                break
-              fi
-              if [ "$i" = "30" ]; then
-                echo "service did not become ready" >&2
-                exit 1
+                echo "ready after ${i} attempt(s)"; READY=1; break
               fi
               sleep 5
             done
+            [ "$READY" = "1" ] || { echo "service did not become ready" >&2; exit 1; }
 
-            # NO db:migrate here, deliberately. Migrations are a separate,
-            # separately authorized action: see migrate.yml. A code deploy that
-            # silently migrates cannot be gated on a verified backup, drained
-            # ingestion or fresh baseline counts.
+            # ---- Post-rollout: ingestion must STILL be off. A rebuild re-reads
+            # .env.prod, so confirm the rollout did not re-arm the scheduler.
+            FLAG2="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
+            [ "$FLAG2" != "true" ] \
+              || { echo "rollout re-armed ingestion (flag=true) — disable and investigate" >&2; exit 1; }
+            echo "post-rollout ingestion flag: ${FLAG2}"
+
+            # NO db:migrate here, deliberately. Migrations are separately
+            # authorised and run BEFORE this workflow: see migrate.yml.
             echo "Deployed $(git rev-parse HEAD) at $(date -u)"
