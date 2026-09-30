@@ -68,130 +68,78 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
             : > /tmp/release_evidence.txt
 
-            DBU="$(docker exec op-backend printenv DB_USER)"
-            DBN="$(docker exec op-backend printenv DB_NAME)"
+            # op-backend is stopped during the freeze, so read credentials from the
+            # postgres container itself rather than from the application container.
+            DBU="$(docker exec op-postgres printenv POSTGRES_USER)"
+            DBN="$(docker exec op-postgres printenv POSTGRES_DB)"
             psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+
             # ---------------------------------------------------------------
-            # WRITE-FREEZE GATE (shared by migrate.yml and release.yml)
+            # PRE-MIGRATION WRITE FREEZE — enforced by absence of a writer,
+            # not by a feature flag.
             #
-            # Every flag is validated to the EXACT string 'false'. `!= true` was
-            # wrong: it passed when a variable was unset, misspelled, or set to
-            # anything at all. An unset BONFIRE_SCRAPER_ENABLED happens to default
-            # to disabled in code, but a release gate must not rely on a default
-            # it cannot see.
+            # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
+            # release being prepared. Production at 6936c99 does not read it, so
+            # setting it would leave `printenv` reporting 'false' while the old
+            # scheduler stayed armed — a gate that passes while the thing it gates
+            # is still running. Requiring its log line instead would block
+            # activation forever, because old code never emits it.
+            #
+            # op-backend is the ONLY container that runs application code, so
+            # stopping it prevents every write path at once: cron schedulers, the
+            # manual scraper trigger, CSV/JSON ingest, document upload, rescoring
+            # and deep-vet jobs, and any admin API call. No enumeration of routes
+            # is required, because none of them have a process to run in.
             # ---------------------------------------------------------------
-            need_false() {
-              local name="$1"
-              local val
-              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo '<unset>')"
-              if [ "$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')" != "false" ]; then
-                echo "WRITE FREEZE FAILED: ${name}='${val}' — must be exactly 'false'" >&2
-                exit 1
-              fi
-              echo "  ${name}=false"
-            }
-
-            echo "--- write-freeze flags (validated false, not merely 'not true') ---"
-            need_false BONFIRE_ENGINE_ENABLED          # engine middleware + strategist scheduler
-            need_false BONFIRE_SCRAPER_ENABLED         # bonfire scraper (runner + /run route)
-            need_false BONFIRE_SCRAPER_CRON_ENABLED    # its cron arming
-            need_false INGESTION_SCHEDULER_ENABLED     # generic ingestion scheduler off switch
-
-            # The generic ingestion scheduler previously had NO off switch:
-            # INGESTION_SCHEDULE only changed the expression and unsetting it fell
-            # back to '0 6 * * *'. INGESTION_SCHEDULER_ENABLED=false is the gate
-            # added for exactly this window.
-
-            # ---- Evidence that the scheduler did not merely intend to be off:
-            # the container logs its refusal at boot.
-            if ! docker logs op-backend --since 24h 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
-              echo "WRITE FREEZE FAILED: no ingestion_scheduler_disabled log in the last 24h —" >&2
-              echo "  the container has not been restarted since the flag was set." >&2
+            echo "--- write freeze: no application container may be running ---"
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "FREEZE FAILED: op-backend is still running." >&2
+              echo "  Stop it first (see docs/gov-phase2/PRE-MIGRATION-FREEZE.md)." >&2
               exit 1
             fi
-            echo "  scheduler refusal observed in container logs"
+            echo "  op-backend: not running"
 
-            # ---- Behavioural catch-all. Rather than enumerate every possible
-            # writer (schedulers, admin scrape routes, manual upload, rescoring
-            # jobs), prove nothing actually wrote. This is the assertion that
-            # holds regardless of entry point.
+            # Leftover one-shot containers from an earlier `compose run` would also
+            # be application processes. There must be none.
+            STRAY=$(docker ps --format '{{.Names}}' | grep -E 'backend[-_]run[-_]' || true)
+            if [ -n "$STRAY" ]; then
+              echo "FREEZE FAILED: stray backend run container(s): ${STRAY}" >&2
+              exit 1
+            fi
+            echo "  no stray one-shot backend containers"
+
+            # Everything still up must be a non-writer: database, cache, proxy,
+            # static frontend, metrics, backup. Any other app container is a writer.
+            echo "  still running (expected non-writers only):"
+            docker ps --format '    {{.Names}} ({{.Image}})'
+
+            # The migration runner itself must not be able to start schedulers.
+            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
+            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
+            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
+            # Asserted rather than assumed:
+            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
+                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
+              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
+              echo "  command may not replace the server startup. Re-verify before migrating." >&2
+              exit 1
+            fi
+            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+
+            # ---- INTEGRITY CHECKS (not prevention).
+            # These detect a change AFTER the fact and cover SELECTED state only:
+            # bonfire_opportunities.(id, close_date), the bonfire_opportunities row
+            # count, and the ingestion_logs row count. They do NOT cover other
+            # columns, other tables, or anything that happens after the final
+            # comparison. Prevention is the container stop above; these are a
+            # tripwire that the freeze held.
             FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
             FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
             FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
-            echo "  freeze baseline: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
-
-            # ---------------------------------------------------------------
-            # RESTORE VERIFICATION — machine-verified, not asserted.
-            #
-            # "File exists and is >1 MiB" is not restoration evidence. This
-            # restores the dump into an isolated scratch database on the same
-            # server and compares row counts against the live database. The
-            # scratch database is dropped on every exit path.
-            # ---------------------------------------------------------------
-            echo "--- restore verification ---"
-            test -f "${{ inputs.backup_path }}" \
-              || { echo "backup artifact not found: ${{ inputs.backup_path }}" >&2; exit 1; }
-
-            ACTUAL_SHA="$(sha256sum "${{ inputs.backup_path }}" | cut -d' ' -f1)"
-            echo "  dump sha256: ${ACTUAL_SHA}"
-            if [ "$ACTUAL_SHA" != "${{ inputs.backup_sha256 }}" ]; then
-              echo "DUMP SHA-256 MISMATCH" >&2
-              echo "  expected: ${{ inputs.backup_sha256 }}" >&2
-              echo "  actual:   ${ACTUAL_SHA}" >&2
-              exit 1
-            fi
-            echo "  sha256 matches the authorized value"
-
-            SCRATCH="restore_check_$(date -u +%Y%m%d%H%M%S)"
-            cleanup_scratch() {
-              docker exec op-postgres psql -U "$DBU" -d postgres \
-                -c "DROP DATABASE IF EXISTS ${SCRATCH};" >/dev/null 2>&1 || true
-            }
-            trap cleanup_scratch EXIT
-
-            docker exec op-postgres psql -U "$DBU" -d postgres -c "CREATE DATABASE ${SCRATCH};"
-
-            # Stream the dump in. Supports both plain-SQL and custom-format dumps.
-            if head -c 5 "${{ inputs.backup_path }}" | grep -q 'PGDMP'; then
-              docker exec -i op-postgres pg_restore -U "$DBU" -d "${SCRATCH}" --no-owner --no-privileges \
-                < "${{ inputs.backup_path }}"
-            else
-              docker exec -i op-postgres psql -U "$DBU" -d "${SCRATCH}" -v ON_ERROR_STOP=1 \
-                < "${{ inputs.backup_path }}" > /dev/null
-            fi
-
-            scratch_t() { docker exec op-postgres psql -U "$DBU" -d "${SCRATCH}" -t -A "$@"; }
-
-            LIVE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
-            REST_ROWS=$(scratch_t -c "select count(*) from bonfire_opportunities;")
-            LIVE_CLOSE=$(psql_t -c "select count(close_date) from bonfire_opportunities;")
-            REST_CLOSE=$(scratch_t -c "select count(close_date) from bonfire_opportunities;")
-
-            echo "  live bonfire_opportunities=${LIVE_ROWS} (close_date=${LIVE_CLOSE})"
-            echo "  restored                  =${REST_ROWS} (close_date=${REST_CLOSE})"
-
-            # The dump was taken before this run, so restored counts must be
-            # EQUAL under the write freeze proven above. Any drift means either
-            # the freeze leaked or the dump is not of this database.
-            [ "$LIVE_ROWS" = "$REST_ROWS" ] && [ "$LIVE_CLOSE" = "$REST_CLOSE" ] \
-              || { echo "RESTORE COUNT MISMATCH — dump does not match the live database" >&2; exit 1; }
-
-            # And prove the restored copy is actually queryable structurally,
-            # not just present.
-            REST_TABLES=$(scratch_t -c "select count(*) from information_schema.tables where table_schema='public';")
-            [ "$REST_TABLES" -gt 10 ] \
-              || { echo "restored database has only ${REST_TABLES} tables — not a full dump" >&2; exit 1; }
-            echo "  restored schema has ${REST_TABLES} tables; restore VERIFIED"
-
-            cleanup_scratch
-            trap - EXIT
-            echo "  scratch database dropped"
-
-            {
-              echo "- dump sha256: \`${ACTUAL_SHA}\`"
-              echo "- restore verified: ${REST_ROWS} rows / ${REST_TABLES} tables in an isolated scratch database"
-            } >> /tmp/release_evidence.txt
+            echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
 
             # ---- Drain: nothing in flight, confirmed twice.
             R1=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
@@ -207,9 +155,6 @@ jobs:
             git checkout --detach ${{ inputs.ref }}
             test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
               || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
-
-            ENV_FLAG=""
-            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
 
             docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
 

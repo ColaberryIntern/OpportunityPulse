@@ -96,58 +96,96 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
 
-            DBU="$(docker exec op-backend printenv DB_USER)"
-            DBN="$(docker exec op-backend printenv DB_NAME)"
+            # op-backend is STOPPED for the whole window, so credentials come from
+            # the postgres container, not the application container.
+            DBU="$(docker exec op-postgres printenv POSTGRES_USER)"
+            DBN="$(docker exec op-postgres printenv POSTGRES_DB)"
             psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
             # ---------------------------------------------------------------
-            # WRITE-FREEZE GATE (shared by migrate.yml and release.yml)
+            # need_false(): used AFTER rollout, when the running code actually
+            # reads these flags. Deliberately NOT used before rollout: during the
+            # window op-backend is stopped and has no environment to read, and on
+            # the pre-release code the flag would read back false while the old
+            # scheduler stayed armed.
             #
-            # Every flag is validated to the EXACT string 'false'. `!= true` was
-            # wrong: it passed when a variable was unset, misspelled, or set to
-            # anything at all. An unset BONFIRE_SCRAPER_ENABLED happens to default
-            # to disabled in code, but a release gate must not rely on a default
-            # it cannot see.
+            # Validates the EXACT string false. `!= true` was wrong: it passed when
+            # a variable was unset, misspelled, or set to anything at all.
             # ---------------------------------------------------------------
             need_false() {
               local name="$1"
               local val
-              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo '<unset>')"
-              if [ "$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')" != "false" ]; then
-                echo "WRITE FREEZE FAILED: ${name}='${val}' — must be exactly 'false'" >&2
+              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo unset)"
+              if [ "$(printf %s "$val" | tr "[:upper:]" "[:lower:]")" != "false" ]; then
+                echo "FLAG CHECK FAILED: ${name}=${val} — must be exactly false" >&2
                 exit 1
               fi
               echo "  ${name}=false"
             }
 
-            echo "--- write-freeze flags (validated false, not merely 'not true') ---"
-            need_false BONFIRE_ENGINE_ENABLED          # engine middleware + strategist scheduler
-            need_false BONFIRE_SCRAPER_ENABLED         # bonfire scraper (runner + /run route)
-            need_false BONFIRE_SCRAPER_CRON_ENABLED    # its cron arming
-            need_false INGESTION_SCHEDULER_ENABLED     # generic ingestion scheduler off switch
-
-            # The generic ingestion scheduler previously had NO off switch:
-            # INGESTION_SCHEDULE only changed the expression and unsetting it fell
-            # back to '0 6 * * *'. INGESTION_SCHEDULER_ENABLED=false is the gate
-            # added for exactly this window.
-
-            # ---- Evidence that the scheduler did not merely intend to be off:
-            # the container logs its refusal at boot.
-            if ! docker logs op-backend --since 24h 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
-              echo "WRITE FREEZE FAILED: no ingestion_scheduler_disabled log in the last 24h —" >&2
-              echo "  the container has not been restarted since the flag was set." >&2
+            # ---------------------------------------------------------------
+            # PRE-MIGRATION WRITE FREEZE — enforced by absence of a writer,
+            # not by a feature flag.
+            #
+            # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
+            # release being prepared. Production at 6936c99 does not read it, so
+            # setting it would leave `printenv` reporting 'false' while the old
+            # scheduler stayed armed — a gate that passes while the thing it gates
+            # is still running. Requiring its log line instead would block
+            # activation forever, because old code never emits it.
+            #
+            # op-backend is the ONLY container that runs application code, so
+            # stopping it prevents every write path at once: cron schedulers, the
+            # manual scraper trigger, CSV/JSON ingest, document upload, rescoring
+            # and deep-vet jobs, and any admin API call. No enumeration of routes
+            # is required, because none of them have a process to run in.
+            # ---------------------------------------------------------------
+            echo "--- write freeze: no application container may be running ---"
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "FREEZE FAILED: op-backend is still running." >&2
+              echo "  Stop it first (see docs/gov-phase2/PRE-MIGRATION-FREEZE.md)." >&2
               exit 1
             fi
-            echo "  scheduler refusal observed in container logs"
+            echo "  op-backend: not running"
 
-            # ---- Behavioural catch-all. Rather than enumerate every possible
-            # writer (schedulers, admin scrape routes, manual upload, rescoring
-            # jobs), prove nothing actually wrote. This is the assertion that
-            # holds regardless of entry point.
+            # Leftover one-shot containers from an earlier `compose run` would also
+            # be application processes. There must be none.
+            STRAY=$(docker ps --format '{{.Names}}' | grep -E 'backend[-_]run[-_]' || true)
+            if [ -n "$STRAY" ]; then
+              echo "FREEZE FAILED: stray backend run container(s): ${STRAY}" >&2
+              exit 1
+            fi
+            echo "  no stray one-shot backend containers"
+
+            # Everything still up must be a non-writer: database, cache, proxy,
+            # static frontend, metrics, backup. Any other app container is a writer.
+            echo "  still running (expected non-writers only):"
+            docker ps --format '    {{.Names}} ({{.Image}})'
+
+            # The migration runner itself must not be able to start schedulers.
+            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
+            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
+            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
+            # Asserted rather than assumed:
+            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
+                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
+              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
+              echo "  command may not replace the server startup. Re-verify before migrating." >&2
+              exit 1
+            fi
+            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+
+            # ---- INTEGRITY CHECKS (not prevention).
+            # These detect a change AFTER the fact and cover SELECTED state only:
+            # bonfire_opportunities.(id, close_date), the bonfire_opportunities row
+            # count, and the ingestion_logs row count. They do NOT cover other
+            # columns, other tables, or anything that happens after the final
+            # comparison. Prevention is the container stop above; these are a
+            # tripwire that the freeze held.
             FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
             FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
             FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
-            echo "  freeze baseline: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+            echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
 
             # ---- Deploy an explicit commit, and REFUSE rather than merge.
             git fetch origin --prune
@@ -180,15 +218,34 @@ jobs:
             done
             [ "$READY" = "1" ] || { echo "service did not become ready" >&2; exit 1; }
 
-            # ---- POST-ROLLOUT: the freeze must still hold. A rebuild re-reads
-            # .env.prod, so a flag could have been re-armed; and nothing may have
-            # written while the new image was starting.
-            echo "--- re-verifying the write freeze AFTER rollout ---"
+            # ---- POST-ROLLOUT: the freeze must still hold, and the scheduler must
+            # be provably disabled IN THE CONTAINER NOW RUNNING.
+            #
+            # A log line "within the last 24h" is not evidence: it could come from a
+            # previous container, or from before the flag was set. This reads the
+            # current container's StartedAt and only accepts evidence emitted after
+            # that instant.
+            echo "--- post-rollout: scheduler disabled in the CURRENT container ---"
+            STARTED_AT="$(docker inspect -f '{{.State.StartedAt}}' op-backend)"
+            CONTAINER_ID="$(docker inspect -f '{{.Id}}' op-backend | cut -c1-12)"
+            echo "  container ${CONTAINER_ID} started at ${STARTED_AT}"
+            if ! docker logs op-backend --since "$STARTED_AT" 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
+              echo "POST-ROLLOUT FAILED: container ${CONTAINER_ID} did not log" >&2
+              echo "  ingestion_scheduler_disabled since ${STARTED_AT}." >&2
+              echo "  Either INGESTION_SCHEDULER_ENABLED is not 'false' in the env this" >&2
+              echo "  container received, or this build predates the gate." >&2
+              exit 1
+            fi
+            echo "  ingestion_scheduler_disabled observed in this container's startup"
+
+            # Flags validated to the exact string 'false' — and now meaningful,
+            # because the code running DOES read them.
             need_false BONFIRE_ENGINE_ENABLED
             need_false BONFIRE_SCRAPER_ENABLED
             need_false BONFIRE_SCRAPER_CRON_ENABLED
             need_false INGESTION_SCHEDULER_ENABLED
 
+            # Integrity tripwire: selected state only, checked after the fact.
             POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
             POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
             POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
@@ -198,7 +255,7 @@ jobs:
               || { echo "a close_date VALUE changed across rollout — a writer was active" >&2; exit 1; }
             [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
               || { echo "ingestion_logs grew across rollout (${FREEZE_LOGS} -> ${POST_LOGS})" >&2; exit 1; }
-            echo "freeze held: rows, deadline values and ingestion_logs all unchanged"
+            echo "  integrity tripwire held on the state it covers"
 
             # NO db:migrate here, deliberately. See migrate.yml.
             echo "Deployed $(git rev-parse HEAD) at $(date -u)"
