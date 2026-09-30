@@ -305,6 +305,10 @@ The union was built by actually merging the two branches in a throwaway worktree
 
 ## 10. Revised landing order
 
+> **Prerequisite zero: read §13 first.** Merging into `main` currently triggers an unattended
+> production deploy that also runs `db:migrate`. Until that coupling is resolved, **no PR below should
+> be merged** — the order is correct, but it cannot be executed safely yet.
+
 Four PRs, in this order. Each step is separately authorizable.
 
 1. **PR #5 — healthcheck fix** (`fix/healthcheck-readiness-not-rate-limited`, base `main`). Independent of the gov stack; no file overlap with #4, #2 or #3. Land it **before the rollout** so the deploy's own health signal is trustworthy. Takes effect on the next image build only.
@@ -319,6 +323,10 @@ Four PRs, in this order. Each step is separately authorizable.
 9. **Deploy #2 and #3 together, in one rollout.** Never #2 alone: `closeDate` is in `updateOnDuplicate` and with no Phase 2 tables it is the only publisher, so a re-scrape would shift stored deadlines — six hours exactly for the Utah MDT case — with no verification column, observation, snapshot or superseded history.
 
 ## 11. Activation sequence (explicit; nothing below is authorized yet)
+
+> **§13 blocks this sequence.** Steps 1-4 assume the migration is applied deliberately, after a drained
+> ingestion and a verified backup. The CI deploy job runs `db:migrate` automatically on merge, which
+> would bypass all of it.
 
 Ordered, each step gated on the previous one's evidence.
 
@@ -410,3 +418,63 @@ A green run of items 1–5 proves the pipe works. It does **not** establish qual
 - **`companyQualification` is always `null`.** The API does not determine whether any company qualifies.
 - `sourceAssessment` carries `isNotEligibilityDetermination: true`, and `legacy.deprecation.status` is `advisory_only` with "do not rank on it".
 - `deadline.verifiedAt` means verified **against the notice**, never against the cover page and addenda.
+
+## 13. BLOCKER — merging to `main` auto-deploys and auto-migrates production
+
+Found while verifying PR #5's CI, because one job reported `Deploy to Production: skipped`.
+
+`.github/workflows/ci.yml` stage 9:
+
+```yaml
+deploy:
+  name: Deploy to Production
+  needs: [docker-build]
+  if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  steps:
+    - uses: appleboy/ssh-action@v1
+      with:
+        script: |
+          cd /opt/opportunity-pulse
+          git pull origin main
+          docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
+          sleep 25
+          curl -sf .../api/v1/health || ... || exit 1
+          docker exec op-backend npx sequelize-cli db:migrate
+```
+
+**Every merge into `main` triggers an unattended production deploy that also applies pending migrations.** There is **no approval gate**: the job declares no `environment:`, and the repository has **0 environments configured**, so no required reviewer exists. `main` also has no branch protection.
+
+### Why this invalidates the landing plan as written
+
+§10 and §11 assume merging and deploying are separate, separately authorized acts. **They are not, as currently configured.**
+
+1. **Merging PR #5, PR #4 or an accelerator PR would deploy production immediately** — not on authorization, on merge.
+2. **Merging PR #2 would deploy Phase 1 alone**, which §3 establishes as unacceptable: a re-scrape shifts stored deadlines (six hours for the Utah MDT case) with no verification column, observation, snapshot or superseded history. The stacked sequence necessarily leaves `main` holding Phase 1 without Phase 2 while #3 is retargeted, reviewed and re-checked — and auto-deploy would ship exactly that window.
+3. **`db:migrate` runs automatically**, so the Phase 2 migration would apply with **no fresh baseline counts, no verified backup restoration, and no drained ingestion** — defeating Steps 1–4 of §11.
+4. **The deploy's own smoke check curls `/api/v1/health`**, the endpoint that returns 200 unconditionally (PR #5, defect 2). So the gate that decides whether a deploy "succeeded" cannot detect an unready service. PR #5 fixes the *container* HEALTHCHECK; this curl is a separate line in the deploy script and is **not** changed by it.
+
+### What would happen today, before reconciliation
+
+Production `main` is divergent from `origin/main` and prod runs git 2.43.0 with `pull.rebase` and `pull.ff` **unset**, so `git pull` on a divergent branch **refuses** (`fatal: Need to specify how to reconcile divergent branches`). The workflow does not set `script_stop`, so on the action's default the script continues past the failure. Either way the outcome is bad:
+
+- **If the script continues:** `docker compose up -d --build` rebuilds and restarts production from the **old, unchanged** checkout, `db:migrate` runs against it, and the job prints `Deploy successful` — an unattended restart of production reported as a successful deploy that shipped nothing.
+- **If it aborts:** the deploy fails after having attempted a pull on the live checkout.
+
+Once the divergence is reconciled (PR #4 + accelerator landed), the pull succeeds — and then merges really do ship code and run migrations unattended.
+
+### Required decision before any merge
+
+This is a production-infrastructure change and therefore a governance boundary; it is **not** something to fix unilaterally. Options, in order of preference:
+
+| Option | Effect | Cost |
+|---|---|---|
+| **A. Add a GitHub environment with a required reviewer** to the `deploy` job (`environment: production`), so merges queue a deploy that waits for explicit approval | Preserves the existing flow, makes every deploy an authorized act, and makes the §11 sequence enforceable | One workflow edit + one repo setting |
+| **B. Gate the deploy on a tag or a manual `workflow_dispatch`** instead of push-to-main | Fully decouples merge from deploy | One workflow edit; changes team habits |
+| **C. Temporarily disable the deploy job** for the duration of the release, re-enabling it after | Simplest; unblocks merging now | Easy to forget to re-enable |
+| **D. Merge nothing until the release window**, accepting that each merge deploys | No changes | Removes the ability to land #4/#5 early, and still auto-migrates |
+
+Separately, and regardless of which option is chosen: **`db:migrate` should not run unattended in the same step as a code deploy**, and the deploy's readiness curl should target `/api/v1/health/ready` rather than `/api/v1/health`.
+
+### Consequence for §10 and §11
+
+**§10's order and §11's sequence remain correct in substance, but neither can be executed safely until this is resolved.** Treat this as prerequisite zero, ahead of PR #4. No PR should be merged — including PR #5 and PR #4 — until the merge-to-deploy coupling is decided.
