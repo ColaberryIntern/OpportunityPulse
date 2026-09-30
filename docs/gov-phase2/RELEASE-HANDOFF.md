@@ -91,7 +91,9 @@ empty against `refs/prod/main`), with its tests passing (9/9, and 406/37 for the
 (`status: resolved_pending_review`).
 
 **Merge PR #4 before any rollout step that touches the prod checkout.** Until it lands, `origin/main`
-is still not a superset of production and the recovery move remains destructive. Note also that
+is still not a superset of production and the recovery move remains destructive. **§9-§11 below supersede
+this section's ordering**: the accelerator branch is also still unmerged, and the full reconciliation,
+the four-PR landing order and the explicit activation sequence live there. Note also that
 `feat/accelerator-bonfire-read-integration` has no PR of its own — its content is safe on origin but
 unmerged, so prod `main` stays divergent from `origin/main` until that lands too.
 
@@ -125,7 +127,10 @@ smoke checks below rely on observing health. Fix separately.
    the new base.
 6. **Then merge #3 → `main`.** Delete both feature branches after #3 lands.
 
-## 5. Bounded activation plan (requires Ali's release authorization; nothing here is done)
+## 5. Bounded activation plan (superseded by §11 — kept for the per-step detail it carries)
+
+> **§11 is the authoritative activation sequence.** It adds the ingestion pause/drain, backup
+> *restoration*, fresh baseline counts and the enforced one-record pilot gate that this section lacks.
 
 Each step is separately authorizable and separately reversible.
 
@@ -265,3 +270,143 @@ over:
   snapshot versioning as soon as they are observed — the plumbing is ready, the observation is not.
 - Provenance of a manual upload is a human, not a portal fetch; the contract has no field asserting
   that, so it must not be presented as source-verified coverage.
+
+## 9. Production-to-origin reconciliation — the complete picture
+
+Measured, not assumed. `refs/prod/main` is a read-only fetch of production's `main` (`6936c99`).
+
+| Compared against | Files where **production** has content the ref lacks |
+|---|---|
+| `origin/main` (`f0c577c`) | **14** |
+| `origin/recovery/prod-ingestion-source-health` (PR #4) | 11 |
+| `origin/feat/accelerator-bonfire-read-integration` (`a3a451a`, **no PR**) | 4 |
+| **Union of PR #4 + the accelerator branch** | **1** |
+
+The union was built by actually merging the two branches in a throwaway worktree (they merge with **zero code conflicts**; one trivial `PROGRESS.md` conflict) and diffing production against the result. What remains is exactly one file:
+
+- `directives/ACCELERATOR_BONFIRE_API_CONTRACT.md` — **7 lines**, the stale `Rollout state as of 2026-09-28 — NOT LIVE` table asserting "deploy blocked", "no credential minted", "no such hostname". Deliberately excluded: the accelerator branch supersedes it with the post-rollout state, and preserving it would reintroduce claims that are now false.
+
+**Therefore: once PR #4 and an accelerator PR both land, `origin/main` contains every line of production *code* and *test*. Zero source files remain production-unique.** The only residual difference is those 7 lines of superseded documentation.
+
+**`origin/main` is not, and is not claimed to be, a byte-for-byte copy of production.** Any checkout replacement on the server must be justified by the functional statement above, not by a byte comparison — and it is only safe **after both PRs land**. Until then, `git reset --hard origin/main` on production still destroys the source-health monitor.
+
+### Production functionality accounted for
+
+| Production capability | Where it lives on origin | Status |
+|---|---|---|
+| Ingestion source-health monitor + scheduler wiring + tests | `recovery/prod-ingestion-source-health` | **PR #4, draft — needs review** |
+| `read:bonfire_source` API-key scope | `feat/accelerator-bonfire-read-integration` | **no PR yet** |
+| `/api/v1/bonfire/best-fit` digest-parity endpoint | same | **no PR yet** |
+| `bestFit` + `sourceFieldsScope` test suites | same | **no PR yet** |
+| Accelerator API contract directive | same (supersedes prod's copy) | **no PR yet** |
+| Stale "NOT LIVE" rollout table | nowhere, by decision | not preserved |
+
+**Blocker:** the accelerator branch carries the **live Enterprise integration surface** — the scope and endpoint Enterprise consumes today — and it has no PR. It must be reviewed and landed as part of the release, not left as an unmerged branch.
+
+## 10. Revised landing order
+
+Four PRs, in this order. Each step is separately authorizable.
+
+1. **PR #5 — healthcheck fix** (`fix/healthcheck-readiness-not-rate-limited`, base `main`). Independent of the gov stack; no file overlap with #4, #2 or #3. Land it **before the rollout** so the deploy's own health signal is trustworthy. Takes effect on the next image build only.
+2. **PR #4 — preservation** (`recovery/prod-ingestion-source-health`, base `main`). Review and land. Until it merges, `origin/main` is not a superset of production.
+3. **A new PR for `feat/accelerator-bonfire-read-integration`** → `main`. This is the remaining production dependency and the live Enterprise surface. **Not yet opened** — needs authorization, since it is someone else's unreviewed branch.
+4. **PR #2 — Phase 1** → `main`, **with a merge commit** (`gh pr merge 2 --merge`), never squash. A squash replaces #2's commits while #3's branch still holds the originals, so #3's diff would re-show every Phase 1 change.
+   - **Retain `feat/gov-deadline-parser-and-contract-v1` until #3 is retargeted.** The repo has `delete_branch_on_merge: false` (verified) — confirm again at merge time rather than assuming.
+5. **Retarget PR #3** to `main` (`gh pr edit 3 --base main`). #2's commits are now ancestors of `main`, so nothing duplicates: no rebase, no force-push.
+6. **Inspect the resulting diff:** `git diff --stat origin/main...origin/feat/gov-phase2-persistence-and-v2-api` must list **only Phase 2 paths**. If Phase 1 paths appear, step 4 did not use a merge commit.
+7. **Re-run checks and re-review on the new base.** Retargeting changes the merge base, so the earlier run no longer describes the diff under review. A green `mergeable` flag reports absence of textual conflict — it is **not** review. `main` has no branch protection, so nothing enforces this mechanically.
+8. **Merge PR #3.** Then delete the two gov feature branches.
+9. **Deploy #2 and #3 together, in one rollout.** Never #2 alone: `closeDate` is in `updateOnDuplicate` and with no Phase 2 tables it is the only publisher, so a re-scrape would shift stored deadlines — six hours exactly for the Utah MDT case — with no verification column, observation, snapshot or superseded history.
+
+## 11. Activation sequence (explicit; nothing below is authorized yet)
+
+Ordered, each step gated on the previous one's evidence.
+
+### Step 1 — Pause and drain scheduled ingestion
+
+Ingestion must not run during migration or rollout: a scrape mid-migration would write through a half-applied schema, and one after code rollout but before the pilot gate would violate the one-record pilot scope.
+
+- **Pause:** set `BONFIRE_ENGINE_ENABLED=false` (the flag `/api/v1/bonfire/flag` already reports, verified `true` in production today) and unset/disable `INGESTION_SCHEDULE`, then restart the backend so no scheduler is armed. Record `/api/v1/bonfire/flag` returning `enabled:false` as the evidence that the pause took effect.
+- **Drain:** confirm no ingestion is in flight before touching the schema —
+  `SELECT count(*) FROM ingestion_logs WHERE status = 'running'` must be **0**, and it must stay 0 across two reads 60s apart. If a run is in flight, wait for it to reach a terminal status; do not kill it mid-write.
+- **Confirm quiet:** no new `ingestion_logs` row for at least one full scheduler interval.
+
+### Step 2 — Verify backup *restoration*, not just backup existence
+
+A dump that has never been restored is not a backup.
+
+- Take a fresh explicit `pg_dump` immediately before migrating; record its byte size and SHA-256.
+- **Restore it into a scratch database on the same server and verify row counts match the source.** Existence of the nightly `op-backup` artifact is not sufficient evidence.
+- Record where the dump lives and how long it is retained.
+
+### Step 3 — Fresh baseline counts, taken at activation time
+
+The counts observed on 2026-09-29 (5,302 rows / 5,192 with `close_date` / 516 still open) are **evidence of method, not the baseline**. Ingestion has run since. Re-measure immediately before migrating and record the new numbers:
+
+```sql
+SELECT count(*) AS total,
+       count(close_date) AS with_close_date,
+       count(*) FILTER (WHERE close_date >= now()) AS still_open,
+       count(*) FILTER (WHERE close_date_verified_at IS NOT NULL) AS verified
+FROM bonfire_opportunities;
+```
+
+The last column must be **0** before and after the migration.
+
+### Step 4 — Apply the additive migration
+
+`20260929000001` only. 23 nullable columns, 5 tables, 2 indexes, 1 immutability trigger. **No backfill, no UPDATE of any existing row.**
+
+Post-migration assertions, all read-only: the Step-3 counts are unchanged; `close_date_verified_at IS NOT NULL` is still **0**; the 5 tables exist and are empty; `UPDATE gov_source_snapshots …` is rejected by the trigger.
+
+### Step 5 — Roll out code
+
+Rebuild and restart `op-backend` from the merged `main`. The new `HEALTHCHECK` (PR #5) takes effect with this build, so container health becomes a real readiness signal at this point — confirm `docker inspect` reports `healthy` with `failing_streak=0`.
+
+### Step 6 — Verify v1 *and* v2
+
+- **v1 regression (the live Enterprise surface):** `/api/v1/bonfire/opportunities`, `/api/v1/bonfire/best-fit`, `/api/v1/bonfire/opportunities/:id` return unchanged shapes; `read:bonfire_source` still gates un-redaction of `sourceUrl`/`rawText`. **Legacy semantics preserved** is a release requirement, not a nice-to-have.
+- **v2 read-only smoke:** `GET /api/v2/gov-opportunities/contract` → 200 with `schemaSha256.committedBlobLf = 26ff667e…`; no credential → **401**; a `read`-only credential → **403**.
+
+### Step 7 — Provision the scoped credential, securely and separately
+
+One API key carrying **`read:gov_opportunities` only**. Do **not** widen the existing `read:bonfire_source` key. Deliver out of band — never into a transcript, ticket, log or PR. Record only the key prefix and the scope set. This is its own authorization, not a rider on Steps 4–6.
+
+### Step 8 — The authorized one-opportunity Utah pilot, and nothing more
+
+Only after release approval, and only after Steps 1–7 have produced their evidence.
+
+- Scope: **one** portal (`utah`), **one** opportunity already present in `bonfire_opportunities`. Not the 1,698 Utah rows, not a new portal, not a corpus re-fetch.
+- **Enforcement, not intention:** re-enable ingestion in a single-record mode rather than re-arming the scheduler — run the scraper for that one `external_id` with the scheduler still disabled, and keep `BONFIRE_ENGINE_ENABLED=false` until the pilot evidence is reviewed. The gate is that the scheduler stays unarmed; a flag alone that some other code path ignores is not a gate.
+- Expected changes, stated in advance so they can be checked afterwards: **1** `bonfire_opportunities` row (its source columns and, if the observation verifies, `close_date` plus the deadline-evidence columns — **`close_date` may move by hours**, which is the corrected parse and the point of the exercise); **1** row in `gov_canonical_opportunities`; **1–2** rows in `gov_source_aliases`; **1** row in `gov_source_snapshots` at version 1. Nothing else, because ingestion is keyed on `external_id`.
+- Evidence retained under `docs/gov-phase2/activation-evidence/`: the row before/after, the snapshot payload, the immutability check (`UPDATE gov_source_snapshots` rejected), and the identity check (the id returned by list resolves through detail).
+- **Resume broader ingestion only after that evidence is reviewed and accepted.** Re-arming the scheduler is a separate authorization.
+
+### Step 9 — Rollback that preserves evidence
+
+- **Code rollback is the first resort and is sufficient for most failures:** redeploy the previous image. The evidence columns and tables are additive; the legacy `close_date` path works with them present and populated.
+- **Do not drop the evidence tables as routine rollback.** They hold the only record of what was observed, including superseded deadline values. Dropping them destroys the audit history this phase exists to create and is not reversible from the application.
+- If the schema itself must go: export `gov_source_snapshots`, `gov_canonical_opportunities` and `gov_source_aliases` to a retained dump **first**, record where it lives, then run the migration's `down` (proven to leave `close_date` intact by `govPhase2Migration.integration.test.js`). Treat it as data destruction requiring its own authorization.
+- A single wrong published deadline after the pilot is remedied by re-running ingestion for that one `external_id` — the write is idempotent and appends a new snapshot rather than editing the old one. **No corpus-wide re-fetch and no historical deadline correction** are part of activation or rollback.
+
+## 12. Enterprise live-integration evidence
+
+What Enterprise must be able to show before the integration counts as live. Each item is a checkable artifact, not an assertion.
+
+| # | Evidence | How it is checked | Status of the field today |
+|---|---|---|---|
+| 1 | **Matching contract hash** | `GET /api/v2/gov-opportunities/contract` → `data.schemaSha256.committedBlobLf` equals `26ff667ed6d669d35fc89dc13886042f23620b1b9cf97b0fc90f1597d6cdd6bb`, and equals Enterprise's vendored copy hashed as a **git blob**. Fail closed on mismatch. | Implemented |
+| 2 | **A real canonical ID** | A `canonicalOpportunityId` matching `^op:gov:[0-9a-f]{32}$` that came from a **list** response, not constructed by hand. | Implemented |
+| 3 | **A persisted snapshot** | `GET /api/v2/gov-opportunities/{id}/snapshots` returns `meta.recorded >= 1` and `data[0].contentHash`; `?snapshotVersion=1` returns the immutable payload. **Requires the pilot ingestion to have run** — before that, `meta.recorded: 0` with the explicit note that none were written. | Implemented; **unpopulated until Step 8** |
+| 4 | **A real "available" resolve** | The id from (2) resolves through **detail** and returns `200` with `data.canonicalOpportunityId` equal to the id requested — i.e. list → detail round-trips on a persisted identity, not on the derivation fallback. Confirm `meta.sourceSnapshotVersion` is non-null, which is what distinguishes the two. | Implemented |
+| 5 | **Source liveness** | ⚠️ **There is no `sourceLive` field.** I checked the contract and the API: no such property exists. The real signal is `data.sourceAvailability`, which is **`null` when the last fetch for that record succeeded** and an object `{status: 'degraded', since, reason, servingLastKnownSnapshot: true}` when it failed; plus a corpus-wide `meta.sourceAvailability` on list. Enterprise should assert `sourceAvailability === null` (record-level) rather than a `sourceLive: true` that does not exist. If a positive boolean is genuinely wanted, that is an **additive v1.1 change** to propose, not an existing field to consume. | **Field does not exist — mapped to `sourceAvailability`** |
+
+### What connectivity does *not* establish
+
+A green run of items 1–5 proves the pipe works. It does **not** establish qualification, and the contract is built so it cannot be read that way:
+
+- **`documents` and `requirements` are empty because nothing was observed.** Ingestion captures no solicitation documents at all — portal scraping reads the notice table only. `documents.coverage` is `inaccessible`, all counts are `0`, `items`/`amendments`/`requirements` are `[]`. That is *not observed*, **not** a reviewed package and **not** an absence of requirements.
+- **Document coverage and cited requirements must pass independently**, through the human route in §7 (portal download → manual upload → `documentDeepVet`). Until the mapper joins uploaded attachments into `documents.items` with per-document `sha256`/version/`supersededByDocId`, an empty `documents` block is silent about coverage and must be treated as unreviewed.
+- **`companyQualification` is always `null`.** The API does not determine whether any company qualifies.
+- `sourceAssessment` carries `isNotEligibilityDetermination: true`, and `legacy.deprecation.status` is `advisory_only` with "do not rank on it".
+- `deadline.verifiedAt` means verified **against the notice**, never against the cover page and addenda.
