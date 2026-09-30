@@ -2,14 +2,10 @@ name: Release (manual)
 
 # Deploying is a decision, not a side effect of merging.
 #
-# The old arrangement ran a deploy from ci.yml on every push to main: SSH, `git
-# pull`, rebuild every container, then `db:migrate` — with no approval gate, no
-# environment and no branch protection. Merging Phase 1 would have deployed Phase 1
-# alone and migrated production unattended.
-#
-# This workflow runs ONLY on manual dispatch, refuses trees that would regress
-# production, refuses to run BEFORE the schema it needs exists, keeps scheduled
-# ingestion off across the rollout, and stops on the first failed command.
+# ci.yml used to deploy on every push to main: SSH, `git pull`, rebuild every
+# container, then `db:migrate` — no approval gate, no environment, no branch
+# protection. Merging Phase 1 would have deployed Phase 1 alone and migrated
+# production unattended.
 #
 # ORDER: migrate.yml first, then this. Enforced below, not merely documented.
 on:
@@ -30,7 +26,6 @@ on:
         required: false
 
 concurrency:
-  # A release and a migration must never interleave on one server.
   group: production-release
   cancel-in-progress: false
 
@@ -57,7 +52,7 @@ jobs:
           set -euo pipefail
           {
             echo "### Release candidate"
-            echo "- sha: \`$(git rev-parse HEAD)\`"
+            echo "- sha: `$(git rev-parse HEAD)`"
             echo "- $(git log -1 --format='%an, %ad')"
             echo "- subject: $(git log -1 --format='%s')"
           } | tee -a "$GITHUB_STEP_SUMMARY"
@@ -85,8 +80,6 @@ jobs:
     needs: [preflight]
     runs-on: ubuntu-latest
     # Requires the protected `production` environment with required reviewers.
-    # Without that environment configured WITH reviewers, this name resolves to an
-    # unprotected environment and the job proceeds once preflight passes.
     environment: production
     steps:
       - name: Deploy via SSH
@@ -96,8 +89,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           # Stop on the FIRST failed command. Previously unset, which is why a
-          # failed `git pull` on a divergent checkout did not stop the script: it
-          # rebuilt from the unchanged tree and printed "Deploy successful".
+          # failed `git pull` did not stop the script: it rebuilt from the
+          # unchanged tree and printed "Deploy successful".
           script_stop: true
           script: |
             set -euo pipefail
@@ -107,9 +100,56 @@ jobs:
             DBN="$(docker exec op-backend printenv DB_NAME)"
             psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
-            # ---- Deploy an explicit commit, and REFUSE rather than merge. A
-            # divergent checkout is a reconciliation problem for a human, not
-            # something a deploy should paper over.
+            # ---------------------------------------------------------------
+            # WRITE-FREEZE GATE (shared by migrate.yml and release.yml)
+            #
+            # Every flag is validated to the EXACT string 'false'. `!= true` was
+            # wrong: it passed when a variable was unset, misspelled, or set to
+            # anything at all. An unset BONFIRE_SCRAPER_ENABLED happens to default
+            # to disabled in code, but a release gate must not rely on a default
+            # it cannot see.
+            # ---------------------------------------------------------------
+            need_false() {
+              local name="$1"
+              local val
+              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo '<unset>')"
+              if [ "$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')" != "false" ]; then
+                echo "WRITE FREEZE FAILED: ${name}='${val}' — must be exactly 'false'" >&2
+                exit 1
+              fi
+              echo "  ${name}=false"
+            }
+
+            echo "--- write-freeze flags (validated false, not merely 'not true') ---"
+            need_false BONFIRE_ENGINE_ENABLED          # engine middleware + strategist scheduler
+            need_false BONFIRE_SCRAPER_ENABLED         # bonfire scraper (runner + /run route)
+            need_false BONFIRE_SCRAPER_CRON_ENABLED    # its cron arming
+            need_false INGESTION_SCHEDULER_ENABLED     # generic ingestion scheduler off switch
+
+            # The generic ingestion scheduler previously had NO off switch:
+            # INGESTION_SCHEDULE only changed the expression and unsetting it fell
+            # back to '0 6 * * *'. INGESTION_SCHEDULER_ENABLED=false is the gate
+            # added for exactly this window.
+
+            # ---- Evidence that the scheduler did not merely intend to be off:
+            # the container logs its refusal at boot.
+            if ! docker logs op-backend --since 24h 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
+              echo "WRITE FREEZE FAILED: no ingestion_scheduler_disabled log in the last 24h —" >&2
+              echo "  the container has not been restarted since the flag was set." >&2
+              exit 1
+            fi
+            echo "  scheduler refusal observed in container logs"
+
+            # ---- Behavioural catch-all. Rather than enumerate every possible
+            # writer (schedulers, admin scrape routes, manual upload, rescoring
+            # jobs), prove nothing actually wrote. This is the assertion that
+            # holds regardless of entry point.
+            FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  freeze baseline: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+
+            # ---- Deploy an explicit commit, and REFUSE rather than merge.
             git fetch origin --prune
             git checkout --detach ${{ inputs.ref }}
             test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
@@ -119,33 +159,18 @@ jobs:
             if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
 
             # ---- ORDER GATE: the schema this code needs must already exist.
-            # Build the candidate image and ask IT what is still pending. Anything
-            # pending means migrate.yml has not run: refuse rather than deploy code
-            # that expects columns the database does not have.
             docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
             PENDING=$(docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
                         npx sequelize-cli db:migrate:status 2>/dev/null | grep -c '^down ' || true)
             [ "$PENDING" = "0" ] \
-              || { echo "${PENDING} migration(s) still pending — run migrate.yml BEFORE deploying" >&2; exit 1; }
+              || { echo "${PENDING} migration(s) pending — run migrate.yml BEFORE deploying" >&2; exit 1; }
             echo "no pending migrations: safe to roll out code"
-
-            # ---- INGESTION GATE: scheduled ingestion must be off across the
-            # rollout, so no scrape can write through a freshly changed code path
-            # before the pilot is authorised.
-            FLAG="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
-            [ "$FLAG" != "true" ] \
-              || { echo "BONFIRE_ENGINE_ENABLED=true — disable scheduled ingestion before rollout" >&2; exit 1; }
-            RUNNING=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
-            [ "$RUNNING" = "0" ] \
-              || { echo "ingestion in flight (running=${RUNNING}) — drain before rollout" >&2; exit 1; }
-            echo "ingestion disabled (flag=${FLAG}) and nothing in flight"
 
             # ---- Roll out.
             docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
 
             # ---- READINESS, not liveness. /api/v1/health returns 200
-            # unconditionally and cannot detect an unready service; /ready returns
-            # 503 when the database is unreachable.
+            # unconditionally; /ready returns 503 when the database is down.
             READY=0
             for i in $(seq 1 30); do
               if curl -sf http://localhost:3001/api/v1/health/ready >/dev/null; then
@@ -155,13 +180,25 @@ jobs:
             done
             [ "$READY" = "1" ] || { echo "service did not become ready" >&2; exit 1; }
 
-            # ---- Post-rollout: ingestion must STILL be off. A rebuild re-reads
-            # .env.prod, so confirm the rollout did not re-arm the scheduler.
-            FLAG2="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
-            [ "$FLAG2" != "true" ] \
-              || { echo "rollout re-armed ingestion (flag=true) — disable and investigate" >&2; exit 1; }
-            echo "post-rollout ingestion flag: ${FLAG2}"
+            # ---- POST-ROLLOUT: the freeze must still hold. A rebuild re-reads
+            # .env.prod, so a flag could have been re-armed; and nothing may have
+            # written while the new image was starting.
+            echo "--- re-verifying the write freeze AFTER rollout ---"
+            need_false BONFIRE_ENGINE_ENABLED
+            need_false BONFIRE_SCRAPER_ENABLED
+            need_false BONFIRE_SCRAPER_CRON_ENABLED
+            need_false INGESTION_SCHEDULER_ENABLED
 
-            # NO db:migrate here, deliberately. Migrations are separately
-            # authorised and run BEFORE this workflow: see migrate.yml.
+            POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            [ "$POST_ROWS" = "$FREEZE_ROWS" ] \
+              || { echo "row count changed across rollout (${FREEZE_ROWS} -> ${POST_ROWS})" >&2; exit 1; }
+            [ "$POST_SUM" = "$FREEZE_SUM" ] \
+              || { echo "a close_date VALUE changed across rollout — a writer was active" >&2; exit 1; }
+            [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
+              || { echo "ingestion_logs grew across rollout (${FREEZE_LOGS} -> ${POST_LOGS})" >&2; exit 1; }
+            echo "freeze held: rows, deadline values and ingestion_logs all unchanged"
+
+            # NO db:migrate here, deliberately. See migrate.yml.
             echo "Deployed $(git rev-parse HEAD) at $(date -u)"

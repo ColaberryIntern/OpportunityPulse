@@ -3,20 +3,16 @@ name: Migrate production database (manual)
 # Migrations run BEFORE the application rollout, and from an artifact that
 # actually contains them.
 #
-# Two defects in the first draft of this workflow, both fixed here:
-#
-#   1. It asserted the DEPLOYED HEAD equalled the ref, which forced
-#      deploy-before-migrate. For an additive migration that is the wrong order:
-#      it opens a window where new code expects columns that do not exist yet.
-#      The correct order is migrate first, then roll out code.
-#
-#   2. It ran `docker exec op-backend npx sequelize-cli db:migrate`, i.e. inside
-#      the RUNNING container, which is built from the OLD image and therefore does
-#      not contain the new migration file. That step would have reported nothing
-#      pending and silently done nothing.
-#
-# This version builds the image from the reviewed commit and runs the migration in
-# a ONE-SHOT container from that image, leaving the serving container untouched.
+# Three defects fixed across revisions of this workflow:
+#   1. It asserted the DEPLOYED HEAD equalled the ref, forcing deploy-before-
+#      migrate. For an additive migration that is backwards.
+#   2. It ran `docker exec op-backend ... db:migrate`, i.e. inside the RUNNING
+#      container built from the OLD image, which does not contain the new
+#      migration file. It would have found nothing pending and exited 0.
+#   3. Its gates were operator assertions. Backup "evidence" was file existence
+#      and size; the write freeze was `!= true`, which passes when a variable is
+#      unset or misspelled; and immutability was an UPDATE against an empty
+#      table, which affects 0 rows and proves nothing.
 on:
   workflow_dispatch:
     inputs:
@@ -27,11 +23,14 @@ on:
         description: 'Type MIGRATE to confirm you intend to change the production schema'
         required: true
       backup_path:
-        description: 'Absolute path on the server to the restore-tested pg_dump artifact'
+        description: 'Absolute path on the server to the pg_dump artifact'
         required: true
-      backup_restore_evidence:
-        description: 'How the restore was verified (scratch DB name + row counts compared)'
+      backup_sha256:
+        description: 'SHA-256 of that dump. Verified on the server; a mismatch aborts.'
         required: true
+      restore_report_path:
+        description: 'Optional: path to a retained restoration report for the same SHA-256'
+        required: false
 
 concurrency:
   group: production-release
@@ -44,70 +43,166 @@ jobs:
     # Requires the protected `production` environment with required reviewers.
     environment: production
     steps:
-      - name: Operator assertions must be explicit
+      - name: Operator intent must be explicit
         run: |
           set -euo pipefail
           [ "${{ inputs.confirm }}" = "MIGRATE" ] || { echo "::error::confirm must be MIGRATE"; exit 1; }
-          [ -n "${{ inputs.backup_path }}" ] || { echo "::error::backup_path required"; exit 1; }
-          [ -n "${{ inputs.backup_restore_evidence }}" ] || { echo "::error::backup_restore_evidence required"; exit 1; }
+          [ -n "${{ inputs.backup_path }}" ]   || { echo "::error::backup_path required"; exit 1; }
+          [ -n "${{ inputs.backup_sha256 }}" ] || { echo "::error::backup_sha256 required"; exit 1; }
           {
-            echo "### Migration authorization (operator assertions)"
-            echo "- ref: \`${{ inputs.ref }}\`"
-            echo "- backup artifact: \`${{ inputs.backup_path }}\`"
-            echo "- restore evidence: ${{ inputs.backup_restore_evidence }}"
-            echo ""
-            echo "Machine-verified preconditions follow. The reviewer must independently confirm"
-            echo "the restore was actually performed and that the row counts matched."
+            echo "### Migration authorization"
+            echo "- ref: `${{ inputs.ref }}`"
+            echo "- dump: `${{ inputs.backup_path }}`"
+            echo "- expected sha256: `${{ inputs.backup_sha256 }}`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify preconditions and migrate via SSH
+      - name: Verify, restore-test, migrate and prove via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # Any failed command aborts. Nothing below is allowed to "continue anyway".
           script_stop: true
           script: |
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+            : > /tmp/release_evidence.txt
 
             DBU="$(docker exec op-backend printenv DB_USER)"
             DBN="$(docker exec op-backend printenv DB_NAME)"
             psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
-            # ---- PRECONDITION 1: the backup artifact exists and is non-trivial.
-            # This does NOT prove a restore was tested — only the reviewer can
-            # confirm that — but it does catch a path that is wrong or empty.
+            # ---------------------------------------------------------------
+            # WRITE-FREEZE GATE (shared by migrate.yml and release.yml)
+            #
+            # Every flag is validated to the EXACT string 'false'. `!= true` was
+            # wrong: it passed when a variable was unset, misspelled, or set to
+            # anything at all. An unset BONFIRE_SCRAPER_ENABLED happens to default
+            # to disabled in code, but a release gate must not rely on a default
+            # it cannot see.
+            # ---------------------------------------------------------------
+            need_false() {
+              local name="$1"
+              local val
+              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo '<unset>')"
+              if [ "$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')" != "false" ]; then
+                echo "WRITE FREEZE FAILED: ${name}='${val}' — must be exactly 'false'" >&2
+                exit 1
+              fi
+              echo "  ${name}=false"
+            }
+
+            echo "--- write-freeze flags (validated false, not merely 'not true') ---"
+            need_false BONFIRE_ENGINE_ENABLED          # engine middleware + strategist scheduler
+            need_false BONFIRE_SCRAPER_ENABLED         # bonfire scraper (runner + /run route)
+            need_false BONFIRE_SCRAPER_CRON_ENABLED    # its cron arming
+            need_false INGESTION_SCHEDULER_ENABLED     # generic ingestion scheduler off switch
+
+            # The generic ingestion scheduler previously had NO off switch:
+            # INGESTION_SCHEDULE only changed the expression and unsetting it fell
+            # back to '0 6 * * *'. INGESTION_SCHEDULER_ENABLED=false is the gate
+            # added for exactly this window.
+
+            # ---- Evidence that the scheduler did not merely intend to be off:
+            # the container logs its refusal at boot.
+            if ! docker logs op-backend --since 24h 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
+              echo "WRITE FREEZE FAILED: no ingestion_scheduler_disabled log in the last 24h —" >&2
+              echo "  the container has not been restarted since the flag was set." >&2
+              exit 1
+            fi
+            echo "  scheduler refusal observed in container logs"
+
+            # ---- Behavioural catch-all. Rather than enumerate every possible
+            # writer (schedulers, admin scrape routes, manual upload, rescoring
+            # jobs), prove nothing actually wrote. This is the assertion that
+            # holds regardless of entry point.
+            FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  freeze baseline: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+
+            # ---------------------------------------------------------------
+            # RESTORE VERIFICATION — machine-verified, not asserted.
+            #
+            # "File exists and is >1 MiB" is not restoration evidence. This
+            # restores the dump into an isolated scratch database on the same
+            # server and compares row counts against the live database. The
+            # scratch database is dropped on every exit path.
+            # ---------------------------------------------------------------
+            echo "--- restore verification ---"
             test -f "${{ inputs.backup_path }}" \
               || { echo "backup artifact not found: ${{ inputs.backup_path }}" >&2; exit 1; }
-            BSIZE=$(stat -c%s "${{ inputs.backup_path }}")
-            [ "$BSIZE" -gt 1048576 ] \
-              || { echo "backup artifact suspiciously small: ${BSIZE} bytes" >&2; exit 1; }
-            echo "backup artifact: ${{ inputs.backup_path }} (${BSIZE} bytes)"
 
-            # ---- PRECONDITION 2: scheduled ingestion is OFF. Verified, not asserted.
-            FLAG="$(docker exec op-backend printenv BONFIRE_ENGINE_ENABLED || echo unset)"
-            [ "$FLAG" != "true" ] \
-              || { echo "BONFIRE_ENGINE_ENABLED=true — pause ingestion before migrating" >&2; exit 1; }
-            echo "ingestion flag: ${FLAG}"
+            ACTUAL_SHA="$(sha256sum "${{ inputs.backup_path }}" | cut -d' ' -f1)"
+            echo "  dump sha256: ${ACTUAL_SHA}"
+            if [ "$ACTUAL_SHA" != "${{ inputs.backup_sha256 }}" ]; then
+              echo "DUMP SHA-256 MISMATCH" >&2
+              echo "  expected: ${{ inputs.backup_sha256 }}" >&2
+              echo "  actual:   ${ACTUAL_SHA}" >&2
+              exit 1
+            fi
+            echo "  sha256 matches the authorized value"
 
-            # ---- PRECONDITION 3: nothing in flight. Two reads, 60s apart.
+            SCRATCH="restore_check_$(date -u +%Y%m%d%H%M%S)"
+            cleanup_scratch() {
+              docker exec op-postgres psql -U "$DBU" -d postgres \
+                -c "DROP DATABASE IF EXISTS ${SCRATCH};" >/dev/null 2>&1 || true
+            }
+            trap cleanup_scratch EXIT
+
+            docker exec op-postgres psql -U "$DBU" -d postgres -c "CREATE DATABASE ${SCRATCH};"
+
+            # Stream the dump in. Supports both plain-SQL and custom-format dumps.
+            if head -c 5 "${{ inputs.backup_path }}" | grep -q 'PGDMP'; then
+              docker exec -i op-postgres pg_restore -U "$DBU" -d "${SCRATCH}" --no-owner --no-privileges \
+                < "${{ inputs.backup_path }}"
+            else
+              docker exec -i op-postgres psql -U "$DBU" -d "${SCRATCH}" -v ON_ERROR_STOP=1 \
+                < "${{ inputs.backup_path }}" > /dev/null
+            fi
+
+            scratch_t() { docker exec op-postgres psql -U "$DBU" -d "${SCRATCH}" -t -A "$@"; }
+
+            LIVE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            REST_ROWS=$(scratch_t -c "select count(*) from bonfire_opportunities;")
+            LIVE_CLOSE=$(psql_t -c "select count(close_date) from bonfire_opportunities;")
+            REST_CLOSE=$(scratch_t -c "select count(close_date) from bonfire_opportunities;")
+
+            echo "  live bonfire_opportunities=${LIVE_ROWS} (close_date=${LIVE_CLOSE})"
+            echo "  restored                  =${REST_ROWS} (close_date=${REST_CLOSE})"
+
+            # The dump was taken before this run, so restored counts must be
+            # EQUAL under the write freeze proven above. Any drift means either
+            # the freeze leaked or the dump is not of this database.
+            [ "$LIVE_ROWS" = "$REST_ROWS" ] && [ "$LIVE_CLOSE" = "$REST_CLOSE" ] \
+              || { echo "RESTORE COUNT MISMATCH — dump does not match the live database" >&2; exit 1; }
+
+            # And prove the restored copy is actually queryable structurally,
+            # not just present.
+            REST_TABLES=$(scratch_t -c "select count(*) from information_schema.tables where table_schema='public';")
+            [ "$REST_TABLES" -gt 10 ] \
+              || { echo "restored database has only ${REST_TABLES} tables — not a full dump" >&2; exit 1; }
+            echo "  restored schema has ${REST_TABLES} tables; restore VERIFIED"
+
+            cleanup_scratch
+            trap - EXIT
+            echo "  scratch database dropped"
+
+            {
+              echo "- dump sha256: \`${ACTUAL_SHA}\`"
+              echo "- restore verified: ${REST_ROWS} rows / ${REST_TABLES} tables in an isolated scratch database"
+            } >> /tmp/release_evidence.txt
+
+            # ---- Drain: nothing in flight, confirmed twice.
             R1=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
             sleep 60
             R2=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
             [ "$R1" = "0" ] && [ "$R2" = "0" ] \
-              || { echo "ingestion in flight (running=${R1} then ${R2}) — drain before migrating" >&2; exit 1; }
+              || { echo "ingestion in flight (running=${R1} then ${R2})" >&2; exit 1; }
             echo "drained: running=0 across two reads"
 
-            # ---- BASELINE BEFORE (recorded so 'nothing was rewritten' is checkable)
-            echo "--- baseline BEFORE ---"
-            psql_t -F'|' -c "select count(*) total, count(close_date) with_close, count(*) filter (where close_date >= now()) still_open from bonfire_opportunities;"
-
-            # ---- Obtain the migration: check out the reviewed commit and BUILD the
-            # image from it. The running container is the old image and does not
-            # contain the new migration file, which is why `docker exec` into it
-            # would silently find nothing pending.
+            # ---- Obtain the migration: check out the reviewed commit and BUILD
+            # the image from it. The running container is the old image.
             git fetch origin --prune
             git checkout --detach ${{ inputs.ref }}
             test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
@@ -116,39 +211,93 @@ jobs:
             ENV_FLAG=""
             if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
 
-            # Build only. The serving container is NOT replaced by this step.
             docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
 
-            # Prove the artifact really contains the migration before running it.
+            # Prove the artifact contains the migration before running it.
             docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
-              sh -c 'ls -1 src/migrations | tail -5'
+              sh -c 'ls -1 src/migrations | grep 20260929000001' \
+              || { echo "built image does not contain the Phase 2 migration" >&2; exit 1; }
 
             echo "--- pending BEFORE ---"
             docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
               npx sequelize-cli db:migrate:status | tail -20
 
-            # ---- MIGRATE from the one-shot container built from the reviewed commit.
+            # ---- MIGRATE from the one-shot container. Serving container untouched.
             docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
               npx sequelize-cli db:migrate
 
-            echo "--- pending AFTER (must show none down) ---"
+            echo "--- pending AFTER ---"
             docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
               npx sequelize-cli db:migrate:status | tail -20
 
-            # ---- BASELINE AFTER: additive means these must be unchanged, and
-            # nothing may have been marked verified.
-            echo "--- baseline AFTER ---"
-            psql_t -F'|' -c "select count(*) total, count(close_date) with_close, count(*) filter (where close_date >= now()) still_open from bonfire_opportunities;"
+            # ---------------------------------------------------------------
+            # PROOF THE MIGRATION RAN — not "the command exited 0".
+            # ---------------------------------------------------------------
+            echo "--- proof: SequelizeMeta entry ---"
+            META=$(psql_t -c "select count(*) from \"SequelizeMeta\" where name = '20260929000001-gov-phase2-deadline-evidence-and-identity.js';")
+            [ "$META" = "1" ] \
+              || { echo "SequelizeMeta has ${META} rows for the Phase 2 migration — expected exactly 1" >&2; exit 1; }
+            psql_t -c "select name from \"SequelizeMeta\" order by name desc limit 3;"
+
+            echo "--- proof: expected schema objects ---"
+            TBLS=$(psql_t -c "select count(*) from information_schema.tables where table_schema='public' and table_name in ('gov_canonical_opportunities','gov_source_aliases','gov_source_snapshots','gov_solicitation_families','gov_family_members');")
+            [ "$TBLS" = "5" ] || { echo "expected 5 gov tables, found ${TBLS}" >&2; exit 1; }
+            COLS=$(psql_t -c "select count(*) from information_schema.columns where table_name='bonfire_opportunities' and column_name like 'close\\_date%';")
+            [ "$COLS" -ge 24 ] \
+              || { echo "expected >=24 close_date* columns (1 original + 23 added), found ${COLS}" >&2; exit 1; }
+            IDX=$(psql_t -c "select count(*) from pg_indexes where tablename='gov_canonical_opportunities' and indexdef ilike '%unique%canonical_public_id%';")
+            [ "$IDX" -ge 1 ] || { echo "unique index on canonical_public_id missing" >&2; exit 1; }
+            TRG=$(psql_t -c "select count(*) from pg_trigger where tgname='trg_gov_source_snapshots_immutable' and not tgisinternal;")
+            [ "$TRG" = "1" ] || { echo "immutability trigger missing" >&2; exit 1; }
+            echo "  5 tables, ${COLS} close_date* columns, unique canonical index, trigger present"
+
+            echo "--- proof: existing data UNCHANGED (counts AND deadline values) ---"
+            POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  rows: ${FREEZE_ROWS} -> ${POST_ROWS}"
+            echo "  deadline checksum: ${FREEZE_SUM} -> ${POST_SUM}"
+            [ "$POST_ROWS" = "$FREEZE_ROWS" ] \
+              || { echo "ROW COUNT CHANGED during migration" >&2; exit 1; }
+            [ "$POST_SUM" = "$FREEZE_SUM" ] \
+              || { echo "A close_date VALUE CHANGED during migration — the migration must be additive" >&2; exit 1; }
+            [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
+              || { echo "ingestion_logs grew during the freeze (${FREEZE_LOGS} -> ${POST_LOGS}) — something wrote" >&2; exit 1; }
+            echo "  existing rows, deadline values and ingestion_logs all unchanged"
+
+            echo "--- proof: nothing marked verified, new tables EMPTY before the pilot ---"
             VERIFIED=$(psql_t -c "select count(*) from bonfire_opportunities where close_date_verified_at is not null;")
-            [ "$VERIFIED" = "0" ] \
-              || { echo "MIGRATION MARKED ${VERIFIED} ROWS VERIFIED — expected 0" >&2; exit 1; }
-            echo "verified rows after migration: ${VERIFIED} (expected 0)"
+            [ "$VERIFIED" = "0" ] || { echo "migration marked ${VERIFIED} rows verified — expected 0" >&2; exit 1; }
+            for t in gov_canonical_opportunities gov_source_aliases gov_source_snapshots gov_solicitation_families gov_family_members; do
+              C=$(psql_t -c "select count(*) from ${t};")
+              [ "$C" = "0" ] || { echo "${t} has ${C} rows before the pilot — expected 0" >&2; exit 1; }
+              echo "  ${t}=0"
+            done
 
-            # ---- Snapshot immutability trigger is live.
-            if docker exec op-postgres psql -U "$DBU" -d "$DBN" -c \
-                 "update gov_source_snapshots set content_hash = 'x';" >/dev/null 2>&1; then
-              echo "immutability trigger did NOT reject an UPDATE" >&2; exit 1
-            fi
-            echo "immutability trigger rejects UPDATE, as expected"
+            # ---------------------------------------------------------------
+            # IMMUTABILITY EXERCISED against a REAL snapshot, inside a
+            # transaction that is rolled back. An UPDATE against an empty table
+            # affects 0 rows and proves nothing; a generic "command failed" could
+            # be any SQL error. This asserts the SPECIFIC trigger message and
+            # confirms the table is still empty afterwards.
+            # ---------------------------------------------------------------
+            echo "--- proof: immutability trigger fires on a real snapshot ---"
+            # Built as a single psql command string so every line stays indented:
+            # a heredoc body at column 0 terminates the YAML block scalar. Verified
+            # to behave identically to the heredoc form (same error, same rollback).
+            TRIG_SQL="BEGIN;"
+            TRIG_SQL="$TRIG_SQL INSERT INTO gov_canonical_opportunities (canonical_id, canonical_public_id, source_system, source_snapshot_version, created_at, updated_at) VALUES ('99999999-9999-4999-8999-999999999999','op:gov:ffffffffffffffffffffffffffffffff','release-check',1,NOW(),NOW());"
+            TRIG_SQL="$TRIG_SQL INSERT INTO gov_source_snapshots (id, canonical_id, source_snapshot_version, content_hash, fetch_status, payload, created_at) VALUES (gen_random_uuid(),'99999999-9999-4999-8999-999999999999',1,'release-check-hash','success','{\"probe\":true}'::jsonb,NOW());"
+            TRIG_SQL="$TRIG_SQL UPDATE gov_source_snapshots SET content_hash='tampered' WHERE canonical_id='99999999-9999-4999-8999-999999999999';"
+            TRIG_SQL="$TRIG_SQL ROLLBACK;"
+            TRIG_OUT=$(docker exec op-postgres psql -U "$DBU" -d "$DBN" -c "$TRIG_SQL" 2>&1 || true)
+            echo "$TRIG_OUT" | sed 's/^/    /'
+            echo "$TRIG_OUT" | grep -qi 'gov_source_snapshots is append-only'               || { echo "trigger did NOT raise the expected append-only error" >&2; exit 1; }
+            echo "$TRIG_OUT" | grep -q 'INSERT 0 1'               || { echo "the test snapshot was not actually inserted — the UPDATE had nothing to hit" >&2; exit 1; }
+            AFTER_SNAPS=$(psql_t -c "select count(*) from gov_source_snapshots;")
+            AFTER_CANON=$(psql_t -c "select count(*) from gov_canonical_opportunities;")
+            [ "$AFTER_SNAPS" = "0" ] && [ "$AFTER_CANON" = "0" ]               || { echo "aborted transaction leaked rows (snapshots=${AFTER_SNAPS} canonical=${AFTER_CANON})" >&2; exit 1; }
+            echo "  trigger raised the expected error on a real inserted snapshot; transaction left no rows"
 
+            cat /tmp/release_evidence.txt
             echo "Migrated from $(git rev-parse HEAD) at $(date -u). Serving container NOT restarted."
