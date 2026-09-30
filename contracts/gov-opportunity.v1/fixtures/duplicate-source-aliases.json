@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 2,
+  "canonicalOpportunityId": "op:gov:c8c57d9a34b46b3f067c0d066a9d770d",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "688316aed90d4b8fbcef73b0c2e4e8ef",
+  "sourceAliases": [
+    {
+      "idType": "source_record_id",
+      "idValue": "634c8faf6b9d4171bcf6873e153258ed",
+      "observedAt": "2026-05-20T00:00:00.000Z",
+      "note": "Distinct SAM noticeId for the same solicitation number."
+    },
+    {
+      "idType": "legacy_row_id",
+      "idValue": "opportunities.id=96771",
+      "observedAt": "2026-05-20T00:00:00.000Z",
+      "note": "Duplicate row with type=null and fit_score=null - divergent enrichment."
+    },
+    {
+      "idType": "legacy_row_id",
+      "idValue": "opportunities.id=97872",
+      "observedAt": "2026-05-21T00:00:00.000Z",
+      "note": "Duplicate row with type=\"Sources Sought\" and fit_score=49."
+    }
+  ],
+  "solicitationFamily": {
+    "familyId": "opfam:3a93751ef234322c964ab94fe6a2f9ef",
+    "solicitationNumber": "36C10B26Q0485",
+    "linkBasis": "solicitation_number",
+    "confidence": "high",
+    "memberSourceRecordIds": [
+      "688316aed90d4b8fbcef73b0c2e4e8ef",
+      "634c8faf6b9d4171bcf6873e153258ed"
+    ]
+  },
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "SAM.gov",
+      "portal": "sam.gov",
+      "url": "https://sam.gov"
+    },
+    "leadBuyer": {
+      "name": "Department of Veterans Affairs",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-federal"
+    },
+    "officialSourceUrl": "https://sam.gov/opp/688316aed90d4b8fbcef73b0c2e4e8ef/view",
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": "DA01--VA Enterprise Artificial Intelligence (VA-26-00070193)",
+    "noticeType": {
+      "value": "sources_sought",
+      "raw": "Sources Sought",
+      "isResponseInvited": false,
+      "isBindingSolicitation": false,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "not_yet_determined",
+      "basis": "summary",
+      "evidenceRef": null
+    },
+    "contractVehicle": {
+      "value": "none_yet",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "2026-06-09T13:00:00-04:00",
+    "wallClock": "2026-06-09T13:00:00",
+    "statedTimezone": "-04:00",
+    "resolvedZone": "America/New_York",
+    "offsetMinutes": -240,
+    "timezoneSource": "offset",
+    "utc": "2026-06-09T17:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": "2026-09-28T21:00:00.000Z",
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "unknown",
+    "accessBarrier": null,
+    "counts": {
+      "listed": 0,
+      "downloaded": 0,
+      "parsed": 0,
+      "inaccessible": 0
+    },
+    "items": [],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-05-21T00:00:00.000Z",
+    "fetchedAt": null,
+    "enrichedAt": "2026-05-21T00:00:00.000Z",
+    "documentReviewedAt": null,
+    "lastVerifiedAtSource": "2026-09-28T21:00:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "ai_implementation"
+    ],
+    "relevanceBasis": "summary",
+    "assessedBy": "opportunity-pulse/title-screen",
+    "method": "keyword",
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 49,
+    "priorityScore": null,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "Two duplicate rows carried different fitScores (49 and null) for the same notice.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

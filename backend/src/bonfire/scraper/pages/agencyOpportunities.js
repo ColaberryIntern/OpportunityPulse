@@ -10,6 +10,7 @@
 // them and dedupe by ref#. This is robust against tab reordering.
 
 const cheerio = require('cheerio');
+const { parseDeadline } = require('../deadlineParser');
 
 // Default column ordering on the standard DHA-style portal. Some agencies
 // (e.g. metra) inject an extra column (Department) — buildColumnMap() resolves
@@ -45,16 +46,20 @@ function buildColumnMap(headerCells) {
   return map;
 }
 
+/**
+ * Parse a portal close-date cell.
+ *
+ * Delegates to deadlineParser, which keeps the timezone instead of stripping
+ * it and never depends on the process TZ. See that module for why the previous
+ * implementation produced instants up to 7 hours early.
+ *
+ * Returns the full structured result so callers can persist the original text
+ * and the offset alongside the instant. `.utc` is null whenever the timezone
+ * was missing or ambiguous — callers must treat that as "unknown deadline",
+ * NOT as "no deadline".
+ */
 function tryParseDate(s) {
-  if (!s) return null;
-  // Bonfire format: "Apr 27th 2026, 2:00 PM CDT"  — strip ordinals + tz.
-  const cleaned = String(s)
-    .replace(/(\d+)(st|nd|rd|th)/g, '$1') // "27th" -> "27"
-    .replace(/\s+(CST|CDT|EST|EDT|PST|PDT|MST|MDT|UTC|GMT)\b.*/i, '')
-    .trim();
-  const d = new Date(cleaned);
-  if (!Number.isNaN(d.getTime())) return d.toISOString();
-  return cleaned || null;
+  return parseDeadline(s);
 }
 
 function tryParseInt(s) {
@@ -95,11 +100,24 @@ function parseHtml(html) {
       const actionAnchor = $(cells[get('action')]).find('a[href]').first().attr('href') || null;
 
       seen.add(ref);
+      // `closeDate` stays an ISO string (or null) so existing consumers are
+      // unchanged. The structured provenance rides alongside it so the original
+      // text and offset survive — previously both were discarded at parse time.
+      // NOTE: closeDate is null when the timezone was missing or ambiguous.
+      // That means "deadline unknown", not "no deadline"; see closeDateUncertainty.
+      const deadline = tryParseDate(closeRaw);
       records.push({
         refNumber: ref,
         projectName: project,
         status: status || null,
-        closeDate: tryParseDate(closeRaw),
+        closeDate: deadline.utc,
+        closeDateRaw: deadline.originalText,
+        closeDateWallClock: deadline.wallClock,
+        closeDateTimezone: deadline.timezoneLabel,
+        closeDateTimezoneSource: deadline.timezoneSource,
+        closeDateOffsetMinutes: deadline.offsetMinutes,
+        closeDateConfidence: deadline.confidence,
+        closeDateUncertainty: deadline.uncertainty,
         daysLeft,
         portalUrl: actionAnchor,
       });

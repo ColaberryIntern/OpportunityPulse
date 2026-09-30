@@ -11,6 +11,64 @@ class AppError extends Error {
   }
 }
 
+// An undated opportunity counts as open for this many days after it was
+// posted. Many SAM.gov notices (sources sought, special notices) carry no
+// response deadline; without a window they would stay "open" forever.
+const UNDATED_OPEN_WINDOW_DAYS = 30;
+
+function splitList(value) {
+  return String(value).split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Build the `source` column condition from an include list and an exclude
+ * list (both comma-separated). `rss_enriched` is not a source key — it is a
+ * legacy flag handled separately — so it is ignored here.
+ * @returns {object|string|null} Sequelize condition, or null for no filter.
+ */
+function buildSourceCondition(source, excludeSource) {
+  const include = source ? splitList(source).filter((s) => s !== 'rss_enriched') : [];
+  const exclude = excludeSource ? splitList(excludeSource) : [];
+  if (include.length === 0 && exclude.length === 0) return null;
+  if (include.length === 1 && exclude.length === 0) return include[0];
+  const condition = {};
+  if (include.length) condition[Op.in] = include;
+  if (exclude.length) condition[Op.notIn] = exclude;
+  return condition;
+}
+
+// SAM.gov notice types that announce a decision rather than invite a
+// response (award, sole-source justification, bundling, surplus sale). They
+// carry no deadline, so the undated window alone would list them as open —
+// 380 rows in production on 2026-09-18. Both SAM feeds store the type:
+// the API in source_data.type, the scraper in source_data.noticeType.
+// Static SQL (no user input).
+const NOT_A_SOLICITATION = literal(
+  "COALESCE(\"Opportunity\".\"source_data\"->>'type', \"Opportunity\".\"source_data\"->>'noticeType', '') "
+  + "!~* '^(award|justification|consolidate|intent to bundle|sale of surplus)'",
+);
+
+/**
+ * "Still open": the deadline is in the future, or there is no deadline and
+ * the notice was posted within UNDATED_OPEN_WINDOW_DAYS. `status` alone is
+ * not enough — most "active" SAM.gov rows have a response deadline that has
+ * already passed.
+ */
+function buildOpenOnlyCondition(now = new Date()) {
+  const undatedCutoff = new Date(now.getTime() - UNDATED_OPEN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    [Op.or]: [
+      { expiresAt: { [Op.gte]: now } },
+      { expiresAt: null, publishedAt: { [Op.gte]: undatedCutoff } },
+    ],
+  };
+}
+
+/** Everything openOnly=true adds to the query: still open, and invites a response. */
+function buildOpenOnlyConditions(now = new Date()) {
+  return [buildOpenOnlyCondition(now), NOT_A_SOLICITATION];
+}
+
 /**
  * List opportunities with filtering, search, pagination, and sorting.
  */
@@ -36,6 +94,9 @@ async function listOpportunities({
   quadrant,
   cluster,
   source,
+  excludeSource,
+  openOnly,
+  now = new Date(),
 } = {}) {
   const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit });
 
@@ -104,12 +165,26 @@ async function listOpportunities({
   if (source === 'rss_enriched') {
     where.aiAnalysis = { rssSignals: { [Op.ne]: null } };
   }
+  const sourceCondition = buildSourceCondition(source, excludeSource);
+  if (sourceCondition !== null) where.source = sourceCondition;
+
+  // Wrapped in Op.and so it cannot collide with the keyword search's Op.or.
+  if (openOnly === true || openOnly === 'true') {
+    where[Op.and] = buildOpenOnlyConditions(now);
+  }
 
   // Sort order
   let order;
   switch (sort) {
     case 'oldest':
       order = [['published_at', 'ASC']];
+      break;
+    case 'deadline':
+      // Soonest deadline first; undated rows last, newest of those first.
+      order = [
+        [literal('"Opportunity"."expires_at" ASC NULLS LAST')],
+        ['published_at', 'DESC'],
+      ];
       break;
     case 'score':
       order = [['ai_score', 'DESC NULLS LAST']];
@@ -223,6 +298,9 @@ async function listOpportunities({
   if (geo) filters.geo = geo;
   if (quadrant) filters.quadrant = quadrant;
   if (cluster) filters.cluster = cluster;
+  if (source) filters.source = source;
+  if (excludeSource) filters.excludeSource = excludeSource;
+  if (openOnly === true || openOnly === 'true') filters.openOnly = true;
 
   return {
     results,
@@ -344,4 +422,9 @@ module.exports = {
   getOpportunityById,
   getOpportunityStats,
   AppError,
+  buildSourceCondition,
+  buildOpenOnlyCondition,
+  buildOpenOnlyConditions,
+  NOT_A_SOLICITATION,
+  UNDATED_OPEN_WINDOW_DAYS,
 };

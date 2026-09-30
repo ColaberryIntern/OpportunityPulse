@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:e06a9a6f7410d3cfe10eafe0d692bcb3",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "sbir:unavailable",
+  "sourceAliases": [],
+  "solicitationFamily": null,
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "SBIR.gov",
+      "portal": "sbir.gov",
+      "url": "https://www.sbir.gov"
+    },
+    "leadBuyer": {
+      "name": "Unknown (source unreachable)",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-federal"
+    },
+    "officialSourceUrl": null,
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": null,
+    "noticeType": {
+      "value": "unknown",
+      "raw": null,
+      "isResponseInvited": false,
+      "isBindingSolicitation": false,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "unknown",
+      "basis": "not_established",
+      "evidenceRef": null
+    },
+    "contractVehicle": {
+      "value": "unknown",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": null,
+    "wallClock": null,
+    "statedTimezone": null,
+    "resolvedZone": null,
+    "offsetMinutes": null,
+    "timezoneSource": "absent",
+    "utc": null,
+    "utcConfidence": "unknown",
+    "uncertaintyReason": "unparseable",
+    "verifiedAt": null,
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "unknown",
+    "accessBarrier": "source_outage",
+    "counts": {
+      "listed": 0,
+      "downloaded": 0,
+      "parsed": 0,
+      "inaccessible": 0
+    },
+    "items": [],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": null,
+    "fetchedAt": null,
+    "enrichedAt": null,
+    "documentReviewedAt": null,
+    "lastVerifiedAtSource": null
+  },
+  "sourceAssessment": {
+    "serviceCategories": [],
+    "relevanceBasis": "not_assessed",
+    "assessedBy": null,
+    "method": null,
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": null,
+  "sourceAvailability": {
+    "status": "unavailable",
+    "since": "2026-08-13T00:00:00.000Z",
+    "reason": "SBIR.gov returned HTTP 403 on every ingestion attempt; zero rows have ever been stored.",
+    "servingLastKnownSnapshot": false
+  },
+  "companyQualification": null
+}

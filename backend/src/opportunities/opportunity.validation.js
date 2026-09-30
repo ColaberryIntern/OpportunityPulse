@@ -1,14 +1,38 @@
 const { query } = require('express-validator');
 
+// Every type the ingestion pipeline writes. bonfire / freelance / research
+// were missing, so the Freelance view (type=freelance) got a 400 and Bonfire
+// solicitations could not be listed at all.
+const VALID_TYPES = [
+  'gov_contract', 'bonfire', 'grant', 'ai_job', 'investment', 'ai_news',
+  'freelance', 'research', 'bonfire_strategic',
+];
+
+// Comma-separated data-source keys (e.g. "sam_gov,sam_gov_scraper").
+const SOURCE_LIST_RE = /^[a-z0-9_]+(,[a-z0-9_]+)*$/;
+
 const listOpportunitiesValidation = [
   query('type')
     .optional()
     .custom((value) => {
-      const validTypes = ['gov_contract', 'ai_job', 'investment', 'grant', 'ai_news'];
       const types = value.split(',').map(t => t.trim()).filter(Boolean);
-      return types.length > 0 && types.every(t => validTypes.includes(t));
+      return types.length > 0 && types.every(t => VALID_TYPES.includes(t));
     })
-    .withMessage('Type must be comma-separated list of: gov_contract, ai_job, investment, grant, ai_news.'),
+    .withMessage(`Type must be comma-separated list of: ${VALID_TYPES.join(', ')}.`),
+  query('source')
+    .optional()
+    .isLength({ max: 200 })
+    .matches(SOURCE_LIST_RE)
+    .withMessage('source must be a comma-separated list of lowercase source keys.'),
+  query('excludeSource')
+    .optional()
+    .isLength({ max: 200 })
+    .matches(SOURCE_LIST_RE)
+    .withMessage('excludeSource must be a comma-separated list of lowercase source keys.'),
+  query('openOnly')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('openOnly must be true or false.'),
   query('status')
     .optional()
     .isIn(['active', 'closed', 'expired', 'archived'])
@@ -28,8 +52,8 @@ const listOpportunitiesValidation = [
     .withMessage('Limit must be an integer between 1 and 100.'),
   query('sort')
     .optional()
-    .isIn(['newest', 'oldest', 'score', 'value'])
-    .withMessage('Sort must be newest, oldest, score, or value.'),
+    .isIn(['newest', 'oldest', 'score', 'value', 'deadline'])
+    .withMessage('Sort must be newest, oldest, score, value, or deadline.'),
   query('actionType')
     .optional()
     .isIn(['BUILD', 'BID', 'APPLY', 'PARTNER', 'INVEST', 'TEACH', 'IGNORE'])
@@ -82,4 +106,5 @@ const listOpportunitiesValidation = [
 
 module.exports = {
   listOpportunitiesValidation,
+  VALID_TYPES,
 };

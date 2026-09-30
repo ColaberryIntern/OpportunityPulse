@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:19cb1e0081e9aef1b06d6632c0208d05",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "bonfire:agency:wfsdallas:244997",
+  "sourceAliases": [],
+  "solicitationFamily": null,
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "Workforce Solutions Greater Dallas",
+      "portal": "bonfire",
+      "url": "https://wfsdallas.bonfirehub.com/opportunities/244997"
+    },
+    "leadBuyer": {
+      "name": "Workforce Solutions Greater Dallas",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-TX"
+    },
+    "officialSourceUrl": "https://wfsdallas.bonfirehub.com/opportunities/244997",
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": "Upskilling Projects - 2025",
+    "noticeType": {
+      "value": "unknown",
+      "raw": null,
+      "isResponseInvited": true,
+      "isBindingSolicitation": false,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "unknown",
+      "basis": "title",
+      "evidenceRef": null
+    },
+    "contractVehicle": {
+      "value": "unknown",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Sep 30th 2026, 11:30 AM CDT",
+    "wallClock": "2026-09-30T11:30:00",
+    "statedTimezone": "CDT",
+    "resolvedZone": "America/Chicago",
+    "offsetMinutes": -300,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-09-30T16:30:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": null,
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": {
+      "amountMinorUnits": 30000000,
+      "currency": "USD",
+      "method": "llm-title-inference-v1",
+      "generatedAt": "2026-06-20T13:56:17.000Z",
+      "notForRevenuePlanning": true
+    }
+  },
+  "documents": {
+    "coverage": "inaccessible",
+    "accessBarrier": "bot_protection",
+    "counts": {
+      "listed": 0,
+      "downloaded": 0,
+      "parsed": 0,
+      "inaccessible": 0
+    },
+    "items": [],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:45:00.000Z",
+    "fetchedAt": null,
+    "enrichedAt": "2026-06-20T13:56:17.000Z",
+    "documentReviewedAt": null,
+    "lastVerifiedAtSource": "2026-09-28T16:40:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "training"
+    ],
+    "relevanceBasis": "title",
+    "assessedBy": "opportunity-pulse/title-screen",
+    "method": "keyword",
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": {
+      "status": "no_bid",
+      "disqualifier": "DOMAIN_MISMATCH",
+      "label": "Not a bid: employer-applies model; register as a training provider instead",
+      "method": "title_regex",
+      "evidence": null,
+      "vettedAt": "2026-06-20T13:56:17.000Z",
+      "scope": "this_notice"
+    }
+  },
+  "legacy": {
+    "fitScore": 75,
+    "priorityScore": 59,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "declined",
+    "pursuitStatusChangedAt": "2026-06-20T14:00:00.000Z",
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "pursuitStatus=declined is an OP-local operator action, NOT an authoritative decision for the consumer. legacyVerdict was produced by a /upskill/i title regex with evidence=null.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

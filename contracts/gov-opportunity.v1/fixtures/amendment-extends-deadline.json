@@ -1,0 +1,212 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 4,
+  "canonicalOpportunityId": "op:gov:46ac77b1a22e1ce67eb7bf1eed3581f7",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "sam:amend:0001",
+  "sourceAliases": [],
+  "solicitationFamily": {
+    "familyId": "opfam:7d5dd5f6ae3853b7a15fe684b80e2dfc",
+    "solicitationNumber": "N0002426R0001",
+    "linkBasis": "solicitation_number",
+    "confidence": "high",
+    "memberSourceRecordIds": [
+      "sam:amend:0001",
+      "sam:base:0001"
+    ]
+  },
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "SAM.gov",
+      "portal": "sam.gov",
+      "url": "https://sam.gov"
+    },
+    "leadBuyer": {
+      "name": "Department of the Navy",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-federal"
+    },
+    "officialSourceUrl": "https://sam.gov/opp/example-amendment/view",
+    "submissionPortal": {
+      "name": "SAM.gov",
+      "url": "https://sam.gov",
+      "method": "portal_upload",
+      "evidenceRef": null
+    }
+  },
+  "notice": {
+    "title": "Amendment #10: Common Very Low Frequency Receiver",
+    "noticeType": {
+      "value": "amendment",
+      "raw": "Amendment",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "mixed",
+      "basis": "document",
+      "evidenceRef": null,
+      "components": [
+        {
+          "value": "custom_development",
+          "share": "primary",
+          "evidenceRef": {
+            "docId": "doc:amend10",
+            "section": "1",
+            "page": 1,
+            "quote": "engineering development"
+          }
+        },
+        {
+          "value": "professional_services",
+          "share": "secondary",
+          "evidenceRef": {
+            "docId": "doc:amend10",
+            "section": "1",
+            "page": 1,
+            "quote": "integration support"
+          }
+        }
+      ]
+    },
+    "contractVehicle": {
+      "value": "standalone_contract",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Amended: offers due 2 November 2026, 4:00 PM EST",
+    "wallClock": "2026-11-02T16:00:00",
+    "statedTimezone": "EST",
+    "resolvedZone": "America/New_York",
+    "offsetMinutes": -300,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-11-02T21:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": "2026-09-28T21:00:00.000Z",
+    "conservativePlanningUtc": null,
+    "conflicts": [
+      {
+        "originalText": "Offers due 19 October 2026, 5:00 PM EDT",
+        "utc": "2026-10-19T21:00:00.000Z",
+        "source": "base solicitation (superseded by Amendment #10)",
+        "observedAt": "2026-09-01T00:00:00.000Z",
+        "supersedes": false,
+        "note": "Original deadline. Superseded, retained for audit."
+      }
+    ]
+  },
+  "value": {
+    "published": {
+      "amountMinorUnits": null,
+      "currency": "USD",
+      "valueType": "unknown",
+      "provenance": "unknown",
+      "evidenceRef": null
+    },
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "complete",
+    "accessBarrier": "none",
+    "counts": {
+      "listed": 2,
+      "downloaded": 2,
+      "parsed": 2,
+      "inaccessible": 0
+    },
+    "items": [
+      {
+        "docId": "doc:amend10",
+        "filename": "amendment-0010.pdf",
+        "url": "https://sam.gov/example/amend10",
+        "role": "amendment",
+        "documentVersion": "Amendment 0010",
+        "documentDate": "2026-09-20",
+        "sha256": "a7c88138a11662aa820fb667b5fb521bfa69f074f48d1ead72fbfd01ddeaf2b2",
+        "byteSize": 24110,
+        "mediaType": "application/pdf",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T21:00:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "pdf_text",
+          "reviewedBy": "model",
+          "reviewedAt": "2026-09-28T21:02:00.000Z"
+        },
+        "supersededByDocId": null
+      },
+      {
+        "docId": "doc:base",
+        "filename": "base-solicitation.pdf",
+        "url": "https://sam.gov/example/base",
+        "role": "solicitation",
+        "documentVersion": "Rev 0",
+        "documentDate": "2026-08-15",
+        "sha256": "cae662172fd450bb0cd710a769079c05bfc5d8e35efa6576edc7d0377afdd4a2",
+        "byteSize": 990211,
+        "mediaType": "application/pdf",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T21:00:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "pdf_text",
+          "reviewedBy": "model",
+          "reviewedAt": "2026-09-28T21:02:00.000Z"
+        },
+        "supersededByDocId": "doc:amend10"
+      }
+    ],
+    "amendments": [
+      {
+        "amendmentId": "amend:0010",
+        "number": "0010",
+        "issuedDate": "2026-09-20",
+        "observedAt": "2026-09-28T21:00:00.000Z",
+        "docId": "doc:amend10",
+        "affects": [
+          "deadline",
+          "requirements"
+        ],
+        "summary": "Extends the offer due date and revises Section L submission instructions."
+      }
+    ]
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:00:00.000Z",
+    "fetchedAt": "2026-09-28T21:00:00.000Z",
+    "enrichedAt": null,
+    "documentReviewedAt": "2026-09-28T21:02:00.000Z",
+    "lastVerifiedAtSource": "2026-09-28T21:00:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "custom_software"
+    ],
+    "relevanceBasis": "document",
+    "assessedBy": "opportunity-pulse/document-review",
+    "method": "pdf-extract",
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": null,
+  "sourceAvailability": null,
+  "companyQualification": null
+}

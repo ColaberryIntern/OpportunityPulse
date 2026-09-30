@@ -26,12 +26,22 @@ beforeEach(() => {
 });
 
 describe('bonfire.service.upsertJsonArray', () => {
-  it('routes rows with external_id through bulkCreate with updateOnDuplicate', async () => {
+  // NOTE: closeDate is now conditional. A row whose deadline is KNOWN updates
+  // closeDate; a row whose deadline is unresolved is upserted without it, so a
+  // re-scrape cannot overwrite a stored deadline with NULL. Both paths must
+  // still protect the enrichment fields.
+  const ENRICHMENT_FIELDS = [
+    'fitScore', 'priorityScore', 'automationPotential',
+    'enrichedAt', 'enrichmentHash', 'signals', 'strategy',
+  ];
+
+  it('routes rows with external_id AND a known deadline through updateOnDuplicate incl. closeDate', async () => {
     await upsertJsonArray([
       {
         external_id: 'bonfire:agency:dhantx:RFP-1',
         title: 'Title I Compliance',
         agency: 'DHA',
+        close_date: '2026-10-15T20:00:00.000Z',
       },
     ]);
     expect(mockBulkCreate).toHaveBeenCalledTimes(1);
@@ -46,13 +56,24 @@ describe('bonfire.service.upsertJsonArray', () => {
     );
     expect(options.conflictAttributes).toEqual(['externalId']);
     // CRITICAL invariant — re-scraping must NOT clobber enrichment fields.
-    expect(options.updateOnDuplicate).not.toContain('fitScore');
-    expect(options.updateOnDuplicate).not.toContain('priorityScore');
-    expect(options.updateOnDuplicate).not.toContain('automationPotential');
-    expect(options.updateOnDuplicate).not.toContain('enrichedAt');
-    expect(options.updateOnDuplicate).not.toContain('enrichmentHash');
-    expect(options.updateOnDuplicate).not.toContain('signals');
-    expect(options.updateOnDuplicate).not.toContain('strategy');
+    for (const f of ENRICHMENT_FIELDS) expect(options.updateOnDuplicate).not.toContain(f);
+  });
+
+  it('routes rows with an UNRESOLVED deadline through updateOnDuplicate WITHOUT closeDate', async () => {
+    await upsertJsonArray([
+      { external_id: 'bonfire:agency:dhantx:RFP-2', title: 'Deadline unknown', agency: 'DHA' },
+    ]);
+    expect(mockBulkCreate).toHaveBeenCalledTimes(1);
+    const [rows, options] = mockBulkCreate.mock.calls[0];
+    expect(rows).toHaveLength(1);
+    // The guard: a null deadline must not be written over a stored one.
+    expect(options.updateOnDuplicate).not.toContain('closeDate');
+    // Everything else still refreshes, and enrichment is still protected.
+    expect(options.updateOnDuplicate).toEqual(
+      expect.arrayContaining(['title', 'agency', 'description', 'sourceUrl', 'rawText', 'updatedAt']),
+    );
+    expect(options.conflictAttributes).toEqual(['externalId']);
+    for (const f of ENRICHMENT_FIELDS) expect(options.updateOnDuplicate).not.toContain(f);
   });
 
   it('routes rows without external_id through plain bulkCreate (no updateOnDuplicate)', async () => {

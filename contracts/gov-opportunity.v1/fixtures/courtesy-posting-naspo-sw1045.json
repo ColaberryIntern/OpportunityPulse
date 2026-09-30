@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:d2c00cb1df8a789a0f0030bd83683d2a",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "bonfire:agency:utah:249683",
+  "sourceAliases": [
+    {
+      "idType": "external_id",
+      "idValue": "bonfire:agency:utah:NASPO Courtesy Posting- Emerging Technologies Consulting and Services",
+      "observedAt": "2026-08-21T07:48:09.000Z",
+      "note": "Title-derived legacy external_id. Unstable: changes if the buyer edits the title. Retained as an alias only, never as a key."
+    },
+    {
+      "idType": "portal_url",
+      "idValue": "https://utah.bonfirehub.com/opportunities/249683",
+      "observedAt": "2026-09-28T07:45:00.000Z",
+      "note": null
+    }
+  ],
+  "solicitationFamily": {
+    "familyId": "opfam:2a7b06f9c999fc6e47d61eacf40b6f82",
+    "solicitationNumber": "SW1045",
+    "linkBasis": "explicit_source_reference",
+    "confidence": "high",
+    "memberSourceRecordIds": [
+      "bonfire:agency:utah:249683"
+    ]
+  },
+  "publisher": {
+    "isCourtesyPosting": true,
+    "postingSource": {
+      "name": "State of Utah (U3P)",
+      "portal": "bonfire",
+      "url": "https://utah.bonfirehub.com/opportunities/249683"
+    },
+    "leadBuyer": {
+      "name": "State of Oklahoma",
+      "office": null,
+      "requirementOwner": "NASPO ValuePoint",
+      "jurisdiction": "US-OK"
+    },
+    "officialSourceUrl": "https://www.naspovaluepoint.org/solicitations/sw1045/",
+    "submissionPortal": {
+      "name": "Oklahoma Supplier Portal",
+      "url": "https://financials.ok.gov/psc/SOKLFP1DS/SUPPLIER/ERP/c/SCP_PUBLIC_MENU_FL.SCP_PUB_BID_CMP_FL.GBL",
+      "method": "portal_upload",
+      "evidenceRef": {
+        "docId": "doc:naspo-page",
+        "section": "Solicitation details",
+        "page": null,
+        "quote": "Lead State: Oklahoma"
+      }
+    }
+  },
+  "notice": {
+    "title": "Emerging Technologies Consulting and Services",
+    "noticeType": {
+      "value": "courtesy_posting",
+      "raw": "NASPO Courtesy Posting",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": {
+        "docId": "doc:naspo-page",
+        "section": "body",
+        "page": null,
+        "quote": "Request for Proposal (RFP) for the Emerging Technologies Consulting and Services"
+      }
+    },
+    "procurementType": {
+      "value": "professional_services",
+      "basis": "summary",
+      "evidenceRef": {
+        "docId": "doc:naspo-page",
+        "section": "body",
+        "page": null,
+        "quote": "Emerging Technologies Consulting and Services"
+      }
+    },
+    "contractVehicle": {
+      "value": "cooperative_master_agreement",
+      "programName": "NASPO ValuePoint",
+      "obligationsSummary": "Multi-state master agreement. Administrative-fee, reporting and sustained-capacity obligations NOT yet verified.",
+      "evidenceRef": {
+        "docId": "doc:naspo-page",
+        "section": "Solicitation details",
+        "page": null,
+        "quote": "Solicitation Number: SW1045"
+      }
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "All vendor proposals must be submitted by 3 p.m., Central Time on October 15, 2026.",
+    "wallClock": "2026-10-15T15:00:00",
+    "statedTimezone": "Central Time",
+    "resolvedZone": "America/Chicago",
+    "offsetMinutes": -300,
+    "timezoneSource": "named_zone",
+    "utc": "2026-10-15T20:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": "2026-09-28T16:29:00.000Z",
+    "conservativePlanningUtc": null,
+    "conflicts": [
+      {
+        "originalText": "(derived) 2026-10-15T14:00:00.000Z",
+        "utc": "2026-10-15T14:00:00.000Z",
+        "source": "opportunity-pulse legacy scraper (timezone-stripping parser, pre-fix)",
+        "observedAt": "2026-08-21T07:48:09.000Z",
+        "supersedes": false,
+        "note": "Six hours early. Produced by the defect this contract’s deadline block exists to surface. Retained so the discrepancy is auditable rather than silently overwritten."
+      }
+    ]
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": {
+      "amountMinorUnits": 25000000,
+      "currency": "USD",
+      "method": "llm-title-inference-v1",
+      "generatedAt": "2026-08-21T07:48:09.000Z",
+      "notForRevenuePlanning": true
+    }
+  },
+  "documents": {
+    "coverage": "partial",
+    "accessBarrier": "bot_protection",
+    "counts": {
+      "listed": 1,
+      "downloaded": 1,
+      "parsed": 1,
+      "inaccessible": 1
+    },
+    "items": [
+      {
+        "docId": "doc:naspo-page",
+        "filename": "naspo-sw1045.html",
+        "url": "https://www.naspovaluepoint.org/solicitations/sw1045/",
+        "role": "other",
+        "documentVersion": null,
+        "documentDate": null,
+        "sha256": "8f09487d8d3cb58bd0a1f01994802eee07adcf4d349d946005c733899a5037ad",
+        "byteSize": 46946,
+        "mediaType": "text/html",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T16:29:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "html",
+          "reviewedBy": "hybrid",
+          "reviewedAt": "2026-09-28T16:30:00.000Z"
+        },
+        "supersededByDocId": null
+      },
+      {
+        "docId": "doc:sw1045-package",
+        "filename": "(SW1045 RFP package)",
+        "url": "https://financials.ok.gov/psc/SOKLFP1DS/SUPPLIER/ERP/c/SCP_PUBLIC_MENU_FL.SCP_PUB_BID_CMP_FL.GBL",
+        "role": "solicitation",
+        "documentVersion": null,
+        "documentDate": null,
+        "sha256": null,
+        "byteSize": null,
+        "mediaType": null,
+        "retrieval": {
+          "status": "not_attempted",
+          "method": "none",
+          "retrievedAt": null,
+          "failureReason": "Oklahoma portal requires an interactive session; courtesy posting returns HTTP 403 to direct requests."
+        },
+        "extraction": null,
+        "supersededByDocId": null
+      }
+    ],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:45:00.000Z",
+    "fetchedAt": "2026-09-28T16:29:00.000Z",
+    "enrichedAt": "2026-08-21T07:48:09.000Z",
+    "documentReviewedAt": "2026-09-28T16:30:00.000Z",
+    "lastVerifiedAtSource": "2026-09-28T16:29:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "consulting",
+      "ai_implementation"
+    ],
+    "relevanceBasis": "summary",
+    "assessedBy": "opportunity-pulse/document-review",
+    "method": "lead-source-page-read",
+    "evidenceRefs": [
+      {
+        "docId": "doc:naspo-page",
+        "section": "body",
+        "page": null,
+        "quote": null
+      }
+    ],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 70,
+    "priorityScore": 54,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "Advisory only.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

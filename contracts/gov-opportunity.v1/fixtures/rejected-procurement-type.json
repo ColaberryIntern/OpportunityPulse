@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:e67976c90917855deed857dcf9ea5227",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "bonfire:agency:example:copier-001",
+  "sourceAliases": [],
+  "solicitationFamily": null,
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "Example County",
+      "portal": "bonfire",
+      "url": "https://example.bonfirehub.com/opportunities/1"
+    },
+    "leadBuyer": {
+      "name": "Example County",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-TX"
+    },
+    "officialSourceUrl": "https://example.bonfirehub.com/opportunities/1",
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": "LEASE/RENTAL OF COPIER AND DIGITAL EQUIPMENT AND SERVICES",
+    "noticeType": {
+      "value": "solicitation",
+      "raw": "IFB",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "existing_product_license",
+      "basis": "document",
+      "evidenceRef": {
+        "docId": "doc:ifb",
+        "section": "2.1 Scope",
+        "page": 3,
+        "quote": "The County seeks to lease multifunction copier devices and associated maintenance"
+      }
+    },
+    "contractVehicle": {
+      "value": "standalone_contract",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Nov 5th 2026, 10:00 AM CST",
+    "wallClock": "2026-11-05T10:00:00",
+    "statedTimezone": "CST",
+    "resolvedZone": "America/Chicago",
+    "offsetMinutes": -360,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-11-05T16:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": null,
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": {
+      "amountMinorUnits": 30000000,
+      "currency": "USD",
+      "valueType": "estimated_by_buyer",
+      "provenance": "buyer_stated",
+      "evidenceRef": {
+        "docId": "doc:ifb",
+        "section": "2.4",
+        "page": 4,
+        "quote": "estimated annual expenditure of $300,000"
+      }
+    },
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "complete",
+    "accessBarrier": "none",
+    "counts": {
+      "listed": 1,
+      "downloaded": 1,
+      "parsed": 1,
+      "inaccessible": 0
+    },
+    "items": [
+      {
+        "docId": "doc:ifb",
+        "filename": "copier-ifb.pdf",
+        "url": "https://example.invalid/ifb.pdf",
+        "role": "solicitation",
+        "documentVersion": null,
+        "documentDate": "2026-09-15",
+        "sha256": "14402ade251ef9e50aef60550772e7044b49f4ccee394423526e9465e5ad5cca",
+        "byteSize": 120000,
+        "mediaType": "application/pdf",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "manual_upload",
+          "retrievedAt": "2026-09-25T00:00:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "pdf_text",
+          "reviewedBy": "human",
+          "reviewedAt": "2026-09-25T00:10:00.000Z"
+        },
+        "supersededByDocId": null
+      }
+    ],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-20T00:00:00.000Z",
+    "fetchedAt": "2026-09-25T00:00:00.000Z",
+    "enrichedAt": "2026-09-20T00:05:00.000Z",
+    "documentReviewedAt": "2026-09-25T00:10:00.000Z",
+    "lastVerifiedAtSource": "2026-09-25T00:00:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [],
+    "relevanceBasis": "document",
+    "assessedBy": "opportunity-pulse/document-review",
+    "method": "pdf-extract",
+    "evidenceRefs": [
+      {
+        "docId": "doc:ifb",
+        "section": "2.1 Scope",
+        "page": 3,
+        "quote": "lease multifunction copier devices"
+      }
+    ],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 60,
+    "priorityScore": 54,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "This row reached the legacy Top 10 because its title contains \"digital\".",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}
