@@ -150,6 +150,35 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'vet_verdict',
     },
+    // ---- Phase 2 deadline evidence -------------------------------------
+    // EFFECTIVE (published) — written only together, only on verification.
+    // closeDateVerifiedAt NULL means UNVERIFIED, including every legacy row.
+    closeDateVerifiedAt: { type: DataTypes.DATE, allowNull: true, field: 'close_date_verified_at' },
+    closeDateVerifiedSource: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_verified_source' },
+    // LATEST SUCCESSFUL OBSERVATION — not moved by a failed fetch.
+    closeDateObservedAt: { type: DataTypes.DATE, allowNull: true, field: 'close_date_observed_at' },
+    closeDateObservationUtc: { type: DataTypes.DATE, allowNull: true, field: 'close_date_observation_utc' },
+    closeDateObservationConfidence: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_observation_confidence' },
+    closeDateRaw: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_raw' },
+    closeDateTimezone: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_timezone' },
+    closeDateTimezoneSource: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_timezone_source' },
+    closeDateOffsetMinutes: { type: DataTypes.INTEGER, allowNull: true, field: 'close_date_offset_minutes' },
+    closeDateUncertainty: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_uncertainty' },
+    closeDateLastObservationId: { type: DataTypes.UUID, allowNull: true, field: 'close_date_last_observation_id' },
+    closeDateVerifiedObservationId: { type: DataTypes.UUID, allowNull: true, field: 'close_date_verified_observation_id' },
+    closeDateAuthority: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_authority' },
+    closeDateAuthorityEvidence: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_authority_evidence' },
+    closeDateObservationOutcome: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_observation_outcome' },
+    closeDateVerificationBasis: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_verification_basis' },
+    closeDateSourceState: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_source_state' },
+    // FETCH ATTEMPT — distinct from observation.
+    closeDateFetchAttemptedAt: { type: DataTypes.DATE, allowNull: true, field: 'close_date_fetch_attempted_at' },
+    closeDateFetchStatus: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_fetch_status' },
+    closeDateFetchError: { type: DataTypes.TEXT, allowNull: true, field: 'close_date_fetch_error' },
+    // STRUCTURED EVIDENCE.
+    closeDateCandidates: { type: DataTypes.JSONB, allowNull: true, field: 'close_date_candidates' },
+    closeDateConservativeUtc: { type: DataTypes.DATE, allowNull: true, field: 'close_date_conservative_utc' },
+    closeDateSuperseded: { type: DataTypes.JSONB, allowNull: true, field: 'close_date_superseded' },
   }, {
     tableName: 'bonfire_opportunities',
     timestamps: true,

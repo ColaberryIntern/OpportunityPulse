@@ -191,3 +191,117 @@ CREATE INDEX idx_bonfire_close_date_uncertainty
    "unknown" from "none".
 5. Tests — the four invariants in §3, plus a re-scrape sequence: verified → unresolved → verified,
    asserting `close_date_verified_at` does **not** move during the middle step.
+
+## 8. Evidence integrity — the three issues closed after the first Phase 2 review
+
+Sections 1–7 were the proposal. This section records what the implementation actually does, where it
+differs from the proposal, and why. Each subsection is a defect that was reproduced first.
+
+### 8.1 One publisher for the deadline (transactional consistency)
+
+**What was wrong.** `upsertJsonArray` published `close_date` through the bulk upsert, and
+`recordGovEvidence` moved the observation state afterwards, in a different transaction. Two wrong
+answers followed:
+
+- An evidence failure left a **changed** `close_date` beside an untouched `close_date_verified_at`
+  and an untouched observation id. The row then satisfied every "is this verification current?" test
+  while holding a value nobody had verified.
+- On success, the evidence write read the **already-overwritten** `close_date`, so the
+  `close_date_superseded` entry recorded the new value as the one it had replaced. The audit trail
+  described a transition that never happened.
+
+**What it does now.** When the Phase 2 tables are present, the bulk statement inserts new rows and,
+on conflict, touches nothing but `updated_at`. Every source column of an existing row *and* its
+deadline decision are applied by `ingestObservation` in **one** transaction, together with identity
+resolution and the snapshot append. A snapshot therefore always describes a row state that existed.
+
+`SOURCE_COLUMNS` in `govIngestion.service.js` is the allow-list of row columns an observation may
+rewrite — held in the writer, not taken from the caller, so nothing can rewrite enrichment or scoring
+through the evidence path. `close_date` is deliberately **not** in it: the deadline decision owns it.
+
+**Per-row failure is contained, not fatal.** A row whose evidence write fails keeps its last
+consistent state in full — old title, old deadline, old verification metadata — and the loop
+continues with the next row. A brand-new row whose evidence write fails exists (the insert is what
+made it addressable) with no verification and no identity, which is the honest description of what
+happened.
+
+**Only validated rows reach evidence.** `recordGovEvidence` now takes `{raw, row}` pairs. It used to
+receive the entire raw array, so a row the validator had **rejected** could still mint identity, write
+a snapshot, and move the deadline state of a row that does exist. The pair keeps the provenance the
+allow-list strips (`close_date_raw`, timezone, confidence) while guaranteeing validation ran.
+
+**Capability is probed, not assumed.** The switch between legacy and evidence-only publication is a
+real query against `gov_canonical_opportunities`, cached per process. Gating on model presence would
+have been wrong: the models ship with the code and the tables arrive with a migration, so an
+unmigrated database — production, today — would have switched to evidence-only publication while
+every evidence write failed on a missing relation, and deadlines would have silently stopped
+updating.
+
+### 8.2 Retention is a guarantee about *verified* deadlines
+
+Making evidence the sole publisher raised a question §3 had not answered: what happens to a row whose
+stored deadline was **never** verified when a new unverifiable reading arrives?
+
+- A **verified** deadline is never replaced by a reading we could not verify. Unchanged from §3.
+- A deadline that was never verified has no claim to protect, and freezing it would leave a staler
+  unverified value standing in front of a fresher one — on the column `/best-fit` filters by. So an
+  applied observation refreshes it, **without touching any verification column**. The row stays
+  unverified; it is unverified about the current reading rather than about an older one.
+- Nothing is ever null-erased. Only a reading we actually have replaces a stored one.
+
+### 8.3 Authority is established, not assumed
+
+**What was wrong.** Every portal row was ingested with a hardcoded
+`basis: 'agency_portal_is_publisher_of_record'`. That asserted the reading agency publishes the
+deadline, for rows where it demonstrably does not. NASPO SW1045 is the live case: carried on Utah's
+Bonfire with Oklahoma as lead buyer, so Utah's rendering of the deadline is Utah's, not the buyer's.
+
+**What it does now.** `classifySourceAuthority()` returns a classification **and** the evidence for
+it, both derived from what ingestion observed:
+
+| Classification | How it is established | Can verify |
+|---|---|---|
+| `publisher_of_record` | Portal host matches the ingest namespace — both observed | Yes |
+| `courtesy_posting` | Notice text matches a re-publication phrase (`courtesy post`, `on behalf of`, `NASPO`, `cooperative post`) | No |
+| `aggregator` | Reserved; no ingestion path produces it yet | No |
+| `unknown` | Host/namespace mismatch, or either one missing | No |
+
+`VERIFIABLE_AUTHORITIES` is a one-element set. Widening it is a decision, not a typo.
+
+Two limits stated rather than papered over:
+
+- A NASPO solicitation on a state portal may be that state's **own** lead posting or a courtesy
+  re-post, and the notice text alone does not distinguish them. Both classify as courtesy, which
+  withholds verification rather than inventing a confirmed authority.
+- `verifiability()` returns the failing condition, not just `false`
+  (`unestablished_source_authority`, `unevidenced_authority`, `missing_source_ref`,
+  `missing_provenance_or_basis`, `low_confidence_parse`), so the read model and the logs say *which*
+  condition a row failed.
+
+### 8.4 Versioning covers all material evidence; validity is decided by identity
+
+**Content hash.** `sourceContentHash` covers the published source facts **plus** the competing-reading
+set, the authority determination, and its evidence, plus observed document identities, versions and
+hashes. Candidate and document lists are sorted, so an ordering change is not mistaken for a content
+change while a changed reading is. Fetch timestamps, observation ids and every enrichment field are
+deliberately excluded: re-running enrichment must not advance a *source* version.
+
+`documents: null` means **ingestion has not observed any documents** for this source. It is not a
+claim that none exist — Bonfire portal scraping captures none at all.
+
+**Verification validity.** `close_date_verified_observation_id` and `close_date_last_observation_id`
+are minted per observation (UUID). A verification is current only while they are equal. Timestamp
+comparison could not express two cases that occur:
+
+- Two observations inside the same millisecond, where `observed_at <= verified_at` read an unresolved
+  outcome as verified.
+- Out-of-order arrival: an observation older than the one already applied is now recorded as an
+  attempt (`reason: 'stale_observation'`) and otherwise ignored, instead of rewriting current state.
+
+A **failed fetch** deliberately does not set `close_date_last_observation_id`: our inability to reach
+the source is not evidence against a deadline we already verified.
+
+The timestamp rule survives only as a fallback for rows written before observation ids existed, where
+`observed_at <= verified_at` is correct because the old code stamped both from the same clock read.
+`CURRENT_SQL` in `govOpportunityV2.service.js` mirrors this definition exactly, so the API's SQL
+buckets and the mapper's state never disagree.

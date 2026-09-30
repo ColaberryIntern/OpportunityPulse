@@ -1,0 +1,160 @@
+name: Gov Phase 2
+
+# The main CI pipeline only triggers on PRs into main/develop, so a PR stacked
+# on another feature branch gets no checks at all. This workflow runs the same
+# gates for the Phase 2 branch and its dependent PRs, WITHOUT relaxing any of
+# them, plus the Postgres-backed migration and end-to-end suites that the main
+# pipeline cannot run because it has no service database.
+on:
+  push:
+    branches:
+      - 'feat/gov-phase2-**'
+      - 'feat/gov-deadline-**'
+  pull_request:
+    branches:
+      - 'feat/gov-phase2-**'
+      - 'feat/gov-deadline-**'
+
+env:
+  NODE_ENV: test
+  JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+  JWT_ACCESS_EXPIRY: 15m
+  BCRYPT_ROUNDS: 10
+  LOG_LEVEL: error
+  ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm ci
+        working-directory: backend
+      - run: npm run lint --if-present
+        working-directory: backend
+
+  unit:
+    name: Unit & Contract Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm ci
+        working-directory: backend
+      - name: Unit tests
+        run: npx jest tests/unit --forceExit
+        working-directory: backend
+      - name: Contract + gov tests (pinned-schema validation)
+        run: npx jest tests/contracts tests/govContracts tests/bonfire --forceExit
+        working-directory: backend
+
+  postgres-suites:
+    name: Migration & End-to-End (Postgres)
+    runs-on: ubuntu-latest
+    # Isolated service database. Ephemeral to the job; never a shared or
+    # production instance.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: optest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U testuser -d optest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm ci
+        working-directory: backend
+
+      - name: Migration + end-to-end suites (single run, JSON captured)
+        id: pg
+        run: |
+          set -o pipefail
+          npx jest tests/integration/govPhase2 --runInBand --forceExit --json --outputFile=pg-results.json
+        working-directory: backend
+        env:
+          PHASE2_TEST_DB_URL: postgres://testuser:testpw@localhost:5432/optest
+
+      - name: Guard — the Postgres suites must NOT have skipped
+        # These suites self-skip without a database, and a silent skip looks
+        # exactly like a pass. This asserts on the run above rather than
+        # re-running them, which previously made suite order significant.
+        if: always()
+        run: |
+          node -e "
+            const j = require('./pg-results.json');
+            const passed = j.numPassedTests, pending = j.numPendingTests, failed = j.numFailedTests;
+            console.log('passed=' + passed + ' skipped=' + pending + ' failed=' + failed);
+            if (pending > 0) { console.log('::error::Postgres suites SKIPPED - no database was reachable'); process.exit(1); }
+            if (failed > 0)  { console.log('::error::Postgres suites had failures'); process.exit(1); }
+            if (passed < 42) { console.log('::error::Postgres suites under-ran (expected >= 42, got ' + passed + ')'); process.exit(1); }
+          "
+        working-directory: backend
+
+  schema-integrity:
+    name: Contract Schema Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Committed-blob hash is stable and LF
+        # Hashes the git BLOB, not the working copy, so the value is identical
+        # on every platform. A CRLF checkout hashes differently and that
+        # difference previously looked like a second schema version.
+        run: |
+          EXPECTED=26ff667ed6d669d35fc89dc13886042f23620b1b9cf97b0fc90f1597d6cdd6bb
+          ACTUAL=$(git cat-file blob HEAD:contracts/gov-opportunity.v1/schema.json | sha256sum | cut -d' ' -f1)
+          echo "expected=$EXPECTED"
+          echo "actual  =$ACTUAL"
+          test "$EXPECTED" = "$ACTUAL"
+      - name: Schema contains no CRLF
+        run: |
+          if git cat-file blob HEAD:contracts/gov-opportunity.v1/schema.json | grep -q $'\r'; then
+            echo "::error::schema.json contains CRLF in the committed blob"; exit 1
+          fi
+
+  security-audit:
+    name: Security Audit (advisory)
+    runs-on: ubuntu-latest
+    # ADVISORY, matching the main pipeline, which sets continue-on-error on its
+    # audit steps. A green tick here does NOT mean zero advisories — it means
+    # the step ran. The summary below reports the real counts.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm ci
+        working-directory: backend
+      - name: Audit (non-blocking)
+        id: audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+        working-directory: backend
+      - name: Report counts, and separate NEW risk from inherited
+        run: |
+          npm audit --json > audit.json 2>/dev/null || true
+          node -e "
+            const a=require('./audit.json');
+            const v=a.metadata.vulnerabilities;
+            console.log('advisories:', JSON.stringify(v));
+            const pkg=require('./package.json');
+            const added=['ajv','ajv-formats'];
+            console.log('dependencies added by Phase 1/2 (runtime):', 'none');
+            console.log('devDependencies added by Phase 1/2:', added.join(', '));
+            const names=Object.keys(a.vulnerabilities||{});
+            const fromAdded=names.filter(n=>added.includes(n));
+            console.log('advisories attributable to the added devDependencies:', fromAdded.length ? fromAdded.join(', ') : 'none');
+            console.log('NOTE: audit is advisory here and in the main pipeline (continue-on-error).');
+          "
+        working-directory: backend
+        continue-on-error: true

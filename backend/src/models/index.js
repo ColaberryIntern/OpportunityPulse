@@ -57,6 +57,12 @@ const OpportunityMultiTag = require('./OpportunityMultiTag')(sequelize);
 const ToolSignal = require('./ToolSignal')(sequelize);
 const FreelanceTrendSnapshot = require('./FreelanceTrendSnapshot')(sequelize);
 const BonfireOpportunity = require('./BonfireOpportunity')(sequelize);
+// Phase 2 — persisted government-opportunity source evidence.
+const GovCanonicalOpportunity = require('./GovCanonicalOpportunity')(sequelize);
+const GovSourceAlias = require('./GovSourceAlias')(sequelize);
+const GovSolicitationFamily = require('./GovSolicitationFamily')(sequelize);
+const GovFamilyMember = require('./GovFamilyMember')(sequelize);
+const GovSourceSnapshot = require('./GovSourceSnapshot')(sequelize);
 const BonfireOpportunityTag = require('./BonfireOpportunityTag')(sequelize);
 const BonfirePipeline = require('./BonfirePipeline')(sequelize);
 const BonfireAgency = require('./BonfireAgency')(sequelize);
@@ -253,6 +259,11 @@ const models = {
   ToolSignal,
   FreelanceTrendSnapshot,
   BonfireOpportunity,
+  GovCanonicalOpportunity,
+  GovSourceAlias,
+  GovSolicitationFamily,
+  GovFamilyMember,
+  GovSourceSnapshot,
   BonfireOpportunityTag,
   BonfirePipeline,
   BonfireAgency,

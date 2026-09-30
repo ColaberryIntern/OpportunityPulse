@@ -105,6 +105,20 @@ describe('bonfire.service.upsertJsonArray', () => {
     expect(mockBulkCreate).not.toHaveBeenCalled();
   });
 
+  it('an all-rejected batch returns the SAME shape as a successful one', async () => {
+    // It used to return `inserted`/`updated`/`skippedNoExternalId` and no
+    // `evidence` at all, so a caller reading `out.evidence.recorded` crashed
+    // and the scraper runner's counters silently read `undefined || 0`.
+    const ok = await upsertJsonArray([{ external_id: 'a', title: 'A' }]);
+    const rejected = await upsertJsonArray([{ external_id: 'b', title: '' }]);
+    expect(Object.keys(rejected).sort()).toEqual(Object.keys(ok).sort());
+    expect(rejected.evidence).toEqual({
+      recorded: 0, skipped: 0, failed: 0, snapshotsWritten: 0, verified: 0,
+    });
+    expect(rejected.processed).toBe(0);
+    expect(rejected.upserted).toBe(0);
+  });
+
   it('throws on non-array input', async () => {
     await expect(upsertJsonArray({})).rejects.toThrow('payload must be an array');
   });

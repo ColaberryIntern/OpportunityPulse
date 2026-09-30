@@ -1,0 +1,38 @@
+# Line-ending convention.
+#
+# WHY THIS FILE EXISTS
+# The gov-opportunity.v1 schema was reported with two different SHA-256 values
+# across two commits, which looked like two schema versions. It was one:
+#
+#   git blob (both commits) 23c85c08d0c59c89b2c7095956fe134d203ef549
+#   sha256 of LF bytes      26ff667ed6d669d35fc89dc13886042f23620b1b9cf97b0fc90f1597d6cdd6bb  <- authoritative
+#   sha256 of CRLF checkout d2a100c810244221c01b5550c43e78731509d72ec444e7055b01d989d94d37c8
+#
+# The difference was purely the working-copy line endings on Windows. Forcing LF
+# on the shared contract makes the file hash identically on every platform, so a
+# consumer can verify it without knowing which OS produced the checkout.
+#
+# Verify with the committed bytes, not the working copy:
+#   git cat-file blob HEAD:contracts/gov-opportunity.v1/schema.json | sha256sum
+
+# Shared contract artifacts: always LF, on every platform.
+contracts/** text eol=lf
+
+# Source and config: normalise in the repo, LF in the blob.
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sql  text eol=lf
+
+# Binaries must never be touched.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.zip  binary
