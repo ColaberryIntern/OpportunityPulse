@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Release handoff updated: divergence prerequisite prepared as draft PR #4
+
+- [x] Record in `docs/gov-phase2/RELEASE-HANDOFF.md` that the production-divergence prerequisite is prepared and awaiting review, plus one non-blocking production finding.
+  - Date: 2026-09-29
+  - What changed: §4's prerequisite now states that the production-only ingestion source-health monitor is preserved on `recovery/prod-ingestion-source-health` as **draft PR #4**, byte-identical to production, and must merge before any rollout step touches the prod checkout — and that `feat/accelerator-bonfire-read-integration` still has no PR, so prod `main` stays divergent until that lands too. Also records that `op-backend` reports **unhealthy** because the rate limiter returns **429** to its own localhost healthcheck: external traffic is unaffected (1,873 of the last 2,000 nginx lines are 200; the only two 429s were `/metrics` from curl), and the rollout is not gated on backend health, but the signal step B's smoke checks rely on is untrustworthy until fixed separately.
+  - Verification: draft PR #4 open against `main`, +329/−0 across 3 files before the log commit; preserved blobs verified identical to prod; `sourceHealthMonitor.test.js` 9/9 and full `tests/unit` 406 passed / 37 suites / 0 failures on the recovery branch; `git merge-tree` reports 0 conflicts against PR #2 and PR #3.
+  - Notes: The full recovery log lives in `PROGRESS.md` **on the recovery branch**, where the work was done; this entry is the pointer so the Phase 2 branch's log is not silent about the doc change. Nothing merged, deployed, migrated, provisioned or ingested.
+
 ## GOV-PHASE-2-OP release readiness: contract-enum defect fixed, release handoff and Enterprise consumer kit
 
 - [x] Reconcile PR #3's stale release description, fix the defects release preparation exposed, and publish the landing/activation plan plus the Enterprise consumer kit. Bounded preparation only — no merge, deployment, production migration, credential creation, ingestion, re-fetch, backfill or rescoring.
