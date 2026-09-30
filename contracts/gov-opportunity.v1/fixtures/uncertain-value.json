@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:fad9ddb62809fa74e9c8afa87f902015",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "bonfire:agency:harriscountytx:235035",
+  "sourceAliases": [],
+  "solicitationFamily": null,
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "Harris County",
+      "portal": "bonfire",
+      "url": "https://harriscountytx.bonfirehub.com/opportunities/235035"
+    },
+    "leadBuyer": {
+      "name": "Harris County",
+      "office": "Sheriff’s Office",
+      "requirementOwner": null,
+      "jurisdiction": "US-TX"
+    },
+    "officialSourceUrl": "https://harriscountytx.bonfirehub.com/opportunities/235035",
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": "RFP - Integrated Law Enforcement Data Platform",
+    "noticeType": {
+      "value": "solicitation",
+      "raw": "RFP",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "unknown",
+      "basis": "title",
+      "evidenceRef": null
+    },
+    "contractVehicle": {
+      "value": "unknown",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Oct 5th 2026, 2:00 PM CDT",
+    "wallClock": "2026-10-05T14:00:00",
+    "statedTimezone": "CDT",
+    "resolvedZone": "America/Chicago",
+    "offsetMinutes": -300,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-10-05T19:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": null,
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": {
+      "amountMinorUnits": 100000000,
+      "currency": "USD",
+      "method": "llm-title-inference-v1",
+      "generatedAt": "2026-09-28T07:45:00.000Z",
+      "notForRevenuePlanning": true
+    }
+  },
+  "documents": {
+    "coverage": "inaccessible",
+    "accessBarrier": "bot_protection",
+    "counts": {
+      "listed": 0,
+      "downloaded": 0,
+      "parsed": 0,
+      "inaccessible": 0
+    },
+    "items": [],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:45:00.000Z",
+    "fetchedAt": null,
+    "enrichedAt": "2026-09-28T07:45:11.000Z",
+    "documentReviewedAt": null,
+    "lastVerifiedAtSource": "2026-09-28T16:40:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "data_engineering"
+    ],
+    "relevanceBasis": "title",
+    "assessedBy": "opportunity-pulse/title-screen",
+    "method": "keyword",
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 75,
+    "priorityScore": 76,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "Advisory only.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

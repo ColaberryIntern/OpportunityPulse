@@ -274,31 +274,24 @@ jobs:
           docker image inspect op-frontend:ci > /dev/null 2>&1
           echo "Both images built successfully"
 
-  # Stage 9: Deploy to production (only on push to main)
-  deploy:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [docker-build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
-            git pull origin main
-            # Prefer .env.prod when present (server convention) and fall back to
-            # the docker-compose default of .env. The --env-file flag affects
-            # ${VAR} substitution in docker-compose.prod.yml, NOT what gets passed
-            # into the running containers (those still come from each service's
-            # own `environment:` block).
-            ENV_FLAG=""
-            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
-            docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
-            sleep 25
-            curl -sf http://127.0.0.1/api/v1/health || curl -sf http://localhost:3001/api/v1/health || curl -sf http://127.0.0.1:8091/api/v1/health || exit 1
-            docker exec op-backend npx sequelize-cli db:migrate
-            echo "Deploy successful at $(date)"
+# Stage 9: DEPLOY REMOVED -- deploying is no longer a side effect of merging.
+#
+# This job used to run on every push to main: it SSHed to production, ran
+# `git pull origin main`, rebuilt every container and then ran `db:migrate`,
+# with no approval gate, no GitHub environment and no branch protection.
+#
+# Consequences it produced:
+#   * merging Phase 1 alone would have DEPLOYED Phase 1 alone, silently
+#     rewriting stored close_date values with no evidence columns to explain
+#     them (see docs/gov-phase2/RELEASE-HANDOFF.md section 3);
+#   * the Phase 2 migration would have applied unattended, with no verified
+#     backup, no drained ingestion and no fresh baseline counts;
+#   * its smoke check curled /api/v1/health, which returns 200
+#     unconditionally and cannot detect an unready service;
+#   * script_stop was unset, so a failed `git pull` on a divergent checkout
+#     did not stop the script -- it rebuilt from the unchanged tree and
+#     printed "Deploy successful".
+#
+# Releasing is now explicit and separate:
+#   .github/workflows/release.yml  - manual deploy, preflight-gated, readiness-checked
+#   .github/workflows/migrate.yml  - manual migration, separately authorized

@@ -74,6 +74,15 @@ function fromAgencyOpportunity(record, subdomain, { agencyName } = {}) {
     category_raw: record.categoryRaw ? clean(record.categoryRaw) : null,
     estimated_value: record.estimatedValue || null,
     close_date: record.closeDate || null,
+    // Deadline provenance carried forward from deadlineParser. bonfire.util
+    // validateRow() only copies the keys it knows, so these are inert until a
+    // migration adds columns for them (Phase 2) — but they are no longer lost
+    // at parse time, which is what made the old timezone bug unrecoverable.
+    close_date_raw: record.closeDateRaw || null,
+    close_date_timezone: record.closeDateTimezone || null,
+    close_date_offset_minutes: record.closeDateOffsetMinutes != null ? record.closeDateOffsetMinutes : null,
+    close_date_confidence: record.closeDateConfidence || null,
+    close_date_uncertainty: record.closeDateUncertainty || null,
     source_url: portalUrl,
     raw_text: raw,
   };

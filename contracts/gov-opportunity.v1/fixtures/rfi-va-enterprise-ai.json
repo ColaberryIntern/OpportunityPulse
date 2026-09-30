@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 3,
+  "canonicalOpportunityId": "op:gov:43f74bb799b8290bf5706153a35c2b72",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "ad537f8f7c044c7fadbe03e19193de21",
+  "sourceAliases": [],
+  "solicitationFamily": {
+    "familyId": "opfam:93b365ca71b6f54dc8f239b385873d02",
+    "solicitationNumber": "36C10B26Q0834",
+    "linkBasis": "solicitation_number",
+    "confidence": "high",
+    "memberSourceRecordIds": [
+      "ad537f8f7c044c7fadbe03e19193de21"
+    ]
+  },
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "SAM.gov",
+      "portal": "sam.gov",
+      "url": "https://sam.gov"
+    },
+    "leadBuyer": {
+      "name": "Department of Veterans Affairs",
+      "office": "Technology Acquisition Center NJ (36C10B)",
+      "requirementOwner": "VA OIT Chief Artificial Intelligence Office",
+      "jurisdiction": "US-federal"
+    },
+    "officialSourceUrl": "https://sam.gov/workspace/contract/opp/ad537f8f7c044c7fadbe03e19193de21/view",
+    "submissionPortal": {
+      "name": "Email to Technology Acquisition Center",
+      "url": null,
+      "method": "email",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "Response Instructions",
+        "page": null,
+        "quote": "Responses shall be submitted electronically by 10:00 AM Eastern Standard Time, October 7, 2026, via email"
+      }
+    }
+  },
+  "notice": {
+    "title": "VA Enterprise Artificial Intelligence Support Services",
+    "noticeType": {
+      "value": "sources_sought",
+      "raw": "Sources Sought",
+      "isResponseInvited": true,
+      "isBindingSolicitation": false,
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "opening",
+        "page": 1,
+        "quote": "This is a Request for Information (RFI) only issued for conducting market research."
+      }
+    },
+    "procurementType": {
+      "value": "not_yet_determined",
+      "basis": "document",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "5",
+        "page": null,
+        "quote": null
+      },
+      "components": [
+        {
+          "value": "custom_development",
+          "share": "primary",
+          "evidenceRef": {
+            "docId": "doc:rfi",
+            "section": "5.1 Scope",
+            "page": null,
+            "quote": "Full development lifecycle: discovery, architecture, development, integration, testing"
+          }
+        },
+        {
+          "value": "managed_services",
+          "share": "secondary",
+          "evidenceRef": {
+            "docId": "doc:pws",
+            "section": "3.1 Annual Core Services",
+            "page": 8,
+            "quote": "Tier 1, Tier 2, and Tier 3 support operations integrated with the VA Enterprise Service Desk"
+          }
+        }
+      ]
+    },
+    "contractVehicle": {
+      "value": "none_yet",
+      "programName": null,
+      "obligationsSummary": "Vehicle not established; RFI asks respondents which vehicles they hold.",
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Responses shall be submitted electronically by 10:00 AM Eastern Standard Time, October 7, 2026",
+    "wallClock": "2026-10-07T10:00:00",
+    "statedTimezone": "Eastern Standard Time",
+    "resolvedZone": "America/New_York",
+    "offsetMinutes": null,
+    "timezoneSource": "named_zone",
+    "utc": null,
+    "utcConfidence": "unknown",
+    "uncertaintyReason": "conflicting_sources",
+    "verifiedAt": "2026-09-28T21:42:56.000Z",
+    "conservativePlanningUtc": "2026-10-07T14:00:00.000Z",
+    "conflicts": [
+      {
+        "originalText": "10:00 AM Eastern Standard Time, October 7, 2026",
+        "utc": "2026-10-07T15:00:00.000Z",
+        "source": "RFI document prose (36C10B26Q0834), taken literally: EST = UTC-05:00",
+        "observedAt": "2026-09-28T21:40:00.000Z",
+        "supersedes": null,
+        "note": "Literal reading of the stated timezone. 7 Oct 2026 is inside US Eastern DST, so \"Standard\" may be a drafting slip - unverified either way."
+      },
+      {
+        "originalText": "2026-10-07T10:00:00-04:00",
+        "utc": "2026-10-07T14:00:00.000Z",
+        "source": "sam.gov responseDeadLine structured field (UTC-04:00, EDT)",
+        "observedAt": "2026-09-28T21:42:56.000Z",
+        "supersedes": null,
+        "note": "Machine field. One hour EARLIER than the literal prose reading. Chosen as conservativePlanningUtc for that reason, not because it is verified."
+      }
+    ]
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": null
+  },
+  "documents": {
+    "coverage": "complete_for_this_notice",
+    "accessBarrier": "none",
+    "counts": {
+      "listed": 2,
+      "downloaded": 2,
+      "parsed": 2,
+      "inaccessible": 0
+    },
+    "items": [
+      {
+        "docId": "doc:pws",
+        "filename": "PWS - Enterprise AI Support Services Draft.docx",
+        "url": "https://sam.gov/api/prod/opps/v3/opportunities/resources/files/39948bda93e74362bd453479a865baaf/download",
+        "role": "draft_pws",
+        "documentVersion": "PWS v2.0",
+        "documentDate": "2026-09-22",
+        "sha256": "7cca9f74da2fde5a94e8cba061f9d67e5bc67edcf120996ef65011e62d02e054",
+        "byteSize": 136527,
+        "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T21:36:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "docx_xml",
+          "reviewedBy": "hybrid",
+          "reviewedAt": "2026-09-28T21:40:00.000Z"
+        },
+        "supersededByDocId": null
+      },
+      {
+        "docId": "doc:rfi",
+        "filename": "RFI - Veterans Affairs AI platform 3rd party support services.docx",
+        "url": "https://sam.gov/api/prod/opps/v3/opportunities/resources/files/8ed266af08614a4a936eed3d6a731ee0/download",
+        "role": "rfi",
+        "documentVersion": null,
+        "documentDate": null,
+        "sha256": "e75c6b56ab0cede14a56c365b081911c9ba983a08ae05ae191ec251c5a1e34f7",
+        "byteSize": 50897,
+        "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "retrieval": {
+          "status": "downloaded",
+          "method": "direct_download",
+          "retrievedAt": "2026-09-28T21:36:00.000Z",
+          "failureReason": null
+        },
+        "extraction": {
+          "status": "parsed",
+          "method": "docx_xml",
+          "reviewedBy": "hybrid",
+          "reviewedAt": "2026-09-28T21:40:00.000Z"
+        },
+        "supersededByDocId": null
+      }
+    ],
+    "amendments": []
+  },
+  "requirements": [
+    {
+      "id": "req.uei",
+      "text": "System for Award Management (SAM) Unique Entity Identifier (UEI)",
+      "category": "registration",
+      "applicability": "always",
+      "applicabilityNote": null,
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "submission",
+      "bindingStatus": "mandatory_response_instruction",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "Information to include in a response",
+        "page": null,
+        "quote": "System for Award Management (SAM) Unique Entity Identifier (UEI):"
+      }
+    },
+    {
+      "id": "req.vaar.219-75",
+      "text": "Ability to comply with VAAR 852.219-75 Notice of Limitations on Subcontracting - Certificate of Compliance for Services and Construction (Jan 2023) (Deviation)",
+      "category": "subcontracting",
+      "applicability": "always",
+      "applicabilityNote": null,
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "submission",
+      "bindingStatus": "mandatory_response_instruction",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "Information to include in a response",
+        "page": null,
+        "quote": "The ability to comply with VAAR 852.219-75"
+      }
+    },
+    {
+      "id": "req.format.20pages",
+      "text": "Responses shall not exceed 20 pages excluding cover page and appendices; MS Word, minimum 11-point font, 1-inch margins",
+      "category": "format",
+      "applicability": "always",
+      "applicabilityNote": null,
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "submission",
+      "bindingStatus": "mandatory_response_instruction",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "Response Instructions",
+        "page": null,
+        "quote": "Responses shall not exceed 20 pages"
+      }
+    },
+    {
+      "id": "req.508",
+      "text": "Section 508 conformance and applicable VA security requirements on all deliverables",
+      "category": "accessibility",
+      "applicability": "unknown",
+      "applicabilityNote": "Appears in a DRAFT PWS. Binds nobody until a solicitation issues.",
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "delivery",
+      "bindingStatus": "draft_future_obligation",
+      "evidenceRef": {
+        "docId": "doc:pws",
+        "section": "5.4 Safety and governance",
+        "page": null,
+        "quote": "Section 508 conformance and applicable VA security requirements on all deliverables"
+      }
+    },
+    {
+      "id": "req.rmf.ato",
+      "text": "Task-level support for cybersecurity, privacy, RMF and ATO activities",
+      "category": "security",
+      "applicability": "conditional",
+      "applicabilityNote": "Contractor SUPPORTS VA’s RMF/ATO process; the AI product carries its own authorization. Not a demand that the bidder hold an ATO.",
+      "applicabilityEvidenceRef": {
+        "docId": "doc:pws",
+        "section": "3.1",
+        "page": 8,
+        "quote": "Task-level support for cybersecurity, privacy, Risk Management Framework (RMF) and Authority to Operate (ATO) activities"
+      },
+      "responsibleParty": "shared",
+      "dueStage": "delivery",
+      "bindingStatus": "draft_future_obligation",
+      "evidenceRef": {
+        "docId": "doc:pws",
+        "section": "3.1",
+        "page": 8,
+        "quote": null
+      }
+    },
+    {
+      "id": "q.subcontract.share",
+      "text": "How much of this potential requirement would your company need to subcontract to other companies, if any?",
+      "category": "subcontracting",
+      "applicability": "always",
+      "applicabilityNote": null,
+      "applicabilityEvidenceRef": null,
+      "responsibleParty": "bidder",
+      "dueStage": "submission",
+      "bindingStatus": "rfi_question",
+      "evidenceRef": {
+        "docId": "doc:rfi",
+        "section": "Information to include in a response",
+        "page": null,
+        "quote": "How much of this potential requirement would your company need to subcontract"
+      }
+    }
+  ],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:45:00.000Z",
+    "fetchedAt": "2026-09-28T21:36:00.000Z",
+    "enrichedAt": "2026-09-28T07:45:11.000Z",
+    "documentReviewedAt": "2026-09-28T21:40:00.000Z",
+    "lastVerifiedAtSource": "2026-09-28T21:42:56.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "ai_implementation",
+      "custom_software",
+      "workflow_automation",
+      "managed_services"
+    ],
+    "relevanceBasis": "document",
+    "assessedBy": "opportunity-pulse/document-review",
+    "method": "manual-read-of-pws-and-rfi",
+    "evidenceRefs": [
+      {
+        "docId": "doc:pws",
+        "section": "3.1",
+        "page": 8,
+        "quote": null
+      },
+      {
+        "docId": "doc:rfi",
+        "section": "5.1",
+        "page": null,
+        "quote": null
+      }
+    ],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 47,
+    "priorityScore": null,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "fitScore is title/summary-derived and is not an eligibility signal. Do not rank on it.",
+      "earliestRemovalVersion": "gov-opportunity.v3"
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

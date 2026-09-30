@@ -61,3 +61,7 @@ tests/coverage/
 
 # Governance reports (generated)
 execution/reports/
+
+# Runtime document store (Docker volume in prod). Source procurement documents
+# and research artifacts live here and must never be committed.
+backend/uploads/

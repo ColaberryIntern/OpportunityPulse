@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "gov-opportunity.v1",
+  "sourceSnapshotVersion": 1,
+  "canonicalOpportunityId": "op:gov:52928300fbd0ca93f7c50b17921557f3",
+  "sourceSystem": "opportunity-pulse",
+  "sourceRecordId": "bonfire:agency:dallascityhall:252009",
+  "sourceAliases": [],
+  "solicitationFamily": null,
+  "publisher": {
+    "isCourtesyPosting": false,
+    "postingSource": {
+      "name": "City of Dallas",
+      "portal": "bonfire",
+      "url": "https://dallascityhall.bonfirehub.com/opportunities/252009"
+    },
+    "leadBuyer": {
+      "name": "City of Dallas",
+      "office": null,
+      "requirementOwner": null,
+      "jurisdiction": "US-TX"
+    },
+    "officialSourceUrl": "https://dallascityhall.bonfirehub.com/opportunities/252009",
+    "submissionPortal": null
+  },
+  "notice": {
+    "title": "AI-Assisted Digital Evidence Analysis Platform",
+    "noticeType": {
+      "value": "solicitation",
+      "raw": "RFP",
+      "isResponseInvited": true,
+      "isBindingSolicitation": true,
+      "evidenceRef": null
+    },
+    "procurementType": {
+      "value": "unknown",
+      "basis": "title",
+      "evidenceRef": null
+    },
+    "contractVehicle": {
+      "value": "unknown",
+      "programName": null,
+      "obligationsSummary": null,
+      "evidenceRef": null
+    },
+    "selectableLots": null
+  },
+  "deadline": {
+    "originalText": "Oct 23rd 2026, 1:00 PM CDT",
+    "wallClock": "2026-10-23T13:00:00",
+    "statedTimezone": "CDT",
+    "resolvedZone": "America/Chicago",
+    "offsetMinutes": -300,
+    "timezoneSource": "abbreviation",
+    "utc": "2026-10-23T18:00:00.000Z",
+    "utcConfidence": "high",
+    "uncertaintyReason": null,
+    "verifiedAt": null,
+    "conservativePlanningUtc": null,
+    "conflicts": []
+  },
+  "value": {
+    "published": null,
+    "modelEstimate": {
+      "amountMinorUnits": 100000000,
+      "currency": "USD",
+      "method": "llm-title-inference-v1",
+      "generatedAt": "2026-09-28T07:45:00.000Z",
+      "notForRevenuePlanning": true
+    }
+  },
+  "documents": {
+    "coverage": "inaccessible",
+    "accessBarrier": "bot_protection",
+    "counts": {
+      "listed": 0,
+      "downloaded": 0,
+      "parsed": 0,
+      "inaccessible": 0
+    },
+    "items": [],
+    "amendments": []
+  },
+  "requirements": [],
+  "timestamps": {
+    "sourceObservedAt": "2026-09-28T07:45:00.000Z",
+    "fetchedAt": null,
+    "enrichedAt": "2026-09-28T07:45:11.000Z",
+    "documentReviewedAt": null,
+    "lastVerifiedAtSource": "2026-09-28T16:40:00.000Z"
+  },
+  "sourceAssessment": {
+    "serviceCategories": [
+      "ai_implementation"
+    ],
+    "relevanceBasis": "title",
+    "assessedBy": "opportunity-pulse/title-screen",
+    "method": "keyword",
+    "evidenceRefs": [],
+    "isNotEligibilityDetermination": true,
+    "legacyVerdict": null
+  },
+  "legacy": {
+    "fitScore": 80,
+    "priorityScore": 79,
+    "enrichmentVersion": 1,
+    "enrichmentHash": null,
+    "pursuitStatus": "none",
+    "pursuitStatusChangedAt": null,
+    "deprecation": {
+      "status": "advisory_only",
+      "guidance": "Advisory only. legacyVerdict null means NOT VETTED, not cleared.",
+      "earliestRemovalVersion": null
+    }
+  },
+  "sourceAvailability": null,
+  "companyQualification": null
+}

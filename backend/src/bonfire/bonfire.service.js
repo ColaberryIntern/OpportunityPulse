@@ -307,21 +307,44 @@ async function upsertJsonArray(arr) {
   const withId = accepted.filter((r) => !!r.externalId);
   const withoutId = accepted.filter((r) => !r.externalId);
 
+  // Base columns refreshed on every upsert.
+  const UPDATE_COLUMNS = [
+    'title', 'agency', 'description', 'categoryRaw',
+    'sourceUrl', 'rawText', 'updatedAt',
+  ];
+
+  // closeDate is refreshed ONLY when we actually know it.
+  //
+  // deadlineParser deliberately returns null when a portal string has no
+  // resolvable timezone ("deadline unknown", not "no deadline"). Including
+  // closeDate in updateOnDuplicate for those rows would overwrite a previously
+  // known deadline with NULL, and a NULL close_date silently drops the row out
+  // of /best-fit (which requires close_date >= cutoff). That is data loss on a
+  // re-scrape, so uncertain rows are upserted WITHOUT touching closeDate.
+  const withKnownClose = withId.filter((r) => r.closeDate != null);
+  const withUnknownClose = withId.filter((r) => r.closeDate == null);
+
   let upsertCount = 0;
-  if (withId.length) {
-    // Postgres ON CONFLICT needs an explicit conflict target. Without
-    // conflictAttributes Sequelize falls back to the primary key (id),
-    // which forces the duplicate-handling path to fail with a unique-constraint
-    // error on external_id. Naming the target lets the partial unique index
-    // do its job.
-    await BonfireOpportunity.bulkCreate(withId, {
+  // Postgres ON CONFLICT needs an explicit conflict target. Without
+  // conflictAttributes Sequelize falls back to the primary key (id), which
+  // forces the duplicate-handling path to fail with a unique-constraint error
+  // on external_id. Naming the target lets the partial unique index do its job.
+  if (withKnownClose.length) {
+    await BonfireOpportunity.bulkCreate(withKnownClose, {
       conflictAttributes: ['externalId'],
-      updateOnDuplicate: [
-        'title', 'agency', 'description', 'categoryRaw',
-        'closeDate', 'sourceUrl', 'rawText', 'updatedAt',
-      ],
+      updateOnDuplicate: [...UPDATE_COLUMNS, 'closeDate'],
     });
-    upsertCount = withId.length;
+    upsertCount += withKnownClose.length;
+  }
+  if (withUnknownClose.length) {
+    logger.warn('Bonfire upsert: rows with an unresolved deadline; preserving any existing close_date', {
+      count: withUnknownClose.length,
+    });
+    await BonfireOpportunity.bulkCreate(withUnknownClose, {
+      conflictAttributes: ['externalId'],
+      updateOnDuplicate: UPDATE_COLUMNS,
+    });
+    upsertCount += withUnknownClose.length;
   }
 
   let plainInserted = 0;
