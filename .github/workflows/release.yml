@@ -162,18 +162,10 @@ jobs:
             echo "  still running (expected non-writers only):"
             docker ps --format '    {{.Names}} ({{.Image}})'
 
-            # The migration runner itself must not be able to start schedulers.
-            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
-            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
-            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
-            # Asserted rather than assumed:
-            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
-                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
-              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
-              echo "  command may not replace the server startup. Re-verify before migrating." >&2
-              exit 1
-            fi
-            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+            # The one-shot runner must not be able to start schedulers. That is
+            # asserted BEHAVIOURALLY, after the candidate image is built, against
+            # the image that will actually be used. See "ONE-SHOT ASSERTION" below.
+            # It cannot be asserted here, because that image does not exist yet.
 
             # ---- INTEGRITY CHECKS (not prevention).
             # These detect a change AFTER the fact and cover SELECTED state only:
@@ -203,6 +195,28 @@ jobs:
 
             # ---- ORDER GATE: the schema this code needs must already exist.
             docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+
+            # ---- ONE-SHOT ASSERTION (behavioural, post-build).
+            # The order gate below reads migration status from a one-shot
+            # container, which is only safe if the one-shot command replaces the
+            # server startup. Asserted by observation against the freshly built
+            # image. (A previous version inspected `.Config.Entrypoint` before the
+            # build; node:20-alpine always sets one, so that gate never passed.)
+            PROBE_OUT="$(docker compose $ENV_FLAG -f docker-compose.prod.yml \
+                           run --rm --no-deps -T backend node --version 2>&1 || true)"
+            echo "$PROBE_OUT" | grep -qE '^v[0-9]+\.' || {
+              echo "FREEZE FAILED: a one-shot command did not execute; it may not" >&2
+              echo "  replace the server startup. Do NOT deploy." >&2
+              echo "$PROBE_OUT" | tail -20 >&2
+              exit 1
+            }
+            if echo "$PROBE_OUT" | grep -qiE 'listening on|server started|scheduler|Xvfb'; then
+              echo "FREEZE FAILED: a one-shot run started the server, scheduler or X display." >&2
+              echo "$PROBE_OUT" | tail -20 >&2
+              exit 1
+            fi
+            echo "  one-shot assertion: command ran, no server/scheduler/X startup"
+
             PENDING=$(docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
                         npx sequelize-cli db:migrate:status 2>/dev/null | grep -c '^down ' || true)
             [ "$PENDING" = "0" ] \
@@ -214,14 +228,29 @@ jobs:
 
             # ---- READINESS, not liveness. /api/v1/health returns 200
             # unconditionally; /ready returns 503 when the database is down.
+            #
+            # The probe goes through the PUBLISHED nginx port, not
+            # http://localhost:3001. op-backend exposes 3001 on the compose
+            # network but publishes NOTHING to the host, so a host-side curl to
+            # :3001 can never connect: the previous version failed all 30 attempts
+            # and exited 1 AFTER the rollout had already happened. Going through
+            # nginx also exercises the path real users take.
+            #
+            # The port is discovered, not hardcoded, because it comes from
+            # NGINX_HTTP_PORT in .env.prod.
+            NGINX_PORT="$(docker port op-nginx 80/tcp 2>/dev/null | head -1 | sed 's/.*://')"
+            [ -n "$NGINX_PORT" ] \
+              || { echo "cannot determine the published nginx port; readiness cannot be verified" >&2; exit 1; }
+            READY_URL="http://127.0.0.1:${NGINX_PORT}/api/v1/health/ready"
+            echo "readiness probe: ${READY_URL}"
             READY=0
             for i in $(seq 1 30); do
-              if curl -sf http://localhost:3001/api/v1/health/ready >/dev/null; then
+              if curl -sf "$READY_URL" >/dev/null; then
                 echo "ready after ${i} attempt(s)"; READY=1; break
               fi
               sleep 5
             done
-            [ "$READY" = "1" ] || { echo "service did not become ready" >&2; exit 1; }
+            [ "$READY" = "1" ] || { echo "service did not become ready at ${READY_URL}" >&2; exit 1; }
 
             # ---- POST-ROLLOUT: the freeze must still hold, and the scheduler must
             # be provably disabled IN THE CONTAINER NOW RUNNING.

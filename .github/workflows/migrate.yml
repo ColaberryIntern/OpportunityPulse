@@ -123,18 +123,11 @@ jobs:
             echo "  still running (expected non-writers only):"
             docker ps --format '    {{.Names}} ({{.Image}})'
 
-            # The migration runner itself must not be able to start schedulers.
-            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
-            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
-            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
-            # Asserted rather than assumed:
-            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
-                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
-              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
-              echo "  command may not replace the server startup. Re-verify before migrating." >&2
-              exit 1
-            fi
-            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+            # The migration runner must not be able to start schedulers. That is
+            # asserted BEHAVIOURALLY, after the candidate image is built, against
+            # the image that will actually run the migration. See
+            # "ONE-SHOT ASSERTION" below. It cannot be asserted here, because the
+            # image that matters does not exist yet at this point.
 
             # ---- INTEGRITY CHECKS (not prevention).
             # These detect a change AFTER the fact and cover SELECTED state only:
@@ -175,6 +168,35 @@ jobs:
               || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
 
             docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+
+            # ---- ONE-SHOT ASSERTION (behavioural, post-build).
+            #
+            # The migration runs in a one-shot container. That is only safe if the
+            # one-shot command REPLACES the server startup; otherwise the server
+            # and its ingestion scheduler would boot inside it and break the freeze.
+            #
+            # Asserted by observation, against the image that will actually run the
+            # migration — hence after the build. A previous version inspected
+            # `.Config.Entrypoint` BEFORE the build and failed on any non-null
+            # value. That was wrong twice over: node:20-alpine always sets
+            # ENTRYPOINT ["docker-entrypoint.sh"], so the gate could never pass;
+            # and it inspected the OLD image, not the one about to be used.
+            # backend/Dockerfile declares only CMD, and the inherited entrypoint is
+            # Node's passthrough wrapper, which exec's whatever command it is given.
+            PROBE_OUT="$(docker compose $ENV_FLAG -f docker-compose.prod.yml \
+                           run --rm --no-deps -T backend node --version 2>&1 || true)"
+            echo "$PROBE_OUT" | grep -qE '^v[0-9]+\.' || {
+              echo "FREEZE FAILED: a one-shot command did not execute; it may not" >&2
+              echo "  replace the server startup. Do NOT migrate." >&2
+              echo "$PROBE_OUT" | tail -20 >&2
+              exit 1
+            }
+            if echo "$PROBE_OUT" | grep -qiE 'listening on|server started|scheduler|Xvfb'; then
+              echo "FREEZE FAILED: a one-shot run started the server, scheduler or X display." >&2
+              echo "$PROBE_OUT" | tail -20 >&2
+              exit 1
+            fi
+            echo "  one-shot assertion: command ran, no server/scheduler/X startup"
 
             # Prove the artifact contains the migration before running it.
             docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
