@@ -1,0 +1,82 @@
+name: Migrate production database (manual)
+
+# Migrations are their own authorized action, never a step inside a code deploy.
+#
+# The Phase 2 migration must be applied only after ingestion is paused and
+# drained, a backup has been RESTORE-tested, and fresh baseline counts have been
+# recorded. A deploy step cannot be gated on any of that, so it does not belong
+# in one.
+#
+# This workflow does not decide whether those prerequisites were met — a human
+# does, and records it here. What it does guarantee: the migration runs alone,
+# deliberately, against a named commit, with the pending list shown first and
+# the before/after counts captured.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit SHA already DEPLOYED to production (migrations run from the deployed tree)'
+        required: true
+      confirm:
+        description: 'Type MIGRATE to confirm you intend to change the production schema'
+        required: true
+      backup_evidence:
+        description: 'Where the restore-tested backup lives (path/host + how it was verified)'
+        required: true
+      ingestion_paused:
+        description: 'Type PAUSED-AND-DRAINED to confirm no ingestion is in flight'
+        required: true
+
+concurrency:
+  group: production-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Confirmations must be explicit
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "MIGRATE" ] || { echo "::error::confirm must be MIGRATE"; exit 1; }
+          [ "${{ inputs.ingestion_paused }}" = "PAUSED-AND-DRAINED" ] \
+            || { echo "::error::ingestion_paused must be PAUSED-AND-DRAINED"; exit 1; }
+          [ -n "${{ inputs.backup_evidence }}" ] || { echo "::error::backup_evidence required"; exit 1; }
+          {
+            echo "### Migration authorization"
+            echo "- ref: ${{ inputs.ref }}"
+            echo "- backup evidence: ${{ inputs.backup_evidence }}"
+            echo "- ingestion: ${{ inputs.ingestion_paused }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migrate via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+
+            # The deployed tree must be the one being migrated.
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
+              || { echo "deployed HEAD is not ${{ inputs.ref }} — deploy first" >&2; exit 1; }
+
+            echo "--- baseline BEFORE ---"
+            docker exec op-backend npx sequelize-cli db:migrate:status | tail -20
+            docker exec op-postgres psql -U "$(docker exec op-backend printenv DB_USER)" \
+              -d "$(docker exec op-backend printenv DB_NAME)" -t -A -F'|' -c \
+              "select count(*), count(close_date), count(*) filter (where close_date_verified_at is not null) from bonfire_opportunities;" \
+              2>/dev/null || echo "(close_date_verified_at absent pre-migration, as expected)"
+
+            docker exec op-backend npx sequelize-cli db:migrate
+
+            echo "--- baseline AFTER (verified count MUST still be 0) ---"
+            docker exec op-postgres psql -U "$(docker exec op-backend printenv DB_USER)" \
+              -d "$(docker exec op-backend printenv DB_NAME)" -t -A -F'|' -c \
+              "select count(*), count(close_date), count(*) filter (where close_date_verified_at is not null) from bonfire_opportunities;"
+            echo "Migrated at $(date -u)"

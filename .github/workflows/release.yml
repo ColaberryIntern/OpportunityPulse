@@ -1,0 +1,130 @@
+name: Release (manual)
+
+# Deploying is a decision, not a side effect of merging.
+#
+# The old arrangement ran a deploy from ci.yml on every push to main, SSHed to the
+# server, pulled, rebuilt every container and then ran `db:migrate` — with no
+# approval gate, no environment, and no branch protection. Merging PR #2 would
+# therefore have deployed Phase 1 alone and migrated production unattended.
+#
+# This workflow replaces that. It runs ONLY when a human dispatches it, it refuses
+# trees that would regress production, it never migrates as part of a code deploy,
+# and it stops on the first failed command.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit SHA or ref to deploy (use a full SHA for an auditable release)'
+        required: true
+      confirm:
+        description: 'Type DEPLOY to confirm you intend to change production'
+        required: true
+      skip_preflight:
+        description: 'Never use in a normal release. Requires a written reason below.'
+        type: boolean
+        default: false
+      skip_reason:
+        description: 'Why preflight is being bypassed (recorded in the run log)'
+        required: false
+
+concurrency:
+  # Two releases must never interleave on one server.
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight — refuse unsafe trees
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirmation must be explicit
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "DEPLOY" ]; then
+            echo "::error::confirm must be exactly DEPLOY. Got: '${{ inputs.confirm }}'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Record exactly what is being released
+        run: |
+          set -euo pipefail
+          echo "release_sha=$(git rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          git log -1 --format='%H %an %ad %s' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Release preflight gates
+        if: ${{ !inputs.skip_preflight }}
+        run: |
+          set -euo pipefail
+          node backend/src/scripts/releasePreflight.js
+
+      - name: Record a preflight bypass
+        if: ${{ inputs.skip_preflight }}
+        run: |
+          set -euo pipefail
+          if [ -z "${{ inputs.skip_reason }}" ]; then
+            echo "::error::skip_preflight requires skip_reason"
+            exit 1
+          fi
+          echo "::warning::PREFLIGHT BYPASSED: ${{ inputs.skip_reason }}"
+          echo "PREFLIGHT BYPASSED: ${{ inputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          node backend/src/scripts/releasePreflight.js --json || true
+
+  deploy:
+    name: Deploy to Production
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    # Requires a GitHub environment named `production` with a required reviewer.
+    # Until that environment exists with reviewers configured, this job runs as
+    # soon as preflight passes — see the repository-settings note in the PR.
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Stop on the FIRST failed command. Previously unset, so a failed
+          # `git pull` on a divergent checkout did not stop the script: it went on
+          # to rebuild from the unchanged tree and printed "Deploy successful".
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+
+            # Deploy an explicit commit, and refuse rather than merge. A divergent
+            # checkout is a reconciliation problem for a human, not something a
+            # deploy should paper over.
+            git fetch origin --prune
+            git checkout --detach ${{ inputs.ref }}
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})"
+
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+            docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
+
+            # Readiness, not liveness: /api/v1/health returns 200 unconditionally
+            # and cannot detect an unready service. /ready returns 503 when the
+            # database is unreachable.
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:3001/api/v1/health/ready >/dev/null; then
+                echo "ready after ${i} attempt(s)"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "service did not become ready" >&2
+                exit 1
+              fi
+              sleep 5
+            done
+
+            # NO db:migrate here, deliberately. Migrations are a separate,
+            # separately authorized action: see migrate.yml. A code deploy that
+            # silently migrates cannot be gated on a verified backup, drained
+            # ingestion or fresh baseline counts.
+            echo "Deployed $(git rev-parse HEAD) at $(date -u)"
