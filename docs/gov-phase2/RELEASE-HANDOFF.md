@@ -610,7 +610,7 @@ Earlier sections had the activation order wrong: they dispatched the code releas
 
 | PR | Branch | Head | Base | State |
 |---|---|---|---|---|
-| **#7** | `fix/separate-release-from-merge` | **`c26923e`** | `main` | open |
+| **#7** | `fix/separate-release-from-merge` | **`fe4d0c7`** | `main` | open |
 | **#4** | `recovery/prod-ingestion-source-health` | **`486630f`** | `main` | **draft** |
 | **#6** | `feat/accelerator-bonfire-read-integration` | **`a3a451a`** | `main` | open |
 | **#5** | `fix/healthcheck-readiness-not-rate-limited` | **`668342c`** | `main` | open |
@@ -622,7 +622,7 @@ Earlier sections had the activation order wrong: they dispatched the code releas
 | Step | Action | Evidence required at this gate |
 |---|---|---|
 | **L0** | Create the GitHub environment **`production` with required reviewers** | The environment exists and lists at least one reviewer. **Prerequisite to any dispatch** — both production-changing jobs declare `environment: production`, but an environment that exists *without* reviewers is not a gate |
-| **L1** | **Merge #7** (`c26923e`). Fast-forwards onto `main` | CI green on the head; `ci.yml` contains no `appleboy/ssh-action`, no `DEPLOY_SSH_KEY`, no `refs/heads/main` |
+| **L1** | **Merge #7** (`fe4d0c7`) **with a merge commit** | CI green on the head; `ci.yml` contains no `appleboy/ssh-action`, no `DEPLOY_SSH_KEY`, no `refs/heads/main` |
 | **L2** | Review, **un-draft, and merge #4** (`486630f`) | Human review recorded. Three preservation blobs still byte-identical to production |
 | **L3** | Review and **merge #6** (`a3a451a`). Resolve the `PROGRESS.md` conflict by **union — keep every entry** | Human review recorded. Nine code/test files byte-identical to production |
 | **L4** | **Merge #5** (`668342c`) | CI green; `healthLimiter.test.js` 8/8 |
@@ -685,7 +685,7 @@ Performed in an isolated worktree off `origin/main`; **production checkout never
 
 | Step | Result |
 |---|---|
-| #7 | **fast-forward** (its base is `origin/main`, so no merge commit) |
+| #7 | fast-forwarded **in this local rehearsal only** (its base is `origin/main`, which had not moved). **Not a merge policy** — the intended GitHub method is a **merge commit**; see §20 |
 | #4 | clean |
 | #6 | `PROGRESS.md` conflict → **union, every entry kept** |
 | #5 | clean |
@@ -709,3 +709,34 @@ reordering changed nothing functionally.
 | Localhost rate-limit burst source unidentified | **separate follow-up.** The app logs nothing for rate-limited requests, so the source is not attributable without request-level evidence. Not attributed here. PR #5 isolates the probe from it regardless |
 | Plaintext env backups in the production deploy directory | ops hygiene |
 | `/metrics` shares the general rate-limit bucket | not release-blocking |
+
+## 20. Review-item closure evidence
+
+Each item implemented and executed, not described. PR #7 head **`fe4d0c7`**.
+
+| Requested fix | Implementation location | Verification result | Tested SHA |
+|---|---|---|---|
+| **1a.** Replace `!= true` with explicit validated false | `.github/workflows/release.yml` + `migrate.yml`, shared `need_false()` helper requiring the exact lowercase string `false` for `BONFIRE_ENGINE_ENABLED`, `BONFIRE_SCRAPER_ENABLED`, `BONFIRE_SCRAPER_CRON_ENABLED`, `INGESTION_SCHEDULER_ENABLED` | Both workflows parse; all 7 extracted step scripts pass `bash -n` | `fe4d0c7` |
+| **1b.** Demonstrate the scheduler is disabled | `backend/src/ingestion/scheduler.js` — **new** `INGESTION_SCHEDULER_ENABLED=false` gate, checked *before* cron validation. It had **no off switch**: `INGESTION_SCHEDULE` only changed the expression and unsetting it fell back to `0 6 * * *`. Workflows additionally require the container to have logged `ingestion_scheduler_disabled` within 24 h, proving the flag took effect | `backend/tests/unit/ingestionSchedulerGate.test.js` **7/7** — arms by default; refuses on `false`/`FALSE`/`False`; a typo (`flase`, `no`, `0`, `off`) still **arms** so ingestion cannot be silently killed; an explicit `schedule` argument cannot bypass it; the gate precedes cron validation | `fe4d0c7` |
+| **1c.** Prevent other ingestion entry points from writing | Behavioural catch-all in both workflows: `ingestion_logs` count, `bonfire_opportunities` count, and an **md5 checksum over `(id, close_date)`** captured before and compared after. `release.yml` re-runs the entire freeze check **after** rollout, because a rebuild re-reads `.env.prod` | Any writer by any entry point (scheduler, admin scrape route, manual upload, rescoring job) breaks the comparison and aborts the run. Scripts syntax-clean | `fe4d0c7` |
+| **2.** Replace "restore verification is irreducibly human" | `migrate.yml`: new required `backup_sha256`; `sha256sum` recomputed on the server and mismatch aborts; the dump is **restored into an isolated scratch database** (`pg_restore` or `psql` by format), row **and** `close_date` counts compared against live, restored schema asserted `>10` tables, scratch DB dropped via `trap` on every exit path | Replaces file-existence and `>1 MiB`, which are now gone. Implemented and syntax-verified; the restore itself executes only at activation | `fe4d0c7` |
+| **3.** Prove the migration actually ran | `migrate.yml` proof block: exactly **1** `SequelizeMeta` row for `20260929000001`; **5** gov tables; **≥24** `close_date*` columns; unique `canonical_public_id` index; trigger present; row count **and** `(id, close_date)` checksum unchanged; `ingestion_logs` unchanged; **0** rows verified; all **5** evidence tables empty | **EXECUTED against a real migrated Postgres 15** built to the production pre-migration shape (one `close_date` column, 3 seeded rows): `SequelizeMeta=1`, `gov tables=5`, `close_date* columns=24`, `unique index=1`, `trigger=1`, all five evidence tables `=0`, `rows=3` unchanged, `deadline_checksum=5a373c39…`, `verified=0` | migration from `af41c35`; assertions run 2026-09-30 |
+| **4.** Exercise immutability on a real snapshot in a rolled-back transaction, asserting the specific error | `migrate.yml`: `BEGIN` → insert a canonical row → insert a snapshot → `UPDATE` it → assert message `gov_source_snapshots is append-only`, assert `INSERT 0 1` so a row really existed, assert both tables empty afterwards | **EXECUTED**: `INSERT 0 1` twice, then `ERROR: gov_source_snapshots is append-only (attempted UPDATE on snapshot 233fe88b-…)` from `gov_source_snapshots_immutable() line 3 at RAISE`; snapshots after = **0**, canonical after = **0**. Re-verified in the indented single-command form actually shipped | migration from `af41c35`; assertions run 2026-09-30 |
+| **5.** Correct "#7 fast-forwards" | §19.7 corrected below | See §19.7 note and the verification in the next row | — |
+| **5b.** Verify post-#7 `main` cannot auto-deploy | `.github/workflows/ci.yml` with the deploy job removed | On the rehearsal tree **with #7 merged**: `ci.yml` has **8** jobs, **0** `appleboy/ssh-action` references, **no** deploy-named job, and **no** job gated on `refs/heads/main` | rehearsal `53e0582` (= corrected order + `fe4d0c7`) |
+
+### Postgres integration provenance — the question asked
+
+**44/44 has now been rerun on the corrected-order tree**, at rehearsal head **`53e0582`** (corrected landing order **plus** PR #7 at `fe4d0c7`), against a disposable `postgres:15-alpine`: **2 suites, 44 passed, 0 skipped, 0 failed.**
+
+To be exact about what was previously reported: the earlier 44/44 was run on the **first** rehearsal tree (`85c6b84`, order `#4 → #6 → #5 → #7 → #2 → #3`). On the corrected-order tree only the full suite had been run, and that run *skips* the two Postgres suites. So the figure was carried-over evidence until this run.
+
+The full suite on the corrected tree remains **2,908 passed / 44 skipped / 0 failures**; the 44 skipped are exactly these two suites when `PHASE2_TEST_DB_URL` is unset.
+
+### §19.7 correction — merge method
+
+"**#7 fast-forwards**" described **local rehearsal behaviour only**: `git merge` fast-forwarded because #7 branches directly from `origin/main` and `main` had not moved. It is **not** a merge policy.
+
+**Intended GitHub merge method for #7: a merge commit** (`gh pr merge 7 --merge`), consistent with every other PR in this release and with the repository's enabled methods (merge, squash and rebase are all available, so the choice must be made deliberately).
+
+Why merging #7 first is safe: for a `push` event GitHub runs the workflow files **as they exist in the pushed commit**. The merge commit for #7 contains #7's `ci.yml`, which has no deploy job — so the very push that lands #7 cannot trigger the old deploy path. Verified structurally in the row above; it cannot be executed without merging, which is not authorized.
