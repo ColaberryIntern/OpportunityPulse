@@ -94,6 +94,13 @@ jobs:
             # and deep-vet jobs, and any admin API call. No enumeration of routes
             # is required, because none of them have a process to run in.
             # ---------------------------------------------------------------
+            # ---- ROLLBACK ANCHOR: the immutable image ID the current container was
+            # created from, captured BEFORE any build. Recovery uses this ID, not a
+            # tag, because tags move when the candidate is built.
+            PREV_IMAGE="$(docker inspect -f '{{.Image}}' op-backend 2>/dev/null || echo none)"
+            echo "rollback anchor: previous backend image = ${PREV_IMAGE}"
+            echo "- rollback image: ${PREV_IMAGE}" >> /tmp/release_evidence.txt
+
             echo "--- write freeze: no application container may be running ---"
             if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
               echo "FREEZE FAILED: op-backend is still running." >&2
@@ -141,13 +148,24 @@ jobs:
             FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
             echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
 
-            # ---- Drain: nothing in flight, confirmed twice.
-            R1=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
-            sleep 60
-            R2=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
-            [ "$R1" = "0" ] && [ "$R2" = "0" ] \
-              || { echo "ingestion in flight (running=${R1} then ${R2})" >&2; exit 1; }
-            echo "drained: running=0 across two reads"
+            # ---- DRAIN VERIFICATION.
+            #
+            # Draining happens BEFORE the stop, with the backend still up (see
+            # docs/gov-phase2/PRE-MIGRATION-FREEZE.md). By the time this runs the
+            # writer is already stopped, so a row still in status='running' can only
+            # mean a run was INTERRUPTED rather than allowed to finish.
+            #
+            # That is an abort, not a warning: migrating over a half-written
+            # ingestion run would bake its partial state into the baseline.
+            RUNNING=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
+            if [ "$RUNNING" != "0" ]; then
+              echo "ABORT: ${RUNNING} ingestion run(s) still marked running while op-backend is stopped." >&2
+              echo "  A writer was force-stopped mid-run. Do NOT migrate." >&2
+              echo "  Restart op-backend on the previous image, let the run reach a terminal" >&2
+              echo "  status, drain again, then stop it gracefully and re-dispatch." >&2
+              exit 1
+            fi
+            echo "  drain verified: no interrupted ingestion runs"
 
             # ---- Obtain the migration: check out the reviewed commit and BUILD
             # the image from it. The running container is the old image.
@@ -245,4 +263,13 @@ jobs:
             echo "  trigger raised the expected error on a real inserted snapshot; transaction left no rows"
 
             cat /tmp/release_evidence.txt
+            # ---- The freeze must SURVIVE this workflow. release.yml has its own
+            # approval, so the backend stays stopped until that approval lands.
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "ABORT: op-backend is running at the end of migration." >&2
+              echo "  The freeze must persist until the approved release runs." >&2
+              exit 1
+            fi
+            echo "freeze preserved: op-backend still stopped, awaiting the approved release"
+
             echo "Migrated from $(git rev-parse HEAD) at $(date -u). Serving container NOT restarted."

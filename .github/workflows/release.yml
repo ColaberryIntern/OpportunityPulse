@@ -187,6 +187,11 @@ jobs:
             FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
             echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
 
+            # ---- ROLLBACK ANCHOR: immutable image ID of whatever the backend
+            # container was last created from, captured BEFORE the candidate build.
+            PREV_IMAGE="$(docker inspect -f '{{.Image}}' op-backend 2>/dev/null || echo none)"
+            echo "rollback anchor: previous backend image = ${PREV_IMAGE}"
+
             # ---- Deploy an explicit commit, and REFUSE rather than merge.
             git fetch origin --prune
             git checkout --detach ${{ inputs.ref }}
@@ -258,4 +263,8 @@ jobs:
             echo "  integrity tripwire held on the state it covers"
 
             # NO db:migrate here, deliberately. See migrate.yml.
+            echo "recovery: docker run/compose with image ${PREV_IMAGE} restores the previous code."
+            echo "  NOTE: the previous image has no INGESTION_SCHEDULER_ENABLED gate, so"
+            echo "  restarting it RE-ARMS its generic ingestion scheduler. See"
+            echo "  docs/gov-phase2/PRE-MIGRATION-FREEZE.md for what that means."
             echo "Deployed $(git rev-parse HEAD) at $(date -u)"

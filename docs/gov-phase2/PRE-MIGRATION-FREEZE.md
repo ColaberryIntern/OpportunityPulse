@@ -1,82 +1,126 @@
-# Pre-migration write freeze — proposal for review
+# Pre-migration write freeze — approved approach, operational detail
 
-**Nothing here has been executed.** This describes the mechanism, its downtime and its rollback, for authorization.
+**Nothing here has been executed.** Approach accepted in principle: a stopped-backend maintenance window, no separate pause-control release.
 
-## The problem it solves
+## Why the freeze is a stopped container, not a flag
 
-The activation plan needs a guaranteed write freeze before the additive migration. The flag-based freeze cannot deliver one, for a reason specific to this release:
+`INGESTION_SCHEDULER_ENABLED` exists only in this release. **Production at `6936c99` does not read it.** Setting it would leave `docker exec op-backend printenv` reporting `false` while the old scheduler stayed armed — a gate that *passes while the thing it gates is still running*. Requiring its log line instead would block activation permanently.
 
-`INGESTION_SCHEDULER_ENABLED` exists only in the release being prepared. **Production at `6936c99` does not read it.** So:
+`op-backend` is the only container running application code (`frontend` serves static assets, `backup` runs `pg_dump`, metrics services read). Stopping it prevents every write path at once — cron schedulers, the manual scraper trigger, CSV/JSON ingest, document upload, rescoring, deep-vet, any admin API call — with no route inventory required, because none of them has a process to run in.
 
-- Setting it and restarting leaves `docker exec op-backend printenv INGESTION_SCHEDULER_ENABLED` reporting `false` while the old scheduler stays armed. The gate **passes while the thing it gates is still running** — worse than a gate that blocks.
-- Requiring its log line instead blocks activation permanently, because old code never emits it.
-- Resolving it by rolling out the gate first would mean an extra, separately reviewed production rollout *before* the migration — which the sequence does not describe and which is more change, not less.
+**The migration runner cannot restart any of it.** `backend/Dockerfile` declares `CMD ["scripts/docker-entrypoint.sh"]` and **no `ENTRYPOINT`**; that script ends in `exec node src/server.js`. `docker compose run --rm --no-deps -T backend npx sequelize-cli db:migrate` replaces `CMD`, so the server and every scheduler never start. `migrate.yml` asserts the image has no `ENTRYPOINT` rather than trusting it.
 
-The flag is still correct for the *post-rollout* state, where the running code does read it. It is simply unusable as a *pre-migration* control.
+---
 
-## Options considered
+## 1. Drain before stopping — and abort rather than force-stop
 
-| Option | Mechanism | Downtime | Extra prod changes | Reliability |
-|---|---|---|---|---|
-| **A (recommended)** | Stop `op-backend`, migrate via the isolated one-shot runner, start the new image | ~2–4 min, in one window | none before migration | **Highest** — the freeze is the absence of a running writer |
-| B | Ship a "pause-control" release first (adds the gate), pause, migrate, then ship the real release | Two rollouts, each with its own restart | **One extra production rollout of unreviewed-in-prod code** | Lower — depends on the new gate behaving, and doubles the change surface |
-| C | Migrate with the app live | none | none | **Rejected** — the additive DDL would survive, but a concurrent scrape under the *old* parser can change `close_date`, destroying the "existing values unchanged" proof and the guarantee that the pilot is the first evidence write |
+**Draining is an operator step performed while the backend is still up.** Order matters: you cannot drain a stopped process.
 
-## Recommended: Option A
+1. Stop *new* work from starting, then watch until nothing is in flight:
+   `select count(*) from ingestion_logs where status = 'running';` must read **0**, and stay 0 across two reads a minute apart.
+2. Only then stop the container, and stop it **gracefully** with room to finish:
+   `docker compose -f docker-compose.prod.yml stop -t 60 backend`.
+3. **Never** `kill`, and never `stop -t 0`. If a run will not finish, leave it alone and reschedule the window.
 
-`op-backend` is the **only** container that runs application code. Compose services are `postgres`, `redis`, `backend`, `frontend`, `nginx`, `certbot`, `prometheus`, `grafana`, `backup` — of these only `backend` executes app code; `frontend` serves static assets, `backup` runs `pg_dump`, and the metrics services read.
+**`migrate.yml` enforces the outcome.** By the time it runs the writer is already stopped, so any row still in `status='running'` can only mean a run was *interrupted*. That is an **abort**, not a warning:
 
-Stopping it therefore prevents **every** write path simultaneously, with no route inventory required, because none of them has a process to run in:
+```
+ABORT: N ingestion run(s) still marked running while op-backend is stopped.
+  A writer was force-stopped mid-run. Do NOT migrate.
+  Restart op-backend on the previous image, let the run reach a terminal
+  status, drain again, then stop it gracefully and re-dispatch.
+```
 
-- cron schedulers (bonfire scraper, generic ingestion, strategist, gov scoring, digests, research)
-- the manual scraper trigger
-- CSV / JSON ingest
-- document upload and deep-vet
-- rescoring and backfill scripts
-- any admin API call
+Migrating over a half-written ingestion run would bake its partial state into the baseline that every later comparison trusts.
 
-**The migration runner cannot restart any of that.** `backend/Dockerfile` declares `CMD ["scripts/docker-entrypoint.sh"]` and **no `ENTRYPOINT`**; that script ends in `exec node src/server.js`. `docker compose run --rm --no-deps -T backend npx sequelize-cli db:migrate` replaces `CMD`, so the entrypoint script — and therefore the server and every scheduler — never runs. `--no-deps` also stops Compose starting sibling services. `migrate.yml` asserts the image has no `ENTRYPOINT` rather than trusting this.
+## 2. The freeze persists between the two approvals
 
-### Sequence
+Migration and release are **separately approved**, so the window spans a human gate.
 
-Build **before** the window so no image build happens during downtime.
+- `migrate.yml` never starts the backend. It uses `compose run --rm --no-deps` only, and **asserts at the end** that `op-backend` is still absent from `docker ps`, failing if anything restarted it.
+- `release.yml` **asserts at the start** that `op-backend` is not running, so it cannot be dispatched into a half-recovered state.
+- Both workflows share one serialization group — `concurrency: { group: production-release, cancel-in-progress: false }` — so a migration and a release can never interleave, and two releases cannot race.
+- `ci.yml` has no deploy path at all after PR #7, so no merge can restart or replace the container.
 
-1. *(serving)* `docker compose -f docker-compose.prod.yml build backend` — pre-build the release image.
-2. *(serving)* `pg_dump` the database; record its SHA-256.
-3. *(serving)* Dispatch nothing yet. Confirm the dump's SHA-256 is the value that will be passed to `migrate.yml`.
-4. **Window opens:** `docker compose -f docker-compose.prod.yml stop backend`.
-5. Verify the freeze: `op-backend` absent from `docker ps`, no stray `backend-run-*` containers, only non-writers up. *(`migrate.yml` does this and refuses otherwise.)*
-6. Dispatch **`migrate.yml`** with the release SHA and the dump SHA-256. It restore-tests the dump into a scratch database, records the baseline, migrates via the one-shot runner, and proves the result.
-7. Dispatch **`release.yml`** with the same SHA. It refuses if any migration is still pending, rolls out the pre-built image, waits on `/api/v1/health/ready`, then requires `ingestion_scheduler_disabled` in **this** container's startup logs and validates all four flags as exactly `false`.
-8. **Window closes** when readiness passes.
+**What this does not cover:** a human running `docker compose up -d` on the server by hand. The concurrency group serializes *workflows*, not people. Announce the window and keep off the box.
 
-Steps 6–7 are the only downtime. With the image pre-built, the window is the migration (additive DDL on ~5.3k rows — seconds) plus container start and readiness.
+### Outage duration is an estimate, not a guarantee
 
-### Downtime implications
+**The outage runs from the stop until the approved release completes readiness.** Because the release needs its own approval, that span includes human response time and is **not bounded by the technical work**.
 
-- **The live Enterprise v1 integration is unavailable for the window** — `/api/v1/bonfire/opportunities`, `/best-fit`, `/opportunities/:id`. Coordinate with Enterprise before opening it; their v2 credential has no fallback to v1, and v1 must keep working afterwards.
-- The public frontend continues to serve static assets through nginx, but API-backed views will error for the window.
-- Prometheus will record the gap; expect alerting noise. The ingestion failure-alerting preserved in PR #4 is itself inside `op-backend`, so it is also paused — it cannot alert on its own absence.
+- *Technical work*, with the image pre-built outside the window: roughly **2–4 minutes** — additive DDL on ~5.3k rows (seconds), plus container start and readiness polling.
+- *Actual outage*: technical work **plus** however long the release approval takes.
 
-### Rollback implications
+Treat 2–4 minutes as the machine time only. If the release approval will not be immediate, do not open the window.
 
-| Failure point | Action | Schema state | Data state |
+## 3. Recovery — precise
+
+### The rollback anchor
+
+Both workflows capture the **immutable image ID** the running container was created from, **before** any candidate build, and print it:
+
+```
+PREV_IMAGE="$(docker inspect -f '{{.Image}}' op-backend 2>/dev/null || echo none)"
+```
+
+Recovery uses **that ID**, never a tag: `backend:latest` moves when the candidate is built. `migrate.yml` also writes it to the run evidence.
+
+### What is and is not restored
+
+| Failure point | Action | Schema | Data |
 |---|---|---|---|
-| Freeze verification fails (step 5) | Nothing has changed; restart `op-backend` on the **old** image | untouched | untouched |
-| Migration fails (step 6) | Restart `op-backend` on the **old** image. Service restored on `6936c99` | The migration runs inside a transaction, so a failure leaves the schema unchanged; if it partially applied, run its `down` | untouched — the migration writes no rows, and `migrate.yml` fails if the checksum moved |
-| Rollout fails readiness (step 7) | Redeploy the previous image | **Additive columns and empty tables remain.** This is safe: the old code ignores them | untouched |
-| Regression found after the window | `release.yml` with the previous SHA | Leave the evidence tables in place | **Never drop the evidence tables as routine rollback** — see handoff §19.6 |
+| Drain or freeze check fails | Nothing has run. Restart `PREV_IMAGE` | untouched | untouched |
+| Migration fails **before commit** | Restart `PREV_IMAGE` | untouched — the migration runs in a transaction | untouched |
+| Migration **committed**, later problem | Restart `PREV_IMAGE` | **The additive schema REMAINS.** 23 nullable columns + 5 empty tables + trigger persist. Safe: the old code ignores them | untouched |
+| Rollout fails readiness | Redeploy `PREV_IMAGE` | additive schema remains | untouched |
+| Regression after the window | `release.yml` with the previous SHA | **Never drop the evidence tables as routine rollback** | preserved |
 
-Keeping the previous image available matters: tag or note `docker images` for the current backend image **before** step 1, so step 4's rollback has something to start.
+So "schema and data untouched" applies **only where the migration did not commit**. After a successful migration the additive schema is permanent until deliberately reversed, and reversing it is its own authorized action requiring the three evidence tables to be exported first.
 
-## What the integrity checks do and do not prove
+### Restarting the old image RE-ARMS ingestion
 
-Corrected claim. The before/after comparison covers **selected state only**:
+This is the part not to gloss over. The previous image has **no `INGESTION_SCHEDULER_ENABLED` gate**, so starting it re-arms its generic ingestion scheduler.
 
-- `bonfire_opportunities` row count
-- an md5 checksum over `(id, close_date)`
-- `ingestion_logs` row count
+**Ingestion resumes on recovery unless you prevent it separately.** Consequences:
 
-It does **not** cover other columns (title, agency, enrichment), other tables, or anything written after the final comparison. It detects a change **after the fact**; it prevents nothing.
+- The **old parser** can rewrite `close_date` on re-scrape. Existing-values-unchanged proofs taken during the window stop holding the moment the old code runs.
+- No evidence rows are written (the old image has no evidence writer), so the gov tables stay empty — but the pilot can no longer be described as the first write to `close_date` since the migration.
+- **The pilot-only freeze does not survive this restart.** Do not claim it does. If a rollback happens, the one-record pilot must be re-planned from a fresh baseline.
 
-So it is a **tripwire that the freeze held**, not the freeze. Prevention is the stopped container. Both are kept because they fail independently: the container check can pass while something writes through a path nobody expected, and the tripwire would then catch it.
+What you *can* control on the old image:
+
+| Flag | Read by old code? | Effect |
+|---|---|---|
+| `BONFIRE_SCRAPER_ENABLED=false` | **yes** | Bonfire scraper stays off |
+| `BONFIRE_SCRAPER_CRON_ENABLED=false` | **yes** | its cron stays unarmed |
+| `BONFIRE_ENGINE_ENABLED=false` | **yes** | engine + strategist scheduler stay off |
+| `INGESTION_SCHEDULER_ENABLED=false` | **no** | ignored — the generic ingestion scheduler still arms |
+
+The only flag-level lever against the generic scheduler on the old image is an **invalid** `INGESTION_SCHEDULE`, which makes `startScheduler` log an error and return null. That is a configuration hack, not a designed switch; the designed switch ships in this release.
+
+**Therefore, state the choice explicitly in the recovery decision:**
+
+- **(a)** Restart `PREV_IMAGE` and **accept that ingestion resumes** (with the three readable flags set false to limit it to the generic scheduler), or
+- **(b)** Restart `PREV_IMAGE` with an intentionally invalid `INGESTION_SCHEDULE` to keep the generic scheduler unarmed, or
+- **(c)** Leave the backend **stopped** — an extended outage — until the problem is fixed and the intended release can go out.
+
+(c) is the only option that preserves a true freeze, and it trades availability for it.
+
+---
+
+## Sequence
+
+Build **before** the window; no image build happens during downtime.
+
+| # | Step | Serving? |
+|---|---|---|
+| 1 | Record `PREV_IMAGE` (immutable ID) | yes |
+| 2 | `docker compose -f docker-compose.prod.yml build backend` — pre-build the candidate | yes |
+| 3 | `pg_dump`; record its SHA-256 | yes |
+| 4 | **Drain**: `status='running'` reads 0 twice, a minute apart | yes |
+| 5 | **Window opens**: `docker compose stop -t 60 backend` | **no** |
+| 6 | Dispatch **`migrate.yml`** (release SHA + dump SHA-256). Verifies the freeze, aborts on an interrupted run, restore-tests the dump into a scratch database, migrates via the one-shot runner, proves the result, and asserts the backend is still stopped | **no** |
+| 7 | *(separate approval)* Dispatch **`release.yml`** (same SHA). Refuses if any migration is pending, rolls out the pre-built image, waits on `/api/v1/health/ready`, then requires `ingestion_scheduler_disabled` in **this** container's startup logs and validates all four flags as exactly `false` | **no** |
+| 8 | **Window closes** when readiness passes | yes |
+
+Enterprise stays on v1 throughout and is unavailable only for steps 5–8. Coordinate before opening.
