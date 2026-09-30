@@ -400,6 +400,11 @@ module.exports = {
   assembleRichDigest,
   TOP,
   BONFIRE_DIGEST_MIN_CLOSE_DAYS,
+  // Exported so GET /api/v1/bonfire/best-fit can report the exact ranking
+  // rules it applied — external consumers need to explain the ordering they
+  // render without hardcoding our (env-tunable) thresholds on their side.
+  HIDDEN_VERDICTS,
+  BONFIRE_DOMAIN_RE,
   buildSummaryParagraph,
   // Exported for tests.
   topByType,

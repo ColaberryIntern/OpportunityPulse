@@ -1,0 +1,270 @@
+name: Release (manual)
+
+# Deploying is a decision, not a side effect of merging.
+#
+# ci.yml used to deploy on every push to main: SSH, `git pull`, rebuild every
+# container, then `db:migrate` — no approval gate, no environment, no branch
+# protection. Merging Phase 1 would have deployed Phase 1 alone and migrated
+# production unattended.
+#
+# ORDER: migrate.yml first, then this. Enforced below, not merely documented.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Reviewed commit SHA to deploy (full SHA for an auditable release)'
+        required: true
+      confirm:
+        description: 'Type DEPLOY to confirm you intend to change production'
+        required: true
+      skip_preflight:
+        description: 'Never use in a normal release. Requires a written reason below.'
+        type: boolean
+        default: false
+      skip_reason:
+        description: 'Why preflight is being bypassed (recorded in the run log)'
+        required: false
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight — refuse unsafe trees
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirmation must be explicit
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "DEPLOY" ]; then
+            echo "::error::confirm must be exactly DEPLOY. Got: '${{ inputs.confirm }}'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Record exactly what is being released
+        run: |
+          set -euo pipefail
+          {
+            echo "### Release candidate"
+            echo "- sha: `$(git rev-parse HEAD)`"
+            echo "- $(git log -1 --format='%an, %ad')"
+            echo "- subject: $(git log -1 --format='%s')"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Release preflight gates
+        if: ${{ !inputs.skip_preflight }}
+        run: |
+          set -euo pipefail
+          node backend/src/scripts/releasePreflight.js
+
+      - name: Record a preflight bypass
+        if: ${{ inputs.skip_preflight }}
+        run: |
+          set -euo pipefail
+          if [ -z "${{ inputs.skip_reason }}" ]; then
+            echo "::error::skip_preflight requires skip_reason"
+            exit 1
+          fi
+          echo "::warning::PREFLIGHT BYPASSED: ${{ inputs.skip_reason }}"
+          echo "PREFLIGHT BYPASSED: ${{ inputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          node backend/src/scripts/releasePreflight.js --json || true
+
+  deploy:
+    name: Deploy to Production
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    # Requires the protected `production` environment with required reviewers.
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Stop on the FIRST failed command. Previously unset, which is why a
+          # failed `git pull` did not stop the script: it rebuilt from the
+          # unchanged tree and printed "Deploy successful".
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+
+            # op-backend is STOPPED for the whole window, so credentials come from
+            # the postgres container, not the application container.
+            DBU="$(docker exec op-postgres printenv POSTGRES_USER)"
+            DBN="$(docker exec op-postgres printenv POSTGRES_DB)"
+            psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
+
+            # ---------------------------------------------------------------
+            # need_false(): used AFTER rollout, when the running code actually
+            # reads these flags. Deliberately NOT used before rollout: during the
+            # window op-backend is stopped and has no environment to read, and on
+            # the pre-release code the flag would read back false while the old
+            # scheduler stayed armed.
+            #
+            # Validates the EXACT string false. `!= true` was wrong: it passed when
+            # a variable was unset, misspelled, or set to anything at all.
+            # ---------------------------------------------------------------
+            need_false() {
+              local name="$1"
+              local val
+              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo unset)"
+              if [ "$(printf %s "$val" | tr "[:upper:]" "[:lower:]")" != "false" ]; then
+                echo "FLAG CHECK FAILED: ${name}=${val} — must be exactly false" >&2
+                exit 1
+              fi
+              echo "  ${name}=false"
+            }
+
+            # ---------------------------------------------------------------
+            # PRE-MIGRATION WRITE FREEZE — enforced by absence of a writer,
+            # not by a feature flag.
+            #
+            # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
+            # release being prepared. Production at 6936c99 does not read it, so
+            # setting it would leave `printenv` reporting 'false' while the old
+            # scheduler stayed armed — a gate that passes while the thing it gates
+            # is still running. Requiring its log line instead would block
+            # activation forever, because old code never emits it.
+            #
+            # op-backend is the ONLY container that runs application code, so
+            # stopping it prevents every write path at once: cron schedulers, the
+            # manual scraper trigger, CSV/JSON ingest, document upload, rescoring
+            # and deep-vet jobs, and any admin API call. No enumeration of routes
+            # is required, because none of them have a process to run in.
+            # ---------------------------------------------------------------
+            echo "--- write freeze: no application container may be running ---"
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "FREEZE FAILED: op-backend is still running." >&2
+              echo "  Stop it first (see docs/gov-phase2/PRE-MIGRATION-FREEZE.md)." >&2
+              exit 1
+            fi
+            echo "  op-backend: not running"
+
+            # Leftover one-shot containers from an earlier `compose run` would also
+            # be application processes. There must be none.
+            STRAY=$(docker ps --format '{{.Names}}' | grep -E 'backend[-_]run[-_]' || true)
+            if [ -n "$STRAY" ]; then
+              echo "FREEZE FAILED: stray backend run container(s): ${STRAY}" >&2
+              exit 1
+            fi
+            echo "  no stray one-shot backend containers"
+
+            # Everything still up must be a non-writer: database, cache, proxy,
+            # static frontend, metrics, backup. Any other app container is a writer.
+            echo "  still running (expected non-writers only):"
+            docker ps --format '    {{.Names}} ({{.Image}})'
+
+            # The migration runner itself must not be able to start schedulers.
+            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
+            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
+            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
+            # Asserted rather than assumed:
+            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
+                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
+              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
+              echo "  command may not replace the server startup. Re-verify before migrating." >&2
+              exit 1
+            fi
+            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+
+            # ---- INTEGRITY CHECKS (not prevention).
+            # These detect a change AFTER the fact and cover SELECTED state only:
+            # bonfire_opportunities.(id, close_date), the bonfire_opportunities row
+            # count, and the ingestion_logs row count. They do NOT cover other
+            # columns, other tables, or anything that happens after the final
+            # comparison. Prevention is the container stop above; these are a
+            # tripwire that the freeze held.
+            FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+
+            # ---- ROLLBACK ANCHOR: immutable image ID of whatever the backend
+            # container was last created from, captured BEFORE the candidate build.
+            PREV_IMAGE="$(docker inspect -f '{{.Image}}' op-backend 2>/dev/null || echo none)"
+            echo "rollback anchor: previous backend image = ${PREV_IMAGE}"
+
+            # ---- Deploy an explicit commit, and REFUSE rather than merge.
+            git fetch origin --prune
+            git checkout --detach ${{ inputs.ref }}
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
+              || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
+
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+
+            # ---- ORDER GATE: the schema this code needs must already exist.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+            PENDING=$(docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+                        npx sequelize-cli db:migrate:status 2>/dev/null | grep -c '^down ' || true)
+            [ "$PENDING" = "0" ] \
+              || { echo "${PENDING} migration(s) pending — run migrate.yml BEFORE deploying" >&2; exit 1; }
+            echo "no pending migrations: safe to roll out code"
+
+            # ---- Roll out.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml up -d --build
+
+            # ---- READINESS, not liveness. /api/v1/health returns 200
+            # unconditionally; /ready returns 503 when the database is down.
+            READY=0
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:3001/api/v1/health/ready >/dev/null; then
+                echo "ready after ${i} attempt(s)"; READY=1; break
+              fi
+              sleep 5
+            done
+            [ "$READY" = "1" ] || { echo "service did not become ready" >&2; exit 1; }
+
+            # ---- POST-ROLLOUT: the freeze must still hold, and the scheduler must
+            # be provably disabled IN THE CONTAINER NOW RUNNING.
+            #
+            # A log line "within the last 24h" is not evidence: it could come from a
+            # previous container, or from before the flag was set. This reads the
+            # current container's StartedAt and only accepts evidence emitted after
+            # that instant.
+            echo "--- post-rollout: scheduler disabled in the CURRENT container ---"
+            STARTED_AT="$(docker inspect -f '{{.State.StartedAt}}' op-backend)"
+            CONTAINER_ID="$(docker inspect -f '{{.Id}}' op-backend | cut -c1-12)"
+            echo "  container ${CONTAINER_ID} started at ${STARTED_AT}"
+            if ! docker logs op-backend --since "$STARTED_AT" 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
+              echo "POST-ROLLOUT FAILED: container ${CONTAINER_ID} did not log" >&2
+              echo "  ingestion_scheduler_disabled since ${STARTED_AT}." >&2
+              echo "  Either INGESTION_SCHEDULER_ENABLED is not 'false' in the env this" >&2
+              echo "  container received, or this build predates the gate." >&2
+              exit 1
+            fi
+            echo "  ingestion_scheduler_disabled observed in this container's startup"
+
+            # Flags validated to the exact string 'false' — and now meaningful,
+            # because the code running DOES read them.
+            need_false BONFIRE_ENGINE_ENABLED
+            need_false BONFIRE_SCRAPER_ENABLED
+            need_false BONFIRE_SCRAPER_CRON_ENABLED
+            need_false INGESTION_SCHEDULER_ENABLED
+
+            # Integrity tripwire: selected state only, checked after the fact.
+            POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            [ "$POST_ROWS" = "$FREEZE_ROWS" ] \
+              || { echo "row count changed across rollout (${FREEZE_ROWS} -> ${POST_ROWS})" >&2; exit 1; }
+            [ "$POST_SUM" = "$FREEZE_SUM" ] \
+              || { echo "a close_date VALUE changed across rollout — a writer was active" >&2; exit 1; }
+            [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
+              || { echo "ingestion_logs grew across rollout (${FREEZE_LOGS} -> ${POST_LOGS})" >&2; exit 1; }
+            echo "  integrity tripwire held on the state it covers"
+
+            # NO db:migrate here, deliberately. See migrate.yml.
+            echo "recovery: docker run/compose with image ${PREV_IMAGE} restores the previous code."
+            echo "  NOTE: the previous image has no INGESTION_SCHEDULER_ENABLED gate, so"
+            echo "  restarting it RE-ARMS its generic ingestion scheduler. See"
+            echo "  docs/gov-phase2/PRE-MIGRATION-FREEZE.md for what that means."
+            echo "Deployed $(git rev-parse HEAD) at $(date -u)"

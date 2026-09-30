@@ -53,6 +53,26 @@ async function listOpportunities(req, res) {
   }
 }
 
+// GET /bonfire/best-fit — the same ranking the daily digest email uses, for
+// external consumers that must match the email 1:1. Same redaction rules as
+// every other egress path: sourceUrl/rawText need admin or the explicit
+// read:bonfire_source API-key scope.
+async function listBestFit(req, res) {
+  try {
+    const { rows, ranking } = await service.listBestFitOpportunities({ limit: req.query.limit });
+    return res.status(200).json({
+      status: 'success',
+      message: 'Success',
+      data: redactListForRole(rows, req.user),
+      ranking,
+      code: 200,
+    });
+  } catch (e) {
+    logger.error('Bonfire best-fit failed', { error: e.message });
+    return errorResponse(res, 'Failed to list best-fit opportunities', 500);
+  }
+}
+
 async function getOpportunity(req, res) {
   try {
     const row = await service.getOpportunity(req.params.id);
@@ -439,6 +459,7 @@ async function deepVet(req, res) {
 module.exports = {
   getFlag,
   listOpportunities,
+  listBestFit,
   getOpportunity,
   uploadFile,
   uploadJson,

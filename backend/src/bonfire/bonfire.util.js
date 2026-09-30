@@ -6,15 +6,31 @@ const { RAW_TEXT_MAX_STORE, ENRICHMENT_VERSION } = require('./bonfire.constants'
 // the camelCase (API-facing) and snake_case (raw-query safety) forms.
 const ADMIN_ONLY_FIELDS = ['sourceUrl', 'rawText', 'source_url', 'raw_text'];
 
+// Narrow, read-only scope that un-redacts ADMIN_ONLY_FIELDS for a machine
+// credential (see apiKeys/). Deliberately NOT the 'admin' role: `role` is what
+// rbac.middleware.checkPermissions() gates every write on, so attaching it to a
+// service credential would hand a read-only integration full write authority
+// over Bonfire (enrich, deep-vet, pursue, upload) and every other admin surface.
+// This scope un-redacts reads and grants nothing else — an API-key request has
+// no `role`, so checkPermissions() still rejects it on every write route.
+const SOURCE_FIELDS_SCOPE = 'read:bonfire_source';
+
 function isAdmin(user) {
   return !!user && user.role === 'admin';
+}
+
+// True when the caller may see sourceUrl / rawText: either a human admin JWT,
+// or an API key explicitly granted SOURCE_FIELDS_SCOPE.
+function canReadSourceFields(user) {
+  if (isAdmin(user)) return true;
+  return !!user && Array.isArray(user.scopes) && user.scopes.includes(SOURCE_FIELDS_SCOPE);
 }
 
 // Central redaction helper — call for EVERY egress path (list, detail, strategy).
 function redactForRole(row, user) {
   if (!row) return row;
   const plain = typeof row.toJSON === 'function' ? row.toJSON() : { ...row };
-  if (isAdmin(user)) return plain;
+  if (canReadSourceFields(user)) return plain;
   for (const f of ADMIN_ONLY_FIELDS) {
     plain[f] = null;
   }
@@ -139,7 +155,9 @@ function computeEnrichmentHash(rawText, version = ENRICHMENT_VERSION) {
 
 module.exports = {
   ADMIN_ONLY_FIELDS,
+  SOURCE_FIELDS_SCOPE,
   isAdmin,
+  canReadSourceFields,
   redactForRole,
   redactListForRole,
   normalizeEstimatedValue,

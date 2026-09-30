@@ -7,7 +7,7 @@ const { env, validateEnv } = require('./config/environment');
 const { initializeSocket } = require('./config/socket');
 const { sequelize } = require('./models');
 const errorHandler = require('./middleware/errorHandler.middleware');
-const { generalLimiter } = require('./middleware/rateLimiter.middleware');
+const { generalLimiter, healthLimiter } = require('./middleware/rateLimiter.middleware');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const logger = require('./logging/logger');
@@ -94,7 +94,7 @@ app.get('/api/docs.json', (req, res) => res.json(swaggerSpec));
  *       200:
  *         description: Service is healthy
  */
-app.get('/api/v1/health', (req, res) => {
+app.get('/api/v1/health', healthLimiter, (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
@@ -111,7 +111,7 @@ app.get('/api/v1/health', (req, res) => {
  *       503:
  *         description: Unhealthy — database unreachable
  */
-app.get('/api/v1/health/ready', async (req, res) => {
+app.get('/api/v1/health/ready', healthLimiter, async (req, res) => {
   const components = {};
 
   // Check database with 5-second timeout
@@ -170,7 +170,7 @@ app.get('/api/v1/health/ready', async (req, res) => {
  *       200:
  *         description: Process is alive
  */
-app.get('/api/v1/health/live', (req, res) => {
+app.get('/api/v1/health/live', healthLimiter, (req, res) => {
   res.json({ status: 'alive', uptime: process.uptime() });
 });
 

@@ -657,10 +657,61 @@ async function generateStrategyForId(id) {
   }
 }
 
+// -------- best-fit (digest parity) --------
+
+// Hard ceiling on ?limit for the best-fit endpoint. The digest itself asks for
+// 10; allow headroom without letting a caller pull the whole table.
+const BEST_FIT_MAX_LIMIT = 50;
+const BEST_FIT_DEFAULT_LIMIT = 10;
+
+// Digest-parity ranking for external consumers (the Accelerator's Factory
+// Command Center renders this as "Top 10 Bonfire Contracts to Bid").
+//
+// This DELEGATES to richDigest.topBonfire — the exact function the daily
+// "Your Opportunity Pulse" email calls — so the API and the email cannot
+// drift. Do NOT reimplement the ranking here: a second copy is a guaranteed
+// future mismatch, which is the whole problem this endpoint exists to solve.
+// The require is function-local to keep the module-load graph acyclic
+// (emailDigest -> models only; bonfire -> emailDigest only at call time).
+//
+// Failure modes: throws only if the DB is unreachable; the controller maps
+// that to a 500. Read-only, no partial state, safe to call repeatedly.
+async function listBestFitOpportunities({ limit } = {}) {
+  // eslint-disable-next-line global-require
+  const richDigest = require('../emailDigest/richDigest.service');
+
+  const asNum = Number(limit);
+  const effectiveLimit = Number.isFinite(asNum) && asNum >= 1
+    ? Math.min(Math.floor(asNum), BEST_FIT_MAX_LIMIT)
+    : BEST_FIT_DEFAULT_LIMIT;
+
+  const rows = await richDigest.topBonfire(effectiveLimit);
+
+  return {
+    rows,
+    // Self-describing ranking metadata so a consumer can explain the order it
+    // rendered without hardcoding our thresholds on their side.
+    ranking: {
+      parityWith: 'daily_digest.topBonfire',
+      limit: effectiveLimit,
+      minCloseDays: richDigest.BONFIRE_DIGEST_MIN_CLOSE_DAYS,
+      // These verdict statuses are DEMOTED to the bottom bucket, not removed.
+      demotedVerdictStatuses: richDigest.HIDDEN_VERDICTS,
+      sort: [
+        'biddable_first (verdict not demoted AND title matches domain regex) ASC',
+        'priorityScore DESC NULLS LAST',
+        'fitScore DESC NULLS LAST',
+        'createdAt DESC',
+      ],
+    },
+  };
+}
+
 module.exports = {
   listOpportunities,
   recordGovEvidence,
   resetGovEvidenceCapability,
+  listBestFitOpportunities,
   getOpportunity,
   ingestJsonArray,
   upsertJsonArray,

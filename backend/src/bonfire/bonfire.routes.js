@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { verifyToken } = require('../middleware/auth.middleware');
+const { verifyToken, verifyTokenOrApiKey } = require('../middleware/auth.middleware');
 const { checkPermissions } = require('../middleware/rbac.middleware');
 const { ROLES } = require('../config/constants');
 const { requireBonfireEnabled } = require('./bonfire.middleware');
@@ -48,8 +48,21 @@ const rfpUpload = multer({
 const bulkJsonParser = express.json({ limit: '5mb' });
 
 // ---- Reads (authenticated).
-router.get('/opportunities', verifyToken, controller.listOpportunities);
-router.get('/opportunities/:id', verifyToken, controller.getOpportunity);
+//
+// These three accept EITHER a Bearer JWT (the frontend) or an X-API-Key
+// (server-to-server consumers, e.g. the Accelerator's Factory Command Center).
+// An API key gets no `role`, so every admin-gated write below still rejects it;
+// un-redacting sourceUrl/rawText requires the explicit read:bonfire_source
+// scope (see bonfire.util.canReadSourceFields). Reads only — do NOT extend
+// verifyTokenOrApiKey to a write route without a scope check.
+router.get('/opportunities', verifyTokenOrApiKey, controller.listOpportunities);
+
+// Digest parity: the exact "Top 10 Bonfire Contracts to Bid" ranking the daily
+// "Your Opportunity Pulse" email renders. Its own path, so no precedence
+// interaction with /opportunities/:id.
+router.get('/best-fit', verifyTokenOrApiKey, controller.listBestFit);
+
+router.get('/opportunities/:id', verifyTokenOrApiKey, controller.getOpportunity);
 
 // v0.1 Submission Readiness — per-bid checklist + bulk summaries for list pages.
 router.get('/opportunities/:id/readiness', verifyToken, controller.getReadiness);
