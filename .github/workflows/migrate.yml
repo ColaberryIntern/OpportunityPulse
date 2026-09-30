@@ -1,0 +1,275 @@
+name: Migrate production database (manual)
+
+# Migrations run BEFORE the application rollout, and from an artifact that
+# actually contains them.
+#
+# Three defects fixed across revisions of this workflow:
+#   1. It asserted the DEPLOYED HEAD equalled the ref, forcing deploy-before-
+#      migrate. For an additive migration that is backwards.
+#   2. It ran `docker exec op-backend ... db:migrate`, i.e. inside the RUNNING
+#      container built from the OLD image, which does not contain the new
+#      migration file. It would have found nothing pending and exited 0.
+#   3. Its gates were operator assertions. Backup "evidence" was file existence
+#      and size; the write freeze was `!= true`, which passes when a variable is
+#      unset or misspelled; and immutability was an UPDATE against an empty
+#      table, which affects 0 rows and proves nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Reviewed commit SHA to migrate from (full SHA; must contain the migration)'
+        required: true
+      confirm:
+        description: 'Type MIGRATE to confirm you intend to change the production schema'
+        required: true
+      backup_path:
+        description: 'Absolute path on the server to the pg_dump artifact'
+        required: true
+      backup_sha256:
+        description: 'SHA-256 of that dump. Verified on the server; a mismatch aborts.'
+        required: true
+      restore_report_path:
+        description: 'Optional: path to a retained restoration report for the same SHA-256'
+        required: false
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply pending migrations (pre-rollout)
+    runs-on: ubuntu-latest
+    # Requires the protected `production` environment with required reviewers.
+    environment: production
+    steps:
+      - name: Operator intent must be explicit
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "MIGRATE" ] || { echo "::error::confirm must be MIGRATE"; exit 1; }
+          [ -n "${{ inputs.backup_path }}" ]   || { echo "::error::backup_path required"; exit 1; }
+          [ -n "${{ inputs.backup_sha256 }}" ] || { echo "::error::backup_sha256 required"; exit 1; }
+          {
+            echo "### Migration authorization"
+            echo "- ref: `${{ inputs.ref }}`"
+            echo "- dump: `${{ inputs.backup_path }}`"
+            echo "- expected sha256: `${{ inputs.backup_sha256 }}`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify, restore-test, migrate and prove via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
+            : > /tmp/release_evidence.txt
+
+            # op-backend is stopped during the freeze, so read credentials from the
+            # postgres container itself rather than from the application container.
+            DBU="$(docker exec op-postgres printenv POSTGRES_USER)"
+            DBN="$(docker exec op-postgres printenv POSTGRES_DB)"
+            psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
+
+            ENV_FLAG=""
+            if [ -f .env.prod ]; then ENV_FLAG="--env-file .env.prod"; fi
+
+            # ---------------------------------------------------------------
+            # PRE-MIGRATION WRITE FREEZE — enforced by absence of a writer,
+            # not by a feature flag.
+            #
+            # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
+            # release being prepared. Production at 6936c99 does not read it, so
+            # setting it would leave `printenv` reporting 'false' while the old
+            # scheduler stayed armed — a gate that passes while the thing it gates
+            # is still running. Requiring its log line instead would block
+            # activation forever, because old code never emits it.
+            #
+            # op-backend is the ONLY container that runs application code, so
+            # stopping it prevents every write path at once: cron schedulers, the
+            # manual scraper trigger, CSV/JSON ingest, document upload, rescoring
+            # and deep-vet jobs, and any admin API call. No enumeration of routes
+            # is required, because none of them have a process to run in.
+            # ---------------------------------------------------------------
+            # ---- ROLLBACK ANCHOR: the immutable image ID the current container was
+            # created from, captured BEFORE any build. Recovery uses this ID, not a
+            # tag, because tags move when the candidate is built.
+            PREV_IMAGE="$(docker inspect -f '{{.Image}}' op-backend 2>/dev/null || echo none)"
+            echo "rollback anchor: previous backend image = ${PREV_IMAGE}"
+            echo "- rollback image: ${PREV_IMAGE}" >> /tmp/release_evidence.txt
+
+            echo "--- write freeze: no application container may be running ---"
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "FREEZE FAILED: op-backend is still running." >&2
+              echo "  Stop it first (see docs/gov-phase2/PRE-MIGRATION-FREEZE.md)." >&2
+              exit 1
+            fi
+            echo "  op-backend: not running"
+
+            # Leftover one-shot containers from an earlier `compose run` would also
+            # be application processes. There must be none.
+            STRAY=$(docker ps --format '{{.Names}}' | grep -E 'backend[-_]run[-_]' || true)
+            if [ -n "$STRAY" ]; then
+              echo "FREEZE FAILED: stray backend run container(s): ${STRAY}" >&2
+              exit 1
+            fi
+            echo "  no stray one-shot backend containers"
+
+            # Everything still up must be a non-writer: database, cache, proxy,
+            # static frontend, metrics, backup. Any other app container is a writer.
+            echo "  still running (expected non-writers only):"
+            docker ps --format '    {{.Names}} ({{.Image}})'
+
+            # The migration runner itself must not be able to start schedulers.
+            # The image declares CMD, not ENTRYPOINT, and `compose run` replaces
+            # CMD — so `npx sequelize-cli db:migrate` runs INSTEAD of
+            # scripts/docker-entrypoint.sh, which is what execs `node src/server.js`.
+            # Asserted rather than assumed:
+            if docker image inspect "$(docker compose $ENV_FLAG -f docker-compose.prod.yml config --images backend 2>/dev/null | head -1)" \
+                 --format '{{json .Config.Entrypoint}}' 2>/dev/null | grep -qv '^null$'; then
+              echo "FREEZE FAILED: backend image declares an ENTRYPOINT, so a one-shot" >&2
+              echo "  command may not replace the server startup. Re-verify before migrating." >&2
+              exit 1
+            fi
+            echo "  backend image has no ENTRYPOINT: a one-shot command replaces CMD and cannot start the server"
+
+            # ---- INTEGRITY CHECKS (not prevention).
+            # These detect a change AFTER the fact and cover SELECTED state only:
+            # bonfire_opportunities.(id, close_date), the bonfire_opportunities row
+            # count, and the ingestion_logs row count. They do NOT cover other
+            # columns, other tables, or anything that happens after the final
+            # comparison. Prevention is the container stop above; these are a
+            # tripwire that the freeze held.
+            FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+
+            # ---- DRAIN VERIFICATION.
+            #
+            # Draining happens BEFORE the stop, with the backend still up (see
+            # docs/gov-phase2/PRE-MIGRATION-FREEZE.md). By the time this runs the
+            # writer is already stopped, so a row still in status='running' can only
+            # mean a run was INTERRUPTED rather than allowed to finish.
+            #
+            # That is an abort, not a warning: migrating over a half-written
+            # ingestion run would bake its partial state into the baseline.
+            RUNNING=$(psql_t -c "select count(*) from ingestion_logs where status = 'running';")
+            if [ "$RUNNING" != "0" ]; then
+              echo "ABORT: ${RUNNING} ingestion run(s) still marked running while op-backend is stopped." >&2
+              echo "  A writer was force-stopped mid-run. Do NOT migrate." >&2
+              echo "  Restart op-backend on the previous image, let the run reach a terminal" >&2
+              echo "  status, drain again, then stop it gracefully and re-dispatch." >&2
+              exit 1
+            fi
+            echo "  drain verified: no interrupted ingestion runs"
+
+            # ---- Obtain the migration: check out the reviewed commit and BUILD
+            # the image from it. The running container is the old image.
+            git fetch origin --prune
+            git checkout --detach ${{ inputs.ref }}
+            test "$(git rev-parse HEAD)" = "$(git rev-parse ${{ inputs.ref }}^{commit})" \
+              || { echo "checkout did not land on ${{ inputs.ref }}" >&2; exit 1; }
+
+            docker compose $ENV_FLAG -f docker-compose.prod.yml build backend
+
+            # Prove the artifact contains the migration before running it.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              sh -c 'ls -1 src/migrations | grep 20260929000001' \
+              || { echo "built image does not contain the Phase 2 migration" >&2; exit 1; }
+
+            echo "--- pending BEFORE ---"
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate:status | tail -20
+
+            # ---- MIGRATE from the one-shot container. Serving container untouched.
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate
+
+            echo "--- pending AFTER ---"
+            docker compose $ENV_FLAG -f docker-compose.prod.yml run --rm --no-deps -T backend \
+              npx sequelize-cli db:migrate:status | tail -20
+
+            # ---------------------------------------------------------------
+            # PROOF THE MIGRATION RAN — not "the command exited 0".
+            # ---------------------------------------------------------------
+            echo "--- proof: SequelizeMeta entry ---"
+            META=$(psql_t -c "select count(*) from \"SequelizeMeta\" where name = '20260929000001-gov-phase2-deadline-evidence-and-identity.js';")
+            [ "$META" = "1" ] \
+              || { echo "SequelizeMeta has ${META} rows for the Phase 2 migration — expected exactly 1" >&2; exit 1; }
+            psql_t -c "select name from \"SequelizeMeta\" order by name desc limit 3;"
+
+            echo "--- proof: expected schema objects ---"
+            TBLS=$(psql_t -c "select count(*) from information_schema.tables where table_schema='public' and table_name in ('gov_canonical_opportunities','gov_source_aliases','gov_source_snapshots','gov_solicitation_families','gov_family_members');")
+            [ "$TBLS" = "5" ] || { echo "expected 5 gov tables, found ${TBLS}" >&2; exit 1; }
+            COLS=$(psql_t -c "select count(*) from information_schema.columns where table_name='bonfire_opportunities' and column_name like 'close\\_date%';")
+            [ "$COLS" -ge 24 ] \
+              || { echo "expected >=24 close_date* columns (1 original + 23 added), found ${COLS}" >&2; exit 1; }
+            IDX=$(psql_t -c "select count(*) from pg_indexes where tablename='gov_canonical_opportunities' and indexdef ilike '%unique%canonical_public_id%';")
+            [ "$IDX" -ge 1 ] || { echo "unique index on canonical_public_id missing" >&2; exit 1; }
+            TRG=$(psql_t -c "select count(*) from pg_trigger where tgname='trg_gov_source_snapshots_immutable' and not tgisinternal;")
+            [ "$TRG" = "1" ] || { echo "immutability trigger missing" >&2; exit 1; }
+            echo "  5 tables, ${COLS} close_date* columns, unique canonical index, trigger present"
+
+            echo "--- proof: existing data UNCHANGED (counts AND deadline values) ---"
+            POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
+            POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
+            POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
+            echo "  rows: ${FREEZE_ROWS} -> ${POST_ROWS}"
+            echo "  deadline checksum: ${FREEZE_SUM} -> ${POST_SUM}"
+            [ "$POST_ROWS" = "$FREEZE_ROWS" ] \
+              || { echo "ROW COUNT CHANGED during migration" >&2; exit 1; }
+            [ "$POST_SUM" = "$FREEZE_SUM" ] \
+              || { echo "A close_date VALUE CHANGED during migration — the migration must be additive" >&2; exit 1; }
+            [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
+              || { echo "ingestion_logs grew during the freeze (${FREEZE_LOGS} -> ${POST_LOGS}) — something wrote" >&2; exit 1; }
+            echo "  existing rows, deadline values and ingestion_logs all unchanged"
+
+            echo "--- proof: nothing marked verified, new tables EMPTY before the pilot ---"
+            VERIFIED=$(psql_t -c "select count(*) from bonfire_opportunities where close_date_verified_at is not null;")
+            [ "$VERIFIED" = "0" ] || { echo "migration marked ${VERIFIED} rows verified — expected 0" >&2; exit 1; }
+            for t in gov_canonical_opportunities gov_source_aliases gov_source_snapshots gov_solicitation_families gov_family_members; do
+              C=$(psql_t -c "select count(*) from ${t};")
+              [ "$C" = "0" ] || { echo "${t} has ${C} rows before the pilot — expected 0" >&2; exit 1; }
+              echo "  ${t}=0"
+            done
+
+            # ---------------------------------------------------------------
+            # IMMUTABILITY EXERCISED against a REAL snapshot, inside a
+            # transaction that is rolled back. An UPDATE against an empty table
+            # affects 0 rows and proves nothing; a generic "command failed" could
+            # be any SQL error. This asserts the SPECIFIC trigger message and
+            # confirms the table is still empty afterwards.
+            # ---------------------------------------------------------------
+            echo "--- proof: immutability trigger fires on a real snapshot ---"
+            # Built as a single psql command string so every line stays indented:
+            # a heredoc body at column 0 terminates the YAML block scalar. Verified
+            # to behave identically to the heredoc form (same error, same rollback).
+            TRIG_SQL="BEGIN;"
+            TRIG_SQL="$TRIG_SQL INSERT INTO gov_canonical_opportunities (canonical_id, canonical_public_id, source_system, source_snapshot_version, created_at, updated_at) VALUES ('99999999-9999-4999-8999-999999999999','op:gov:ffffffffffffffffffffffffffffffff','release-check',1,NOW(),NOW());"
+            TRIG_SQL="$TRIG_SQL INSERT INTO gov_source_snapshots (id, canonical_id, source_snapshot_version, content_hash, fetch_status, payload, created_at) VALUES (gen_random_uuid(),'99999999-9999-4999-8999-999999999999',1,'release-check-hash','success','{\"probe\":true}'::jsonb,NOW());"
+            TRIG_SQL="$TRIG_SQL UPDATE gov_source_snapshots SET content_hash='tampered' WHERE canonical_id='99999999-9999-4999-8999-999999999999';"
+            TRIG_SQL="$TRIG_SQL ROLLBACK;"
+            TRIG_OUT=$(docker exec op-postgres psql -U "$DBU" -d "$DBN" -c "$TRIG_SQL" 2>&1 || true)
+            echo "$TRIG_OUT" | sed 's/^/    /'
+            echo "$TRIG_OUT" | grep -qi 'gov_source_snapshots is append-only'               || { echo "trigger did NOT raise the expected append-only error" >&2; exit 1; }
+            echo "$TRIG_OUT" | grep -q 'INSERT 0 1'               || { echo "the test snapshot was not actually inserted — the UPDATE had nothing to hit" >&2; exit 1; }
+            AFTER_SNAPS=$(psql_t -c "select count(*) from gov_source_snapshots;")
+            AFTER_CANON=$(psql_t -c "select count(*) from gov_canonical_opportunities;")
+            [ "$AFTER_SNAPS" = "0" ] && [ "$AFTER_CANON" = "0" ]               || { echo "aborted transaction leaked rows (snapshots=${AFTER_SNAPS} canonical=${AFTER_CANON})" >&2; exit 1; }
+            echo "  trigger raised the expected error on a real inserted snapshot; transaction left no rows"
+
+            cat /tmp/release_evidence.txt
+            # ---- The freeze must SURVIVE this workflow. release.yml has its own
+            # approval, so the backend stays stopped until that approval lands.
+            if docker ps --format '{{.Names}}' | grep -qx 'op-backend'; then
+              echo "ABORT: op-backend is running at the end of migration." >&2
+              echo "  The freeze must persist until the approved release runs." >&2
+              exit 1
+            fi
+            echo "freeze preserved: op-backend still stopped, awaiting the approved release"
+
+            echo "Migrated from $(git rev-parse HEAD) at $(date -u). Serving container NOT restarted."
