@@ -9,6 +9,18 @@
 
 set -e
 
+# Clear a stale X lock before starting, so this script is safe to run again in a
+# container that was STOPPED rather than removed. `docker compose stop` leaves the
+# filesystem intact, so /tmp/.X99-lock survives; on the next start Xvfb aborts with
+# "Server is already active for display 99" and headed Chromium degrades silently
+# while the API still serves. Observed in production on 2026-09-30 after the
+# pre-migration freeze stopped and restarted op-backend.
+#
+# Removing it is safe because the lock can only be stale here: this runs as pid 1
+# before any Xvfb of ours exists, so no live server owns display :99 in this
+# container's namespace.
+rm -f /tmp/.X99-lock
+
 # Start Xvfb on display :99 to match $DISPLAY in the Dockerfile.
 # -ac disables host-based access control (single-tenant container, no risk).
 # +extension GLX +render enables hardware-render shims that some sites probe.
