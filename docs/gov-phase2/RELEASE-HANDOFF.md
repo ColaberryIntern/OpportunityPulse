@@ -78,12 +78,29 @@ the observation, authority, snapshot and superseded-history record that explains
 
 ## 4. Landing plan for the stacked PRs
 
-**Prerequisite — production divergence.** Production `main` is **5 commits ahead of `origin/main` and
-divergent**; a `git pull` there merges rather than fast-forwards. Two of those commits carry
-`backend/src/ingestion/sourceHealthMonitor.js`, its test, and `scheduler.js` wiring that exist on **no
-origin ref**. See `tmp/escalation.json`. Resolve this *before* any rollout step that touches the prod
-checkout, because the usual recovery move (`git reset --hard origin/main`) would delete live ingestion
-alerting.
+**Prerequisite — production divergence. PREPARED, awaiting review.** Production `main` is 5 commits
+ahead of `origin/main` and divergent; a `git pull` there merges rather than fast-forwards. Two of
+those commits carried `backend/src/ingestion/sourceHealthMonitor.js`, its test and `scheduler.js`
+wiring that existed on **no origin ref**, so the usual recovery move (`git reset --hard origin/main`)
+would have deleted live ingestion alerting.
+
+That code is now preserved on **`recovery/prod-ingestion-source-health`** and opened as **draft PR #4**
+against `main`, byte-identical to production (blobs verified per file; the ingestion surface diffs
+empty against `refs/prod/main`), with its tests passing (9/9, and 406/37 for the whole unit suite) and
+**zero conflicts** against PR #2, PR #3 or the accelerator branch. See `tmp/escalation.json`
+(`status: resolved_pending_review`).
+
+**Merge PR #4 before any rollout step that touches the prod checkout.** Until it lands, `origin/main`
+is still not a superset of production and the recovery move remains destructive. Note also that
+`feat/accelerator-bonfire-read-integration` has no PR of its own — its content is safe on origin but
+unmerged, so prod `main` stays divergent from `origin/main` until that lands too.
+
+**Also surfaced, non-blocking:** `op-backend` reports **unhealthy** because its healthcheck receives
+**429** from `/api/v1/health` on localhost — the rate limiter rejects the container's own healthcheck.
+External traffic is unaffected (1,873 of the last 2,000 nginx lines are 200; the only two 429s were
+`/metrics` from curl). It does not block the rollout — `docker-compose.prod.yml` gates only `postgres`
+and `redis` on `service_healthy` — but it makes the backend health signal untrustworthy, and step B's
+smoke checks below rely on observing health. Fix separately.
 
 **Order and mechanics.**
 
