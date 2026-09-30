@@ -8,12 +8,14 @@ async function listOpportunities(req, res, next) {
       type, category, status, tags, q,
       dateFrom, dateTo, minScore, sort, page, limit, actionType,
       domain, capability, intent, monetization, maturity, geo, quadrant, cluster, source,
+      excludeSource, openOnly,
     } = req.query;
 
     const result = await opportunityService.listOpportunities({
       type, category, status, tags, q,
       dateFrom, dateTo, minScore, sort, page, limit, actionType,
       domain, capability, intent, monetization, maturity, geo, quadrant, cluster, source,
+      excludeSource, openOnly,
     });
 
     logAuditEvent({
