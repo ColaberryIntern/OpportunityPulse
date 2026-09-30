@@ -304,6 +304,7 @@ The union was built by actually merging the two branches in a throwaway worktree
 **Blocker:** the accelerator branch carries the **live Enterprise integration surface** — the scope and endpoint Enterprise consumes today — and it has no PR. It must be reviewed and landed as part of the release, not left as an unmerged branch.
 
 ## 10. Revised landing order
+> **Superseded by §19.2.** That section adds the actual merges for #4 and #6 and puts #7 first.
 
 > **Prerequisite zero: read §13 first.** Merging into `main` currently triggers an unattended
 > production deploy that also runs `db:migrate`. Until that coupling is resolved, **no PR below should
@@ -323,6 +324,8 @@ Four PRs, in this order. Each step is separately authorizable.
 9. **Deploy #2 and #3 together, in one rollout.** Never #2 alone: `closeDate` is in `updateOnDuplicate` and with no Phase 2 tables it is the only publisher, so a re-scrape would shift stored deadlines — six hours exactly for the Utah MDT case — with no verification column, observation, snapshot or superseded history.
 
 ## 11. Activation sequence (explicit; nothing below is authorized yet)
+> **Superseded by §19.3.** This section had the order wrong: it dispatched the code release BEFORE
+> pause/drain and migration. Migration now precedes rollout.
 
 > **§13 blocks this sequence.** Steps 1-4 assume the migration is applied deliberately, after a drained
 > ingestion and a verified backup. The CI deploy job runs `db:migrate` automatically on merge, which
@@ -487,6 +490,7 @@ Separately, and regardless of which option is chosen: **`db:migrate` should not 
 **§10's order and §11's sequence remain correct in substance, but neither can be executed safely until this is resolved.** Treat this as prerequisite zero, ahead of PR #4. No PR should be merged — including PR #5 and PR #4 — until the merge-to-deploy coupling is decided.
 
 ## 14. Current PR set, heads and dependencies
+> **Superseded by §19.1** for the heads, and §19.2 for the order.
 
 Verified against `origin` at the time of writing.
 
@@ -527,6 +531,7 @@ Verified against `origin` at the time of writing.
 | Whether `/metrics` should also leave the general rate-limit bucket | reviewer | not release-blocking |
 
 ## 15. Combined-release rehearsal
+> **Superseded by §19.7**, which rehearses the corrected order with #7 first.
 
 Performed in an isolated `git worktree` off `origin/main`. **The production checkout was never touched.**
 
@@ -596,3 +601,111 @@ To be supplied once the release is authorized and the pilot has run:
 5. **A real canonical ID** with its **persisted snapshot** and a **successful list → detail verification**, including non-null `meta.sourceSnapshotVersion`.
 
 Plus the standing caveat: empty documents/requirements still block qualification approval.
+
+## 19. CORRECTED release checklist — supersedes §10, §11, §14 and §15
+
+Earlier sections had the activation order wrong: they dispatched the code release **before** pause/drain and migration. That would have started the corrected parser against the old schema. §19 is authoritative.
+
+### 19.1 Exact PR heads
+
+| PR | Branch | Head | Base | State |
+|---|---|---|---|---|
+| **#7** | `fix/separate-release-from-merge` | **`c26923e`** | `main` | open |
+| **#4** | `recovery/prod-ingestion-source-health` | **`486630f`** | `main` | **draft** |
+| **#6** | `feat/accelerator-bonfire-read-integration` | **`a3a451a`** | `main` | open |
+| **#5** | `fix/healthcheck-readiness-not-rate-limited` | **`668342c`** | `main` | open |
+| **#2** | `feat/gov-deadline-parser-and-contract-v1` | **`b9b8905`** | `main` | open |
+| **#3** | `feat/gov-phase2-persistence-and-v2-api` | **`2751c2f`** | **#2's branch** | open |
+
+### 19.2 Landing order — actual merges
+
+| Step | Action | Evidence required at this gate |
+|---|---|---|
+| **L0** | Create the GitHub environment **`production` with required reviewers** | The environment exists and lists at least one reviewer. **Prerequisite to any dispatch** — both production-changing jobs declare `environment: production`, but an environment that exists *without* reviewers is not a gate |
+| **L1** | **Merge #7** (`c26923e`). Fast-forwards onto `main` | CI green on the head; `ci.yml` contains no `appleboy/ssh-action`, no `DEPLOY_SSH_KEY`, no `refs/heads/main` |
+| **L2** | Review, **un-draft, and merge #4** (`486630f`) | Human review recorded. Three preservation blobs still byte-identical to production |
+| **L3** | Review and **merge #6** (`a3a451a`). Resolve the `PROGRESS.md` conflict by **union — keep every entry** | Human review recorded. Nine code/test files byte-identical to production |
+| **L4** | **Merge #5** (`668342c`) | CI green; `healthLimiter.test.js` 8/8 |
+| **L5** | **Merge #2** (`b9b8905`) **with a merge commit**, never squash. **Retain its branch** | The merge commit exists; `feat/gov-deadline-parser-and-contract-v1` still present on origin |
+| **L6** | **Retarget #3 to `main`** (`gh pr edit 3 --base main`) | PR #3 base is `main` |
+| **L7** | **Inspect the resulting diff**: `git diff --stat origin/main...origin/feat/gov-phase2-persistence-and-v2-api` | Lists **only Phase 2 paths**. Phase 1 paths appearing means L5 did not use a merge commit |
+| **L8** | **Fresh checks and fresh review on the new base** | A new CI run against the retargeted base, plus a new human approval. A `mergeable` flag is **not** review |
+| **L9** | **Merge #3** | The merge commit SHA — this is the release candidate |
+| **L10** | Delete the two gov feature branches | — |
+
+After L9, record the release-candidate SHA. Everything in 19.3 uses that one SHA.
+
+### 19.3 Activation order — corrected
+
+**Migration comes before code rollout.** The migration is additive, so the currently-deployed code is unaffected by the new nullable columns and tables; deploying code first would instead open a window where new code expects columns that do not exist.
+
+| Step | Action | Machine-verified | Reviewer must verify |
+|---|---|---|---|
+| **A1** | **Pause scheduled ingestion.** Set `BONFIRE_ENGINE_ENABLED=false` and disable `INGESTION_SCHEDULE` in `.env.prod`; restart so no scheduler is armed | — (a production config change, done by an operator) | `/api/v1/bonfire/flag` returns `enabled:false` |
+| **A2** | **Drain in-flight ingestion** | `migrate.yml` asserts `ingestion_logs` `status='running'` is **0 across two reads 60 s apart**, and that `BONFIRE_ENGINE_ENABLED != true` | No terminal-status run was killed mid-write |
+| **A3** | **Backup, and restore-test it** | `migrate.yml` asserts the artifact at `backup_path` **exists** and exceeds **1 MiB** | **That the restore was actually performed into a scratch database and row counts matched.** No workflow can prove this; `backup_restore_evidence` is an operator assertion, recorded in the run summary |
+| **A4** | **Fresh baseline counts** | `migrate.yml` records total / with-`close_date` / still-open **before and after**, and **fails** if any row is marked verified after | The before-counts are from *now*, not carried over from 2026-09-29 |
+| **A5** | **Apply the additive migration** — dispatch `migrate.yml` with the L9 SHA | Checks out the SHA, **asserts HEAD matches**, **builds the image from it**, proves the artifact contains the migration, runs it in a **one-shot container** (`docker compose run --rm --no-deps -T backend`), and **does not restart the serving container**. Fails on any pending-status, verified-count, or immutability-trigger anomaly | The SHA is the reviewed release candidate from L9 |
+| **A6** | **Roll out the combined code** — dispatch `release.yml` with the same SHA | Preflight refuses **Phase 1 alone** and refuses a tree missing the production-only monitor or the Enterprise v1 tests. Then: detached checkout + HEAD assertion; **refuses if any migration is still pending** ("run migrate.yml BEFORE deploying"); **verifies ingestion is off and nothing in flight before rollout**; polls `/api/v1/health/ready`; **re-verifies the ingestion flag after** the rebuild, since a rebuild re-reads `.env.prod` | `confirm: DEPLOY` was typed deliberately; the SHA matches A5 |
+| **A7** | **Verify v1 and v2** | — | v1 unchanged: `/api/v1/bonfire/opportunities`, `/best-fit`, `/opportunities/:id`; `read:bonfire_source` still gates un-redaction. v2: `/contract` → 200 with the LF hash; no credential → **401**; a `read`-only credential → **403** |
+| **A8** | **Provision the scoped credential — its own authorization step** | — | See §19.4. **Not part of A6** |
+| **A9** | **One-opportunity Utah pilot**, scheduler still unarmed | — | See §19.5 |
+| **A10** | **Resume broader ingestion** — a separate authorization after pilot evidence is accepted | — | Re-arming the scheduler is its own decision |
+
+**Why this order prevents every write in the interval:** between A1 and A9 the scheduler is unarmed and `BONFIRE_ENGINE_ENABLED` is false; `migrate.yml` refuses to run unless both are true *and* nothing is in flight; `release.yml` re-checks both before rolling out and re-checks the flag after; and `release.yml` refuses outright while any migration is pending. The only writer that could touch opportunity rows in that window is a scrape, and no scrape can start.
+
+### 19.4 Credential provisioning — separate from deployment (A8)
+
+Previously numbered inside the code-release step, which was wrong. It is its own authorization.
+
+- Mint **one** key scoped **`read:gov_opportunities` only**.
+- **Preserve the existing v1 key and its `read:bonfire_source` scope unchanged** — not replaced, not reissued, not widened. It serves a different, already-live surface.
+- Enterprise's side is `OPPORTUNITY_PULSE_V2_API_KEY` (their PR #2844 at `706e9521`), which has **no fallback to v1**, so the v2 key must exist before Enterprise switches v2 calls on, and v1 must keep working throughout.
+- **Never exposed in logs, run output, PR bodies, tickets or handoff documents.** Delivered out of band. Only the **key prefix** and the **scope set** are ever recorded.
+- Requires its own authorization. Not done.
+
+### 19.5 The authorized pilot (A9)
+
+- **One** portal (`utah`), **one** opportunity already present in `bonfire_opportunities`. Not the 1,698 Utah rows, not a new portal, not a corpus re-fetch.
+- **Enforced, not intended:** run the scraper for that single `external_id` with the scheduler **still disabled** and `BONFIRE_ENGINE_ENABLED` still false. The gate is that the scheduler stays unarmed.
+- Expected changes, stated in advance: **1** `bonfire_opportunities` row (source columns and, if the observation verifies, `close_date` plus deadline-evidence columns — **`close_date` may move by hours**, which is the corrected parse); **1** `gov_canonical_opportunities` row; **1–2** `gov_source_aliases`; **1** `gov_source_snapshots` at version 1. Nothing else, because ingestion is keyed on `external_id`.
+- Evidence retained under `docs/gov-phase2/activation-evidence/`: row before/after, snapshot payload, the immutability rejection, and list → detail resolution.
+
+### 19.6 Rollback that preserves snapshots
+
+1. **Code rollback first, and sufficient for most failures:** dispatch `release.yml` with the previous SHA. The evidence columns and tables are additive, so the prior code runs correctly with them present and populated.
+2. **Do not drop the evidence tables as routine rollback.** `gov_source_snapshots`, `gov_canonical_opportunities` and `gov_source_aliases` hold the only record of what was observed, including superseded deadline values. Dropping them destroys the audit history this phase exists to create and is not recoverable from the application.
+3. If the schema genuinely must be removed: **export those three tables to a retained dump first**, record where it lives, then run the migration's `down` (proven to leave `close_date` intact by `govPhase2Migration.integration.test.js`). Treat it as data destruction requiring its own authorization.
+4. A single wrong published deadline after the pilot is remedied by re-running ingestion for that one `external_id` — the write is idempotent and **appends** a new snapshot rather than editing the old one.
+5. **No corpus-wide re-fetch and no historical deadline correction**, in rollback or activation.
+
+### 19.7 Rehearsal of the corrected landing order
+
+Performed in an isolated worktree off `origin/main`; **production checkout never touched**. Order **#7 → #4 → #6 → #5 → #2 → #3**.
+
+| Step | Result |
+|---|---|
+| #7 | **fast-forward** (its base is `origin/main`, so no merge commit) |
+| #4 | clean |
+| #6 | `PROGRESS.md` conflict → **union, every entry kept** |
+| #5 | clean |
+| #2 | `PROGRESS.md` conflict → **union, every entry kept** |
+| #3 | `PROGRESS.md` **and** `backend/src/bonfire/bonfire.service.js` → both **union**; the service conflict is the `module.exports` list only (#6's `listBestFitOpportunities` + #3's `recordGovEvidence` / `resetGovEvidenceCapability`), **both kept**, `node --check` clean |
+
+Recorded resolutions: **`PROGRESS.md` is always union — never take one side.** The `bonfire.service.js` conflict is always both export lists. No other file conflicts, and there is no logic conflict between the Enterprise v1 integration and Phase 2.
+
+Preflight passes on the corrected-order tree: all three gates, exit 0. Full suite on that tree:
+**2,908 passed / 44 skipped / 215 of 217 suites, 0 failures** — identical to the first rehearsal, so the
+reordering changed nothing functionally.
+
+### 19.8 Remaining blockers
+
+| Blocker | Kind |
+|---|---|
+| `production` environment with required reviewers does not exist | **repository setting** — cannot come from a PR |
+| PR #4 is draft with 0 reviews | human review |
+| PR #6 has 0 reviews | human review |
+| `main` has no branch protection | repository setting, recommended |
+| Localhost rate-limit burst source unidentified | **separate follow-up.** The app logs nothing for rate-limited requests, so the source is not attributable without request-level evidence. Not attributed here. PR #5 isolates the probe from it regardless |
+| Plaintext env backups in the production deploy directory | ops hygiene |
+| `/metrics` shares the general rate-limit bucket | not release-blocking |
