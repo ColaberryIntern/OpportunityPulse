@@ -160,6 +160,95 @@ jobs:
             fi
             echo "  drain verified: no interrupted ingestion runs"
 
+            # ---- RESTORE VERIFICATION — machine-verified, not asserted.
+            #
+            # RESTORED from fe4d0c7, where this logic was first added and then lost
+            # in 6845f42 during the freeze redesign. Between those commits the
+            # workflow still ADVERTISED verification it no longer performed: the
+            # step is named "Verify, restore-test, migrate and prove", and the
+            # backup_sha256 input still says "Verified on the server; a mismatch
+            # aborts". Neither was true, and the gap survived review. It was caught
+            # on 2026-09-30 when the operator had to perform the restore test by
+            # hand during a live maintenance window.
+            #
+            # "File exists and is >1 MiB" is not restoration evidence. This restores
+            # the dump into an isolated scratch database on the same server and
+            # compares against the live database. The scratch database is dropped on
+            # every exit path.
+            echo "--- restore verification ---"
+            test -f "${{ inputs.backup_path }}" \
+              || { echo "backup artifact not found: ${{ inputs.backup_path }}" >&2; exit 1; }
+
+            ACTUAL_SHA="$(sha256sum "${{ inputs.backup_path }}" | cut -d' ' -f1)"
+            echo "  dump sha256: ${ACTUAL_SHA}"
+            if [ "$ACTUAL_SHA" != "${{ inputs.backup_sha256 }}" ]; then
+              echo "DUMP SHA-256 MISMATCH" >&2
+              echo "  expected: ${{ inputs.backup_sha256 }}" >&2
+              echo "  actual:   ${ACTUAL_SHA}" >&2
+              exit 1
+            fi
+            echo "  sha256 matches the authorized value"
+
+            SCRATCH="restore_check_$(date -u +%Y%m%d%H%M%S)"
+            cleanup_scratch() {
+              docker exec op-postgres psql -U "$DBU" -d postgres \
+                -c "DROP DATABASE IF EXISTS ${SCRATCH};" >/dev/null 2>&1 || true
+            }
+            trap cleanup_scratch EXIT
+
+            docker exec op-postgres psql -U "$DBU" -d postgres -c "CREATE DATABASE ${SCRATCH};"
+
+            # Stream the dump in. Supports both plain-SQL and custom-format dumps.
+            if head -c 5 "${{ inputs.backup_path }}" | grep -q 'PGDMP'; then
+              docker exec -i op-postgres pg_restore -U "$DBU" -d "${SCRATCH}" --no-owner --no-privileges \
+                < "${{ inputs.backup_path }}"
+            else
+              docker exec -i op-postgres psql -U "$DBU" -d "${SCRATCH}" -v ON_ERROR_STOP=1 \
+                < "${{ inputs.backup_path }}" > /dev/null
+            fi
+
+            scratch_t() { docker exec op-postgres psql -U "$DBU" -d "${SCRATCH}" -t -A "$@"; }
+
+            # The dump was taken before this run, so restored values must be EQUAL
+            # under the write freeze proven above. Any drift means either the freeze
+            # leaked or the dump is not of this database.
+            #
+            # Beyond fe4d0c7's row and close_date comparison, this also compares the
+            # ingestion_logs count, the applied-migration count and the deadline
+            # checksum — the same checksum the freeze tripwire and the post-migration
+            # proof use, so a dump that disagrees with it is caught here rather than
+            # after the schema has changed.
+            RESTORE_FAIL=0
+            compare_restore() {
+              _label="$1"; _sql="$2"
+              _live="$(psql_t -c "$_sql")"; _rest="$(scratch_t -c "$_sql")"
+              if [ "$_live" = "$_rest" ]; then
+                echo "  OK    ${_label}: ${_live}"
+              else
+                echo "  FAIL  ${_label}: live=${_live} restored=${_rest}" >&2
+                RESTORE_FAIL=1
+              fi
+            }
+            compare_restore "bonfire_opportunities" "select count(*) from bonfire_opportunities;"
+            compare_restore "close_date non-null"   "select count(close_date) from bonfire_opportunities;"
+            compare_restore "ingestion_logs"        "select count(*) from ingestion_logs;"
+            compare_restore "SequelizeMeta"         'select count(*) from "SequelizeMeta";'
+            compare_restore "deadline checksum"     "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;"
+            [ "$RESTORE_FAIL" = "0" ] \
+              || { echo "RESTORE MISMATCH — dump does not match the live database. Do NOT migrate." >&2; exit 1; }
+
+            # And prove the restored copy is structurally queryable, not just present.
+            REST_TABLES=$(scratch_t -c "select count(*) from information_schema.tables where table_schema='public';")
+            [ "$REST_TABLES" -gt 10 ] \
+              || { echo "restored database has only ${REST_TABLES} tables — not a full dump" >&2; exit 1; }
+            echo "  restored schema has ${REST_TABLES} tables; restore VERIFIED"
+
+            # Drop the scratch copy now rather than at exit, so the migration below
+            # does not run alongside a full second copy of the database on disk.
+            cleanup_scratch
+            trap - EXIT
+            echo "  scratch database dropped"
+
             # ---- Obtain the migration: check out the reviewed commit and BUILD
             # the image from it. The running container is the old image.
             git fetch origin --prune
