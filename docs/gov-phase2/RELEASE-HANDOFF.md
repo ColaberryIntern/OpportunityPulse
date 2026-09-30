@@ -398,6 +398,8 @@ Only after release approval, and only after Steps 1–7 have produced their evid
 - A single wrong published deadline after the pilot is remedied by re-running ingestion for that one `external_id` — the write is idempotent and appends a new snapshot rather than editing the old one. **No corpus-wide re-fetch and no historical deadline correction** are part of activation or rollback.
 
 ## 12. Enterprise live-integration evidence
+> **Superseded by §16**, which corrects the cross-repository split: `sourceLive` and `sourceState` are
+> **Enterprise-side** fields, while OP supplies `sourceAvailability` and `meta.sourceSnapshotVersion`.
 
 What Enterprise must be able to show before the integration counts as live. Each item is a checkable artifact, not an assertion.
 
@@ -420,6 +422,11 @@ A green run of items 1–5 proves the pipe works. It does **not** establish qual
 - `deadline.verifiedAt` means verified **against the notice**, never against the cover page and addenda.
 
 ## 13. BLOCKER — merging to `main` auto-deploys and auto-migrates production
+> **RESOLVED IN PR #7** (`fix/separate-release-from-merge`, head `9b08e13`), not yet merged. The fix
+> removes the auto-deploy job from `ci.yml`, adds manual `release.yml` and `migrate.yml`, and adds a
+> preflight that refuses Phase 1 alone. The analysis below is kept because it is the reason the fix
+> exists. **The blocker stands until #7 merges AND the `production` environment with required
+> reviewers is created** — that environment is a repository setting and cannot come from a PR.
 
 Found while verifying PR #5's CI, because one job reported `Deploy to Production: skipped`.
 
@@ -478,3 +485,114 @@ Separately, and regardless of which option is chosen: **`db:migrate` should not 
 ### Consequence for §10 and §11
 
 **§10's order and §11's sequence remain correct in substance, but neither can be executed safely until this is resolved.** Treat this as prerequisite zero, ahead of PR #4. No PR should be merged — including PR #5 and PR #4 — until the merge-to-deploy coupling is decided.
+
+## 14. Current PR set, heads and dependencies
+
+Verified against `origin` at the time of writing.
+
+| PR | Branch | Head | Base | State | What it is |
+|---|---|---|---|---|---|
+| **#7** | `fix/separate-release-from-merge` | `9b08e13` | `main` | open | **Resolves §13.** Removes auto-deploy from `ci.yml`; adds manual `release.yml` + `migrate.yml`; adds `releasePreflight.js` that refuses Phase 1 alone |
+| **#6** | `feat/accelerator-bonfire-read-integration` | `a3a451a` | `main` | open | Preserves the **already-running** Enterprise v1 integration (`read:bonfire_source`, `/best-fit`). All code/test files byte-identical to production |
+| **#5** | `fix/healthcheck-readiness-not-rate-limited` | `668342c` | `main` | open | Probes get their own bounded rate-limit bucket; probe targets `/health/ready` instead of the unconditional `/health` |
+| **#4** | `recovery/prod-ingestion-source-health` | `486630f` | `main` | **draft** | Preserves the production-only ingestion source-health monitor |
+| **#3** | `feat/gov-phase2-persistence-and-v2-api` | `a956725`+ | **#2's branch** | open | Phase 2: evidence persistence, canonical identity, `/api/v2/gov-opportunities` |
+| **#2** | `feat/gov-deadline-parser-and-contract-v1` | `b9b8905` | `main` | open | Phase 1: timezone-correct parser + `gov-opportunity.v1` contract |
+
+### Dependencies
+
+- **#7 gates everything.** Until it lands, merging any PR deploys production unattended and runs `db:migrate`.
+- **#4 + #6 together** make `origin/main` a superset of production *code and test*. Neither alone is sufficient; §9 has the measurement.
+- **#3 depends on #2** and must be retargeted to `main` after #2 merges.
+- **#5 and #7 are independent** of the gov stack — no file overlap.
+- `PROGRESS.md` conflicts between #4, #6, #2 and #3. **Resolution is always union — keep every entry.** Rehearsed; see §15.
+
+### Landing mechanics — unchanged
+
+1. **#2 merges with a merge commit**, never squash.
+2. **Retain `feat/gov-deadline-parser-and-contract-v1`** until #3 is retargeted.
+3. **Retarget #3 to `main`**, inspect the diff (Phase 2 paths only), **re-run checks and re-review** on the new base.
+4. **Merge #3.**
+5. **Deploy #2 and #3 together, only after release authorization.** Never #2 alone — now enforced by preflight, not merely intended.
+
+### Pending decisions
+
+| Decision | Owner | Blocking |
+|---|---|---|
+| Create the GitHub `production` environment **with required reviewers** | repo admin | #7's approval gate is inert without it |
+| Review and un-draft **#4** | reviewer | production reconciliation |
+| Review **#6** (code already live in production) | reviewer | production reconciliation |
+| Branch protection on `main` (currently none) | repo admin | optional, recommended |
+| Rotate/relocate plaintext env backups in the prod deploy directory | ops | hygiene, not release-blocking |
+| Whether `/metrics` should also leave the general rate-limit bucket | reviewer | not release-blocking |
+
+## 15. Combined-release rehearsal
+
+Performed in an isolated `git worktree` off `origin/main`. **The production checkout was never touched.**
+
+Merge order: **#4 → #6 → #5 → #7 → #2 → #3.**
+
+| Conflict | Times | Resolution |
+|---|---|---|
+| `PROGRESS.md` | 3 (at #6, #2, #3) | **Union — every entry kept.** Both the recovery entry and the accelerator entries survive in the final tree, alongside all four gov entries |
+| `backend/src/bonfire/bonfire.service.js` | 1 (at #3) | `module.exports` list only: #6 added `listBestFitOpportunities`, #3 added `recordGovEvidence` and `resetGovEvidenceCapability`. **Both kept** |
+| anything else | 0 | — |
+
+The single code conflict across the entire five-PR stack is an export-list collision. There is no logic conflict between the Enterprise v1 integration and Phase 2.
+
+**Production functionality survives.** In the fully merged tree, every file production currently runs is byte-identical to production: `sourceHealthMonitor.js`, `scheduler.js`, `sourceHealthMonitor.test.js`, `bonfire.util.js`, `apiKeyAuth.middleware.js`, `bestFit.test.js`, `sourceFieldsScope.test.js`.
+
+**Test evidence on the combined tree:** full suite **2,908 passed / 44 skipped / 215 of 217 suites,
+0 failures**; the Postgres suites separately against a disposable `postgres:15-alpine`: **44 passed /
+0 skipped / 0 failed**. The `bonfireManualUpload` flake seen on PR #6's branch in isolation does **not**
+recur here, because PR #2 carries its root-cause fix.
+
+**Preflight passes on the rehearsed tree** — all three gates (`phase1_requires_phase2`, `production_reconciliation_source_health`, `production_reconciliation_enterprise_v1`), exit 0. The same script refuses the tree if any of #2/#3 or #4/#6 is missing.
+
+## 16. Cross-repository acceptance language — corrected
+
+Earlier drafts of this document treated `sourceLive` as a field that ought to exist in `gov-opportunity.v1` and flagged its absence. That was the wrong frame: **`sourceLive` is an Enterprise-side field, not an OP one.** The two systems each supply different signals and they must not be conflated.
+
+| Supplied by | Field | Meaning |
+|---|---|---|
+| **Opportunity Pulse** | `data.sourceAvailability` | Record-level. `null` when the last fetch for that record succeeded; `{status: 'degraded', since, reason, servingLastKnownSnapshot: true}` when it failed |
+| **Opportunity Pulse** | `meta.sourceSnapshotVersion` | The persisted source-snapshot version for the record. Non-null proves a persisted identity rather than the derivation fallback |
+| **Enterprise** | `sourceLive` | Enterprise-side. **Currently indicates configuration, not successful connectivity** — it reports that the integration is configured, not that a call succeeded |
+| **Enterprise** | `sourceState` | Enterprise-side rollup of integration state |
+
+**Consequence:** `sourceLive: true` on the Enterprise side is **not** evidence that OP answered. Acceptance must not rest on it.
+
+### Acceptance requires, on the OP side
+
+1. **A matching contract hash** — `GET /api/v2/gov-opportunities/contract` → `data.schemaSha256.committedBlobLf` equal to Enterprise's vendored copy hashed as a **git blob**. If they differ, **investigate the difference; do not automatically re-pin.** A mismatch has previously meant CRLF-vs-LF on the same bytes, not a new schema version.
+2. **A real canonical ID** — matching `^op:gov:[0-9a-f]{32}$`, taken from a **list** response, not constructed.
+3. **A persisted snapshot** — `/{id}/snapshots` with `meta.recorded >= 1` and a retrievable immutable payload at `?snapshotVersion=N`. Requires the pilot ingestion to have run.
+4. **An actual available resolve** — that id round-trips **list → detail** with `200`, `data.canonicalOpportunityId` equal to the id requested, and **non-null `meta.sourceSnapshotVersion`**, which is what distinguishes a persisted identity from the derivation fallback.
+
+### What still blocks qualification approval
+
+**Empty document evidence and empty requirements continue to block qualification approval, unconditionally.** Ingestion observes no solicitation documents at all, so `documents.coverage` is `inaccessible`, all counts are `0`, and `items` / `amendments` / `requirements` are `[]`. That is *not observed* — it is neither a reviewed package nor an absence of requirements. Document coverage and cited requirements must pass **independently**, via the human route in §7. `companyQualification` is always `null`, and `sourceAssessment.isNotEligibilityDetermination` is `true`. **Connectivity does not establish qualification.**
+
+## 17. Credential coordination
+
+| | |
+|---|---|
+| Enterprise side | Preparing a dedicated **`OPPORTUNITY_PULSE_V2_API_KEY`**, split from the v1 credential (Enterprise PR #2844 at `706e9521`; its CI and secret scan reported passing). **v2 has no fallback to v1.** |
+| OP side | Will mint **one** key scoped **`read:gov_opportunities` only**, at activation Step 7, as its own authorized action |
+| **The existing v1 credential and its scope are preserved unchanged** | `read:bonfire_source` is **not** replaced, reissued or widened. The live v1 integration keeps working exactly as it does today |
+| Delivery | Out of band. Never into a transcript, ticket, log or PR. Only the key prefix and scope set are recorded |
+| Not done | No credential has been minted. This is activation Step 7 and requires release authorization |
+
+Because v2 has no fallback to v1, the v2 key must exist **before** Enterprise switches its v2 calls on — and the v1 key must remain valid throughout, since it serves a different, already-live surface.
+
+## 18. Enterprise handoff package (after release authorization)
+
+To be supplied once the release is authorized and the pilot has run:
+
+1. **The deployed commit SHA** — the exact merge commit containing both #2 and #3, as dispatched through `release.yml`.
+2. **The v2 base URL** — same host as the existing v1 integration.
+3. **The `read:gov_opportunities`-only credential**, delivered securely out of band; v1 credential untouched.
+4. **The confirmed schema hash** — `26ff667e…` as the committed LF blob, cross-checked against Enterprise's vendored copy. Investigate any difference rather than re-pinning.
+5. **A real canonical ID** with its **persisted snapshot** and a **successful list → detail verification**, including non-null `meta.sourceSnapshotVersion`.
+
+Plus the standing caveat: empty documents/requirements still block qualification approval.
