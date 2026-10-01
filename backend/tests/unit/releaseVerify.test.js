@@ -321,6 +321,58 @@ describe('release verification: docker failures are explicit', () => {
   });
 });
 
+describe('release verification: expected configuration is declared, not inferred', () => {
+  it('FAILS when no expected configuration is declared', () => {
+    // The old default silently supplied BONFIRE_SCRAPER_ENABLED=true, which went
+    // stale and failed a release after rollout. Absent means absent now.
+    const r = runVerify({
+      logs: ALL_THREE,
+      env: { OBSERVED_BASELINE: '', SERVICE_BASELINE: '', EXPECTED_CONFIG: '' },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('no expected configuration declared');
+  });
+
+  it('accepts an explicit declaration that matches production', () => {
+    const r = runVerify({
+      logs: ALL_THREE,
+      env: { EXPECTED_CONFIG: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true' },
+    });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('matches the declared expectation');
+  });
+
+  it('fails when the declaration disagrees with production', () => {
+    const r = runVerify({
+      logs: ALL_THREE,
+      env: { EXPECTED_CONFIG: 'BONFIRE_SCRAPER_ENABLED=false' },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('declared expectation is false');
+  });
+
+  it.each([
+    ['BONFIRE_SCRAPER_ENABLED', 'no value at all'],
+    ['BONFIRE_SCRAPER_ENABLED=yes', 'a non-boolean value'],
+    ['=true', 'an empty name'],
+  ])('rejects the malformed declaration %p (%s)', (decl) => {
+    const r = runVerify({ logs: ALL_THREE, env: { EXPECTED_CONFIG: decl } });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/malformed expected configuration|must be exactly true or false|empty name/);
+  });
+
+  it('never derives the expectation from production', () => {
+    // Production reports scraper=true in this fixture. A declaration of false
+    // must fail rather than be quietly corrected to match.
+    const r = runVerify({
+      logs: ALL_THREE,
+      env: { EXPECTED_CONFIG: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=false' },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('configuration drift');
+  });
+});
+
 describe('release verification: measurements are mandatory', () => {
   it('FAILS when no measurements are supplied, instead of skipping the section', () => {
     // The previous version skipped silently, which is how a release came to

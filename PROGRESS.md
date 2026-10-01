@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## Release verification: expected configuration is declared and validated, never inferred
+
+- [x] Replace the stale hardcoded service-configuration expectation with an explicit, validated declaration checked before production is interrupted. Repository-only.
+  - Date: 2026-10-01
+  - What changed: **`scripts/release/verify-release.sh`** no longer defaults the expectation to `BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true`. That default went stale the moment the scraper was disabled at 12:20Z, and release run `36868977258` failed solely because the check still expected the old value — after the rollout had already happened. The expectation is now `EXPECTED_CONFIG`, **required**, with no default: absent is a failure rather than a silent assumption. It is validated before any value is compared, so a malformed declaration cannot match nothing and pass. **`.github/workflows/release.yml`** gains a **required `expected_config` input**, validated **in the preflight job on the runner — before the operator interrupts production** — rejecting unknown names, entries with no value, and anything other than exactly `true` or `false`. The validated value is passed through to the verifier. **The expectation is deliberately never read from production:** a check that agrees with whatever it finds asserts nothing.
+  - Verification: **7/7 new tests** in `backend/tests/unit/releaseVerify.test.js`: failing when nothing is declared; accepting a declaration that matches; failing when it disagrees; rejecting three malformed forms (no value, non-boolean, empty name); and one that pins the principle — production reports `scraper=true` in the fixture and a declaration of `false` **fails** rather than being quietly corrected to match. Both workflows parse as YAML, all 7 extracted step scripts pass `bash -n`, `verify-release.sh` passes `bash -n`, the hardcoded default is gone (0 occurrences), and `expected_config` is confirmed required and threaded through.
+  - Notes: **No redeployment was performed to obtain a green historical result.** Run `36868977258` stands as **FAILURE**, recorded separately from its runtime verification in PR #18. This change only affects future releases. Ordering limitation stated rather than papered over: the operator stops `op-backend` before dispatch, so the *runner-side* validation is what precedes downtime; the comparison against live values necessarily happens after. Not deployed; production remains `79e3acc` / `sha256:3a286cf0`, scraper disabled, all ingestion pause controls `false`, v2 unactivated.
+
 ## Source Health Agent now honours the ingestion pause; verifier requires it (PR pending)
 
 - [x] Close the gap where an ungated scheduler triggered ingestion while the pause controls read false, and make release verification able to detect it. Repository-only.
