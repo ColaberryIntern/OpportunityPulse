@@ -94,6 +94,13 @@ services:
       BONFIRE_SCRAPER_SHUFFLE_AGENCIES: ${BONFIRE_SCRAPER_SHUFFLE_AGENCIES:-true}
       BONFIRE_STRATEGIST_CRON_ENABLED: ${BONFIRE_STRATEGIST_CRON_ENABLED:-false}
       BONFIRE_STRATEGIST_CRON: ${BONFIRE_STRATEGIST_CRON:-0 8 * * 1,3,5}
+      # Scheduled-ingestion pause. 'false' stops every scheduler that ingests:
+      # the daily runner, the freelance scheduler (cron AND its 15s startup
+      # run) and the research tick loop. It was previously read by the daily
+      # runner only and was never passed into the container at all, so a
+      # release could assert "ingestion disabled", pass, and still ingest.
+      # Default stays enabled; only the exact string 'false' pauses.
+      INGESTION_SCHEDULER_ENABLED: ${INGESTION_SCHEDULER_ENABLED:-true}
       # Daily Deep Research auto-pick cron — runs the topic ranker each
       # morning and produces ≥1 data-driven Deep Research report ahead of
       # the 6 AM CT digest. Defaults: 5 AM Central, auto-pick enabled.
