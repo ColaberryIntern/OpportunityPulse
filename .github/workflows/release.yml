@@ -167,7 +167,6 @@ jobs:
             # This is a genuine freeze because the container is stopped. It is NOT
             # the same thing as the scheduled-ingestion pause flags, which stop
             # scheduled execution only and leave manual admin writes reachable.
-            # not by a feature flag.
             #
             # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
             # release being prepared. Production at 6936c99 does not read it, so
