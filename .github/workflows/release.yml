@@ -263,14 +263,38 @@ jobs:
             STARTED_AT="$(docker inspect -f '{{.State.StartedAt}}' op-backend)"
             CONTAINER_ID="$(docker inspect -f '{{.Id}}' op-backend | cut -c1-12)"
             echo "  container ${CONTAINER_ID} started at ${STARTED_AT}"
-            if ! docker logs op-backend --since "$STARTED_AT" 2>&1 | grep -q 'ingestion_scheduler_disabled'; then
-              echo "POST-ROLLOUT FAILED: container ${CONTAINER_ID} did not log" >&2
-              echo "  ingestion_scheduler_disabled since ${STARTED_AT}." >&2
+            # EVERY scheduler that ingests must report itself disabled, not just one.
+            #
+            # The previous check required the string `ingestion_scheduler_disabled`
+            # to appear ONCE. Three independent schedulers ingest (daily runner,
+            # freelance — which also ingests 15s after startup — and the research
+            # tick loop), so a single match proved nothing about the other two.
+            #
+            # It also silently depended on application logs reaching stdout. In
+            # production winston wrote only to files inside the container, so
+            # `docker logs` carried nothing but dotenv's startup tips and this
+            # assertion could not pass for ANY flag value. Fixed in logger.js;
+            # this gate is what makes that fix load-bearing.
+            BOOT_LOGS="$(docker logs op-backend --since "$STARTED_AT" 2>&1)"
+            MISSING=""
+            for s in ingestion freelance research; do
+              if echo "$BOOT_LOGS" | grep -q "\"scheduler\":\"${s}\""; then
+                echo "  scheduler=${s}: reported disabled"
+              else
+                MISSING="${MISSING} ${s}"
+              fi
+            done
+            if [ -n "$MISSING" ]; then
+              echo "POST-ROLLOUT FAILED: container ${CONTAINER_ID} did not report these" >&2
+              echo "  schedulers disabled since ${STARTED_AT}:${MISSING}" >&2
               echo "  Either INGESTION_SCHEDULER_ENABLED is not 'false' in the env this" >&2
-              echo "  container received, or this build predates the gate." >&2
+              echo "  container received, this build predates the gate, or the logger is" >&2
+              echo "  not writing JSON to stdout (see backend/src/logging/logger.js)." >&2
+              echo "  --- what the container did log since boot (tail) ---" >&2
+              echo "$BOOT_LOGS" | tail -20 >&2
               exit 1
             fi
-            echo "  ingestion_scheduler_disabled observed in this container's startup"
+            echo "  all three ingesting schedulers reported disabled in this container's startup"
 
             # Flags validated to the exact string 'false' — and now meaningful,
             # because the code running DOES read them.
