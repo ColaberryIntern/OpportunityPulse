@@ -8,6 +8,14 @@ This file was created mid-stream on 2026-05-05; entries before that date are int
 
 ---
 
+## API-key scope allow-list now matches what the routes require
+
+- [x] Allow `read:gov_opportunities` to be issued, so the documented credential mechanism can produce a key the v2 contract API accepts. Repository-only.
+  - Date: 2026-10-01
+  - What changed: **`backend/src/apiKeys/apiKey.validation.js`** — `ALLOWED_SCOPES` gains `read:gov_opportunities`. `govContracts/govOpportunityV2.routes.js` has required that scope since Phase 2 shipped, while this validator rejected it, so `POST /api/v1/api-keys` could not issue a credential the v2 API would accept. Nothing in the suite noticed, because each side was self-consistent. Adding a scope to the list grants nothing on its own; it only permits the scope to be requested.
+  - Verification: **4/4 new tests** in `backend/tests/unit/apiKeyScopes.test.js`. Beyond asserting the specific scope and that the three pre-existing ones remain, one test states the invariant generally — it walks the route layer for every `requireScope(...)` and `const SCOPE = ...` reference and fails if any required scope cannot be issued, so a future route introducing a scope without listing it fails immediately. A fourth asserts the v2 routes expose **GET only**, so this scope cannot grant writes by construction.
+  - Notes: Discovered while provisioning the authorized Enterprise v2 read-only credential: the established mechanism could not express the scope the task required. **No credential was issued** — that action was blocked by the permission classifier and is awaiting a decision. The existing Enterprise v1 key (id 6, `accelerator-factory-command-center`, prefix `op_e40a3917`, scope `read:bonfire_source`) is untouched. Not deployed; production remains `79e3acc` / `sha256:3a286cf0`. Scraper disabled, all ingestion pause controls `false`, and v2 remains unactivated.
+
 ## Source Health Agent now honours the ingestion pause; verifier requires it (PR pending)
 
 - [x] Close the gap where an ungated scheduler triggered ingestion while the pause controls read false, and make release verification able to detect it. Repository-only.
