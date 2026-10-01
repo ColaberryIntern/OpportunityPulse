@@ -96,11 +96,10 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
 
-            # op-backend is STOPPED for the whole window, so credentials come from
-            # the postgres container, not the application container.
-            DBU="$(docker exec op-postgres printenv POSTGRES_USER)"
-            DBN="$(docker exec op-postgres printenv POSTGRES_DB)"
-            psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
+            # Database credentials are resolved inside collect-baselines.sh from
+            # the postgres container (op-backend is stopped for the window, so it
+            # has no environment to read). The inline psql_t helper that used to
+            # live here is gone with the measurements it served.
 
             # ---------------------------------------------------------------
             # PRE-ROLLOUT WRITE FREEZE — enforced by absence of a writer.
@@ -151,15 +150,18 @@ jobs:
 
             # ---- INTEGRITY CHECKS (not prevention).
             # These detect a change AFTER the fact and cover SELECTED state only:
-            # bonfire_opportunities.(id, close_date), the bonfire_opportunities row
-            # count, and the ingestion_logs row count. They do NOT cover other
-            # columns, other tables, or anything that happens after the final
-            # comparison. Prevention is the container stop above; these are a
-            # tripwire that the freeze held.
-            FREEZE_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
-            FREEZE_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
-            FREEZE_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
-            echo "  integrity tripwire: ingestion_logs=${FREEZE_LOGS} rows=${FREEZE_ROWS} deadline_checksum=${FREEZE_SUM}"
+            # the ingestion_logs count, the bonfire_opportunities count and
+            # close_date values, and each of the five gov_* table counts. They do
+            # NOT cover other columns, other tables, or anything that happens
+            # after the final comparison. Prevention is the container stop above;
+            # these are a tripwire that the freeze held.
+            #
+            # Measured by the same script the post-rollout step runs, so the two
+            # sides are collected identically and a label added to one is a
+            # pairing failure rather than a silently dropped comparison.
+            bash scripts/release/collect-baselines.sh > /tmp/op-baseline-before.txt               || { echo "could not measure state before rollout" >&2; exit 1; }
+            echo "  measurements before rollout:"
+            sed 's/^/    /' /tmp/op-baseline-before.txt
 
             # ---- ROLLBACK ANCHOR: immutable image ID of whatever the backend
             # container was last created from, captured BEFORE the candidate build.
@@ -270,22 +272,17 @@ jobs:
             # Manual scraping stays reachable by an authenticated admin while
             # BONFIRE_SCRAPER_ENABLED is true, and admin API writes remain
             # possible; both are held procedurally, not by configuration.
-            bash scripts/release/verify-release.sh
+            # Invoked through post-rollout-verify.sh, which measures the state
+            # again and pairs it with the pre-rollout file before verifying.
+            # Calling verify-release.sh directly would leave BASELINE_PAIRS unset
+            # and skip every data comparison — which is exactly what the previous
+            # arrangement did while its unit tests passed.
+            BASELINE_BEFORE=/tmp/op-baseline-before.txt               bash scripts/release/post-rollout-verify.sh
 
-            # Integrity tripwire: selected state only, checked after the fact.
-            # Covers exactly bonfire_opportunities (row count and close_date
-            # values) and the ingestion_logs row count. It does NOT cover other
-            # columns, other tables, or anything after the final comparison.
-            POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
-            POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
-            POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
-            [ "$POST_ROWS" = "$FREEZE_ROWS" ] \
-              || { echo "row count changed across rollout (${FREEZE_ROWS} -> ${POST_ROWS})" >&2; exit 1; }
-            [ "$POST_SUM" = "$FREEZE_SUM" ] \
-              || { echo "a close_date VALUE changed across rollout — a writer was active" >&2; exit 1; }
-            [ "$POST_LOGS" = "$FREEZE_LOGS" ] \
-              || { echo "ingestion_logs grew across rollout (${FREEZE_LOGS} -> ${POST_LOGS})" >&2; exit 1; }
-            echo "  integrity tripwire held on the state it covers"
+            # The before/after comparison that used to live here is now performed
+            # by post-rollout-verify.sh above, across ALL measured labels including
+            # the five gov_* counts — not just the three this block covered. The
+            # FREEZE_* variables it compared against no longer exist.
 
             # NO db:migrate here, deliberately. See migrate.yml.
             echo "recovery: docker run/compose with image ${PREV_IMAGE} restores the previous code."
