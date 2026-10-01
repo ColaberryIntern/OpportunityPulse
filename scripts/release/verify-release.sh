@@ -44,7 +44,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER="${CONTAINER:-op-backend}"
 PAUSE_FLAGS="${PAUSE_FLAGS:-INGESTION_SCHEDULER_ENABLED BONFIRE_SCRAPER_CRON_ENABLED BONFIRE_STRATEGIST_CRON_ENABLED}"
 OBSERVED_BASELINE="${OBSERVED_BASELINE:-${SERVICE_BASELINE:-BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true}}"
-SCHEDULERS="${SCHEDULERS:-ingestion freelance research}"
+# source_health_agent is here because it CALLS ingestionSvc.runIngestion.
+# Omitting it is why a release could assert "ingestion held" while that agent
+# wrote rows at 07:00Z on 2026-10-01 with the other three reporting disabled.
+SCHEDULERS="${SCHEDULERS:-ingestion freelance research source_health_agent}"
 BASELINE_PAIRS="${BASELINE_PAIRS:-}"
 REQUIRE_BASELINES="${REQUIRE_BASELINES:-1}"
 # Overridable so the missing-interpreter guard can be exercised by tests
