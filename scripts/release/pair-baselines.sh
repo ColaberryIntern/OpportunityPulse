@@ -24,6 +24,24 @@ die() {
 [ -s "$BEFORE" ] || die "before-measurements file is empty: ${BEFORE}"
 [ -s "$AFTER" ]  || die "after-measurements file is empty: ${AFTER}"
 
+# Duplicate labels must fail, on either side.
+#
+# Without this, a duplicate on the AFTER side was silently dropped: the lookup
+# below takes the first match, so a second differing value for the same label
+# was never compared and the release passed. A duplicate on the BEFORE side was
+# worse in a different way — it produced two pairs for one label, so the result
+# depended on which copy was read. Either way the comparison stopped meaning
+# what it claimed.
+check_duplicates() {
+  local file="$1" side="$2" dupes
+  dupes="$(cut -d'=' -f1 "$file" | grep -v '^$' | sort | uniq -d)"
+  if [ -n "$dupes" ]; then
+    die "duplicate label(s) in the ${side} measurements: $(printf '%s' "$dupes" | tr '\n' ' ')"
+  fi
+}
+check_duplicates "$BEFORE" "before-rollout"
+check_duplicates "$AFTER" "after-rollout"
+
 pairs=""
 count=0
 

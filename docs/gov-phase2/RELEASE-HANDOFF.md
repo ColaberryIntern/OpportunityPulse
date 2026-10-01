@@ -740,3 +740,27 @@ The full suite on the corrected tree remains **2,908 passed / 44 skipped / 0 fai
 **Intended GitHub merge method for #7: a merge commit** (`gh pr merge 7 --merge`), consistent with every other PR in this release and with the repository's enabled methods (merge, squash and rebase are all available, so the choice must be made deliberately).
 
 Why merging #7 first is safe: for a `push` event GitHub runs the workflow files **as they exist in the pushed commit**. The merge commit for #7 contains #7's `ci.yml`, which has no deploy job — so the very push that lands #7 cannot trigger the old deploy path. Verified structurally in the row above; it cannot be executed without merging, which is not authorized.
+
+---
+
+## Pre-flight: tool preconditions (run BEFORE stopping the service)
+
+Post-rollout verification parses scheduler evidence with `python3` on the
+**deploy host** — `scripts/release/check_scheduler_evidence.py` is executed
+there by `verify-release.sh`, not on the GitHub runner.
+
+`release.yml` guards this at the top of its SSH script, but by then the operator
+has already stopped `op-backend`, so a missing interpreter would be discovered
+after downtime had begun. Run this **read-only** check before stopping anything:
+
+```bash
+ssh root@<deploy-host> 'command -v python3 && python3 --version'
+```
+
+Expected: a path and a version. If it prints nothing, **do not stop the
+service** — the release would roll out and then fail verification for a reason
+unrelated to the release itself.
+
+Last verified: 2026-10-01, `/usr/bin/python3`, Python 3.12.3.
+
+This check writes nothing, touches no container, and is safe to run at any time.
