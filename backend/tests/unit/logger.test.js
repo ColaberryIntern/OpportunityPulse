@@ -24,19 +24,36 @@ function loadLoggerWith(nodeEnv) {
 }
 
 /**
- * Capture whatever the logger writes to stdout for one call.
+ * Capture what the Console transport is handed for one log call.
  *
- * winston's Console transport flushes ASYNCHRONOUSLY, so restoring the spy on
- * the next synchronous line races the write. An earlier version of this helper
- * did exactly that: it passed locally by timing luck and failed in CI with an
- * empty capture. This waits for the write, bounded, instead of assuming it.
+ * Two earlier versions of this helper spied on `process.stdout.write`. That is
+ * the wrong seam under Jest: winston's Console transport falls back to the
+ * patched global `console`, which Jest buffers for its reporter instead of
+ * writing through to the real stdout. The first version additionally restored
+ * the spy synchronously and so raced winston's async flush — it passed locally
+ * by timing luck and captured nothing in CI, twice.
+ *
+ * This asserts at the transport boundary instead. `info[Symbol.for('message')]`
+ * is the fully-formatted string winston hands the transport — the exact bytes
+ * that reach stdout in production — so it proves formatting and redaction
+ * without depending on how the test runner patches console. The bounded wait
+ * remains because the pipeline is still asynchronous.
  */
-async function captureStdout(fn, { timeoutMs = 2000 } = {}) {
+async function captureConsoleOutput(logger, fn, { timeoutMs = 2000 } = {}) {
+  const consoleTransport = logger.transports.find(
+    (t) => t.constructor && t.constructor.name === 'Console',
+  );
+  if (!consoleTransport) throw new Error('no Console transport registered');
+
   const written = [];
-  const spy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-    written.push(chunk.toString());
-    return true;
-  });
+  const spy = jest
+    .spyOn(consoleTransport, 'log')
+    .mockImplementation(function capture(info, next) {
+      written.push(String(info[Symbol.for('message')]));
+      if (typeof next === 'function') next();
+      return true;
+    });
+
   try {
     fn();
     const deadline = Date.now() + timeoutMs;
@@ -47,13 +64,19 @@ async function captureStdout(fn, { timeoutMs = 2000 } = {}) {
   } finally {
     spy.mockRestore();
   }
-  return written.join('');
+  return written.join('\n');
 }
 
 afterEach(() => {
   process.env.NODE_ENV = ORIGINAL_ENV;
 });
 
+// NOTE ON FIDELITY: these tests assert at the Console transport boundary, which
+// proves the record is formatted and redacted correctly and is routed to the
+// transport that writes stdout. They do NOT exercise winston's own write to the
+// real file descriptor — that is winston's responsibility, and the end-to-end
+// proof is operational: after deploy, `docker logs op-backend` must show these
+// lines, which release.yml now asserts for all three schedulers.
 describe('production logging path', () => {
   it('registers a Console transport when NODE_ENV=production', () => {
     const logger = loadLoggerWith('production');
@@ -63,10 +86,10 @@ describe('production logging path', () => {
     expect(consoleTransports).toHaveLength(1);
   });
 
-  it('writes structured JSON to stdout in production', async () => {
+  it('hands fully-formatted JSON to the Console transport in production', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = await captureStdout(() => {
+    const out = await captureConsoleOutput(logger, () => {
       logger.warn('Ingestion scheduler DISABLED by INGESTION_SCHEDULER_ENABLED=false', {
         event: 'ingestion_scheduler_disabled',
         scheduler: 'ingestion',
@@ -87,7 +110,7 @@ describe('production logging path', () => {
     const logger = loadLoggerWith('production');
 
     for (const scheduler of ['ingestion', 'freelance', 'research']) {
-      const out = await captureStdout(() => {
+      const out = await captureConsoleOutput(logger, () => {
         logger.warn('disabled', { event: 'ingestion_scheduler_disabled', scheduler });
       });
       // This is the exact shape the workflow greps for.
@@ -97,10 +120,10 @@ describe('production logging path', () => {
 });
 
 describe('redaction applies before any transport', () => {
-  it('redacts sensitive keys in production stdout output', async () => {
+  it('redacts sensitive keys before the Console transport sees them', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = await captureStdout(() => {
+    const out = await captureConsoleOutput(logger, () => {
       logger.info('outbound call', {
         apiKey: 'should-not-appear',
         password: 'should-not-appear',
@@ -118,7 +141,7 @@ describe('redaction applies before any transport', () => {
   it('redacts nested sensitive keys', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = await captureStdout(() => {
+    const out = await captureConsoleOutput(logger, () => {
       logger.info('nested', {
         outer: { inner: { secret: 'should-not-appear', keep: 'visible' } },
         list: [{ token: 'should-not-appear' }],
@@ -132,7 +155,7 @@ describe('redaction applies before any transport', () => {
   it('does NOT redact ordinary keys that merely contain a sensitive substring', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = await captureStdout(() => {
+    const out = await captureConsoleOutput(logger, () => {
       logger.info('article', { author: 'ada', authorId: 7 });
     });
 
@@ -144,7 +167,7 @@ describe('redaction applies before any transport', () => {
     // Documented limitation, asserted so it cannot be mistaken for a guarantee.
     const logger = loadLoggerWith('production');
 
-    const out = await captureStdout(() => {
+    const out = await captureConsoleOutput(logger, () => {
       logger.info('connecting with password=hunter2');
     });
 
