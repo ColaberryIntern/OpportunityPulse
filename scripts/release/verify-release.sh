@@ -10,134 +10,149 @@
 # unconditionally false, a readiness probe pointed at an unpublished port, a
 # flag the container never received, an assertion that read logs the logger
 # never wrote, and a flag check that demanded a state production must not be in.
-# Every one of them linted clean. Extracting the logic lets tests drive it with
-# a mocked `docker` and assert the exit status, which is the only thing that
-# would have caught any of them.
+# Every one of them linted clean.
 #
-# CONTROL CLASSES — these are deliberately NOT one list.
+# CONTROL CLASSES — deliberately NOT one list.
 #
-#   pause controls      scheduled execution. MUST be exactly false for a paused
-#                       release. Verified by equality, not by "not true".
-#   service baseline    existing v1 service and scraper capability. Verified
-#                       against the APPROVED BASELINE, and drift in EITHER
-#                       direction fails. These are not forced to false: doing so
-#                       would 404 the v1 Bonfire surface that a live consumer
-#                       reads.
-#   phase 2             has no environment flag at all. Activation is a runtime
-#                       capability probe over the gov_* tables
-#                       (bonfire.service.js govEvidenceEnabled). Its inactive
-#                       semantics are "no ingestion runs", which the pause
-#                       controls above enforce. No setting is invented here.
+#   pause controls     scheduled execution. MUST be exactly false. Verified by
+#                      equality, not by "not true".
+#   observed baseline  existing service and capability flags. Compared against
+#                      the values production was OBSERVED to have. This is a
+#                      drift detector, not a statement that the configuration
+#                      was reviewed or approved.
+#   phase 2            has no environment flag. See the reporting note below.
+#   data stability     measured before and after rollout and compared.
 #
-# SCOPE OF THE PAUSE — stated so it is not mistaken for more than it is.
-# The pause controls stop SCHEDULED execution. They do not constitute a write
-# freeze. Manual scraping remains reachable by an authenticated admin while
-# BONFIRE_SCRAPER_ENABLED is true, and admin API writes remain possible. A true
-# write freeze is achieved only by stopping the container, which is what the
-# migration window does.
+# WHAT THE PAUSE CONTROLS DO NOT DO — stated because the earlier wording of this
+# script overclaimed it. They stop SCHEDULED execution. They do not:
+#   * make Phase 2 inactive. The gov evidence capability is a runtime probe over
+#     the gov_* tables and has been AVAILABLE since the migration. A manual
+#     ingestion run would write evidence with the pause controls set.
+#   * constitute a write freeze. Manual scraping stays reachable by an
+#     authenticated admin while BONFIRE_SCRAPER_ENABLED is true, and ordinary
+#     admin API writes are unaffected.
+# Those are held procedurally. The only evidence that nothing was written is the
+# measured data stability section, which is why it must actually run.
 #
-# Exit status: 0 when every check passes, 1 otherwise. All failures are
-# reported before exiting, so one run shows every problem rather than the first.
+# Exit status: 0 when every check passes, 1 otherwise. All failures are reported
+# before exiting, so one run shows every problem rather than the first.
 
 set -uo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 CONTAINER="${CONTAINER:-op-backend}"
-
-# Scheduled-execution controls. Exactly false, each one.
 PAUSE_FLAGS="${PAUSE_FLAGS:-INGESTION_SCHEDULER_ENABLED BONFIRE_SCRAPER_CRON_ENABLED BONFIRE_STRATEGIST_CRON_ENABLED}"
-
-# Existing service/capability flags, as name=expected pairs. Checked against the
-# approved baseline rather than forced to a value.
-SERVICE_BASELINE="${SERVICE_BASELINE:-BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true}"
-
-# Schedulers that ingest. Each must report itself disabled from THIS boot.
+OBSERVED_BASELINE="${OBSERVED_BASELINE:-${SERVICE_BASELINE:-BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true}}"
 SCHEDULERS="${SCHEDULERS:-ingestion freelance research}"
-
-# Optional pure-comparison baselines: space-separated label:expected:actual.
 BASELINE_PAIRS="${BASELINE_PAIRS:-}"
+REQUIRE_BASELINES="${REQUIRE_BASELINES:-1}"
 
 FAILURES=0
-
-fail() {
-  echo "VERIFY FAILED: $*" >&2
-  FAILURES=$((FAILURES + 1))
-}
-
-ok() { echo "  OK   $*"; }
-
+fail() { echo "VERIFY FAILED: $*" >&2; FAILURES=$((FAILURES + 1)); }
+ok()   { echo "  OK   $*"; }
 lower() { printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]'; }
 
-flag_value() {
-  docker exec "$CONTAINER" printenv "$1" 2>/dev/null || echo unset
-}
+flag_value() { docker exec "$CONTAINER" printenv "$1" 2>/dev/null || echo unset; }
 
 # ---------------------------------------------------------------------------
-echo "--- pause controls (scheduled execution) ---"
+echo "--- scheduled execution: pause controls ---"
 for name in $PAUSE_FLAGS; do
   value="$(flag_value "$name")"
   if [ "$(lower "$value")" = "false" ]; then
     ok "${name}=false"
   else
-    # Covers true, unset, empty, and typos such as 'flase' identically.
     fail "pause control ${name}=${value} — must be exactly false"
   fi
 done
 
 # ---------------------------------------------------------------------------
-echo "--- existing service flags (verified against the approved baseline) ---"
-for pair in $SERVICE_BASELINE; do
+echo "--- observed configuration baseline (drift detector, not an approval) ---"
+for pair in $OBSERVED_BASELINE; do
   name="${pair%%=*}"
   want="${pair#*=}"
   value="$(flag_value "$name")"
   if [ "$(lower "$value")" = "$(lower "$want")" ]; then
-    ok "${name}=${value} matches approved baseline"
+    ok "${name}=${value} matches the observed baseline"
   else
-    fail "service flag ${name}=${value} — approved baseline is ${want} (drift in either direction is a failure)"
+    fail "configuration drift: ${name}=${value}, observed baseline is ${want}"
   fi
 done
 
 # ---------------------------------------------------------------------------
-echo "--- phase 2 activation ---"
-echo "  no environment flag exists; activation is the gov_* capability probe."
-echo "  inactive semantics are enforced by the pause controls above."
+echo "--- manual write capability (NOT disabled by the pause controls) ---"
+scraper_capability="$(flag_value BONFIRE_SCRAPER_ENABLED)"
+if [ "$(lower "$scraper_capability")" = "true" ]; then
+  echo "  BONFIRE_SCRAPER_ENABLED=true: POST /scrape/run is reachable by an"
+  echo "  authenticated admin. Not scheduled, not authorized by this release,"
+  echo "  and not prevented by configuration — held procedurally."
+else
+  echo "  BONFIRE_SCRAPER_ENABLED=${scraper_capability}: /scrape/* is not mounted."
+fi
+echo "  Ordinary authenticated admin API writes are unaffected either way."
+
+# ---------------------------------------------------------------------------
+echo "--- phase 2 ---"
+echo "  No environment flag exists. Activation is the gov_* capability probe in"
+echo "  bonfire.service.js, which has been AVAILABLE since the migration."
+echo "  The pause controls do NOT make Phase 2 inactive: a manual ingestion run"
+echo "  would write evidence. Absence of writes is evidenced only by the"
+echo "  measured data stability section below."
 
 # ---------------------------------------------------------------------------
 echo "--- scheduler evidence, scoped to the CURRENT container boot ---"
-started_at="$(docker inspect -f '{{.State.StartedAt}}' "$CONTAINER" 2>/dev/null)"
-container_id="$(docker inspect -f '{{.Id}}' "$CONTAINER" 2>/dev/null | cut -c1-12)"
+started_at=""
+container_id=""
 
-if [ -z "$started_at" ]; then
-  fail "cannot read StartedAt for ${CONTAINER} — cannot scope evidence to this boot"
+if ! started_at="$(docker inspect -f '{{.State.StartedAt}}' "$CONTAINER" 2>/dev/null)"; then
+  fail "docker inspect failed for ${CONTAINER} — cannot scope evidence to this boot"
+elif [ -z "$started_at" ]; then
+  fail "docker inspect returned an empty StartedAt for ${CONTAINER}"
 else
-  echo "  container ${container_id} started at ${started_at}"
-  boot_logs="$(docker logs --since "$started_at" "$CONTAINER" 2>&1)"
+  container_id="$(docker inspect -f '{{.Id}}' "$CONTAINER" 2>/dev/null | cut -c1-12)"
+  echo "  container ${container_id:-unknown} started at ${started_at}"
 
-  for scheduler in $SCHEDULERS; do
-    # BOTH markers must appear in the SAME record. Matching the scheduler name
-    # alone would accept any unrelated line mentioning it; matching the event
-    # alone would let one scheduler's record satisfy all three.
-    if printf '%s\n' "$boot_logs" \
-         | grep '"event":"ingestion_scheduler_disabled"' \
-         | grep -q "\"scheduler\":\"${scheduler}\""; then
-      ok "scheduler=${scheduler} reported disabled in this boot"
-    else
-      fail "no ingestion_scheduler_disabled record for scheduler=${scheduler} in this container's boot"
+  if ! boot_logs="$(docker logs --since "$started_at" "$CONTAINER" 2>&1)"; then
+    fail "docker logs failed for ${CONTAINER} — cannot read this boot's evidence"
+  else
+    # Parsed as JSON, top-level fields only. Substring matching accepted the
+    # scheduler name alone, markers split across records, and nested lookalikes.
+    if ! printf '%s\n' "$boot_logs" \
+         | python3 "${HERE}/check_scheduler_evidence.py" $SCHEDULERS; then
+      fail "scheduler evidence incomplete for this container's boot"
     fi
-  done
+  fi
 fi
 
 # ---------------------------------------------------------------------------
-if [ -n "$BASELINE_PAIRS" ]; then
-  echo "--- data baselines (drift is a failure) ---"
+echo "--- measured data stability (before vs after rollout) ---"
+if [ -z "$BASELINE_PAIRS" ]; then
+  if [ "$REQUIRE_BASELINES" = "1" ]; then
+    # Previously this section was simply skipped when unset, which is how a
+    # release came to verify nothing about the data while its tests passed.
+    fail "no measurements supplied — data stability was not verified. Invoke via post-rollout-verify.sh"
+  else
+    echo "  skipped (REQUIRE_BASELINES=0)"
+  fi
+else
   for triple in $BASELINE_PAIRS; do
+    # Field count first. `label:value` with a field missing would otherwise parse
+    # as expected==actual and report "unchanged" — a malformed measurement
+    # silently passing is the exact failure mode this whole script exists to
+    # prevent. Caught by test: "fails on a malformed measurement triple".
+    colons="${triple//[^:]/}"
     label="${triple%%:*}"
     rest="${triple#*:}"
     expected="${rest%%:*}"
     actual="${rest#*:}"
-    if [ "$expected" = "$actual" ]; then
+    if [ "${#colons}" -ne 2 ]; then
+      fail "malformed measurement '${triple}' — expected exactly label:before:after"
+    elif [ -z "$label" ] || [ -z "$expected" ] || [ -z "$actual" ]; then
+      fail "malformed measurement '${triple}' — empty field in label:before:after"
+    elif [ "$expected" = "$actual" ]; then
       ok "${label}=${actual} unchanged"
     else
-      fail "baseline drift: ${label} expected ${expected}, got ${actual}"
+      fail "data drift: ${label} was ${expected}, now ${actual}"
     fi
   done
 fi
