@@ -298,6 +298,86 @@ describe('the production path performs the data comparisons', () => {
     expect(res.stderr).toContain('BASELINE_BEFORE is not set');
   });
 
+  it.each([['before'], ['after']])(
+    'fails when the %s measurements contain a duplicate label',
+    (side) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reldup-'));
+      const clean = Object.entries(BASE_MEASUREMENTS)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n');
+      // A duplicate on the AFTER side used to be dropped by a first-match
+      // lookup, so a second differing value was never compared and the release
+      // passed. A duplicate on the BEFORE side produced two pairs for one
+      // label, so the outcome depended on which copy was read.
+      const dup = `${clean}\ningestion_logs=9999`;
+
+      const beforeFile = path.join(dir, 'before.txt');
+      const afterFile = path.join(dir, 'after.txt');
+      fs.writeFileSync(beforeFile, side === 'before' ? dup : clean);
+      fs.writeFileSync(afterFile, side === 'after' ? dup : clean);
+
+      const pair = spawnSync(
+        'bash',
+        [path.join(SCRIPTS, 'pair-baselines.sh'), beforeFile, afterFile],
+        { encoding: 'utf8' },
+      );
+      expect(pair.status).toBe(1);
+      expect(pair.stderr).toContain('duplicate label(s)');
+      expect(pair.stderr).toContain('ingestion_logs');
+    },
+  );
+
+  it('fails with an interpreter-specific message when python3 is absent', () => {
+    // Without the explicit guard, a missing interpreter made the pipeline exit
+    // non-zero and the failure read as "scheduler evidence incomplete" — a check
+    // describing something other than what actually went wrong.
+    //
+    // PYTHON_BIN is overridden rather than stripping PATH: removing directories
+    // from PATH also removes bash and coreutils, so the script could not run at
+    // all and the test proved nothing.
+    const { bin } = makeDockerMock({
+      flags: PAUSED_FLAGS,
+      measurements: BASE_MEASUREMENTS,
+      logs: ALL_THREE,
+    });
+
+    const res = spawnSync('bash', [path.join(SCRIPTS, 'verify-release.sh')], {
+      env: {
+        ...process.env,
+        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        CONTAINER: 'op-backend',
+        BASELINE_PAIRS: 'ingestion_logs:1:1',
+        PYTHON_BIN: 'python3-does-not-exist-here',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('python3 not found on this host');
+    expect(res.stderr).toContain('python3-does-not-exist-here');
+    // The misleading message must NOT be what surfaces.
+    expect(res.stderr).not.toContain('scheduler evidence incomplete');
+  });
+
+  it('uses the real interpreter when PYTHON_BIN is not overridden', () => {
+    const { bin } = makeDockerMock({
+      flags: PAUSED_FLAGS,
+      measurements: BASE_MEASUREMENTS,
+      logs: ALL_THREE,
+    });
+    const res = spawnSync('bash', [path.join(SCRIPTS, 'verify-release.sh')], {
+      env: {
+        ...process.env,
+        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        CONTAINER: 'op-backend',
+        BASELINE_PAIRS: 'ingestion_logs:1:1',
+      },
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('scheduler=ingestion reported disabled');
+  });
+
   it('fails when a label is measured before but missing after', () => {
     const { bin: preBin, dir: preDir } = makeDockerMock({
       flags: PAUSED_FLAGS,

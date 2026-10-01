@@ -47,6 +47,9 @@ OBSERVED_BASELINE="${OBSERVED_BASELINE:-${SERVICE_BASELINE:-BONFIRE_ENGINE_ENABL
 SCHEDULERS="${SCHEDULERS:-ingestion freelance research}"
 BASELINE_PAIRS="${BASELINE_PAIRS:-}"
 REQUIRE_BASELINES="${REQUIRE_BASELINES:-1}"
+# Overridable so the missing-interpreter guard can be exercised by tests
+# without PATH surgery. Production leaves it at the default.
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 FAILURES=0
 fail() { echo "VERIFY FAILED: $*" >&2; FAILURES=$((FAILURES + 1)); }
@@ -114,11 +117,18 @@ else
 
   if ! boot_logs="$(docker logs --since "$started_at" "$CONTAINER" 2>&1)"; then
     fail "docker logs failed for ${CONTAINER} — cannot read this boot's evidence"
+  elif ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    # Checked explicitly so a missing interpreter reports ITSELF. Without this
+    # the pipeline below simply exits non-zero and the failure reads as
+    # "scheduler evidence incomplete" — a check describing something other than
+    # what actually went wrong, which is the exact defect class this script
+    # exists to prevent. See also the pre-rollout guard in release.yml.
+    fail "python3 not found on this host (looked for '${PYTHON_BIN}') — scheduler evidence cannot be validated"
   else
     # Parsed as JSON, top-level fields only. Substring matching accepted the
     # scheduler name alone, markers split across records, and nested lookalikes.
     if ! printf '%s\n' "$boot_logs" \
-         | python3 "${HERE}/check_scheduler_evidence.py" $SCHEDULERS; then
+         | "$PYTHON_BIN" "${HERE}/check_scheduler_evidence.py" $SCHEDULERS; then
       fail "scheduler evidence incomplete for this container's boot"
     fi
   fi

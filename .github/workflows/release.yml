@@ -96,6 +96,25 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH || '/opt/opportunity-pulse' }}
 
+            # ---- TOOL PRECONDITIONS, before anything is measured, built or
+            # rolled out. Post-rollout verification shells out to python3 for
+            # scheduler-evidence parsing; if the interpreter is absent the
+            # release would get all the way through a rollout before failing,
+            # and would fail with the wrong message. Checked here so it fails
+            # first and says what is actually wrong.
+            #
+            # NOTE ON ORDERING: op-backend is stopped by the operator BEFORE this
+            # workflow is dispatched, so this guard runs after the service is
+            # already down. To fail before downtime begins, run the read-only
+            # check in docs/gov-phase2/RELEASE-HANDOFF.md during pre-flight.
+            command -v python3 >/dev/null 2>&1 || {
+              echo "PRECONDITION FAILED: python3 not found on the deploy host." >&2
+              echo "  scripts/release/check_scheduler_evidence.py needs it to validate" >&2
+              echo "  scheduler evidence. Nothing has been changed by this run." >&2
+              exit 1
+            }
+            echo "precondition: python3 $(python3 --version 2>&1 | awk '{print $2}')"
+
             # Database credentials are resolved inside collect-baselines.sh from
             # the postgres container (op-backend is stopped for the window, so it
             # has no environment to read). The inline psql_t helper that used to
