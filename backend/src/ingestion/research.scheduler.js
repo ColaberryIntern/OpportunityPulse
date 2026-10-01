@@ -13,6 +13,7 @@
 
 const cron = require('node-cron');
 const logger = require('../logging/logger');
+const { isIngestionPaused } = require('./ingestionPause');
 
 let schedulerStarted = false;
 
@@ -68,6 +69,20 @@ async function runDueSources() {
 
 function startResearchScheduler() {
   if (schedulerStarted) return;
+
+  // Shared ingestion pause. This loop ingests arXiv/HuggingFace/blogs on a
+  // TICK_MINUTES cron, so it must honour the same flag as the daily runner —
+  // otherwise a release can assert "ingestion disabled" and still ingest.
+  // `schedulerStarted` is deliberately left false so a later start can arm it
+  // once the pause is lifted.
+  if (isIngestionPaused()) {
+    logger.warn('Research scheduler DISABLED by INGESTION_SCHEDULER_ENABLED=false — tick loop not armed.', {
+      event: 'ingestion_scheduler_disabled',
+      scheduler: 'research',
+    });
+    return;
+  }
+
   schedulerStarted = true;
 
   // Tick every TICK_MINUTES.

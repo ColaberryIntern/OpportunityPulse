@@ -4,6 +4,7 @@ const { classifyFreelanceOpportunities } = require('./freelanceClassification.se
 const { scoreFreelanceOpportunities } = require('./freelanceScoring.service');
 const { generateDailySnapshot } = require('./freelanceTrend.service');
 const logger = require('../logging/logger');
+const { isIngestionPaused } = require('../ingestion/ingestionPause');
 
 // Upwork deprecated public RSS feeds in Aug 2024; only use active sources.
 const FREELANCE_DATA_SOURCES = ['freelancer_api', 'generic_freelance_rss'];
@@ -53,6 +54,18 @@ async function runFreelanceEnrichment() {
  * Start all freelance cron jobs.
  */
 function startFreelanceScheduler() {
+  // Shared ingestion pause. This scheduler ingests on a cron AND 15 seconds
+  // after startup, so the pause must be checked before either is armed —
+  // disabling cron alone would not stop the startup run. Returning here leaves
+  // no cron registered and no startup timers queued.
+  if (isIngestionPaused()) {
+    logger.warn('Freelance scheduler DISABLED by INGESTION_SCHEDULER_ENABLED=false — no cron, no startup ingestion.', {
+      event: 'ingestion_scheduler_disabled',
+      scheduler: 'freelance',
+    });
+    return null;
+  }
+
   // Freelance ingestion — every 4 hours
   cron.schedule('0 */4 * * *', async () => {
     try {

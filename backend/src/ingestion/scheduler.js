@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const logger = require('../logging/logger');
 const { runAllEnabled } = require('./ingestion.service');
 const { checkSourceHealth } = require('./sourceHealthMonitor');
+const { isIngestionPaused } = require('./ingestionPause');
 
 const DEFAULT_SCHEDULE = '0 6 * * *'; // 6:00 AM daily
 
@@ -20,11 +21,13 @@ const DEFAULT_SCHEDULE = '0 6 * * *'; // 6:00 AM daily
  * @returns {import('node-cron').ScheduledTask} The scheduled task (for stopping in tests).
  */
 function startScheduler(schedule) {
-  // Explicit, validated off switch. Only the exact string 'false' disables, so a
-  // typo or an unset variable cannot silently stop ingestion.
-  if (String(process.env.INGESTION_SCHEDULER_ENABLED || '').toLowerCase() === 'false') {
+  // Explicit, validated off switch, shared with every other scheduler that
+  // ingests (see ingestionPause.js). Only the exact string 'false' disables, so
+  // a typo or an unset variable cannot silently stop ingestion.
+  if (isIngestionPaused()) {
     logger.warn('Ingestion scheduler DISABLED by INGESTION_SCHEDULER_ENABLED=false — not started.', {
       event: 'ingestion_scheduler_disabled',
+      scheduler: 'ingestion',
     });
     return null;
   }
