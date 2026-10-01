@@ -23,8 +23,15 @@ function loadLoggerWith(nodeEnv) {
   return logger;
 }
 
-/** Capture whatever the logger writes to stdout for one call. */
-function captureStdout(fn) {
+/**
+ * Capture whatever the logger writes to stdout for one call.
+ *
+ * winston's Console transport flushes ASYNCHRONOUSLY, so restoring the spy on
+ * the next synchronous line races the write. An earlier version of this helper
+ * did exactly that: it passed locally by timing luck and failed in CI with an
+ * empty capture. This waits for the write, bounded, instead of assuming it.
+ */
+async function captureStdout(fn, { timeoutMs = 2000 } = {}) {
   const written = [];
   const spy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
     written.push(chunk.toString());
@@ -32,6 +39,11 @@ function captureStdout(fn) {
   });
   try {
     fn();
+    const deadline = Date.now() + timeoutMs;
+    while (written.length === 0 && Date.now() < deadline) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setImmediate(resolve));
+    }
   } finally {
     spy.mockRestore();
   }
@@ -51,10 +63,10 @@ describe('production logging path', () => {
     expect(consoleTransports).toHaveLength(1);
   });
 
-  it('writes structured JSON to stdout in production', () => {
+  it('writes structured JSON to stdout in production', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = captureStdout(() => {
+    const out = await captureStdout(() => {
       logger.warn('Ingestion scheduler DISABLED by INGESTION_SCHEDULER_ENABLED=false', {
         event: 'ingestion_scheduler_disabled',
         scheduler: 'ingestion',
@@ -71,11 +83,11 @@ describe('production logging path', () => {
     expect(parsed.timestamp).toEqual(expect.any(String));
   });
 
-  it('emits a line release.yml can match, for each scheduler', () => {
+  it('emits a line release.yml can match, for each scheduler', async () => {
     const logger = loadLoggerWith('production');
 
     for (const scheduler of ['ingestion', 'freelance', 'research']) {
-      const out = captureStdout(() => {
+      const out = await captureStdout(() => {
         logger.warn('disabled', { event: 'ingestion_scheduler_disabled', scheduler });
       });
       // This is the exact shape the workflow greps for.
@@ -85,10 +97,10 @@ describe('production logging path', () => {
 });
 
 describe('redaction applies before any transport', () => {
-  it('redacts sensitive keys in production stdout output', () => {
+  it('redacts sensitive keys in production stdout output', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = captureStdout(() => {
+    const out = await captureStdout(() => {
       logger.info('outbound call', {
         apiKey: 'should-not-appear',
         password: 'should-not-appear',
@@ -103,10 +115,10 @@ describe('redaction applies before any transport', () => {
     expect(out).toContain('visible');
   });
 
-  it('redacts nested sensitive keys', () => {
+  it('redacts nested sensitive keys', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = captureStdout(() => {
+    const out = await captureStdout(() => {
       logger.info('nested', {
         outer: { inner: { secret: 'should-not-appear', keep: 'visible' } },
         list: [{ token: 'should-not-appear' }],
@@ -117,10 +129,10 @@ describe('redaction applies before any transport', () => {
     expect(out).toContain('visible');
   });
 
-  it('does NOT redact ordinary keys that merely contain a sensitive substring', () => {
+  it('does NOT redact ordinary keys that merely contain a sensitive substring', async () => {
     const logger = loadLoggerWith('production');
 
-    const out = captureStdout(() => {
+    const out = await captureStdout(() => {
       logger.info('article', { author: 'ada', authorId: 7 });
     });
 
@@ -128,11 +140,11 @@ describe('redaction applies before any transport', () => {
     expect(out).not.toContain('[REDACTED]');
   });
 
-  it('is key-based only — a secret inside the message string is NOT scrubbed', () => {
+  it('is key-based only — a secret inside the message string is NOT scrubbed', async () => {
     // Documented limitation, asserted so it cannot be mistaken for a guarantee.
     const logger = loadLoggerWith('production');
 
-    const out = captureStdout(() => {
+    const out = await captureStdout(() => {
       logger.info('connecting with password=hunter2');
     });
 
