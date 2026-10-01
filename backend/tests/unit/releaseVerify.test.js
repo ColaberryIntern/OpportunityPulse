@@ -27,7 +27,7 @@ function disabledRecord(scheduler) {
   });
 }
 
-const ALL_THREE = ['ingestion', 'freelance', 'research'].map(disabledRecord).join('\n');
+const ALL_THREE = ['ingestion', 'freelance', 'research', 'source_health_agent'].map(disabledRecord).join('\n');
 
 const PAUSED_FLAGS = {
   INGESTION_SCHEDULER_ENABLED: 'false',
@@ -241,7 +241,7 @@ describe('release verification: scheduler evidence is parsed as JSON', () => {
   });
 
   it('rejects a scheduler name without the disabled event', () => {
-    const decoys = ['ingestion', 'freelance', 'research']
+    const decoys = ['ingestion', 'freelance', 'research', 'source_health_agent']
       .map((s) => JSON.stringify({ level: 'info', message: 'started', scheduler: s }))
       .join('\n');
     const r = runVerify({ logs: decoys });
@@ -249,7 +249,7 @@ describe('release verification: scheduler evidence is parsed as JSON', () => {
   });
 
   it('rejects the wrong event name even with the right scheduler', () => {
-    const wrong = ['ingestion', 'freelance', 'research']
+    const wrong = ['ingestion', 'freelance', 'research', 'source_health_agent']
       .map((s) => JSON.stringify({ event: 'scheduler_started', scheduler: s }))
       .join('\n');
     const r = runVerify({ logs: wrong });
@@ -269,7 +269,7 @@ describe('release verification: scheduler evidence is parsed as JSON', () => {
 
   it('rejects a NESTED lookalike that substring matching would accept', () => {
     // Every marker is present in the raw text, but not as top-level fields.
-    const nested = ['ingestion', 'freelance', 'research']
+    const nested = ['ingestion', 'freelance', 'research', 'source_health_agent']
       .map((s) =>
         JSON.stringify({
           level: 'info',

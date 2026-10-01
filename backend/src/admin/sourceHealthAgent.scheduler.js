@@ -13,6 +13,7 @@
 const cron = require('node-cron');
 const logger = require('../logging/logger');
 const agent = require('./sourceHealthAgent.service');
+const { isIngestionPaused } = require('../ingestion/ingestionPause');
 
 let task = null;
 
@@ -21,8 +22,34 @@ function isEnabled() {
 }
 
 function startSourceHealthAgentScheduler() {
+  // This agent TRIGGERS INGESTION. sourceHealthAgent.service calls
+  // ingestionSvc.runIngestion for each source it probes, so it must honour the
+  // same pause as every other ingesting scheduler.
+  //
+  // It did not, and the gap was not theoretical: on 2026-10-01 it ran 8
+  // ingestions at 07:00-07:01Z and wrote rows while INGESTION_SCHEDULER_ENABLED
+  // was false and the other three schedulers had reported themselves disabled.
+  // "All three pause controls false" did not mean ingestion was held.
+  //
+  // Health-by-ingestion is meaningless while ingestion is paused, so the pause
+  // wins over this agent's own flag.
+  if (isIngestionPaused()) {
+    logger.warn('Source Health Agent DISABLED by INGESTION_SCHEDULER_ENABLED=false — it triggers ingestion.', {
+      event: 'ingestion_scheduler_disabled',
+      scheduler: 'source_health_agent',
+      reason: 'paused',
+    });
+    return null;
+  }
+
   if (!isEnabled()) {
-    logger.info('Source Health Agent scheduler not started (OIED_SOURCE_HEALTH_AGENT_ENABLED is off)');
+    // Emitted with the same event/scheduler pair as the paused path so release
+    // verification has uniform evidence however the agent came to be off.
+    logger.info('Source Health Agent scheduler not started (OIED_SOURCE_HEALTH_AGENT_ENABLED is off)', {
+      event: 'ingestion_scheduler_disabled',
+      scheduler: 'source_health_agent',
+      reason: 'flag_off',
+    });
     return null;
   }
   const expr = process.env.OIED_SOURCE_HEALTH_AGENT_CRON || '0 7 * * *';
@@ -31,6 +58,14 @@ function startSourceHealthAgentScheduler() {
     return null;
   }
   task = cron.schedule(expr, async () => {
+    // Re-checked on every fire, mirroring the existing flag check.
+    if (isIngestionPaused()) {
+      logger.warn('Source Health Agent cron skipped — ingestion is paused', {
+        event: 'ingestion_scheduler_skipped',
+        scheduler: 'source_health_agent',
+      });
+      return;
+    }
     if (!isEnabled()) {
       logger.info('Source Health Agent cron skipped (flag flipped off mid-run)');
       return;
