@@ -103,28 +103,10 @@ jobs:
             psql_t() { docker exec op-postgres psql -U "$DBU" -d "$DBN" -t -A "$@"; }
 
             # ---------------------------------------------------------------
-            # need_false(): used AFTER rollout, when the running code actually
-            # reads these flags. Deliberately NOT used before rollout: during the
-            # window op-backend is stopped and has no environment to read, and on
-            # the pre-release code the flag would read back false while the old
-            # scheduler stayed armed.
-            #
-            # Validates the EXACT string false. `!= true` was wrong: it passed when
-            # a variable was unset, misspelled, or set to anything at all.
-            # ---------------------------------------------------------------
-            need_false() {
-              local name="$1"
-              local val
-              val="$(docker exec op-backend printenv "$name" 2>/dev/null || echo unset)"
-              if [ "$(printf %s "$val" | tr "[:upper:]" "[:lower:]")" != "false" ]; then
-                echo "FLAG CHECK FAILED: ${name}=${val} — must be exactly false" >&2
-                exit 1
-              fi
-              echo "  ${name}=false"
-            }
-
-            # ---------------------------------------------------------------
-            # PRE-MIGRATION WRITE FREEZE — enforced by absence of a writer,
+            # PRE-ROLLOUT WRITE FREEZE — enforced by absence of a writer.
+            # This is a genuine freeze because the container is stopped. It is NOT
+            # the same thing as the scheduled-ingestion pause flags, which stop
+            # scheduled execution only and leave manual admin writes reachable.
             # not by a feature flag.
             #
             # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
@@ -252,58 +234,48 @@ jobs:
             done
             [ "$READY" = "1" ] || { echo "service did not become ready at ${READY_URL}" >&2; exit 1; }
 
-            # ---- POST-ROLLOUT: the freeze must still hold, and the scheduler must
-            # be provably disabled IN THE CONTAINER NOW RUNNING.
+            # ---- POST-ROLLOUT VERIFICATION.
             #
-            # A log line "within the last 24h" is not evidence: it could come from a
-            # previous container, or from before the flag was set. This reads the
-            # current container's StartedAt and only accepts evidence emitted after
-            # that instant.
-            echo "--- post-rollout: scheduler disabled in the CURRENT container ---"
-            STARTED_AT="$(docker inspect -f '{{.State.StartedAt}}' op-backend)"
-            CONTAINER_ID="$(docker inspect -f '{{.Id}}' op-backend | cut -c1-12)"
-            echo "  container ${CONTAINER_ID} started at ${STARTED_AT}"
-            # EVERY scheduler that ingests must report itself disabled, not just one.
+            # Scheduler evidence is scoped to the CURRENT container's StartedAt,
+            # because a log line "within the last 24h" could come from a previous
+            # container or from before the flag was set.
             #
-            # The previous check required the string `ingestion_scheduler_disabled`
-            # to appear ONCE. Three independent schedulers ingest (daily runner,
-            # freelance — which also ingests 15s after startup — and the research
-            # tick loop), so a single match proved nothing about the other two.
+            # The previous inline check matched the scheduler NAME alone:
+            #     grep -q "\"scheduler\":\"${s}\""
+            # Any line mentioning a scheduler satisfied it, and a single
+            # ingestion_scheduler_disabled anywhere in the log stood in for all
+            # three. The script now requires BOTH markers in the SAME record.
             #
             # It also silently depended on application logs reaching stdout. In
             # production winston wrote only to files inside the container, so
-            # `docker logs` carried nothing but dotenv's startup tips and this
-            # assertion could not pass for ANY flag value. Fixed in logger.js;
-            # this gate is what makes that fix load-bearing.
-            BOOT_LOGS="$(docker logs op-backend --since "$STARTED_AT" 2>&1)"
-            MISSING=""
-            for s in ingestion freelance research; do
-              if echo "$BOOT_LOGS" | grep -q "\"scheduler\":\"${s}\""; then
-                echo "  scheduler=${s}: reported disabled"
-              else
-                MISSING="${MISSING} ${s}"
-              fi
-            done
-            if [ -n "$MISSING" ]; then
-              echo "POST-ROLLOUT FAILED: container ${CONTAINER_ID} did not report these" >&2
-              echo "  schedulers disabled since ${STARTED_AT}:${MISSING}" >&2
-              echo "  Either INGESTION_SCHEDULER_ENABLED is not 'false' in the env this" >&2
-              echo "  container received, this build predates the gate, or the logger is" >&2
-              echo "  not writing JSON to stdout (see backend/src/logging/logger.js)." >&2
-              echo "  --- what the container did log since boot (tail) ---" >&2
-              echo "$BOOT_LOGS" | tail -20 >&2
-              exit 1
-            fi
-            echo "  all three ingesting schedulers reported disabled in this container's startup"
+            # `docker logs` carried nothing but dotenv's startup tips and the
+            # assertion could not pass for ANY flag value. Fixed in logger.js.
 
-            # Flags validated to the exact string 'false' — and now meaningful,
-            # because the code running DOES read them.
-            need_false BONFIRE_ENGINE_ENABLED
-            need_false BONFIRE_SCRAPER_ENABLED
-            need_false BONFIRE_SCRAPER_CRON_ENABLED
-            need_false INGESTION_SCHEDULER_ENABLED
+            # Flag and scheduler verification lives in a script that tests drive
+            # with a mocked docker (backend/tests/unit/releaseVerify.test.js),
+            # because "the YAML parses" and "bash -n passes" were both true of
+            # five separate gates that could never hold.
+            #
+            # It separates control classes that were previously one flat list:
+            #   pause controls    scheduled execution; must be exactly false
+            #   service baseline  existing v1 service and scraper capability,
+            #                     checked against the APPROVED BASELINE. Forcing
+            #                     BONFIRE_ENGINE_ENABLED=false would 404 the whole
+            #                     v1 Bonfire surface a live consumer reads, so it
+            #                     is verified, not forced.
+            #   phase 2           has no env flag at all; activation is the gov_*
+            #                     capability probe in bonfire.service.js.
+            #
+            # SCOPE: these pause SCHEDULED execution. They are NOT a write freeze.
+            # Manual scraping stays reachable by an authenticated admin while
+            # BONFIRE_SCRAPER_ENABLED is true, and admin API writes remain
+            # possible; both are held procedurally, not by configuration.
+            bash scripts/release/verify-release.sh
 
             # Integrity tripwire: selected state only, checked after the fact.
+            # Covers exactly bonfire_opportunities (row count and close_date
+            # values) and the ingestion_logs row count. It does NOT cover other
+            # columns, other tables, or anything after the final comparison.
             POST_LOGS=$(psql_t -c "select count(*) from ingestion_logs;")
             POST_ROWS=$(psql_t -c "select count(*) from bonfire_opportunities;")
             POST_SUM=$(psql_t -c "select coalesce(md5(string_agg(id::text || coalesce(close_date::text,'-'), ',' order by id)),'empty') from bonfire_opportunities;")
@@ -317,7 +289,10 @@ jobs:
 
             # NO db:migrate here, deliberately. See migrate.yml.
             echo "recovery: docker run/compose with image ${PREV_IMAGE} restores the previous code."
-            echo "  NOTE: the previous image has no INGESTION_SCHEDULER_ENABLED gate, so"
-            echo "  restarting it RE-ARMS its generic ingestion scheduler. See"
-            echo "  docs/gov-phase2/PRE-MIGRATION-FREEZE.md for what that means."
+            echo "  Whether that image honours the pause depends on WHICH image it is."
+            echo "  Images at or after f8689d2d read INGESTION_SCHEDULER_ENABLED and"
+            echo "  will stay paused if .env.prod still sets it false. Images before"
+            echo "  that have no such gate and RE-ARM generic ingestion on start."
+            echo "  Check the image before restoring it; do not assume either way."
+            echo "  See docs/gov-phase2/FLAG-MATRIX.md."
             echo "Deployed $(git rev-parse HEAD) at $(date -u)"
