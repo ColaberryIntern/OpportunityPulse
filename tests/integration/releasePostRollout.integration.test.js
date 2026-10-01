@@ -53,7 +53,7 @@ function disabledRecord(scheduler) {
     service: 'opportunity-pulse',
   });
 }
-const ALL_THREE = ['ingestion', 'freelance', 'research'].map(disabledRecord).join('\n');
+const ALL_THREE = ['ingestion', 'freelance', 'research', 'source_health_agent'].map(disabledRecord).join('\n');
 
 /**
  * Mock `docker` covering every call the real path makes:
