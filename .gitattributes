@@ -36,3 +36,6 @@ contracts/** text eol=lf
 *.docx binary
 *.xlsx binary
 *.zip  binary
+
+# Shell scripts are executed on Linux; CRLF breaks the shebang and every line.
+*.sh text eol=lf
