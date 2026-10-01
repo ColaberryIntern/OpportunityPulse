@@ -128,6 +128,9 @@ function runVerify(opts = {}) {
       PATH: `${bin}${path.delimiter}${process.env.PATH}`,
       CONTAINER: 'op-backend',
       BASELINE_PAIRS: STABLE_PAIRS,
+      // The expectation is required and has no default, so every case that is
+      // not specifically about the declaration must state one.
+      EXPECTED_CONFIG: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true',
       ...(opts.env || {}),
     },
     encoding: 'utf8',
@@ -145,12 +148,12 @@ describe('release verification: the passing shape', () => {
     const r = runVerify({ logs: ALL_THREE });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('RELEASE VERIFICATION PASSED');
-    expect(r.stdout).toContain('BONFIRE_ENGINE_ENABLED=true matches the observed baseline');
+    expect(r.stdout).toContain('BONFIRE_ENGINE_ENABLED=true matches the declared expectation');
   });
 
-  it('describes the baseline as observed, never as approved', () => {
+  it('describes the expectation as declared, never as approved', () => {
     const r = runVerify({ logs: ALL_THREE });
-    expect(r.stdout).toContain('observed configuration baseline');
+    expect(r.stdout).toContain('declared expected configuration');
     expect(r.all).not.toMatch(/approved baseline/i);
   });
 });
@@ -191,7 +194,7 @@ describe('release verification: pause controls', () => {
   });
 });
 
-describe('release verification: observed baseline is a drift detector', () => {
+describe('release verification: the declared expectation is a drift detector', () => {
   it('does NOT require BONFIRE_ENGINE_ENABLED to be false', () => {
     const r = runVerify({ logs: ALL_THREE });
     expect(r.code).toBe(0);
@@ -210,7 +213,7 @@ describe('release verification: observed baseline is a drift detector', () => {
   it('treats scraper capability as independent of v1 service availability', () => {
     const r = runVerify({
       flags: { ...PAUSED_FLAGS, BONFIRE_SCRAPER_ENABLED: 'false' },
-      env: { OBSERVED_BASELINE: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=false' },
+      env: { EXPECTED_CONFIG: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=false' },
       logs: ALL_THREE,
     });
     expect(r.code).toBe(0);
