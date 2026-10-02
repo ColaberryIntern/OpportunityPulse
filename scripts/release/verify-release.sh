@@ -16,10 +16,10 @@
 #
 #   pause controls     scheduled execution. MUST be exactly false. Verified by
 #                      equality, not by "not true".
-#   observed baseline  existing service and capability flags. Compared against
-#                      the values production was OBSERVED to have. This is a
-#                      drift detector, not a statement that the configuration
-#                      was reviewed or approved.
+#   expected config    existing service and capability flags, DECLARED by the
+#                      operator for this release and validated here. Never
+#                      inferred from production: an expectation read from the
+#                      thing it checks asserts nothing.
 #   phase 2            has no environment flag. See the reporting note below.
 #   data stability     measured before and after rollout and compared.
 #
@@ -43,7 +43,19 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CONTAINER="${CONTAINER:-op-backend}"
 PAUSE_FLAGS="${PAUSE_FLAGS:-INGESTION_SCHEDULER_ENABLED BONFIRE_SCRAPER_CRON_ENABLED BONFIRE_STRATEGIST_CRON_ENABLED}"
-OBSERVED_BASELINE="${OBSERVED_BASELINE:-${SERVICE_BASELINE:-BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true}}"
+# Expected service/capability configuration, DECLARED by the operator for this
+# release. There is deliberately no default.
+#
+# It used to default to BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=true.
+# That default went stale the moment the scraper was disabled on 2026-10-01, and
+# release run 36868977258 failed solely because the check still expected the old
+# value. A hardcoded expectation is a claim about production that nothing keeps
+# true.
+#
+# The fix is NOT to read the expectation from production - that would make the
+# check agree with whatever is there and assert nothing. It is to require the
+# operator to state it, and to validate what they stated.
+EXPECTED_CONFIG="${EXPECTED_CONFIG:-${OBSERVED_BASELINE:-${SERVICE_BASELINE:-}}}"
 # source_health_agent is here because it CALLS ingestionSvc.runIngestion.
 # Omitting it is why a release could assert "ingestion held" while that agent
 # wrote rows at 07:00Z on 2026-10-01 with the other three reporting disabled.
@@ -73,15 +85,33 @@ for name in $PAUSE_FLAGS; do
 done
 
 # ---------------------------------------------------------------------------
-echo "--- observed configuration baseline (drift detector, not an approval) ---"
-for pair in $OBSERVED_BASELINE; do
+echo "--- declared expected configuration (validated, not inferred) ---"
+if [ -z "$EXPECTED_CONFIG" ]; then
+  fail "no expected configuration declared — pass EXPECTED_CONFIG, e.g. 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=false'"
+else
+  # Syntax is validated before any value is compared, so a malformed declaration
+  # cannot quietly match nothing and pass.
+  for pair in $EXPECTED_CONFIG; do
+    case "$pair" in
+      *=*) ;;
+      *) fail "malformed expected configuration entry '${pair}' — want NAME=true|false"; continue ;;
+    esac
+    _n="${pair%%=*}"; _v="$(lower "${pair#*=}")"
+    [ -n "$_n" ] || fail "expected configuration entry '${pair}' has an empty name"
+    case "$_v" in
+      true|false) ;;
+      *) fail "expected configuration ${_n}=${pair#*=} — value must be exactly true or false" ;;
+    esac
+  done
+fi
+for pair in $EXPECTED_CONFIG; do
   name="${pair%%=*}"
   want="${pair#*=}"
   value="$(flag_value "$name")"
   if [ "$(lower "$value")" = "$(lower "$want")" ]; then
-    ok "${name}=${value} matches the observed baseline"
+    ok "${name}=${value} matches the declared expectation"
   else
-    fail "configuration drift: ${name}=${value}, observed baseline is ${want}"
+    fail "configuration drift: ${name}=${value}, declared expectation is ${want}"
   fi
 done
 

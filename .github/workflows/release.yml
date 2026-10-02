@@ -17,6 +17,9 @@ on:
       confirm:
         description: 'Type DEPLOY to confirm you intend to change production'
         required: true
+      expected_config:
+        description: 'Expected service configuration for THIS release, comma-separated, e.g. BONFIRE_ENGINE_ENABLED=true,BONFIRE_SCRAPER_ENABLED=false. Declared by the operator; never inferred from production.'
+        required: true
       skip_preflight:
         description: 'Never use in a normal release. Requires a written reason below.'
         type: boolean
@@ -41,6 +44,45 @@ jobs:
             echo "::error::confirm must be exactly DEPLOY. Got: '${{ inputs.confirm }}'"
             exit 1
           fi
+
+          # Expected configuration is validated HERE, on the runner, in the
+          # preflight job — before the operator interrupts production.
+          #
+          # It used to be hardcoded inside verify-release.sh as
+          # BONFIRE_SCRAPER_ENABLED=true. That expectation went stale the moment
+          # the scraper was disabled, and release 36868977258 failed on it AFTER
+          # the rollout had already happened. Reading the expectation from
+          # production would be worse: a check that agrees with whatever it finds
+          # asserts nothing. So the operator declares it and this validates it.
+          RAW="${{ inputs.expected_config }}"
+          if [ -z "$RAW" ]; then
+            echo "::error::expected_config is required"
+            exit 1
+          fi
+          BAD=0
+          for pair in $(printf '%s' "$RAW" | tr ',' ' '); do
+            case "$pair" in
+              BONFIRE_ENGINE_ENABLED=*|BONFIRE_SCRAPER_ENABLED=*) ;;
+              *)
+                echo "::error::unknown or malformed expected_config entry '$pair'"
+                BAD=1
+                continue
+                ;;
+            esac
+            val="$(printf '%s' "${pair#*=}" | tr '[:upper:]' '[:lower:]')"
+            case "$val" in
+              true|false) ;;
+              *)
+                echo "::error::'$pair' value must be exactly true or false"
+                BAD=1
+                ;;
+            esac
+          done
+          if [ "$BAD" != "0" ]; then
+            echo "::error::expected_config failed validation; production was not touched"
+            exit 1
+          fi
+          echo "expected configuration validated: $RAW"
 
       - uses: actions/checkout@v4
         with:
@@ -125,7 +167,6 @@ jobs:
             # This is a genuine freeze because the container is stopped. It is NOT
             # the same thing as the scheduled-ingestion pause flags, which stop
             # scheduled execution only and leave manual admin writes reachable.
-            # not by a feature flag.
             #
             # Why not a flag: INGESTION_SCHEDULER_ENABLED exists only in the
             # release being prepared. Production at 6936c99 does not read it, so
@@ -296,7 +337,7 @@ jobs:
             # Calling verify-release.sh directly would leave BASELINE_PAIRS unset
             # and skip every data comparison — which is exactly what the previous
             # arrangement did while its unit tests passed.
-            BASELINE_BEFORE=/tmp/op-baseline-before.txt               bash scripts/release/post-rollout-verify.sh
+            EXPECTED_CONFIG="$(printf '%s' "${{ inputs.expected_config }}" | tr ',' ' ')" BASELINE_BEFORE=/tmp/op-baseline-before.txt bash scripts/release/post-rollout-verify.sh
 
             # The before/after comparison that used to live here is now performed
             # by post-rollout-verify.sh above, across ALL measured labels including
