@@ -5,8 +5,33 @@ const logger = require('../../logging/logger');
 const JOBICY_API_URL = 'https://jobicy.com/api/v2/remote-jobs';
 
 const REQUEST_TIMEOUT_MS = 15000;
-const DEFAULT_TAGS = ['ai', 'machine-learning', 'data-science'];
+// Jobicy rejects a tag outside 3-50 chars with HTTP 400. 'ai' was here and is
+// 2 chars, so EVERY run 400'd on the first tag and — because one throw aborted
+// the whole loop — the two valid tags never ran either. Verified against the
+// live API on 2026-10-12: 'ai' 400s, 'artificial-intelligence' 200s.
+const MIN_TAG_LENGTH = 3;
+const MAX_TAG_LENGTH = 50;
+const DEFAULT_TAGS = ['artificial-intelligence', 'machine-learning', 'data-science'];
 const DEFAULT_COUNT = 50;
+
+/**
+ * Keep only tags the Jobicy API will accept. Invalid tags are dropped rather
+ * than sent, because the API answers a bad tag with 400 for the whole request.
+ * Validating here covers tags from the DataSource config row too, not just the
+ * defaults — production's row still carries the 2-char 'ai'.
+ * @param {Array<string>} tags - Candidate tags.
+ * @returns {{valid: Array<string>, dropped: Array<string>}}
+ */
+function partitionTags(tags) {
+  const valid = [];
+  const dropped = [];
+  for (const raw of Array.isArray(tags) ? tags : []) {
+    const tag = typeof raw === 'string' ? raw.trim() : '';
+    if (tag.length >= MIN_TAG_LENGTH && tag.length <= MAX_TAG_LENGTH) valid.push(tag);
+    else dropped.push(String(raw));
+  }
+  return { valid, dropped };
+}
 
 /**
  * Strip HTML tags from a string and collapse whitespace.
@@ -28,7 +53,15 @@ class JobicyAdapter extends BaseAdapter {
     super(dataSource);
 
     const config = dataSource.config || {};
-    this.tags = config.tags || DEFAULT_TAGS;
+    const { valid, dropped } = partitionTags(config.tags || DEFAULT_TAGS);
+    if (dropped.length) {
+      logger.warn('Jobicy: dropping tags outside the 3-50 character bound the API enforces.', {
+        dropped, kept: valid,
+      });
+    }
+    // If the configured tags are ALL invalid, fall back to the known-good
+    // defaults rather than fetching nothing and reporting a silent success.
+    this.tags = valid.length ? valid : partitionTags(DEFAULT_TAGS).valid;
     this.count = config.count || DEFAULT_COUNT;
   }
 
@@ -86,10 +119,29 @@ class JobicyAdapter extends BaseAdapter {
    */
   async fetch() {
     let allJobs = [];
+    const failures = [];
 
+    // Per-tag isolation: one tag failing must not cost us the others. Before
+    // this, a single bad tag threw straight out of the loop and the whole
+    // source reported `failed` with zero records.
     for (const tag of this.tags) {
-      const jobs = await this._fetchTag(tag);
-      allJobs = allJobs.concat(jobs);
+      try {
+        const jobs = await this._fetchTag(tag);
+        allJobs = allJobs.concat(jobs);
+      } catch (error) {
+        failures.push({ tag, error: error.message });
+        logger.warn(`Jobicy: tag "${tag}" failed; continuing with remaining tags.`, {
+          tag, error: error.message,
+        });
+      }
+    }
+
+    // Every tag failing is a real outage, not a quiet empty result — surface it
+    // so the source is marked failed instead of silently reporting 0 records.
+    if (failures.length === this.tags.length && this.tags.length > 0) {
+      throw new Error(
+        `Jobicy: all ${this.tags.length} tag(s) failed — ${failures.map((f) => `${f.tag}: ${f.error}`).join('; ')}`
+      );
     }
 
     // Deduplicate by job ID

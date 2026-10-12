@@ -19,7 +19,7 @@ describe('JobicyAdapter', () => {
     name: 'jobicy',
     type: 'api',
     config: {
-      tags: ['ai', 'machine-learning'],
+      tags: ['data-science', 'machine-learning'],
       count: 25,
     },
   };
@@ -39,7 +39,7 @@ describe('JobicyAdapter', () => {
   // ---------------------------------------------------------------
   describe('constructor', () => {
     it('should read config tags and count from dataSource', () => {
-      expect(adapter.tags).toEqual(['ai', 'machine-learning']);
+      expect(adapter.tags).toEqual(['data-science', 'machine-learning']);
       expect(adapter.count).toBe(25);
     });
 
@@ -47,7 +47,7 @@ describe('JobicyAdapter', () => {
       const ds = { id: 12, name: 'jobicy', config: {} };
       const defaultAdapter = new JobicyAdapter(ds);
 
-      expect(defaultAdapter.tags).toEqual(['ai', 'machine-learning', 'data-science']);
+      expect(defaultAdapter.tags).toEqual(['artificial-intelligence', 'machine-learning', 'data-science']);
       expect(defaultAdapter.count).toBe(50);
     });
   });
@@ -72,8 +72,8 @@ describe('JobicyAdapter', () => {
     });
 
     it('should search multiple tags', async () => {
-      // adapter.tags = ['ai', 'machine-learning']
-      // First tag: 'ai'
+      // adapter.tags = ['data-science', 'machine-learning']
+      // First tag: 'data-science'
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -96,7 +96,7 @@ describe('JobicyAdapter', () => {
       // Verify URLs contain the correct tags
       const firstCallUrl = global.fetch.mock.calls[0][0];
       const secondCallUrl = global.fetch.mock.calls[1][0];
-      expect(firstCallUrl).toContain('tag=ai');
+      expect(firstCallUrl).toContain('tag=data-science');
       expect(secondCallUrl).toContain('tag=machine-learning');
     });
 
@@ -171,7 +171,7 @@ describe('JobicyAdapter', () => {
       const firstCallUrl = global.fetch.mock.calls[0][0];
       expect(firstCallUrl).toContain('jobicy.com/api/v2/remote-jobs');
       expect(firstCallUrl).toContain('count=25');
-      expect(firstCallUrl).toContain('tag=ai');
+      expect(firstCallUrl).toContain('tag=data-science');
     });
 
     it('should handle missing jobs array in API response', async () => {
@@ -416,6 +416,73 @@ describe('JobicyAdapter', () => {
       const transformed = adapter.transform(records);
 
       expect(transformed[0].location).toBe('Remote');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Tag validation + per-tag failure isolation (regression)
+  //
+  // Jobicy 400s any tag outside 3-50 chars. DEFAULT_TAGS shipped with 'ai'
+  // (2 chars), and production's DataSource config row still carries it, so the
+  // source failed on EVERY run. Two separate defects: the bad tag, and a loop
+  // where one throw aborted the remaining tags.
+  // ---------------------------------------------------------------
+  describe('tag validation', () => {
+    it('drops a too-short tag instead of sending a request the API will reject', () => {
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: ['ai', 'data-science'] } });
+      expect(a.tags).toEqual(['data-science']);
+    });
+
+    it('drops a too-long tag (>50 chars)', () => {
+      const long = 'x'.repeat(51);
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: [long, 'devops'] } });
+      expect(a.tags).toEqual(['devops']);
+    });
+
+    it('accepts the exact boundary lengths, 3 and 50', () => {
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: ['abc', 'y'.repeat(50)] } });
+      expect(a.tags).toEqual(['abc', 'y'.repeat(50)]);
+    });
+
+    it('falls back to valid defaults when every configured tag is invalid', () => {
+      // Fetching nothing and reporting success would hide the misconfiguration.
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: ['ai', 'ml'] } });
+      expect(a.tags).toEqual(['artificial-intelligence', 'machine-learning', 'data-science']);
+    });
+
+    it('ships no invalid tag in its own defaults', () => {
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: {} });
+      a.tags.forEach((t) => {
+        expect(t.length).toBeGreaterThanOrEqual(3);
+        expect(t.length).toBeLessThanOrEqual(50);
+      });
+    });
+
+    it('tolerates a non-array tags config without throwing', () => {
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: 'data-science' } });
+      expect(a.tags).toEqual(['artificial-intelligence', 'machine-learning', 'data-science']);
+    });
+  });
+
+  describe('per-tag failure isolation', () => {
+    it('keeps results from the surviving tag when one tag fails', async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad tag' })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ jobs: [{ id: 7, jobTitle: 'ML Eng' }] }) });
+
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: ['data-science', 'machine-learning'] } });
+      const records = await a.fetch();
+
+      expect(records).toHaveLength(1);
+      expect(String(records[0].id)).toBe('7');
+    });
+
+    it('throws when every tag fails, so the source is marked failed not silently empty', async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValue({ ok: false, status: 400, text: async () => 'bad tag' });
+
+      const a = new JobicyAdapter({ id: 12, name: 'jobicy', config: { tags: ['data-science', 'machine-learning'] } });
+      await expect(a.fetch()).rejects.toThrow(/all 2 tag\(s\) failed/);
     });
   });
 });
