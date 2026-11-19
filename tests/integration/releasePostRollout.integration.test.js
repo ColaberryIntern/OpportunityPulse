@@ -56,6 +56,18 @@ function disabledRecord(scheduler) {
 const ALL_THREE = ['ingestion', 'freelance', 'research', 'source_health_agent'].map(disabledRecord).join('\n');
 
 /**
+ * What a release declares it expects. Derived from the flags the mocked
+ * container reports so the declaration cannot silently drift away from the
+ * observed configuration -- which is exactly how release 36868977258 failed: a
+ * hardcoded expectation of BONFIRE_SCRAPER_ENABLED=false outlived the scraper
+ * capability it described.
+ */
+const EXPECTED_CONFIG = [
+  `BONFIRE_ENGINE_ENABLED=${PAUSED_FLAGS.BONFIRE_ENGINE_ENABLED}`,
+  `BONFIRE_SCRAPER_ENABLED=${PAUSED_FLAGS.BONFIRE_SCRAPER_ENABLED}`,
+].join(' ');
+
+/**
  * Mock `docker` covering every call the real path makes:
  *   docker exec op-backend  printenv <FLAG>
  *   docker exec op-postgres printenv POSTGRES_USER|POSTGRES_DB
@@ -171,7 +183,14 @@ exit 0
  * Run the REAL production path: collect before, roll out, collect after,
  * pair, verify. `before` and `after` are measurement maps.
  */
-function runPostRollout({ before, after, logs = ALL_THREE, flags = PAUSED_FLAGS, queryFails = null }) {
+function runPostRollout({
+  before,
+  after,
+  logs = ALL_THREE,
+  flags = PAUSED_FLAGS,
+  queryFails = null,
+  expectedConfig = EXPECTED_CONFIG,
+}) {
   // Pre-rollout collection, through the same script release.yml runs.
   const pre = makeDockerMock({ flags, measurements: before, logs, queryFails: null });
   const beforeFile = path.join(pre.dir, 'before.txt');
@@ -188,6 +207,8 @@ function runPostRollout({ before, after, logs = ALL_THREE, flags = PAUSED_FLAGS,
       ...process.env,
       PATH: `${post.bin}${path.delimiter}${process.env.PATH}`,
       CONTAINER: 'op-backend',
+      // Required, with no default: a release states its expectation.
+      EXPECTED_CONFIG: expectedConfig,
       BASELINE_BEFORE: beforeFile,
       BASELINE_AFTER: path.join(post.dir, 'after.txt'),
     },
@@ -290,6 +311,8 @@ describe('the production path performs the data comparisons', () => {
         ...process.env,
         PATH: `${post.bin}${path.delimiter}${process.env.PATH}`,
         CONTAINER: 'op-backend',
+        // Required, with no default: a release states its expectation.
+        EXPECTED_CONFIG,
         BASELINE_BEFORE: '',
       },
       encoding: 'utf8',
@@ -346,6 +369,8 @@ describe('the production path performs the data comparisons', () => {
         ...process.env,
         PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         CONTAINER: 'op-backend',
+        // Required, with no default: a release states its expectation.
+        EXPECTED_CONFIG,
         BASELINE_PAIRS: 'ingestion_logs:1:1',
         PYTHON_BIN: 'python3-does-not-exist-here',
       },
@@ -370,6 +395,8 @@ describe('the production path performs the data comparisons', () => {
         ...process.env,
         PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         CONTAINER: 'op-backend',
+        // Required, with no default: a release states its expectation.
+        EXPECTED_CONFIG,
         BASELINE_PAIRS: 'ingestion_logs:1:1',
       },
       encoding: 'utf8',
@@ -406,5 +433,67 @@ describe('the production path performs the data comparisons', () => {
     });
     expect(pair.status).toBe(1);
     expect(pair.stderr).toContain("label 'gov_family_members' measured before rollout but missing after");
+  });
+});
+
+describe('the production path validates the DECLARED expected configuration', () => {
+  // Release 36868977258 failed here. verify-release.sh carried a hardcoded
+  // expectation of BONFIRE_SCRAPER_ENABLED=false; the scraper capability was
+  // true, so a correct configuration was reported as drift and the release
+  // stopped. The fix is an expectation the release states and the script
+  // validates. These tests drive post-rollout-verify.sh — the entry point
+  // release.yml calls — because an expectation checked only in the unit tests
+  // is the same mistake this file was written about.
+
+  it('reports drift when the declared expectation does not match the container', () => {
+    const r = runPostRollout({
+      before: BASE_MEASUREMENTS,
+      after: BASE_MEASUREMENTS,
+      // Exactly the stale declaration that stopped release 36868977258.
+      expectedConfig: 'BONFIRE_ENGINE_ENABLED=true BONFIRE_SCRAPER_ENABLED=false',
+    });
+    expect(r.code).toBe(1);
+    expect(r.all).toContain('configuration drift: BONFIRE_SCRAPER_ENABLED=true, declared expectation is false');
+    // Stable data must not mask a drifted declaration.
+    expect(r.all).toContain('BONFIRE_ENGINE_ENABLED=true matches the declared expectation');
+  });
+
+  it('refuses to verify when the release declares no expectation at all', () => {
+    const r = runPostRollout({
+      before: BASE_MEASUREMENTS,
+      after: BASE_MEASUREMENTS,
+      expectedConfig: '',
+    });
+    expect(r.code).toBe(1);
+    expect(r.all).toContain('no expected configuration declared');
+    // No silent fallback: nothing may be reported as matching an expectation
+    // that was never stated.
+    expect(r.all).not.toContain('matches the declared expectation');
+  });
+
+  it('rejects a malformed declaration instead of matching nothing and passing', () => {
+    const r = runPostRollout({
+      before: BASE_MEASUREMENTS,
+      after: BASE_MEASUREMENTS,
+      expectedConfig: 'BONFIRE_ENGINE_ENABLED',
+    });
+    expect(r.code).toBe(1);
+    expect(r.all).toContain("malformed expected configuration entry 'BONFIRE_ENGINE_ENABLED'");
+  });
+
+  it('rejects a declared value that is neither true nor false', () => {
+    const r = runPostRollout({
+      before: BASE_MEASUREMENTS,
+      after: BASE_MEASUREMENTS,
+      expectedConfig: 'BONFIRE_ENGINE_ENABLED=enabled',
+    });
+    expect(r.code).toBe(1);
+    expect(r.all).toContain('value must be exactly true or false');
+  });
+
+  it('passes when the declaration matches what the container reports', () => {
+    const r = runPostRollout({ before: BASE_MEASUREMENTS, after: BASE_MEASUREMENTS });
+    expect(r.code).toBe(0);
+    expect(r.all).toContain('BONFIRE_SCRAPER_ENABLED=true matches the declared expectation');
   });
 });
