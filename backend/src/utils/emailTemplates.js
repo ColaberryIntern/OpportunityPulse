@@ -257,6 +257,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
     research = [], aiTools = [], deepResearchReports = [],
     todayCounts = { byType: {}, total: 0 },
     summaryText = '',
+    ingestionPaused = false,
     bonfireMinCloseDays = 5,
   } = data || {};
 
@@ -603,7 +604,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
           📌 Today's Brief
         </div>
         <div style="font-size: 14px; color: #F9FAFB; line-height: 1.55;">
-          ${summaryText ? escapeHtml(summaryText) : 'No fresh items yet — sources refresh on cron.'}
+          ${summaryText ? escapeHtml(summaryText) : (ingestionPaused ? 'No fresh items — scheduled ingestion is PAUSED until it is resumed.' : 'No fresh items yet — sources refresh on cron.')}
         </div>
       </div>
 
@@ -613,7 +614,7 @@ function richDigestEmailTemplate({ name, data, frontendUrl }) {
           ✨ Added in the last 24h${totalAddedToday > 0 ? ` · ${totalAddedToday} new items` : ''}
         </div>
         <div>
-          ${countChips || '<span style="color: #4B5563; font-size: 12px; font-style: italic;">Nothing new ingested today (yet — sources refresh on cron).</span>'}
+          ${countChips || `<span style="color: #4B5563; font-size: 12px; font-style: italic;">${ingestionPaused ? 'Nothing ingested today — scheduled ingestion is PAUSED.' : 'Nothing new ingested today (yet — sources refresh on cron).'}</span>`}
         </div>
       </div>
 

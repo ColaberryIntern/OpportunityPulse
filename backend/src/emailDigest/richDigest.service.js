@@ -21,6 +21,7 @@ const {
   DeepResearchReport,
 } = require('../models');
 const aiToolService = require('../aiTools/aiTool.service');
+const { isIngestionPaused } = require('../ingestion/ingestionPause');
 const logger = require('../logging/logger');
 
 const TOP = {
@@ -320,6 +321,12 @@ function buildSummaryParagraph(data) {
     } else {
       parts.push(`Last 24h: ${totalNew} new items ingested across the network.`);
     }
+  } else if (data.ingestionPaused) {
+    // Never tell the reader to wait for a cron that is disarmed. A zero-ingest day
+    // under INGESTION_SCHEDULER_ENABLED=false is indistinguishable from a zero-ingest
+    // day under a broken adapter unless the digest says which one it is — that
+    // ambiguity cost six days of unnoticed downtime on 2026-10-01.
+    parts.push('No fresh items in the last 24h — scheduled ingestion is PAUSED, so nothing new will arrive until it is resumed.');
   } else {
     parts.push('No fresh items ingested in the last 24h — sources refresh on cron.');
   }
@@ -391,6 +398,9 @@ async function assembleRichDigest() {
     todayCounts,
     generatedAt: new Date(),
     bonfireMinCloseDays: BONFIRE_DIGEST_MIN_CLOSE_DAYS,
+    // Read once and carried as data so the template stays pure (no env reads in
+    // the view layer) and so summary + empty-state copy cannot disagree.
+    ingestionPaused: isIngestionPaused(),
   };
   envelope.summaryText = buildSummaryParagraph(envelope);
   return envelope;
